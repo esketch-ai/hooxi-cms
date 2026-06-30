@@ -18,11 +18,11 @@ WORKDIR /app
 COPY --from=frontend-builder /app/frontend/dist /static
 
 # Install backend dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
-COPY main.py .
+COPY backend/main.py .
 
 # Expose port
 EXPOSE 8080
