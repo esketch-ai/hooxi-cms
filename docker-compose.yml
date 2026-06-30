@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: hooxi_cms_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-hooxi}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hooxi_secret}
+      POSTGRES_DB: ${DB_NAME:-hooxi_cms}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hooxi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: .
+    container_name: hooxi_cms_backend
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-hooxi}:${DB_PASSWORD:-hooxi_secret}@postgres:5432/${DB_NAME:-hooxi_cms}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-hooxi_cms}
+      DB_USER: ${DB_USER:-hooxi}
+      DB_PASSWORD: ${DB_PASSWORD:-hooxi_secret}
+    ports:
+      - "8000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend (optional - for development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: hooxi_cms_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+

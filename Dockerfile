@@ -24,6 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/main.py .
 
+# Create static directory and copy frontend build output
+RUN mkdir -p /static && \
+    cp -r /static/* /app/static/ 2>/dev/null || true
+
 # Expose port
 EXPOSE 8080
 

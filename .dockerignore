@@ -1,16 +1,60 @@
-node_modules
+# Git
 .git
 .gitignore
-*.md
+
+# Environment variables
 .env
 .env.*
+
+# Build outputs
 dist
 build
-.DS_Store
-*.pdf
-frontend/node_modules
-backend/*.pyc
 __pycache__
+*.pyc
 .pytest_cache
 .coverage
 htmlcov/
+
+# Node modules (except package-lock.json)
+node_modules
+!package-lock.json
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+README.md
+LICENSE
+
+# PDF files
+*.pdf
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cloud Build
+cloudbuild.yaml
