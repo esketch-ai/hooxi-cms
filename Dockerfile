@@ -1,7 +1,7 @@
 # Stage 1: Build Frontend
 FROM node:18-alpine AS frontend-builder
 
-WORKDIR /app
+WORKDIR /build
 
 COPY frontend/package*.json ./frontend/
 RUN cd frontend && npm ci
@@ -15,7 +15,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Copy built frontend files
-COPY --from=frontend-builder /app/dist /static
+COPY --from=frontend-builder /build/frontend/dist /static
 
 # Install backend dependencies
 COPY requirements.txt .
