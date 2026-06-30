@@ -3,11 +3,11 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 
-COPY package*.json ./
-RUN npm ci
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm ci
 
-COPY . .
-RUN npm run build
+COPY frontend/. .
+RUN cd frontend && npm run build
 
 # Stage 2: Backend + Static Files
 FROM python:3.9-slim
