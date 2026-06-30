@@ -58,3 +58,6 @@ temp/
 
 # Cloud Build
 cloudbuild.yaml
+
+# Frontend views (will be built separately)
+frontend/src/views
