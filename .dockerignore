@@ -1,0 +1,16 @@
+node_modules
+.git
+.gitignore
+*.md
+.env
+.env.*
+dist
+build
+.DS_Store
+*.pdf
+frontend/node_modules
+backend/*.pyc
+__pycache__
+.pytest_cache
+.coverage
+htmlcov/
