@@ -29,12 +29,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/main.py .
 
-# Expose port
+# Expose port 8080 for Cloud Run
 EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/ || exit 1
 
-# Run the application with static files enabled and PORT env var
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT:-8080}"]
+# Run the application with static files enabled (Cloud Run compatible)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
