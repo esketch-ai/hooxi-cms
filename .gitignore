@@ -1,32 +1,325 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# Git
+.git
+.gitignore
 
-# Test binary, built with `go test -c`
-*.test
-
-# Code coverage profiles and other test artifacts
-*.out
-coverage.*
-*.coverprofile
-profile.cov
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
+# Environment variables (contains sensitive credentials)
 .env
+.env.*
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Build outputs
+dist
+build
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov/
+
+# Node modules (except package-lock.json)
+node_modules
+!package-lock.json
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+README.md
+LICENSE
+
+# PDF files (planning documents)
+*.pdf
+Hooxi_CMS_*.pdf
+Server.pdf
+
+# HTML planning documents
+*CMS_*.html
+hooxi-cms.html
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cloud Build
+cloudbuild.yaml
+
+# Frontend views (will be built separately)
+frontend/src/views
+
+# Database initialization scripts with sample data
+db_init.sql
+
+# API documentation
+API_DOCUMENTATION.md
+FUNCTIONAL_REQUIREMENTS.md
+
+# Backup files
+*.bak
+*.backup
+~*
+
+# Python specific
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# MyPy
+.mypy_cache/
+
+# Coverage
+coverage.xml
+coverage.json
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor directories
+.svn/
+.hg/
+.bzr/
+
+# IDE specific settings
+.idea/
+.vscode/settings.json
+*.iml
+.project
+.settings/
+.classpath
+.npm
+.npmrc
+package-lock.json
+yarn.lock
+
+# OS generated files
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.DocumentRevisions-V100
+.fseventsd
+.Swapfile
+.Windhawk
+.Blocksize
+.Icon
+._lock_file
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Environment variables (security)
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+config/secrets.yml
+
+# Database dumps
+*.sql.gz
+dump-*.sql
+backup-*.sql
+
+# IDE specific
+.idea/
+.vscode/settings.json
+.project
+.settings/
+.classpath
+.npm
+.npmrc
+package-lock.json
+yarn.lock
+
+# OS generated files
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.DocumentRevisions-V100
+.fseventsd
+.Swapfile
+.Windhawk
+.Blocksize
+.Icon
+._lock_file
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Environment variables (security)
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+config/secrets.yml
+
+# Database dumps
+*.sql.gz
+dump-*.sql
+backup-*.sql
+
+# IDE specific
+.idea/
+.vscode/settings.json
+.project
+.settings/
+.classpath
+.npm
+.npmrc
+package-lock.json
+yarn.lock
+
+# OS generated files
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.DocumentRevisions-V100
+.fseventsd
+.Swapfile
+.Windhawk
+.Blocksize
+.Icon
+._lock_file
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Environment variables (security)
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+config/secrets.yml
+
+# Database dumps
+*.sql.gz
+dump-*.sql
+backup-*.sql
+
+# IDE specific
+.idea/
+.vscode/settings.json
+.project
+.settings/
+.classpath
+.npm
+.npmrc
+package-lock.json
+yarn.lock
+
+# OS generated files
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.DocumentRevisions-V100
+.fseventsd
+.Swapfile
+.Windhawk
+.Blocksize
+.Icon
+._lock_file
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
