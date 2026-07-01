@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import DashboardView from '@/views/Dashboard';
-import ClientsView from '@/views/Clients';
-import CommunicationView from '@/views/Communication';
-import AssetsView from '@/views/Assets';
-import SettingsView from '@/views/Settings';
+import DashboardView from './views/Dashboard';
+import ClientsView from './views/Clients';
+import CommunicationView from './views/Communication';
+import AssetsView from './views/Assets';
+import SettingsView from './views/Settings';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
