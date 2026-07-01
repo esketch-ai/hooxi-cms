@@ -19,8 +19,10 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy built frontend files to static directory
-COPY --from=frontend-builder /app/frontend/dist /static
+# Copy built frontend files to static directory (including index.html)
+COPY --from=frontend-builder /app/frontend/dist/index.html /static/index.html
+COPY --from=frontend-builder /app/frontend/dist/assets/ /static/assets/
+COPY --from=frontend-builder /app/frontend/dist/favicon.svg /static/favicon.svg
 
 # Install backend dependencies
 COPY backend/requirements.txt .
@@ -28,10 +30,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
 COPY backend/main.py .
-
-# Create static directory and copy frontend build output
-RUN mkdir -p /static && \
-    cp -r /static/* /app/static/ 2>/dev/null || true
 
 # Expose port
 EXPOSE 8080
