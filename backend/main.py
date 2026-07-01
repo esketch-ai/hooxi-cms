@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import uuid
+import os
 
 # Import SQLAlchemy models
 try:
@@ -24,11 +25,16 @@ app = FastAPI(
 # CORS middleware for frontend connection
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Static files middleware - serve React app from /static
+from fastapi.staticfiles import StaticFiles
+
+app.mount("/static", StaticFiles(directory="/static"), name="static")
 
 # Database session dependency
 def get_db():
@@ -59,7 +65,14 @@ class ContractCreate(BaseModel):
 
 # Health check endpoint
 @app.get("/")
-async def root():
+async def root(request: Request):
+    """Serve React app for frontend"""
+    static_path = "/static/index.html"
+    if os.path.exists(static_path):
+        from fastapi.responses import FileResponse
+        return FileResponse(static_path)
+    
+    # Fallback to API response if no static files found
     return {"Hello": "World", "API": "Hooxi CMS v1.0"}
 
 @app.get("/api/health")

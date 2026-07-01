@@ -6,8 +6,9 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 
-# Explicitly copy all source files including views folder
+# Copy all source files including views folder AND tsconfig
 COPY frontend/src/. src/
+COPY frontend/tsconfig.json .
 RUN npm run build
 
 # Stage 2: Backend + Static Files
@@ -15,7 +16,7 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy built frontend files
+# Copy built frontend files to static directory
 COPY --from=frontend-builder /app/frontend/dist /static
 
 # Install backend dependencies
@@ -36,5 +37,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/ || exit 1
 
-# Run the application
+# Run the application with static files enabled
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
