@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API
+  # Backend API (with static frontend files)
   backend:
     build: .
     container_name: hooxi_cms_backend
@@ -37,7 +37,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Frontend (optional - for development)
+  # Frontend (for development only)
   frontend:
     build:
       context: ./frontend
