@@ -15,13 +15,9 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": false,  // Changed for build compatibility
-    "noUnusedParameters": false,  // Changed for build compatibility
-    "noFallthroughCasesInSwitch": true,
-
-    /* Paths - removed baseUrl as it's deprecated */
-    "baseUrl": "."
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src"]
 }
