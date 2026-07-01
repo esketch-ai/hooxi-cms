@@ -19,10 +19,8 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy built frontend files to static directory (including index.html)
-COPY --from=frontend-builder /app/frontend/dist/index.html /static/index.html
-COPY --from=frontend-builder /app/frontend/dist/assets/ /static/assets/
-COPY --from=frontend-builder /app/frontend/dist/favicon.svg /static/favicon.svg
+# Copy built frontend files to static directory (preserving folder structure)
+COPY --from=frontend-builder /app/frontend/dist ./dist
 
 # Install backend dependencies
 COPY backend/requirements.txt .
