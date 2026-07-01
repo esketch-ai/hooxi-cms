@@ -6,7 +6,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 
-# Copy all source files including views folder AND tsconfig
+# Copy all source files including views folder AND tsconfig with path aliases
 COPY frontend/src/. src/
 COPY frontend/tsconfig.json .
 RUN npm run build
