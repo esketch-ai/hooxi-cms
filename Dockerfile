@@ -6,9 +6,12 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 
-# Copy all source files including views folder AND tsconfig with path aliases
+# Copy all source files including index.html (entry point)
+COPY frontend/index.html .
 COPY frontend/src/. src/
 COPY frontend/tsconfig.json .
+COPY frontend/vite.config.ts .
+COPY frontend/public/. public/
 RUN npm run build
 
 # Stage 2: Backend + Static Files
