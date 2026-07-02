@@ -31,10 +31,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files middleware - serve React app from /static
+# Static files middleware - serve React app from /dist (not /static)
 from fastapi.staticfiles import StaticFiles
 
-app.mount("/static", StaticFiles(directory="/static"), name="static")
+app.mount("/static", StaticFiles(directory="/dist"), name="static")
 
 # Database session dependency
 def get_db():
@@ -67,7 +67,7 @@ class ContractCreate(BaseModel):
 @app.get("/")
 async def root(request: Request):
     """Serve React app for frontend"""
-    static_path = "/static/index.html"
+    static_path = "/dist/index.html"  # Fixed path from dist folder
     if os.path.exists(static_path):
         from fastapi.responses import FileResponse
         return FileResponse(static_path)
