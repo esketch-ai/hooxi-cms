@@ -22,7 +22,7 @@ WORKDIR /app
 # Copy built frontend files to static directory (preserving folder structure)
 COPY --from=frontend-builder /app/frontend/dist ./dist
 
-# Install backend dependencies
+# Install backend dependencies including gunicorn
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -39,5 +39,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 # Set PORT environment variable for Cloud Run compatibility
 ENV PORT=8080
 
-# Run the application with static files enabled (Cloud Run compatible)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
+# Run the application with gunicorn (handles PORT env var properly on Cloud Run)
+CMD ["gunicorn", "main:app", "--bind", "0.0.0.0:8080"]
