@@ -36,5 +36,8 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/ || exit 1
 
+# Set PORT environment variable for Cloud Run compatibility
+ENV PORT=8080
+
 # Run the application with static files enabled (Cloud Run compatible)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
