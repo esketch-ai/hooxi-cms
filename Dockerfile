@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 ENV PORT=8080
 
 # Run the application with gunicorn (handles PORT env var properly on Cloud Run)
-CMD ["gunicorn", "main:app", "--bind", "0.0.0.0:8080"]
+CMD ["gunicorn", "main:app", "--bind", "0.0.0.0:8080", "--workers", "1"]
