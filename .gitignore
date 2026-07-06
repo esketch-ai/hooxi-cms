@@ -324,3 +324,6 @@ Temporary Items
 *.swo
 *~
 .DS_Store
+
+# Docs folder (will be built separately)
+docs/
