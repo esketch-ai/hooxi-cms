@@ -323,3 +323,4 @@ Temporary Items
 *.swp
 *.swo
 *~
+.DS_Store
