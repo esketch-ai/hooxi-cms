@@ -32,12 +32,8 @@ COPY backend/main.py .
 # Expose port 8080 for Cloud Run
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
-
 # Set PORT environment variable for Cloud Run compatibility
 ENV PORT=8080
 
-# Run the application with uvicorn (handles PORT env var automatically on Cloud Run)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
+# Run the application with uvicorn (manually bind to the PORT environment variable)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
