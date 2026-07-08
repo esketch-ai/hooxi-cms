@@ -12,17 +12,29 @@ app = FastAPI(
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Static files middleware - serve React app from /dist
+# Resolve the path to the frontend build output (dist)
+# Supports both Docker environment (/app/dist) and local development
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+dist_path = "/app/dist"
+if not os.path.exists(dist_path):
+    dist_path = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
+if not os.path.exists(dist_path):
+    dist_path = os.path.join(BASE_DIR, "dist")
+
+# Static files middleware - serve React app if dist directory exists
 from fastapi.staticfiles import StaticFiles
-app.mount("/static", StaticFiles(directory="/dist"), name="static")
+if os.path.exists(dist_path):
+    app.mount("/static", StaticFiles(directory=dist_path), name="static")
+else:
+    print(f"Warning: static dist folder not found at {dist_path}")
 
 @app.get("/")
 async def root():
     """Serve React app for frontend"""
-    static_path = "/dist/index.html"
-    if os.path.exists(static_path):
+    index_path = os.path.join(dist_path, "index.html")
+    if os.path.exists(index_path):
         from fastapi.responses import FileResponse
-        return FileResponse(static_path)
+        return FileResponse(index_path)
     
     # Fallback to API response if no static files found
     return {"Hello": "World", "API": "Hooxi CMS v1.0"}
