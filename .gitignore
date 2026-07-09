@@ -52,6 +52,9 @@ hooxi-cms.html
 tests/
 test_*.py
 *_test.py
+# 백엔드 테스트는 저장소에 포함 (위 tests/ 규칙 예외)
+!backend/tests/
+!backend/tests/**
 
 # Logs
 logs/
@@ -327,3 +330,4 @@ Temporary Items
 
 # Docs folder (will be built separately)
 docs/
+.gstack/

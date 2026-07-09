@@ -3,5 +3,10 @@ uvicorn[standard]==0.34.2
 pydantic==2.10.5
 python-multipart==0.0.20
 sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
 asyncpg==0.30.0
 gunicorn==23.0.0
+PyJWT==2.10.1
+bcrypt==4.2.1
+httpx==0.28.1
+# google-cloud-storage==2.19.0  # GCS_BUCKET 사용 시 주석 해제 (services/storage.py)

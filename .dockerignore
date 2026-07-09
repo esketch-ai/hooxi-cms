@@ -44,8 +44,13 @@ LICENSE
 
 # Test files
 tests/
+**/tests/
 test_*.py
 *_test.py
+
+# Python virtualenv
+.venv
+**/.venv
 
 # Logs
 logs/

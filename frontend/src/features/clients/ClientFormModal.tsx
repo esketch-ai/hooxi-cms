@@ -1,0 +1,355 @@
+// SCR-03 고객사 등록/수정 폼 — 플랜 §5 필드 목록 + 월간 보고서 설정 섹션
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { CircleNotch } from '@phosphor-icons/react'
+import { Modal } from '../../components/Modal'
+import { useToast } from '../../components/Toast'
+import { useUserOptions } from '../../lib/api/queries'
+import { fmtDate } from '../../lib/format'
+import type { Client, ClientPayload, ClientType, ContractStatus } from '../../types'
+import { useSaveClient } from './api'
+
+const inputCls =
+  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+  return (
+    <div>
+      <label className={labelCls}>
+        {label}
+        {required && <span className="ml-0.5 text-rose-500">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+interface ClientFormModalProps {
+  open: boolean
+  onClose: () => void
+  /** 지정 시 수정 모드 */
+  client?: Client | null
+}
+
+export function ClientFormModal({ open, onClose, client }: ClientFormModalProps) {
+  const { showToast } = useToast()
+  const { data: users = [] } = useUserOptions()
+  const save = useSaveClient(client?.client_id)
+
+  const [form, setForm] = useState<ClientPayload>(() => initForm(client))
+  // 월간 보고서 설정 (tb_report_subscription — 중첩 subscription payload)
+  const [subType, setSubType] = useState('')
+  const [subChannel, setSubChannel] = useState<'EMAIL' | 'KAKAO' | 'BOTH'>('EMAIL')
+  const [subDueDay, setSubDueDay] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setForm(initForm(client))
+      const sub = client?.subscriptions?.[0]
+      setSubType(sub?.report_type ?? '')
+      setSubChannel((sub?.channel as 'EMAIL' | 'KAKAO' | 'BOTH') ?? 'EMAIL')
+      setSubDueDay(sub?.due_day ?? null)
+    }
+  }, [open, client])
+
+  const set = <K extends keyof ClientPayload>(key: K, value: ClientPayload[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }))
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    // 필수 검증 (플랜 §5 SCR-03: 구분·고객사명·사업자번호·주소·대표자명·대표 연락처·주 담당자명·연락처·이메일·계약 상태·담당 PM)
+    const required: [keyof ClientPayload, string][] = [
+      ['company_name', '고객사명'],
+      ['biz_reg_no', '사업자번호'],
+      ['address', '주소'],
+      ['ceo_name', '대표자명'],
+      ['ceo_contact_phone', '대표 연락처'],
+      ['main_contact_name', '주 담당자명'],
+      ['main_contact_phone', '주 담당자 연락처'],
+      ['main_contact_email', '주 담당자 이메일'],
+      ['manager_id', '담당 PM'],
+    ]
+    for (const [key, label] of required) {
+      if (!String(form[key] ?? '').trim()) {
+        showToast(`${label}을(를) 입력해 주세요.`, 'danger')
+        return
+      }
+    }
+    if (form.report_yn === 'Y' && !subType.trim()) {
+      showToast('보고서 수신 시 보고서 유형을 입력해 주세요.', 'danger')
+      return
+    }
+    try {
+      await save.mutateAsync({
+        ...form,
+        contract_date: form.contract_date || null,
+        subscription:
+          form.report_yn === 'Y' && subType.trim()
+            ? {
+                report_type: subType.trim(),
+                channel: subChannel,
+                due_day: subDueDay,
+                active: 'Y',
+              }
+            : undefined,
+      })
+      showToast(client ? '고객사 정보가 수정되었습니다.' : '고객사가 등록되었습니다.', 'success')
+      onClose()
+    } catch {
+      showToast('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'danger')
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={client ? '고객사 수정' : '신규 고객사 등록'}
+      size="lg"
+    >
+      <form onSubmit={handleSubmit} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+        {/* 기본 정보 */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="구분" required>
+            <select
+              value={form.client_type}
+              onChange={(e) => set('client_type', e.target.value as ClientType)}
+              className={inputCls}
+            >
+              <option value="TRANSPORT">운수사 (TRANSPORT)</option>
+              <option value="FACILITY">건물·농장 (FACILITY)</option>
+            </select>
+          </Field>
+          <Field label="고객사명" required>
+            <input
+              value={form.company_name}
+              onChange={(e) => set('company_name', e.target.value)}
+              className={inputCls}
+              placeholder="예: 대성운수"
+            />
+          </Field>
+          <Field label="사업자번호" required>
+            <input
+              value={form.biz_reg_no ?? ''}
+              onChange={(e) => set('biz_reg_no', e.target.value)}
+              className={inputCls}
+              placeholder="000-00-00000"
+            />
+          </Field>
+          <Field label="지역">
+            <input
+              value={form.region ?? ''}
+              onChange={(e) => set('region', e.target.value)}
+              className={inputCls}
+              placeholder="예: 서울"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field label="주소" required>
+              <input
+                value={form.address ?? ''}
+                onChange={(e) => set('address', e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+          <Field label="대표자명" required>
+            <input
+              value={form.ceo_name ?? ''}
+              onChange={(e) => set('ceo_name', e.target.value)}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="대표 연락처" required>
+            <input
+              value={form.ceo_contact_phone ?? ''}
+              onChange={(e) => set('ceo_contact_phone', e.target.value)}
+              className={inputCls}
+              placeholder="02-0000-0000"
+            />
+          </Field>
+          <Field label="대표 이메일">
+            <input
+              type="email"
+              value={form.ceo_contact_email ?? ''}
+              onChange={(e) => set('ceo_contact_email', e.target.value)}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="keyman (주요 결정권자)">
+            <input
+              value={form.keyman ?? ''}
+              onChange={(e) => set('keyman', e.target.value)}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        {/* 주 담당자 (고객사측) */}
+        <div className="border-t border-slate-100 pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+            고객사 주 담당자
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="주 담당자명" required>
+              <input
+                value={form.main_contact_name ?? ''}
+                onChange={(e) => set('main_contact_name', e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="연락처 (카카오 매핑 기준)" required>
+              <input
+                value={form.main_contact_phone ?? ''}
+                onChange={(e) => set('main_contact_phone', e.target.value)}
+                className={inputCls}
+                placeholder="010-0000-0000"
+              />
+            </Field>
+            <Field label="이메일 (보고서 발송 기준)" required>
+              <input
+                type="email"
+                value={form.main_contact_email ?? ''}
+                onChange={(e) => set('main_contact_email', e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* 계약·담당 */}
+        <div className="border-t border-slate-100 pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+            계약·담당
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="계약 상태" required>
+              <select
+                value={form.contract_status}
+                onChange={(e) => set('contract_status', e.target.value as ContractStatus)}
+                className={inputCls}
+              >
+                <option value="ACTIVE">계약중 (ACTIVE)</option>
+                <option value="HOLD">보류 (HOLD)</option>
+                <option value="END">종료 (END)</option>
+              </select>
+            </Field>
+            <Field label="계약 일자">
+              <input
+                type="date"
+                value={form.contract_date ?? ''}
+                onChange={(e) => set('contract_date', e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="담당 PM" required>
+              <select
+                value={form.manager_id ?? ''}
+                onChange={(e) => set('manager_id', e.target.value)}
+                className={inputCls}
+              >
+                <option value="">선택</option>
+                {users.map((u) => (
+                  <option key={u.user_id} value={u.user_id}>
+                    {u.name} {u.position ? `(${u.position})` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </div>
+
+        {/* 월간 보고서 설정 (tb_report_subscription) */}
+        <div className="border-t border-slate-100 pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+            월간 보고서 설정
+          </p>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Field label="수신 여부">
+              <select
+                value={form.report_yn ?? 'N'}
+                onChange={(e) => set('report_yn', e.target.value)}
+                className={inputCls}
+              >
+                <option value="Y">수신 (Y)</option>
+                <option value="N">미수신 (N)</option>
+              </select>
+            </Field>
+            <Field label="보고서 유형">
+              <input
+                value={subType}
+                onChange={(e) => setSubType(e.target.value)}
+                className={inputCls}
+                placeholder="예: 월간 운행 보고서"
+                disabled={form.report_yn !== 'Y'}
+              />
+            </Field>
+            <Field label="발송 채널">
+              <select
+                value={subChannel}
+                onChange={(e) => setSubChannel(e.target.value as 'EMAIL' | 'KAKAO' | 'BOTH')}
+                className={inputCls}
+                disabled={form.report_yn !== 'Y'}
+              >
+                <option value="EMAIL">이메일</option>
+                <option value="KAKAO">카카오</option>
+                <option value="BOTH">이메일+카카오</option>
+              </select>
+            </Field>
+            <Field label="마감일 (매월 n일)">
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={subDueDay ?? ''}
+                onChange={(e) => setSubDueDay(e.target.value ? Number(e.target.value) : null)}
+                className={inputCls}
+                disabled={form.report_yn !== 'Y'}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* 액션 */}
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={save.isPending}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+          >
+            {save.isPending && <CircleNotch size={14} className="animate-spin" />}
+            {client ? '수정 저장' : '등록'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function initForm(client?: Client | null): ClientPayload {
+  return {
+    client_type: client?.client_type ?? 'TRANSPORT',
+    company_name: client?.company_name ?? '',
+    biz_reg_no: client?.biz_reg_no ?? '',
+    region: client?.region ?? '',
+    address: client?.address ?? '',
+    ceo_name: client?.ceo_name ?? '',
+    ceo_contact_phone: client?.ceo_contact_phone ?? '',
+    ceo_contact_email: client?.ceo_contact_email ?? '',
+    main_contact_name: client?.main_contact_name ?? '',
+    main_contact_phone: client?.main_contact_phone ?? '',
+    main_contact_email: client?.main_contact_email ?? '',
+    contract_status: client?.contract_status ?? 'ACTIVE',
+    contract_date: client?.contract_date ? fmtDate(client.contract_date) : '',
+    keyman: client?.keyman ?? '',
+    manager_id: client?.manager_id ?? '',
+    report_yn: client?.report_yn ?? 'N',
+  }
+}

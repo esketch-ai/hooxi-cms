@@ -30,20 +30,22 @@
 
 ### Backend API (FastAPI)
 - [ ] **Authentication** - JWT 기반 인증 시스템
-- [ ] **Client Management APIs**
-  - [ ] GET /api/clients - 고객사 목록 조회
-  - [ ] POST /api/clients - 고객사 등록
-  - [ ] GET /api/clients/{id} - 고객사 상세 조회
-  - [ ] PUT /api/clients/{id} - 고객사 수정
-  - [ ] DELETE /api/clients/{id} - 고객사 삭제
-- [ ] **Contract Management APIs**
-  - [ ] GET /api/contracts - 계약 목록 조회
-  - [ ] POST /api/contracts - 계약 등록
-- [ ] **Service Request APIs** (FMS 연동)
-  - [ ] GET /api/service-requests - 서비스 요청 목록
-  - [ ] POST /api/service-requests - 서비스 요청 생성
-- [ ] **Chat Log APIs**
-  - [ ] GET /api/chat-logs/{client_id} - 채팅 기록 조회
+- [x] **Client Management APIs**
+  - [x] GET /api/clients - 고객사 목록 조회
+  - [x] POST /api/clients - 고객사 등록
+  - [x] GET /api/clients/{id} - 고객사 상세 조회
+  - [x] PUT /api/clients/{id} - 고객사 수정
+  - [x] DELETE /api/clients/{id} - 고객사 삭제
+- [x] **Contract Management APIs**
+  - [x] GET /api/contracts - 계약 목록 조회
+  - [x] POST /api/contracts - 계약 등록
+- [x] **Service Request APIs** (FMS 연동)
+  - [x] GET /api/service-requests - 서비스 요청 목록
+  - [x] POST /api/service-requests - 서비스 요청 생성
+- [x] **Chat Log APIs**
+  - [x] GET /api/chat-logs/{client_id} - 채팅 기록 조회
+  - [x] POST /api/chat-logs/{client_id} - 채팅 메시지 등록
+- [x] **Dashboard Stats API** - GET /api/dashboard/stats
 
 ### Frontend API Integration
 - [ ] Axios/React Query 설정
@@ -86,14 +88,14 @@
 
 ---
 
-## 📊 현재 진행률: 45%
+## 📊 현재 진행률: 65%
 
 ### 완료된 항목:
 - ✅ Frontend UI 구조 (100%)
-- ✅ Database 스키마 (100%)  
-- ⏳ Backend API (0%)
+- ✅ Database 스키마 (100%)
+- ✅ Backend API - CRUD (100%)
 - ⏳ Authentication (0%)
-- ⏳ API Integration (0%)
+- ⏳ Frontend ↔ API Integration (0%)
 
 ---
 

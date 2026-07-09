@@ -1,0 +1,84 @@
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { CircleNotch } from '@phosphor-icons/react'
+import { useAuth } from './AuthProvider'
+import { AppShell } from '../layouts/AppShell'
+import { LoginPage } from '../features/auth/LoginPage'
+import { PlaceholderPage } from '../features/placeholder/PlaceholderPage'
+import { DashboardPage } from '../features/dashboard/DashboardPage'
+import { IssuesPage } from '../features/issues/IssuesPage'
+import { CalendarPage } from '../features/calendar/CalendarPage'
+import { ClientsPage } from '../features/clients/ClientsPage'
+import { ClientDetailPage } from '../features/clients/ClientDetailPage'
+import { HistoriesPage } from '../features/histories/HistoriesPage'
+import { ReportsPage } from '../features/reports/ReportsPage'
+import { DocumentsPage } from '../features/documents/DocumentsPage'
+import { SettingsPage } from '../features/settings/SettingsPage'
+
+/** 미인증(또는 PENDING·PIN 미설정) 접근 시 /login 리다이렉트 */
+function RequireAuth() {
+  const { isLoading, isAuthenticated, pinSet } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
+        <CircleNotch size={28} className="animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated || !pinSet) {
+    return <Navigate to="/login" replace />
+  }
+
+  // AppShell 내부의 <Outlet />이 하위 라우트를 렌더링
+  return <AppShell />
+}
+
+// P2·P3 플레이스홀더 라우트 — 플랜 §2.1 화면 목록 · Phase는 로드맵 §8.2 기준
+interface PlaceholderRoute {
+  path: string
+  title: string
+  subtitle: string
+  phase: 'P2' | 'P3'
+}
+
+const PLACEHOLDER_ROUTES: PlaceholderRoute[] = [
+  { path: '/assets', title: '자산 및 연동 현황', subtitle: '통합 자산·관제 연동·보안 접속 정보 (SCR-04)', phase: 'P2' },
+  { path: '/chat', title: '카카오톡 상담 관제', subtitle: 'AI·직원 응대 전환 관제 (SCR-08)', phase: 'P3' },
+  { path: '/projects', title: '감축 사업 관리', subtitle: '감축 사업·배출권 발급 추적 (SCR-06)', phase: 'P2' },
+  { path: '/projects/:projectId', title: '사업 상세·정산 매핑', subtitle: '참여 고객사 배분율·정산 매핑 (SCR-06)', phase: 'P2' },
+  { path: '/settlements', title: '고객사별 정산 현황', subtitle: '청구·입금 상태 추적 (SCR-07)', phase: 'P2' },
+  { path: '/map', title: '전국 관제 지도', subtitle: '고객사 분포·계약 상태 관제 (SCR-09)', phase: 'P3' },
+]
+
+export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
+  {
+    element: <RequireAuth />,
+    children: [
+      { path: '/', element: <Navigate to="/dashboard" replace /> },
+      // ── P1 구현 화면 ──────────────────────────────────────────────
+      { path: '/dashboard', element: <DashboardPage /> }, // SCR-01
+      { path: '/issues', element: <IssuesPage /> }, // SCR-02
+      { path: '/calendar', element: <CalendarPage /> }, // SCR-11
+      { path: '/clients', element: <ClientsPage /> }, // SCR-03
+      { path: '/clients/:clientId', element: <ClientDetailPage /> }, // SCR-03D
+      { path: '/histories', element: <HistoriesPage /> }, // SCR-05
+      { path: '/reports', element: <ReportsPage /> }, // SCR-12
+      { path: '/documents', element: <DocumentsPage /> }, // SCR-13
+      { path: '/settings', element: <SettingsPage /> }, // SCR-14 (계정 관리 탭)
+      // ── P2·P3 플레이스홀더 ────────────────────────────────────────
+      ...PLACEHOLDER_ROUTES.map((route) => ({
+        path: route.path,
+        element: (
+          <PlaceholderPage
+            title={route.title}
+            subtitle={route.subtitle}
+            phase={route.phase}
+          />
+        ),
+      })),
+    ],
+  },
+  { path: '*', element: <Navigate to="/dashboard" replace /> },
+])

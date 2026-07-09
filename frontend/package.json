@@ -8,13 +8,21 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.101.2",
+    "axios": "^1.18.1",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
     "vite": "^8.1.0"
   }

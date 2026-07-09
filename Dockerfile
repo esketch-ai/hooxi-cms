@@ -6,12 +6,8 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 
-# Copy all source files including index.html (entry point)
-COPY frontend/index.html .
-COPY frontend/src/. src/
-COPY frontend/tsconfig.json .
-COPY frontend/vite.config.ts .
-COPY frontend/public/. public/
+# Copy all source files (node_modules/dist excluded via .dockerignore)
+COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Backend + Static Files
@@ -26,8 +22,8 @@ COPY --from=frontend-builder /app/frontend/dist ./dist
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
-COPY backend/main.py .
+# Copy backend code (routers/, services/, scripts/ 포함 — .dockerignore가 .venv·tests 제외)
+COPY backend/ ./
 
 # Expose port 8080 for Cloud Run
 EXPOSE 8080

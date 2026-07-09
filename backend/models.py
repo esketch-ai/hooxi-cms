@@ -1,66 +1,474 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, UUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+"""Hooxi-CMS 데이터 모델 — SCREEN_DESIGN_PLAN.md §6 (데이터 모델 v3.2) 전면 구현.
+
+규약(PDF): 테이블명 tb_* / PK VARCHAR(50) (UUID 문자열) / 상태값 영문 대문자 /
+created_at·updated_at 필수 / FK 명시.
+"""
+
+import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Database URL from environment or default
-DATABASE_URL = "postgresql://hooxi:hooxi_secret123@localhost:5432/hooxi_cms"
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+)
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-engine = create_engine(DATABASE_URL)
+# DATABASE_URL takes precedence (Cloud Run / docker-compose);
+# otherwise assemble from individual DB_* variables (local .env)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://{user}:{password}@{host}:{port}/{name}".format(
+        user=os.getenv("DB_USER", "hooxi"),
+        password=os.getenv("DB_PASSWORD", "hooxi_secret"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        name=os.getenv("DB_NAME", "hooxi_cms"),
+    ),
+)
+
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Models
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def utcnow():
+    # DB columns are TIMESTAMP WITHOUT TIME ZONE; store naive UTC
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def gen_uuid():
+    # 규약: PK VARCHAR(50) — UUID 문자열 수용
+    return str(uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# 사용자 (CR-1: 네이버웍스 OAuth SSO — login_id/password_hash 폐지)
+# ---------------------------------------------------------------------------
+class User(Base):
+    __tablename__ = "tb_user"
+
+    user_id = Column(String(50), primary_key=True, default=gen_uuid)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    works_user_id = Column(String(100), index=True)  # 네이버웍스 사용자 ID(OAuth 매칭)
+    auth_provider = Column(String(20), default="NAVER_WORKS")
+    name = Column(String(50))
+    position = Column(String(50))
+    role = Column(String(20), nullable=False, default="STAFF")  # ADMIN/MANAGER/STAFF (§10.1)
+    status = Column(String(20), nullable=False, default="PENDING")  # PENDING/ACTIVE/INACTIVE
+    pin_hash = Column(String(255))  # 미팅 모드·reveal 게이트용 (R2-C11)
+    token_version = Column(Integer, nullable=False, default=0)  # 즉시 무효화 (C2)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# PDF 정의 5테이블 (+ 플랜 §6.1 확장 필드)
+# ---------------------------------------------------------------------------
 class Client(Base):
-    __tablename__ = "clients"
-    
-    client_id = Column(UUID(as_uuid=True), primary_key=True, default=lambda: str(uuid.uuid4()))
-    client_type = Column(String(20), nullable=False)
-    company_name = Column(String(100))
+    __tablename__ = "tb_client"
+
+    client_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_type = Column(String(20), nullable=False)  # TRANSPORT/FACILITY
+    company_name = Column(String(100), nullable=False)
     biz_reg_no = Column(String(20))
+    region = Column(String(20))
+    address = Column(String(200))
     ceo_name = Column(String(50))
+    ceo_contact_phone = Column(String(20))
+    ceo_contact_email = Column(String(100))
     main_contact_name = Column(String(50))
-    main_contact_phone = Column(String(20))
-    main_contact_email = Column(String(100), index=True)
-    contract_status = Column(String(20), default="ACTIVE")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    main_contact_phone = Column(String(20))  # 카카오톡 연동 시 매핑 기준
+    main_contact_email = Column(String(100), index=True)  # AI 메일 발송 기준
+    contract_status = Column(String(20), default="ACTIVE")  # ACTIVE/HOLD/END
+    contract_date = Column(DateTime)
+    keyman = Column(String(50))  # 주요 결정권자
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"))  # 내부 담당 PM
+    report_yn = Column(String(1), default="N")  # 보고서 대상 여부 (GAN A7)
+    lat = Column(Numeric(10, 7))  # 지오코딩 — 결정 3호
+    lng = Column(Numeric(10, 7))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-class Contract(Base):
-    __tablename__ = "contracts"
-    
-    contract_id = Column(UUID(as_uuid=True), primary_key=True, default=lambda: str(uuid.uuid4()))
-    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.client_id"), nullable=False)
-    contract_no = Column(String(50))
-    start_date = Column(DateTime)
-    end_date = Column(DateTime)
-    amount = Column(Float)
-    status = Column(String(20), default="ACTIVE")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-class ServiceRequest(Base):
-    __tablename__ = "service_requests"
-    
-    request_id = Column(UUID(as_uuid=True), primary_key=True, default=lambda: str(uuid.uuid4()))
-    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.client_id"), nullable=False)
-    request_type = Column(String(50))
-    description = Column(Text)
-    status = Column(String(20), default="PENDING")
-    priority = Column(String(20), default="NORMAL")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+class Asset(Base):
+    __tablename__ = "tb_asset"
 
-class ChatLog(Base):
-    __tablename__ = "chat_logs"
-    
-    log_id = Column(UUID(as_uuid=True), primary_key=True, default=lambda: str(uuid.uuid4()))
-    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.client_id"), nullable=True)
-    message = Column(Text, nullable=False)
-    response = Column(Text)
-    is_user = Column(Boolean, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    asset_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    asset_group = Column(String(20), nullable=False)  # MOBILITY/FACILITY 등
+    asset_type = Column(String(50))  # ICE/EV/SOLAR/HEATPUMP 등
+    quantity = Column(Integer)
+    main_spec = Column(String(100))
+    telemetry_yn = Column(String(1), default="N")  # 관제 연동 여부
+    location_info = Column(String(200))
+    status = Column(String(20), default="ACTIVE")  # ACTIVE/INACTIVE/ERROR
+    agency_name = Column(String(100))  # 대상 기관 (한국환경공단, 특정 FMS 관제사 등)
+    site_url = Column(String(255))
+    auth_type = Column(String(20))  # ID_PW/API_KEY/NONE
+    login_id = Column(String(100))
+    login_password = Column(String(255))  # 서버 AES-256 암호화 저장 (P2)
+    api_token = Column(String(500))  # 암호화 저장 (P2)
+    usage_purpose = Column(String(100))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+
+class ActivityHistory(Base):
+    __tablename__ = "tb_activity_history"
+
+    history_id = Column(String(50), primary_key=True, default=gen_uuid)
+    # 미지정 고객 임시 이력 허용 — 미매핑 플래그 (GAN E5)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=True)
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=False)  # 재지정 가능 담당자
+    created_by = Column(String(50), ForeignKey("tb_user.user_id"))  # 불변 작성자 (GAN A1)
+    activity_date = Column(DateTime, nullable=False)
+    activity_type = Column(String(20), nullable=False)  # CALL/MEETING/SITE_VISIT/EMAIL/ISSUE/KAKAO
+    retention_stage = Column(String(20))  # 인지~확장 8단계
+    issue_status = Column(String(20))  # OPEN/IN_PROGRESS/HOLD/CLOSED (ISSUE 전용)
+    priority = Column(String(10))  # URGENT/NORMAL (ISSUE 전용 — 결정 1호)
+    due_date = Column(Date)  # 이슈 마감일 (GAN A2)
+    next_action = Column(String(200))  # GAN A3
+    next_action_done = Column(String(1), default="N")
+    related_history_id = Column(
+        String(50), ForeignKey("tb_activity_history.history_id"), nullable=True
+    )  # 이슈 승격 원 이력 링크 (R2-D6)
+    title = Column(String(200), nullable=False)
+    content = Column(Text)
+    main_needs = Column(String(200))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class Project(Base):
+    __tablename__ = "tb_project"
+
+    project_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 묶음 사업 시 대표사
+    project_name = Column(String(200), nullable=False)
+    reg_code = Column(String(50))  # 예: R-2020-KR-03-000528
+    project_status = Column(String(20), nullable=False)  # 기획/등록완료/모니터링/검증/발급완료
+    reg_date = Column(Date)
+    credit_start_date = Column(Date)
+    credit_end_date = Column(Date)
+    credit_period_type = Column(String(20))
+    mon_start_date = Column(Date)
+    mon_end_date = Column(Date)
+    mon_cycle = Column(String(50))
+    expected_issue_date = Column(Date)
+    expected_credits = Column(Numeric(10, 2))
+    unit_price = Column(Numeric(15, 2))  # 수기 단가 (§10.3)
+    price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
+    issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
+    issued_at = Column(Date)
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ProjectClientMap(Base):
+    __tablename__ = "tb_project_client_map"
+
+    map_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"), nullable=True)
+    allocation_ratio = Column(Numeric(5, 2))  # 배출권 배분 비율(%)
+    success_fee_rate = Column(Numeric(5, 2))  # 성공 보수율(%)
+    expected_amount = Column(Numeric(15, 2))  # 서버 계산 (§10.3)
+    settlement_status = Column(String(20), default="STANDBY")  # STANDBY/BILLED/COMPLETED
+    # 청구 증빙 (GAN A5) — 최신 상태만 보유, 회차 스냅샷은 tb_settlement_snapshot (R3-1)
+    billed_at = Column(DateTime)
+    billed_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    completed_at = Column(DateTime)
+    completed_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    paid_amount = Column(Numeric(15, 2))
+    payment_type = Column(String(20))  # FULL/PARTIAL
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# 신규 테이블 (플랜 §6.2)
+# ---------------------------------------------------------------------------
+class Schedule(Base):
+    __tablename__ = "tb_schedule"
+
+    schedule_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=True)  # 내부 일정
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=False)
+    schedule_type = Column(String(20), nullable=False)  # MEETING/CALL/SITE_VISIT/REPORT_DUE/INTERNAL
+    title = Column(String(200), nullable=False)
+    start_at = Column(DateTime, nullable=False)
+    end_at = Column(DateTime)
+    location = Column(String(200))  # 현장 주소, 내비 딥링크 원천 (GAN A8)
+    memo = Column(Text)
+    status = Column(String(20), default="PLANNED")  # PLANNED/DONE/CANCELED (R2-D9)
+    recur_rule = Column(String(50))  # 예: MONTHLY
+    recur_until = Column(Date)  # 반복 종료일 (R3-9)
+    parent_schedule_id = Column(
+        String(50), ForeignKey("tb_schedule.schedule_id"), nullable=True
+    )  # 반복 템플릿의 회차 실체화 (R2-D8)
+    history_id = Column(
+        String(50), ForeignKey("tb_activity_history.history_id"), nullable=True
+    )  # 완료 시 생성된 활동 이력 연결
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ReportDelivery(Base):
+    __tablename__ = "tb_report_delivery"
+    __table_args__ = (
+        UniqueConstraint("client_id", "period", "report_type", name="uq_report_delivery_slot"),
+    )
+
+    report_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    period = Column(String(7), nullable=False)  # 'YYYY-MM'
+    report_type = Column(String(50), nullable=False)
+    # STANDBY/WRITING/REVIEW/SENT/CONFIRMED/CANCELED(GAN A13)/MERGED(R3-5)
+    status = Column(String(20), nullable=False, default="STANDBY")
+    canceled_reason = Column(String(200))  # 취소·복원 사유 (R3-3)
+    due_date = Column(Date)
+    sent_at = Column(DateTime)  # 최종 발송 요약 — 회차별 상세는 send_log
+    sent_channel = Column(String(20))  # EMAIL/KAKAO/BOTH
+    confirmed_at = Column(DateTime)
+    confirm_basis = Column(String(20))  # 회신메일/유선/열람 (GAN B11)
+    doc_id = Column(
+        String(50), ForeignKey("tb_document.doc_id", use_alter=True, name="fk_report_doc"),
+        nullable=True,
+    )  # 최신 표시용
+    pinned_doc_id = Column(
+        String(50), ForeignKey("tb_document.doc_id", use_alter=True, name="fk_report_pinned_doc"),
+        nullable=True,
+    )  # 발송 후보 고정 (R2-B4)
+    reviewed_by = Column(String(50), ForeignKey("tb_user.user_id"), nullable=True)  # R2-B10
+    reviewed_at = Column(DateTime)
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ReportSendLog(Base):
+    """발송 이력 — GAN A6, append-only (result만 배달 이벤트로 사후 갱신 허용, R3-4)."""
+
+    __tablename__ = "tb_report_send_log"
+
+    send_id = Column(String(50), primary_key=True, default=gen_uuid)
+    report_id = Column(String(50), ForeignKey("tb_report_delivery.report_id"), nullable=False)
+    seq = Column(Integer, nullable=False)  # 모든 발송 시도는 무조건 새 seq (R2-B3)
+    sent_doc_id = Column(String(50), ForeignKey("tb_document.doc_id"))  # 발송 시점 파일 버전 고정
+    recipients = Column(Text)  # 수신자 스냅샷
+    channel = Column(String(20))  # 채널당 1행(동일 seq 공유) — R2-B2
+    result = Column(String(20))  # SUCCESS/FAIL/BOUNCED(P2)
+    result_updated_at = Column(DateTime)  # SUCCESS→BOUNCED 사후 갱신 (R3-4)
+    confirmed_at = Column(DateTime)  # 회차별 고객확인 보존 (R3-6)
+    confirm_basis = Column(String(20))
+    confirmed_by = Column(String(50), ForeignKey("tb_user.user_id"), nullable=True)
+    sent_by = Column(String(50), ForeignKey("tb_user.user_id"))  # 대리 발송자 포함
+    reason = Column(String(200))  # 정정 재발송 사유
+    created_at = Column(DateTime, default=utcnow)
+
+
+class ReportSubscription(Base):
+    __tablename__ = "tb_report_subscription"
+    __table_args__ = (
+        UniqueConstraint("client_id", "report_type", name="uq_report_subscription_slot"),
+    )
+
+    sub_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    report_type = Column(String(50), nullable=False)
+    channel = Column(String(20), default="EMAIL")  # EMAIL/KAKAO/BOTH
+    due_day = Column(Integer)  # 1~31, 짧은 달은 말일 보정
+    active = Column(String(1), default="Y")
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ReportRecipient(Base):
+    __tablename__ = "tb_report_recipient"
+
+    recipient_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    name = Column(String(50))
+    email = Column(String(100), nullable=False)
+    cc_yn = Column(String(1), default="N")  # TO(cc_yn=N) 최소 1명 검증은 서비스 계층 (R2-B5)
+    sub_id = Column(
+        String(50), ForeignKey("tb_report_subscription.sub_id"), nullable=True
+    )  # null=전 유형 공통 (R2-B8)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class Document(Base):
+    __tablename__ = "tb_document"
+
+    doc_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id"), nullable=True
+    )  # 공용 양식·미지정 이력 사진 (R2-C6)
+    doc_type = Column(String(20), nullable=False)  # CONTRACT/REPORT/FORM/PHOTO/ETC
+    title = Column(String(200), nullable=False)
+    file_url = Column(String(255), nullable=False)
+    version = Column(Integer, default=1)
+    report_id = Column(String(50), ForeignKey("tb_report_delivery.report_id"), nullable=True)
+    history_id = Column(
+        String(50), ForeignKey("tb_activity_history.history_id"), nullable=True
+    )  # 활동 이력·이슈 첨부 (R2-C6)
+    uploaded_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
+class IssueComment(Base):
+    __tablename__ = "tb_issue_comment"
+
+    comment_id = Column(String(50), primary_key=True, default=gen_uuid)
+    history_id = Column(String(50), ForeignKey("tb_activity_history.history_id"), nullable=False)
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=False)
+    comment_type = Column(String(20), default="COMMENT")  # COMMENT/STATUS_CHANGE/ASSIGN (GAN A4)
+    content = Column(Text)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Config(Base):
+    __tablename__ = "tb_config"
+
+    config_key = Column(String(50), primary_key=True)
+    config_value = Column(Text)
+    description = Column(String(200))
+    updated_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ConfigHistory(Base):
+    __tablename__ = "tb_config_history"
+
+    history_id = Column(String(50), primary_key=True, default=gen_uuid)
+    config_key = Column(String(50), ForeignKey("tb_config.config_key"), nullable=False)
+    old_value = Column(Text)
+    new_value = Column(Text)
+    updated_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
+class AuditLog(Base):
+    """감사 로그 — GAN A10. 비밀번호·해시·인증정보 값 기록 절대 금지 (R2-E6)."""
+
+    __tablename__ = "tb_audit_log"
+
+    log_id = Column(String(50), primary_key=True, default=gen_uuid)
+    actor_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=False)
+    # REVEAL_AUTH/DOWNLOAD/ACCOUNT_CHANGE/CLIENT_KEY_CHANGE/PRIVACY_OFF
+    # + HANDOVER/MERGE/SETTLEMENT_CHANGE/AUDIT_VIEW (R2) + KAKAO_APPROVAL (CR-3)
+    action = Column(String(30), nullable=False)
+    target_type = Column(String(30))
+    target_id = Column(String(50))
+    old_value = Column(Text)
+    new_value = Column(Text)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class KpiSnapshot(Base):
+    __tablename__ = "tb_kpi_snapshot"
+
+    snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
+    period = Column(String(7), nullable=False)  # 'YYYY-MM' — 기준 시각 말일 23:59 (R2-E8)
+    metrics = Column(Text)  # JSON: 고객사 수·상태별 이슈·보고서 발송률·예상 청구액·당월 실입금 합
+    created_at = Column(DateTime, default=utcnow)
+
+
+class SettlementSnapshot(Base):
+    """정산 증빙 회차 — R3-1. 불변(append-only), map에는 최신 상태만."""
+
+    __tablename__ = "tb_settlement_snapshot"
+
+    snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
+    map_id = Column(String(50), ForeignKey("tb_project_client_map.map_id"), nullable=False)
+    seq = Column(Integer, nullable=False)
+    # 5요소 동결
+    issued_credits = Column(Numeric(10, 2))
+    amount = Column(Numeric(15, 2))
+    unit_price = Column(Numeric(15, 2))
+    allocation_ratio = Column(Numeric(5, 2))
+    success_fee_rate = Column(Numeric(5, 2))
+    paid_amount = Column(Numeric(15, 2))
+    action = Column(String(20), nullable=False)  # BILLED/REBILLED/REVERTED/COMPLETED
+    reason = Column(String(200))
+    created_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
+class KakaoContact(Base):
+    """카카오 고객 연락처 승인 — CR-3. 승인 전 AI는 일반 안내만(보안 게이트)."""
+
+    __tablename__ = "tb_kakao_contact"
+
+    contact_id = Column(String(50), primary_key=True, default=gen_uuid)
+    kakao_user_key = Column(String(100), unique=True, nullable=False)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=True)  # 승인 시 확정
+    name = Column(String(50))
+    phone = Column(String(20))
+    contact_role = Column(String(20))  # REPRESENTATIVE/CONTACT
+    status = Column(String(20), default="PENDING")  # PENDING/APPROVED/REJECTED/BLOCKED
+    requested_at = Column(DateTime, default=utcnow)
+    approved_by = Column(String(50), ForeignKey("tb_user.user_id"), nullable=True)
+    approved_at = Column(DateTime)
+    memo = Column(String(200))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ChatThread(Base):
+    __tablename__ = "tb_chat_thread"
+
+    thread_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id"), nullable=True
+    )  # kakao_contact 승인 시 확정 (CR-3)
+    kakao_contact_id = Column(String(50), ForeignKey("tb_kakao_contact.contact_id"))
+    mode = Column(String(20), default="AI")  # AI/HUMAN
+    status = Column(String(20), default="OPEN")  # OPEN/WAITING/CLOSED
+    last_message_at = Column(DateTime)
+    assigned_manager_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "tb_chat_message"
+
+    message_id = Column(String(50), primary_key=True, default=gen_uuid)
+    thread_id = Column(String(50), ForeignKey("tb_chat_thread.thread_id"), nullable=False)
+    sender_type = Column(String(20), nullable=False)  # CUSTOMER/AI/STAFF/SYSTEM
+    sender_id = Column(String(50), ForeignKey("tb_user.user_id"), nullable=True)
+    content = Column(Text)
+    created_at = Column(DateTime, default=utcnow)
+
+
+def init_db():
+    """Create tables if the database is reachable. Called at app startup —
+    must not raise, or Cloud Run will crash-loop when the DB is unset."""
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✓ Database tables ready")
+        return True
+    except Exception as exc:
+        print(f"⚠ Database unavailable, starting without it: {exc}")
+        return False
