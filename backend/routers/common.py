@@ -2,7 +2,7 @@
 
 import re
 from calendar import monthrange
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -15,6 +15,22 @@ from models import Client, Document, User, utcnow
 AUTO_PREFIX = "[자동]"
 
 _PERIOD_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+# KST(UTC+9, DST 없음) — 사용자가 고른 '날짜'를 UTC 저장 타임스탬프와 비교할 때 사용.
+# created_at 등 서버 생성 시각(UTC 저장) 필터에만 적용한다. 사용자가 벽시계로 입력한
+# activity_date·schedule 일시는 저장값 자체가 KST라 이 변환을 쓰면 안 된다.
+_KST_OFFSET = timedelta(hours=9)
+
+
+def kst_day_start_utc(d: date) -> datetime:
+    """KST 기준 해당 날짜 00:00 → UTC naive (저장 규약과 동일)."""
+    return datetime.combine(d, time.min) - _KST_OFFSET
+
+
+def kst_day_end_utc(d: date) -> datetime:
+    """KST 기준 해당 날짜 23:59:59.999999 → UTC naive."""
+    return datetime.combine(d, time.max) - _KST_OFFSET
 
 
 def current_period() -> str:

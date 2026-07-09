@@ -19,8 +19,9 @@ import { fmtDate } from '../../lib/format'
 import type { User, UserRole } from '../../types'
 import { SystemConfigTab } from './SystemConfigTab'
 import { AuditLogTab } from './AuditLogTab'
+import { BackupTab } from './BackupTab'
 
-type TabKey = 'accounts' | 'system' | 'audit'
+type TabKey = 'accounts' | 'system' | 'backup' | 'audit'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: '관리자',
@@ -50,6 +51,7 @@ export function SettingsPage() {
           [
             { key: 'accounts', label: '계정 관리' },
             { key: 'system', label: '시스템 설정' },
+            { key: 'backup', label: '백업·복구' },
             { key: 'audit', label: '감사 로그' },
           ] as { key: TabKey; label: string }[]
         ).map((t) => (
@@ -80,6 +82,8 @@ export function SettingsPage() {
         ))}
       {tab === 'system' &&
         (isAdmin ? <SystemConfigTab /> : <AdminOnlyNotice feature="시스템 설정" />)}
+      {tab === 'backup' &&
+        (isAdmin ? <BackupTab /> : <AdminOnlyNotice feature="백업·복구" />)}
       {tab === 'audit' &&
         (isAdmin ? <AuditLogTab /> : <AdminOnlyNotice feature="감사 로그" />)}
     </div>

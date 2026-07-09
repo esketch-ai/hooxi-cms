@@ -30,6 +30,8 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
   DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
+  BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
 }
 
 const FALLBACK_SPEC = { label: '', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
@@ -44,6 +46,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   KAKAO_CONTACT: '카카오 연락처',
   PROJECT_CLIENT_MAP: '정산 매핑',
   DOCUMENT: '문서',
+  DATABASE: '데이터베이스',
 }
 
 function ActionBadge({ action }: { action: string }) {

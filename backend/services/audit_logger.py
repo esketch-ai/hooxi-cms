@@ -149,6 +149,23 @@ class AuditLogger:
             db, actor_id, "USER_PIN_RESET", target_type="USER", target_id=user_id
         )
 
+    # ── 백업·복구 (SCR-14) ─────────────────────────────────────────
+    @staticmethod
+    def backup_create(db: Session, actor_id: str) -> AuditLog:
+        return AuditLogger.log_action(db, actor_id, "BACKUP_CREATE", target_type="DATABASE")
+
+    @staticmethod
+    def backup_restore(db: Session, actor_id: str, backup_run_id: str, backup_date: str) -> AuditLog:
+        """복구 실행 — 어떤 일자 백업으로 되돌렸는지 기록."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "BACKUP_RESTORE",
+            target_type="DATABASE",
+            target_id=backup_run_id,
+            new_value=backup_date,
+        )
+
     # ── 시스템 설정 (SCR-14) ───────────────────────────────────────
     @staticmethod
     def config_change(

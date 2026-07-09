@@ -38,9 +38,9 @@ def list_documents(
     if doc_type:
         query = query.filter(Document.doc_type == doc_type)
     if date_from:
-        query = query.filter(Document.created_at >= datetime.combine(date_from, datetime.min.time()))
+        query = query.filter(Document.created_at >= common.kst_day_start_utc(date_from))
     if date_to:
-        query = query.filter(Document.created_at <= datetime.combine(date_to, datetime.max.time()))
+        query = query.filter(Document.created_at <= common.kst_day_end_utc(date_to))
     if search:
         query = query.filter(Document.title.ilike("%{0}%".format(search.strip())))
 

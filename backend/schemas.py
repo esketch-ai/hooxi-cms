@@ -911,3 +911,33 @@ class AuditLogOut(BaseModel):
 class AuditLogListResponse(BaseModel):
     items: List[AuditLogOut]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# P3 — 데이터베이스 백업·복구 (SCR-14, ADMIN 전용)
+# ---------------------------------------------------------------------------
+class BackupRunOut(BaseModel):
+    backup_run_id: str
+    backup_type: Optional[str] = None    # AUTOMATED / ON_DEMAND
+    status: Optional[str] = None         # SUCCESSFUL / FAILED / RUNNING
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    description: Optional[str] = None
+
+
+class BackupListResponse(BaseModel):
+    policy: dict                         # {schedule, retention_days}
+    items: List[BackupRunOut]
+
+
+class BackupRestoreRequest(BaseModel):
+    """복구 확인 — confirm에 '복구'를 입력해야 실행."""
+
+    confirm: str = Field(min_length=1, max_length=10)
+    backup_date: Optional[str] = None    # 감사 로그 표기용
+
+
+class BackupOperationOut(BaseModel):
+    operation_id: str
+    status: str
+    error: Optional[str] = None
