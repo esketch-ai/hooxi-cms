@@ -12,7 +12,7 @@ export function LoginPage() {
     isAuthenticated,
     isPending,
     pinSet,
-    loginDev,
+    loginEmail,
     loginWithWorks,
     logout,
   } = useAuth()
@@ -21,9 +21,11 @@ export function LoginPage() {
 
   const [worksLoading, setWorksLoading] = useState(false)
   const [worksNotice, setWorksNotice] = useState<string | null>(null)
-  const [devEmail, setDevEmail] = useState('')
-  const [devLoading, setDevLoading] = useState(false)
-  const [devError, setDevError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [loginPin, setLoginPin] = useState('')
+  const [pinRequired, setPinRequired] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
 
   // PIN 설정 스텝 (R2-C11: 최초 ACTIVE 로그인 시 필수)
   const [pin1, setPin1] = useState('')
@@ -61,28 +63,38 @@ export function LoginPage() {
     }
   }
 
-  const handleDevLogin = async (e: FormEvent) => {
+  const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault()
-    setDevError(null)
-    if (!devEmail.trim()) {
-      setDevError('이메일을 입력해 주세요.')
+    setLoginError(null)
+    if (!email.trim()) {
+      setLoginError('이메일을 입력해 주세요.')
       return
     }
-    setDevLoading(true)
+    if (pinRequired && !/^\d{4,6}$/.test(loginPin)) {
+      setLoginError('PIN(4~6자리 숫자)을 입력해 주세요.')
+      return
+    }
+    setLoginLoading(true)
     try {
-      const me = await loginDev(devEmail.trim())
-      if (me.status === 'ACTIVE' && me.pin_set) {
+      const result = await loginEmail(email.trim(), pinRequired ? loginPin : undefined)
+      if (result.status === 'PIN_REQUIRED') {
+        setPinRequired(true)
+        return
+      }
+      if (result.status === 'OK' && result.me?.status === 'ACTIVE' && result.me.pin_set) {
         navigate('/dashboard', { replace: true })
       }
       // PENDING·PIN 미설정은 아래 렌더 분기에서 처리
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
-        setDevError('로그인할 수 없는 계정입니다.')
+        setLoginError('PIN이 올바르지 않습니다.')
+      } else if (isAxiosError(error) && error.response?.status === 403) {
+        setLoginError('회사 계정(@hooxipartners.com)으로만 로그인할 수 있습니다.')
       } else {
-        setDevError('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+        setLoginError('로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')
       }
     } finally {
-      setDevLoading(false)
+      setLoginLoading(false)
     }
   }
 
@@ -191,13 +203,67 @@ export function LoginPage() {
               </button>
             </form>
           ) : (
-            /* 로그인 (네이버웍스 SSO — 유일한 진입 수단) */
+            /* 로그인 — 이메일+PIN (회사 도메인 제한) + 네이버웍스 SSO(보조) */
             <div>
+              <form onSubmit={handleEmailLogin}>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  회사 이메일
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setPinRequired(false)
+                    setLoginPin('')
+                  }}
+                  placeholder="name@hooxipartners.com"
+                  autoComplete="username"
+                  className="h-11 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                  aria-label="회사 이메일"
+                />
+                {pinRequired && (
+                  <>
+                    <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">
+                      PIN (4~6자리)
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="current-password"
+                      maxLength={6}
+                      value={loginPin}
+                      onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ''))}
+                      autoFocus
+                      className="h-11 w-full rounded-lg border border-slate-200 px-3 text-center text-lg tracking-[0.5em] focus:border-slate-500 focus:outline-none"
+                      aria-label="PIN"
+                    />
+                  </>
+                )}
+                {loginError && (
+                  <p className="mt-2 text-sm text-rose-600">{loginError}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-800 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {loginLoading && <CircleNotch size={16} className="animate-spin" />}
+                  로그인
+                </button>
+              </form>
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs text-slate-400">또는</span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
               <button
                 type="button"
                 onClick={handleWorksLogin}
                 disabled={worksLoading}
-                className="flex h-12 w-full items-center justify-center gap-2.5 rounded-lg bg-[#03c75a] text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
+                className="flex h-11 w-full items-center justify-center gap-2.5 rounded-lg bg-[#03c75a] text-sm font-semibold text-white hover:brightness-95 disabled:opacity-60"
               >
                 {worksLoading ? (
                   <CircleNotch size={18} className="animate-spin" />
@@ -216,44 +282,8 @@ export function LoginPage() {
               <p className="mt-4 text-center text-xs leading-relaxed text-slate-400">
                 회사 계정(@hooxipartners.com)으로 로그인합니다
                 <br />
-                문의: 시스템 관리자(내선)
+                최초 로그인 시 가입 신청 후 관리자 승인이 필요합니다
               </p>
-
-              {/* 개발 로그인 — DEV 빌드에서만 노출 */}
-              {import.meta.env.DEV && (
-                <form
-                  onSubmit={handleDevLogin}
-                  className="mt-6 border-t border-dashed border-slate-200 pt-5"
-                >
-                  <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
-                    개발 로그인 (DEV 전용)
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={devEmail}
-                      onChange={(e) => setDevEmail(e.target.value)}
-                      placeholder="name@hooxipartners.com"
-                      className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
-                      aria-label="개발 로그인 이메일"
-                    />
-                    <button
-                      type="submit"
-                      disabled={devLoading}
-                      className="h-10 shrink-0 rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      {devLoading ? (
-                        <CircleNotch size={16} className="animate-spin" />
-                      ) : (
-                        '로그인'
-                      )}
-                    </button>
-                  </div>
-                  {devError && (
-                    <p className="mt-2 text-sm text-rose-600">{devError}</p>
-                  )}
-                </form>
-              )}
             </div>
           )}
         </div>

@@ -9,11 +9,13 @@
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 import bcrypt
 import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,8 @@ NW_AUTHORIZE_URL = "https://auth.worksmobile.com/oauth2/v2.0/authorize"
 NW_TOKEN_URL = "https://auth.worksmobile.com/oauth2/v2.0/token"
 NW_USERINFO_URL = "https://www.worksapis.com/v1.0/users/me"
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "hooxipartners.com")
+# OAuth 콜백 후 브라우저를 돌려보낼 프론트 오리진 — 프로덕션은 동일 오리진이라 기본 ""
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "")
 
 # --- RBAC (§10.1) — 권한 매트릭스는 서버 상수로 관리해 차후 수정 용이하게 ---
 ROLE_LEVEL = {"STAFF": 1, "MANAGER": 2, "ADMIN": 3}
@@ -263,15 +267,73 @@ async def works_callback(code: str, state: str, db: Session = Depends(get_db)):
         user.works_user_id = works_user_id
         db.commit()
 
+    # 브라우저 리다이렉트 플로우 — 토큰은 URL fragment(#)로 전달해 서버 로그에 남지 않게 함
     if user.status == "PENDING":
-        return {
-            "status": "PENDING",
-            "message": "가입 요청이 접수되었습니다 — 관리자 승인 후 이용 가능합니다",
-        }
+        return RedirectResponse(
+            f"{FRONTEND_ORIGIN}/login#works=pending&email={quote(email)}", status_code=302
+        )
+    if user.status != "ACTIVE":
+        return RedirectResponse(f"{FRONTEND_ORIGIN}/login#works=inactive", status_code=302)
+
+    tokens = _token_response(user)
+    fragment = (
+        f"access_token={quote(tokens.access_token)}"
+        f"&refresh_token={quote(tokens.refresh_token)}"
+    )
+    return RedirectResponse(f"{FRONTEND_ORIGIN}/login#{fragment}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# 이메일+PIN 로그인 — 도메인 제한 (네이버웍스 미연동 기간의 기본 로그인 수단)
+# ---------------------------------------------------------------------------
+@router.post("/email-login", response_model=schemas.EmailLoginResponse)
+def email_login(payload: schemas.EmailLoginRequest, db: Session = Depends(get_db)):
+    """@ALLOWED_EMAIL_DOMAIN 계정 로그인.
+
+    - 미등록 이메일: JIT 가입(PENDING) → 관리자 승인 필요
+    - ACTIVE + PIN 미설정(최초 로그인): 즉시 토큰 발급 → 프론트가 PIN 설정 강제
+    - ACTIVE + PIN 설정됨: PIN 검증 필수 (PIN이 비밀번호 역할)
+    """
+    email = payload.email.strip().lower()
+    if not email.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
+        raise HTTPException(status_code=403, detail="회사 계정으로만 로그인할 수 있습니다")
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        # JIT 가입: status=PENDING, role=STAFF (네이버웍스 JIT와 동일 정책)
+        user = User(
+            email=email,
+            auth_provider="EMAIL",
+            name=email.split("@")[0],
+            role="STAFF",
+            status="PENDING",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    if user.status == "PENDING":
+        return schemas.EmailLoginResponse(
+            status="PENDING",
+            message="가입 요청이 접수되었습니다 — 관리자 승인 후 이용 가능합니다",
+        )
     if user.status != "ACTIVE":
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다. 관리자에게 문의하세요")
 
-    return _token_response(user)
+    if user.pin_hash:
+        pin = (payload.pin or "").strip()
+        if not pin:
+            return schemas.EmailLoginResponse(status="PIN_REQUIRED")
+        if not bcrypt.checkpw(pin.encode(), user.pin_hash.encode()):
+            raise HTTPException(status_code=401, detail="PIN이 올바르지 않습니다")
+
+    tokens = _token_response(user)
+    return schemas.EmailLoginResponse(
+        status="OK",
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        user=tokens.user,
+    )
 
 
 # ---------------------------------------------------------------------------

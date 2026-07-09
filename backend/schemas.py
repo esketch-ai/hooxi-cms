@@ -67,6 +67,24 @@ class DevLoginRequest(BaseModel):
     email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+class EmailLoginRequest(BaseModel):
+    """도메인 제한 이메일+PIN 로그인 (네이버웍스 미연동 기간의 기본 수단)."""
+
+    email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    pin: Optional[str] = Field(default=None, max_length=6)
+
+
+class EmailLoginResponse(BaseModel):
+    """status: OK(토큰 포함) / PIN_REQUIRED / PENDING."""
+
+    status: str
+    message: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    user: Optional[UserOut] = None
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
