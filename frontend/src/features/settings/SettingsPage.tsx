@@ -1,9 +1,7 @@
-// SCR-14 환경 설정 — P1: 계정 관리 탭만 활성 (backend/routers/users.py)
+// SCR-14 환경 설정 — 계정 관리(P1) + 시스템 설정·감사 로그(P3, ADMIN 전용)
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ClipboardText,
-  Gear,
   LockKeyOpen,
   Prohibit,
   ShieldCheck,
@@ -19,6 +17,8 @@ import { useAuth } from '../../app/AuthProvider'
 import { api } from '../../lib/api/client'
 import { fmtDate } from '../../lib/format'
 import type { User, UserRole } from '../../types'
+import { SystemConfigTab } from './SystemConfigTab'
+import { AuditLogTab } from './AuditLogTab'
 
 type TabKey = 'accounts' | 'system' | 'audit'
 
@@ -78,21 +78,22 @@ export function SettingsPage() {
             description="계정 관리는 관리자(ADMIN)·팀장(MANAGER)만 조회할 수 있습니다."
           />
         ))}
-      {tab === 'system' && (
-        <EmptyState
-          icon={<Gear size={36} />}
-          title="시스템 설정은 P3에서 제공됩니다"
-          description="퍼널 매핑·보고서 기본값 등 tb_config 기반 설정 관리가 P3 단계에서 구현됩니다."
-        />
-      )}
-      {tab === 'audit' && (
-        <EmptyState
-          icon={<ClipboardText size={36} />}
-          title="감사 로그는 P3에서 제공됩니다"
-          description="reveal·다운로드·계정 변경 등 감사 이벤트 조회가 P3 단계에서 구현됩니다."
-        />
-      )}
+      {tab === 'system' &&
+        (isAdmin ? <SystemConfigTab /> : <AdminOnlyNotice feature="시스템 설정" />)}
+      {tab === 'audit' &&
+        (isAdmin ? <AuditLogTab /> : <AdminOnlyNotice feature="감사 로그" />)}
     </div>
+  )
+}
+
+// ── ADMIN 전용 안내 (MANAGER 이하) ──────────────────────────────────
+function AdminOnlyNotice({ feature }: { feature: string }) {
+  return (
+    <EmptyState
+      icon={<ShieldCheck size={36} />}
+      title="ADMIN 전용 기능입니다"
+      description={`${feature}은(는) 관리자(ADMIN) 권한으로만 조회·변경할 수 있습니다. (§10.1)`}
+    />
   )
 }
 

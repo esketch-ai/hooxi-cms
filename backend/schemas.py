@@ -850,3 +850,64 @@ class DashboardStats(BaseModel):
     funnel: List[FunnelStage]
     recent_activities: List[HistoryOut]
     open_issues: List[HistoryOut]
+
+
+# ---------------------------------------------------------------------------
+# 시스템 설정 (SCR-14 설정 탭 — tb_config, ADMIN 전용 §10.1)
+# ---------------------------------------------------------------------------
+class ConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    config_key: str
+    config_value: Optional[str] = None  # JSON 문자열
+    description: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    is_default: bool = False  # True = DB 미저장 — 코드 기본값(미저장) 표시
+
+
+class ConfigUpdate(BaseModel):
+    """tb_config 값 변경 — config_value는 JSON 문자열(파싱 검증)."""
+
+    config_value: str = Field(min_length=1)
+    description: Optional[str] = None
+
+
+class ConfigHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    history_id: str
+    config_key: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ConfigHistoryListResponse(BaseModel):
+    items: List[ConfigHistoryOut]
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# 감사 로그 (SCR-14 감사 로그 탭 — tb_audit_log, ADMIN 전용)
+# ---------------------------------------------------------------------------
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    log_id: str
+    actor_id: str
+    actor_name: Optional[str] = None
+    action: str
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class AuditLogListResponse(BaseModel):
+    items: List[AuditLogOut]
+    total: int

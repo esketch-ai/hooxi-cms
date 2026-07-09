@@ -9,6 +9,7 @@ import {
   FileText,
   Fire,
   Handshake,
+  MapTrifold,
   Plus,
   SquaresFour,
 } from '@phosphor-icons/react'
@@ -70,14 +71,24 @@ export function DashboardPage() {
         title="통합 현황판"
         subtitle={`팀 전체 KPI · 파이프라인 · 최근 활동${data ? ` (${data.period})` : ''}`}
         actions={
-          <button
-            type="button"
-            onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
-          >
-            <Plus size={16} weight="bold" />
-            신규 이력 등록
-          </button>
+          <>
+            {/* SCR-01 → SCR-09 지도 진입 링크 (§2.1 보조 화면) */}
+            <Link
+              to="/map"
+              className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 sm:flex"
+            >
+              <MapTrifold size={16} />
+              관제 지도
+            </Link>
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            >
+              <Plus size={16} weight="bold" />
+              신규 이력 등록
+            </button>
+          </>
         }
       />
 

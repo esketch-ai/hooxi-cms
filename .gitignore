@@ -5,6 +5,8 @@
 # Environment variables (contains sensitive credentials)
 .env
 .env.*
+# 예외: Maps JS 키는 리퍼러 제한(프로덕션 도메인·localhost 전용)이라 번들 공개 전제 — §10.4
+!frontend/.env.production
 
 # Build outputs
 dist

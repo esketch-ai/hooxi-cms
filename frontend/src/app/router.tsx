@@ -3,7 +3,6 @@ import { CircleNotch } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { AppShell } from '../layouts/AppShell'
 import { LoginPage } from '../features/auth/LoginPage'
-import { PlaceholderPage } from '../features/placeholder/PlaceholderPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { IssuesPage } from '../features/issues/IssuesPage'
 import { CalendarPage } from '../features/calendar/CalendarPage'
@@ -18,6 +17,7 @@ import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { SettlementsPage } from '../features/settlements/SettlementsPage'
 import { ChatPage } from '../features/chat/ChatPage'
+import { MapPage } from '../features/map/MapPage'
 
 /** 미인증(또는 PENDING·PIN 미설정) 접근 시 /login 리다이렉트 */
 function RequireAuth() {
@@ -38,18 +38,6 @@ function RequireAuth() {
   // AppShell 내부의 <Outlet />이 하위 라우트를 렌더링
   return <AppShell />
 }
-
-// P3 플레이스홀더 라우트 — 플랜 §2.1 화면 목록 · Phase는 로드맵 §8.2 기준
-interface PlaceholderRoute {
-  path: string
-  title: string
-  subtitle: string
-  phase: 'P2' | 'P3'
-}
-
-const PLACEHOLDER_ROUTES: PlaceholderRoute[] = [
-  { path: '/map', title: '전국 관제 지도', subtitle: '고객사 분포·계약 상태 관제 (SCR-09)', phase: 'P3' },
-]
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -74,17 +62,7 @@ export const router = createBrowserRouter([
       { path: '/settlements', element: <SettlementsPage /> }, // SCR-07
       // ── P3 구현 화면 ──────────────────────────────────────────────
       { path: '/chat', element: <ChatPage /> }, // SCR-08
-      // ── P3 플레이스홀더 ───────────────────────────────────────────
-      ...PLACEHOLDER_ROUTES.map((route) => ({
-        path: route.path,
-        element: (
-          <PlaceholderPage
-            title={route.title}
-            subtitle={route.subtitle}
-            phase={route.phase}
-          />
-        ),
-      })),
+      { path: '/map', element: <MapPage /> }, // SCR-09
     ],
   },
   { path: '*', element: <Navigate to="/dashboard" replace /> },

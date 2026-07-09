@@ -64,6 +64,18 @@ USERS = [
     {"user_id": "demo-user-03", "email": "demo.staff2@hooxipartners.com", "name": "박대리", "role": "STAFF"},
 ]
 
+# region별 근사 좌표 — lat/lng 미입력 고객사 보정용 (SCR-09 지도 마커, 결정 3호)
+REGION_COORDS = {
+    "서울": (37.5665, 126.9780),
+    "인천": (37.4563, 126.7052),
+    "경기": (37.2894, 127.0536),
+    "충남": (36.6588, 126.6728),
+    "부산": (35.1796, 129.0756),
+    "전북": (35.7175, 127.1530),
+    "대구": (35.8714, 128.6014),
+    "강원": (37.8228, 128.1555),
+}
+
 CLIENTS = [
     ("demo-cl-01", "TRANSPORT", "한빛운수", "ACTIVE", "demo-user-01", "서울", "Y"),
     ("demo-cl-02", "TRANSPORT", "미래교통", "ACTIVE", "demo-user-02", "경기", "Y"),
@@ -310,6 +322,25 @@ def seed():
                     keyman="키맨{0}".format(num), manager_id=mgr, report_yn=report_yn,
                 ),
             )
+        db.flush()
+
+        # lat/lng 보정 — 좌표가 비어 있는 데모 고객사만 region 근사 좌표 + 고객사별
+        # 오프셋(마커 겹침 방지)으로 채운다. 이미 좌표가 있으면 건드리지 않음(멱등).
+        coords_filled = 0
+        for idx, entry in enumerate(CLIENTS):
+            cid = entry[0]
+            row = db.get(Client, cid)
+            if row is None or row.lat is not None or row.lng is not None:
+                continue
+            base = REGION_COORDS.get(row.region)
+            if base is None:
+                continue
+            offset = (idx + 1) * 0.0035
+            row.lat = round(base[0] + offset, 7)
+            row.lng = round(base[1] - offset, 7)
+            coords_filled += 1
+        if coords_filled:
+            print("✓ 고객사 좌표 보정 — {0}건 (region 근사 좌표)".format(coords_filled))
         db.flush()
 
         for hid, cid, mgr, days_ago, atype, stage, istatus, prio, title in HISTORIES:

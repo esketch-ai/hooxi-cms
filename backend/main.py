@@ -34,8 +34,10 @@ from models import (
     init_db,
 )
 from routers import assets as assets_router
+from routers import audit as audit_router
 from routers import chat as chat_router
 from routers import clients as clients_router
+from routers import config as config_router
 from routers import dashboard as dashboard_router
 from routers import documents as documents_router
 from routers import histories as histories_router
@@ -127,6 +129,8 @@ app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(chat_router.router, prefix=API_V1_PREFIX)
+app.include_router(config_router.router, prefix=API_V1_PREFIX)
+app.include_router(audit_router.router, prefix=API_V1_PREFIX)
 
 
 @app.get(f"{API_V1_PREFIX}/health", response_model=schemas.HealthResponse)
