@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission
 from models import (
-    AuditLog,
     Project,
     ProjectClientMap,
     SettlementSnapshot,
@@ -23,6 +22,7 @@ from models import (
     utcnow,
 )
 from routers import common
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/settlements", tags=["settlements"])
 
@@ -172,16 +172,7 @@ def update_settlement_status(
         )
     )
     # 감사 로그 (R2) — 금액·값 원문 기록 금지, 상태만
-    db.add(
-        AuditLog(
-            actor_id=user.user_id,
-            action="SETTLEMENT_CHANGE",
-            target_type="PROJECT_CLIENT_MAP",
-            target_id=map_id,
-            old_value=current,
-            new_value=target,
-        )
-    )
+    AuditLogger.settlement_change(db, user.user_id, map_id, current, target)
     db.commit()
     db.refresh(mapping)
     cnames = common.client_name_map(db, [mapping.client_id])

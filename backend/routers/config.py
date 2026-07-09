@@ -14,10 +14,11 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import require_role
-from models import AuditLog, Config, ConfigHistory, User, get_db
+from models import Config, ConfigHistory, User, get_db
 from routers import common
 from routers.dashboard import _DEFAULT_FUNNEL_MAPPING
 from routers.kakao import DEFAULT_SENSITIVE_KEYWORDS
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -156,16 +157,7 @@ def update_config(
         )
     )
     # 감사 로그 (tb_audit_log) — 설정값은 비밀정보가 아니므로 전/후 값 기록 (R2-E6 준수)
-    db.add(
-        AuditLog(
-            actor_id=admin.user_id,
-            action="CONFIG_CHANGE",
-            target_type="CONFIG",
-            target_id=config_key,
-            old_value=old_value,
-            new_value=payload.config_value,
-        )
-    )
+    AuditLogger.config_change(db, admin.user_id, config_key, old_value, payload.config_value)
     db.commit()
     db.refresh(row)
     return _config_out(db, row)

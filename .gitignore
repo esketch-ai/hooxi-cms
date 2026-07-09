@@ -336,3 +336,4 @@ docs/
 
 # 예외(최종 — 뒤쪽 중복 규칙보다 우선): 리퍼러 제한 Maps JS 키 (§10.4)
 !frontend/.env.production
+tsconfig.tsbuildinfo

@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission, require_role
 from models import (
-    AuditLog,
     ChatMessage,
     ChatThread,
     Client,
@@ -27,6 +26,7 @@ from models import (
     utcnow,
 )
 from routers import common
+from services.audit_logger import AuditLogger
 from services import kakao_service
 
 router = APIRouter(tags=["kakao"])
@@ -267,16 +267,7 @@ def update_kakao_contact(
     if payload.memo is not None:
         contact.memo = payload.memo
 
-    db.add(
-        AuditLog(
-            actor_id=user.user_id,
-            action="KAKAO_APPROVAL",
-            target_type="KAKAO_CONTACT",
-            target_id=contact.contact_id,
-            old_value=old_status,
-            new_value=payload.status,
-        )
-    )
+    AuditLogger.kakao_approval(db, user.user_id, contact.contact_id, old_status, payload.status)
     db.commit()
     db.refresh(contact)
     return _contact_out(db, contact)

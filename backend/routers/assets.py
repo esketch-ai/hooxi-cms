@@ -14,9 +14,10 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission, require_role
-from models import Asset, AuditLog, Client, ProjectClientMap, User, get_db, utcnow
+from models import Asset, Client, ProjectClientMap, User, get_db, utcnow
 from routers import common
 from services import crypto
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -210,14 +211,7 @@ def reveal_auth(
     plaintext = crypto.decrypt(encrypted)  # 키 미설정 시 여기서 503
 
     # 감사 로그 — 누가·언제·어떤 자산 (값은 기록 금지)
-    db.add(
-        AuditLog(
-            actor_id=user.user_id,
-            action="REVEAL_AUTH",
-            target_type="ASSET",
-            target_id=asset.asset_id,
-        )
-    )
+    AuditLogger.reveal_auth_access(db, user.user_id, asset.asset_id)
     db.commit()
     return schemas.AssetRevealOut(
         asset_id=asset.asset_id,

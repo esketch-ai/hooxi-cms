@@ -12,6 +12,7 @@ from auth import get_current_user, require_permission
 from models import ActivityHistory, Client, Document, User, get_db
 from routers import common
 from services import storage
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -94,10 +95,10 @@ async def upload_document(
 @router.get("/{doc_id}/download")
 def download_document(
     doc_id: str,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """다운로드 — GCS는 서명 URL 리다이렉트, 로컬은 파일 응답."""
+    """다운로드 — GCS는 서명 URL 리다이렉트, 로컬은 파일 응답. 감사 로그 기록."""
     doc = common.get_or_404(db, Document, doc_id, "문서")
     try:
         url = storage.get_url(doc.file_url)
@@ -105,6 +106,8 @@ def download_document(
         raise HTTPException(status_code=503, detail=str(exc))
     if not url:
         raise HTTPException(status_code=404, detail="저장소에서 파일을 찾을 수 없습니다")
+    AuditLogger.document_download(db, user.user_id, doc.doc_id)
+    db.commit()
     if url.startswith("http://") or url.startswith("https://"):
         return RedirectResponse(url)
     return FileResponse(url, filename=doc.title or "document")

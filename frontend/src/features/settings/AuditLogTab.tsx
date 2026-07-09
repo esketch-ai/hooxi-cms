@@ -24,6 +24,12 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
     cls: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   },
   CONFIG_CHANGE: { label: '설정 변경', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+  // 내부 사용자 감사 이력 (SCR-14 계정 관리)
+  USER_APPROVE: { label: '가입 승인', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+  DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
 }
 
 const FALLBACK_SPEC = { label: '', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
@@ -36,6 +42,8 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   SETTLEMENT: '정산',
   CONFIG: '설정',
   KAKAO_CONTACT: '카카오 연락처',
+  PROJECT_CLIENT_MAP: '정산 매핑',
+  DOCUMENT: '문서',
 }
 
 function ActionBadge({ action }: { action: string }) {

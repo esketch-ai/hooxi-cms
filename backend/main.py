@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 import auth
 import schemas
 from models import (
-    AuditLog,
     Client,
     Document,
     ReportDelivery,
@@ -48,6 +47,7 @@ from routers import schedules as schedules_router
 from routers import settlements as settlements_router
 from routers import users as users_router
 from services import storage
+from services.audit_logger import AuditLogger
 
 API_VERSION = "1.0.0"
 
@@ -226,16 +226,8 @@ def view_report_page(token: str, db: Session = Depends(get_db)):
     # 열람 추적 (REPORT_VIEW) — actor는 발송 담당자 기준(무인증 열람, tb_user FK 제약)
     actor_id = delivery.manager_id or doc.uploaded_by
     if actor_id:
-        db.add(
-            AuditLog(
-                actor_id=actor_id,
-                action="REPORT_VIEW",
-                target_type="REPORT",
-                target_id=delivery.report_id,
-            )
-        )
+        AuditLogger.report_view(db, actor_id, delivery.report_id)
         db.commit()
-
     # 다운로드: GCS는 서명 URL, 로컬 저장소는 토큰 재검증 스트림 엔드포인트
     if doc.file_url.startswith("gs://"):
         download_url = storage.get_url(doc.file_url, expires_seconds=3600)

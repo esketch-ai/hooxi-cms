@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_role
 from models import User, get_db
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -48,7 +49,7 @@ def list_users(
 def approve_user(
     user_id: str,
     payload: schemas.UserApproveRequest,
-    _: User = Depends(require_role("ADMIN")),
+    admin: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ):
     """가입 승인 (CR-1): PENDING → ACTIVE + role 지정."""
@@ -57,6 +58,7 @@ def approve_user(
         raise HTTPException(status_code=409, detail="승인 대기(PENDING) 상태의 사용자가 아닙니다")
     target.status = "ACTIVE"
     target.role = payload.role
+    AuditLogger.user_approve(db, admin.user_id, target.user_id, payload.role)
     db.commit()
     db.refresh(target)
     return _user_out(target)
@@ -74,8 +76,10 @@ def change_role(
         raise HTTPException(status_code=400, detail="본인의 역할은 변경할 수 없습니다")
     target = _get_target_user(user_id, db)
     if target.role != payload.role:
+        old_role = target.role
         target.role = payload.role
         target.token_version = (target.token_version or 0) + 1
+        AuditLogger.user_role_change(db, admin.user_id, target.user_id, old_role, payload.role)
         db.commit()
         db.refresh(target)
     return _user_out(target)
@@ -97,8 +101,10 @@ def deactivate_user(
         )
         if active_admins <= 1:
             raise HTTPException(status_code=400, detail="마지막 ADMIN 계정은 비활성화할 수 없습니다")
+    old_status = target.status
     target.status = "INACTIVE"
     target.token_version = (target.token_version or 0) + 1
+    AuditLogger.user_deactivate(db, admin.user_id, target.user_id, old_status)
     db.commit()
     db.refresh(target)
     return _user_out(target)
@@ -107,12 +113,13 @@ def deactivate_user(
 @router.put("/{user_id}/pin-reset", response_model=schemas.UserOut)
 def reset_pin(
     user_id: str,
-    _: User = Depends(require_role("ADMIN")),
+    admin: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ):
     """PIN 초기화 (CR-1: 비밀번호 초기화 폐지 — PIN 초기화만 유지)."""
     target = _get_target_user(user_id, db)
     target.pin_hash = None
+    AuditLogger.user_pin_reset(db, admin.user_id, target.user_id)
     db.commit()
     db.refresh(target)
     return _user_out(target)
