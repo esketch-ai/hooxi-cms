@@ -1,4 +1,5 @@
-"""Pydantic 스키마 — P0(auth·users·health) + P1(고객사·이력·일정·보고서·문서·대시보드)."""
+"""Pydantic 스키마 — P0(auth·users·health) + P1(고객사·이력·일정·보고서·문서·대시보드)
++ P2(자산·감축 사업·정산)."""
 
 from datetime import date, datetime
 from typing import List, Optional
@@ -235,6 +236,232 @@ class AssetOut(BaseModel):
     has_credentials: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# P2 — 자산 및 연동 (SCR-04)
+# ---------------------------------------------------------------------------
+class AssetCreate(BaseModel):
+    """자산 등록 — auth_value(평문 인증정보)는 서버 AES-256-GCM 암호화 후 저장, 응답 미포함."""
+
+    client_id: str
+    asset_group: str = Field(pattern="^(MOBILITY|FACILITY)$")
+    asset_type: Optional[str] = None  # ICE/EV/SOLAR/HEATPUMP 등
+    quantity: Optional[int] = Field(default=None, ge=0)
+    main_spec: Optional[str] = None
+    telemetry_yn: str = Field(default="N", pattern="^[YN]$")
+    location_info: Optional[str] = None
+    status: str = Field(default="ACTIVE", pattern="^(ACTIVE|INACTIVE|ERROR)$")
+    agency_name: Optional[str] = None
+    site_url: Optional[str] = None
+    auth_type: str = Field(default="NONE", pattern="^(ID_PW|API_KEY|NONE)$")
+    login_id: Optional[str] = None
+    auth_value: Optional[str] = None  # ID_PW=비밀번호 / API_KEY=토큰 — 평문 저장 절대 금지
+    usage_purpose: Optional[str] = None
+
+
+class AssetUpdate(BaseModel):
+    """자산 수정 — 전달된 필드만 반영. auth_value 전달 시 재암호화(빈 문자열은 삭제)."""
+
+    client_id: Optional[str] = None
+    asset_group: Optional[str] = Field(default=None, pattern="^(MOBILITY|FACILITY)$")
+    asset_type: Optional[str] = None
+    quantity: Optional[int] = Field(default=None, ge=0)
+    main_spec: Optional[str] = None
+    telemetry_yn: Optional[str] = Field(default=None, pattern="^[YN]$")
+    location_info: Optional[str] = None
+    status: Optional[str] = Field(default=None, pattern="^(ACTIVE|INACTIVE|ERROR)$")
+    agency_name: Optional[str] = None
+    site_url: Optional[str] = None
+    auth_type: Optional[str] = Field(default=None, pattern="^(ID_PW|API_KEY|NONE)$")
+    login_id: Optional[str] = None
+    auth_value: Optional[str] = None
+    usage_purpose: Optional[str] = None
+
+
+class AssetListItem(AssetOut):
+    """자산 목록 행 (SCR-04) — 고객사명 조인. 인증정보는 has_credentials·auth_type만."""
+
+    client_name: Optional[str] = None
+
+
+class AssetListResponse(BaseModel):
+    items: List[AssetListItem]
+    total: int
+
+
+class AssetRevealOut(BaseModel):
+    """reveal-auth 응답 — 일시 복호화 평문(프론트 5초 자동 숨김). 호출은 감사 로그 필수."""
+
+    asset_id: str
+    auth_type: Optional[str] = None
+    login_id: Optional[str] = None
+    auth_value: str
+    revealed_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# P2 — 감축 사업 (SCR-06)
+# ---------------------------------------------------------------------------
+_PROJECT_STATUS_PATTERN = "^(기획|등록완료|모니터링|검증|발급완료)$"
+
+
+class ProjectCreate(BaseModel):
+    client_id: Optional[str] = None  # 묶음 사업 시 대표사
+    project_name: str = Field(min_length=1, max_length=200)
+    reg_code: Optional[str] = None  # 예: R-2024-KR-03-000528
+    project_status: str = Field(default="기획", pattern=_PROJECT_STATUS_PATTERN)
+    reg_date: Optional[date] = None
+    credit_start_date: Optional[date] = None
+    credit_end_date: Optional[date] = None
+    credit_period_type: Optional[str] = None
+    mon_start_date: Optional[date] = None
+    mon_end_date: Optional[date] = None
+    mon_cycle: Optional[str] = None
+    expected_issue_date: Optional[date] = None
+    expected_credits: Optional[float] = Field(default=None, ge=0)
+    unit_price: Optional[float] = Field(default=None, ge=0)  # §10.3 수기 단가
+    issued_credits: Optional[float] = Field(default=None, ge=0)
+    issued_at: Optional[date] = None
+    manager_id: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    client_id: Optional[str] = None
+    project_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    reg_code: Optional[str] = None
+    project_status: Optional[str] = Field(default=None, pattern=_PROJECT_STATUS_PATTERN)
+    reg_date: Optional[date] = None
+    credit_start_date: Optional[date] = None
+    credit_end_date: Optional[date] = None
+    credit_period_type: Optional[str] = None
+    mon_start_date: Optional[date] = None
+    mon_end_date: Optional[date] = None
+    mon_cycle: Optional[str] = None
+    expected_issue_date: Optional[date] = None
+    expected_credits: Optional[float] = Field(default=None, ge=0)
+    unit_price: Optional[float] = Field(default=None, ge=0)
+    issued_credits: Optional[float] = Field(default=None, ge=0)
+    issued_at: Optional[date] = None
+    manager_id: Optional[str] = None
+
+
+class ProjectOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    project_id: str
+    client_id: Optional[str] = None
+    project_name: str
+    reg_code: Optional[str] = None
+    project_status: str
+    reg_date: Optional[date] = None
+    credit_start_date: Optional[date] = None
+    credit_end_date: Optional[date] = None
+    credit_period_type: Optional[str] = None
+    mon_start_date: Optional[date] = None
+    mon_end_date: Optional[date] = None
+    mon_cycle: Optional[str] = None
+    expected_issue_date: Optional[date] = None  # D-day 계산용 (SCR-06)
+    expected_credits: Optional[float] = None  # 🔒 프론트 마스킹
+    unit_price: Optional[float] = None  # 🔒
+    price_source: Optional[str] = None
+    issued_credits: Optional[float] = None
+    issued_at: Optional[date] = None
+    manager_id: Optional[str] = None
+    manager_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ProjectListItem(ProjectOut):
+    """목록 행 — 참여 고객사 수 포함."""
+
+    client_count: int = 0
+
+
+class ProjectListResponse(BaseModel):
+    items: List[ProjectListItem]
+    total: int
+
+
+class UnitPriceUpdate(BaseModel):
+    """배출권 단가 수기 입력 (§10.3) — null 전달 시 '미정'으로 초기화."""
+
+    unit_price: Optional[float] = Field(default=None, ge=0)
+
+
+class ProjectMapIn(BaseModel):
+    """참여 고객사 매핑 등록/수정 — expected_amount는 서버 계산(§10.3)."""
+
+    client_id: str
+    asset_id: Optional[str] = None  # 연결 자산
+    allocation_ratio: float = Field(ge=0, le=100)  # 배분율(%)
+    success_fee_rate: float = Field(ge=0, le=100)  # 성공 보수율(%) 🔒
+
+
+class ProjectMapOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    map_id: str
+    project_id: str
+    client_id: str
+    client_name: Optional[str] = None
+    asset_id: Optional[str] = None
+    asset_summary: Optional[str] = None  # 연결 자산 요약 (분류·제원)
+    allocation_ratio: Optional[float] = None
+    success_fee_rate: Optional[float] = None  # 🔒
+    expected_amount: Optional[float] = None  # 🔒 서버 계산 — 단가 미입력 시 null(미정)
+    settlement_status: Optional[str] = None
+    billed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    paid_amount: Optional[float] = None
+    payment_type: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ProjectDetailOut(ProjectOut):
+    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계."""
+
+    clients: List[ProjectMapOut] = []
+    allocation_total: float = 0  # 배분율 합계(100% 검증 UI용)
+
+
+# ---------------------------------------------------------------------------
+# P2 — 정산 (SCR-07)
+# ---------------------------------------------------------------------------
+class SettlementRow(BaseModel):
+    """정산 행 — tb_project_client_map 기반. 금액은 항상 서버 계산 값."""
+
+    map_id: str
+    project_id: str
+    project_name: Optional[str] = None
+    client_id: str
+    client_name: Optional[str] = None
+    allocation_ratio: Optional[float] = None  # 지분율(%)
+    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
+    expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
+    settlement_status: str
+    unit_price: Optional[float] = None  # 🔒
+    expected_credits: Optional[float] = None  # 🔒
+    billed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    paid_amount: Optional[float] = None
+    payment_type: Optional[str] = None
+
+
+class SettlementListResponse(BaseModel):
+    items: List[SettlementRow]
+    total: int
+
+
+class SettlementStatusUpdate(BaseModel):
+    """정산 상태 전이 — STANDBY→BILLED→COMPLETED, 역행 금지(409). MANAGER 이상(§10.1)."""
+
+    settlement_status: str = Field(pattern="^(STANDBY|BILLED|COMPLETED)$")
+    paid_amount: Optional[float] = Field(default=None, ge=0)  # COMPLETED — 실입금액
+    payment_type: Optional[str] = Field(default=None, pattern="^(FULL|PARTIAL)$")
+    reason: Optional[str] = None  # 스냅샷 사유
 
 
 # ---------------------------------------------------------------------------

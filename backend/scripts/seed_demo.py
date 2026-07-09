@@ -6,6 +6,10 @@
 내용: 데모 사용자 3명 · 고객사 8곳(TRANSPORT/FACILITY, ACTIVE/HOLD/END 혼합) ·
 활동 이력 30건(ISSUE 상태 분포 + 코멘트) · 당월 일정 15건(REPORT_DUE 포함) ·
 당월 보고서 대상 8건(상태 분포) · 문서 10건(더미 file_url) · 구독·수신자 설정.
+
+P2 확장: 자산 12건(고객사 분산·인증 방식 혼합 — ASSET_ENC_KEY 미설정 시 인증정보 비움) ·
+감축 사업 4건(상태 분포·단가 입력/미입력 혼합) · 참여 고객사 매핑 10건(배분율 합계 100% 이하,
+정산 상태 분포). expected_amount는 §10.3 산식으로 적재.
 """
 
 import os
@@ -16,9 +20,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import (  # noqa: E402
     ActivityHistory,
+    Asset,
     Client,
     Document,
     IssueComment,
+    Project,
+    ProjectClientMap,
     ReportDelivery,
     ReportRecipient,
     ReportSubscription,
@@ -28,6 +35,8 @@ from models import (  # noqa: E402
     init_db,
     utcnow,
 )
+from routers.common import compute_expected_amount  # noqa: E402
+from services import crypto  # noqa: E402
 
 NOW = utcnow()
 PERIOD = NOW.strftime("%Y-%m")
@@ -159,6 +168,55 @@ DOCUMENTS = [
     ("demo-d-08", None, "FORM", "VCM 검증 체크리스트", None),
     ("demo-d-09", "demo-cl-06", "PHOTO", "서해태양광 현장 점검 사진", None),
     ("demo-d-10", "demo-cl-08", "PHOTO", "누리히트펌프 설치 현장 사진", None),
+]
+
+
+# ---------------------------------------------------------------------------
+# P2 — 자산·감축 사업·정산 매핑 (SCR-04/06/07)
+# ---------------------------------------------------------------------------
+# (id, client, group, type, qty, spec, telemetry, agency, auth_type, login_id, secret)
+# secret은 ASSET_ENC_KEY가 설정된 경우에만 암호화 저장 — 미설정 시 인증정보 비움
+ASSETS = [
+    ("demo-a-01", "demo-cl-01", "MOBILITY", "ICE", 45, "경유 시내버스", "Y", "한국환경공단", "ID_PW", "hanbit-admin", "demo-pw-01!"),
+    ("demo-a-02", "demo-cl-01", "MOBILITY", "EV", 12, "전기 저상버스", "Y", "스마트FMS관제", "API_KEY", None, "demo-token-02"),
+    ("demo-a-03", "demo-cl-02", "MOBILITY", "ICE", 30, "경유 광역버스", "Y", "한국환경공단", "ID_PW", "mirae-fleet", "demo-pw-03!"),
+    ("demo-a-04", "demo-cl-02", "MOBILITY", "EV", 8, "전기 마을버스", "Y", "스마트FMS관제", "API_KEY", None, "demo-token-04"),
+    ("demo-a-05", "demo-cl-03", "FACILITY", "SOLAR", 1, "500kW 태양광 발전소", "Y", "한국에너지공단 RPS", "API_KEY", None, "demo-token-05"),
+    ("demo-a-06", "demo-cl-03", "FACILITY", "SOLAR", 1, "100kW 지붕형 태양광", "N", None, "NONE", None, None),
+    ("demo-a-07", "demo-cl-04", "FACILITY", "HEATPUMP", 3, "농업용 히트펌프 30RT", "Y", "설비 원격관제", "ID_PW", "ecofarms-hp", "demo-pw-07!"),
+    ("demo-a-08", "demo-cl-05", "MOBILITY", "ICE", 25, "경유 화물트럭", "N", None, "NONE", None, None),
+    ("demo-a-09", "demo-cl-06", "FACILITY", "SOLAR", 2, "1MW 지상형 태양광", "Y", "한국에너지공단 RPS", "API_KEY", None, "demo-token-09"),
+    ("demo-a-10", "demo-cl-07", "MOBILITY", "ICE", 18, "경유 시외버스", "N", None, "NONE", None, None),
+    ("demo-a-11", "demo-cl-08", "FACILITY", "HEATPUMP", 5, "산업용 히트펌프 50RT", "Y", "설비 원격관제", "ID_PW", "nuri-hp", "demo-pw-11!"),
+    ("demo-a-12", "demo-cl-06", "FACILITY", "SOLAR", 1, "ESS 연계 태양광", "N", "한국에너지공단 RPS", "API_KEY", None, "demo-token-12"),
+]
+
+# (id, name, reg_code, status, expected_credits, unit_price, mon_cycle,
+#  issue_in_days(예상 발급일 오프셋), issued_credits, manager)
+PROJECTS = [
+    ("demo-p-01", "수도권 전기버스 전환 감축사업", "R-2024-KR-03-000101", "모니터링",
+     12000, 15000, "분기", 45, None, "demo-user-01"),
+    ("demo-p-02", "서해권 태양광 발전 감축사업", "R-2023-KR-03-000202", "검증",
+     8000, None, "반기", 90, None, "demo-user-02"),  # 단가 미입력 — 금액 '미정'
+    ("demo-p-03", "히트펌프 보일러 대체 감축사업", "R-2025-KR-03-000303", "기획",
+     3000, None, "월간", None, None, "demo-user-03"),
+    ("demo-p-04", "노후 화물차 EV 전환 감축사업", "R-2022-KR-03-000404", "발급완료",
+     15000, 12000, "분기", -30, 14200, "demo-user-01"),
+]
+
+# (id, project, client, asset, allocation_ratio, success_fee_rate, settlement_status)
+# 사업별 배분율 합계 100% 이하 유지
+PROJECT_MAPS = [
+    ("demo-m-01", "demo-p-01", "demo-cl-01", "demo-a-02", 40, 10, "STANDBY"),
+    ("demo-m-02", "demo-p-01", "demo-cl-02", "demo-a-04", 35, 12, "STANDBY"),
+    ("demo-m-03", "demo-p-01", "demo-cl-05", "demo-a-08", 25, 10, "STANDBY"),
+    ("demo-m-04", "demo-p-02", "demo-cl-03", "demo-a-05", 60, 15, "STANDBY"),
+    ("demo-m-05", "demo-p-02", "demo-cl-06", "demo-a-09", 40, 15, "STANDBY"),
+    ("demo-m-06", "demo-p-03", "demo-cl-08", "demo-a-11", 50, 20, "STANDBY"),
+    ("demo-m-07", "demo-p-03", "demo-cl-04", "demo-a-07", 30, 20, "STANDBY"),
+    ("demo-m-08", "demo-p-04", "demo-cl-01", "demo-a-01", 50, 10, "BILLED"),
+    ("demo-m-09", "demo-p-04", "demo-cl-02", "demo-a-03", 30, 12, "COMPLETED"),
+    ("demo-m-10", "demo-p-04", "demo-cl-07", "demo-a-10", 20, 10, "STANDBY"),
 ]
 
 
@@ -300,6 +358,76 @@ def seed():
                 delivery = db.get(ReportDelivery, rid)
                 if delivery is not None and delivery.doc_id is None:
                     delivery.doc_id = did
+
+        # --- P2: 자산 (SCR-04) — ASSET_ENC_KEY 없으면 인증정보는 비움 ---
+        enc_ok = crypto.encryption_available()
+        for aid, cid, group, atype, qty, spec, tel, agency, auth, login, secret in ASSETS:
+            add_if_absent(
+                Asset, aid,
+                lambda aid=aid, cid=cid, group=group, atype=atype, qty=qty, spec=spec,
+                tel=tel, agency=agency, auth=auth, login=login, secret=secret: Asset(
+                    asset_id=aid, client_id=cid, asset_group=group, asset_type=atype,
+                    quantity=qty, main_spec=spec, telemetry_yn=tel, status="ACTIVE",
+                    agency_name=agency, auth_type=auth, login_id=login,
+                    location_info="현장 {0}".format(aid[-2:]),
+                    usage_purpose="관제 연동" if tel == "Y" else None,
+                    login_password=(
+                        crypto.encrypt(secret) if enc_ok and secret and auth == "ID_PW" else None
+                    ),
+                    api_token=(
+                        crypto.encrypt(secret) if enc_ok and secret and auth == "API_KEY" else None
+                    ),
+                ),
+            )
+        db.flush()
+
+        # --- P2: 감축 사업 (SCR-06) — 상태 분포·단가 입력/미입력 혼합 ---
+        for pid, name, reg, status, credits, price, cycle, issue_days, issued, mgr in PROJECTS:
+            issue_date = (NOW + timedelta(days=issue_days)).date() if issue_days is not None else None
+            add_if_absent(
+                Project, pid,
+                lambda pid=pid, name=name, reg=reg, status=status, credits=credits,
+                price=price, cycle=cycle, issue_date=issue_date, issued=issued, mgr=mgr: Project(
+                    project_id=pid, project_name=name, reg_code=reg, project_status=status,
+                    reg_date=(NOW - timedelta(days=400)).date(),
+                    credit_start_date=(NOW - timedelta(days=365)).date(),
+                    credit_end_date=(NOW + timedelta(days=365 * 4)).date(),
+                    credit_period_type="고정형",
+                    mon_start_date=(NOW - timedelta(days=180)).date(),
+                    mon_end_date=(NOW + timedelta(days=180)).date(),
+                    mon_cycle=cycle, expected_issue_date=issue_date,
+                    expected_credits=credits, unit_price=price, price_source="MANUAL",
+                    issued_credits=issued,
+                    issued_at=issue_date if status == "발급완료" else None,
+                    manager_id=mgr,
+                ),
+            )
+        db.flush()
+
+        # --- P2: 참여 고객사 매핑 (SCR-06/07) — expected_amount는 §10.3 산식으로 적재 ---
+        project_by_id = {p[0]: p for p in PROJECTS}
+        for mid, pid, cid, aid, ratio, fee, sstatus in PROJECT_MAPS:
+            credits, price = project_by_id[pid][4], project_by_id[pid][5]
+            add_if_absent(
+                ProjectClientMap, mid,
+                lambda mid=mid, pid=pid, cid=cid, aid=aid, ratio=ratio, fee=fee,
+                sstatus=sstatus, credits=credits, price=price: ProjectClientMap(
+                    map_id=mid, project_id=pid, client_id=cid, asset_id=aid,
+                    allocation_ratio=ratio, success_fee_rate=fee,
+                    expected_amount=compute_expected_amount(credits, ratio, price, fee),
+                    settlement_status=sstatus,
+                    billed_at=NOW - timedelta(days=10) if sstatus in ("BILLED", "COMPLETED") else None,
+                    billed_by="demo-user-01" if sstatus in ("BILLED", "COMPLETED") else None,
+                    completed_at=NOW - timedelta(days=3) if sstatus == "COMPLETED" else None,
+                    completed_by="demo-user-01" if sstatus == "COMPLETED" else None,
+                    paid_amount=(
+                        compute_expected_amount(credits, ratio, price, fee)
+                        if sstatus == "COMPLETED" else None
+                    ),
+                    payment_type="FULL" if sstatus == "COMPLETED" else None,
+                ),
+            )
+        db.flush()
 
         db.commit()
         print("✓ 데모 시드 완료 — 신규 {0}건, 기존 유지 {1}건 (period={2})".format(created, skipped, PERIOD))

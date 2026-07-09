@@ -56,6 +56,13 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
     CLOSED: { label: '완료', className: green },
   },
   project: {
+    // 백엔드 저장 값(한국어 — schemas._PROJECT_STATUS_PATTERN)
+    기획: { label: '기획', className: gray },
+    등록완료: { label: '등록완료', className: blue },
+    모니터링: { label: '모니터링', className: blue },
+    검증: { label: '검증', className: purple },
+    발급완료: { label: '발급완료', className: green },
+    // 영문 코드 호환
     PLANNING: { label: '기획', className: gray },
     REGISTERED: { label: '등록', className: blue },
     MONITORING: { label: '모니터링', className: blue },

@@ -18,12 +18,15 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 import auth
 import schemas
 from models import SessionLocal, User, engine, init_db
+from routers import assets as assets_router
 from routers import clients as clients_router
 from routers import dashboard as dashboard_router
 from routers import documents as documents_router
 from routers import histories as histories_router
+from routers import projects as projects_router
 from routers import reports as reports_router
 from routers import schedules as schedules_router
+from routers import settlements as settlements_router
 from routers import users as users_router
 
 API_VERSION = "1.0.0"
@@ -101,6 +104,9 @@ app.include_router(schedules_router.router, prefix=API_V1_PREFIX)
 app.include_router(reports_router.router, prefix=API_V1_PREFIX)
 app.include_router(documents_router.router, prefix=API_V1_PREFIX)
 app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
+app.include_router(assets_router.router, prefix=API_V1_PREFIX)
+app.include_router(projects_router.router, prefix=API_V1_PREFIX)
+app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 
 
 @app.get(f"{API_V1_PREFIX}/health", response_model=schemas.HealthResponse)

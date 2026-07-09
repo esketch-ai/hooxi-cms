@@ -339,6 +339,131 @@ export interface Asset {
   has_credentials?: boolean
   created_at?: string
   updated_at?: string
+  // 목록 조인 보강
+  client_name?: string | null
+}
+
+/** 자산 등록/수정 payload (schemas.AssetCreate/AssetUpdate) — 인증 정보는 입력 시에만 전송 */
+export interface AssetPayload {
+  client_id: string
+  asset_group: string
+  asset_type?: string | null
+  quantity?: number | null
+  main_spec?: string | null
+  telemetry_yn?: string
+  location_info?: string | null
+  status?: string
+  agency_name?: string | null
+  site_url?: string | null
+  auth_type?: string
+  login_id?: string | null
+  /** ID_PW=비밀번호 / API_KEY=토큰 — 변경 시에만 전송(저장 후 재조회 불가, reveal만) */
+  auth_value?: string
+  usage_purpose?: string | null
+}
+
+/** POST /assets/{id}/reveal-auth 응답 (schemas.AssetRevealOut) — 평문 일시 복호화 */
+export interface RevealAuthResponse {
+  asset_id: string
+  auth_type?: string | null
+  login_id?: string | null
+  auth_value: string
+  revealed_at: string
+}
+
+// ---------------------------------------------------------------------------
+// tb_project — 감축 사업 (SCR-06)
+// ---------------------------------------------------------------------------
+/** 진행 상태 — 백엔드 저장 값 그대로 한국어 (schemas._PROJECT_STATUS_PATTERN) */
+export type ProjectStatus = '기획' | '등록완료' | '모니터링' | '검증' | '발급완료'
+
+export interface Project {
+  project_id: string
+  client_id?: string | null // 묶음 사업 시 대표사
+  project_name: string
+  reg_code?: string | null // 예: R-2020-KR-03-000528
+  project_status: ProjectStatus | string
+  reg_date?: string | null
+  credit_start_date?: string | null
+  credit_end_date?: string | null
+  credit_period_type?: string | null
+  mon_start_date?: string | null
+  mon_end_date?: string | null
+  mon_cycle?: string | null
+  expected_issue_date?: string | null
+  expected_credits?: number | null
+  unit_price?: number | null // 수기 단가 (§10.3) — 미입력 시 "미정"
+  price_source?: string | null
+  issued_credits?: number | null // 확정 발급량 (R2-A1)
+  issued_at?: string | null
+  manager_id?: string | null
+  created_at?: string
+  updated_at?: string
+  // 조인 보강 (schemas.ProjectListItem / ProjectDetailOut)
+  manager_name?: string | null
+  /** 참여 고객사 수 (목록 응답) */
+  client_count?: number
+  /** 상세 응답 — 참여 고객사 매핑 목록 */
+  clients?: ProjectClientMap[]
+  /** 상세 응답 — 배분율 합계 (100% 검증 UI용) */
+  allocation_total?: number
+}
+
+export interface ProjectPayload {
+  client_id?: string | null
+  project_name: string
+  reg_code?: string | null
+  project_status: string
+  reg_date?: string | null
+  credit_start_date?: string | null
+  credit_end_date?: string | null
+  credit_period_type?: string | null
+  mon_start_date?: string | null
+  mon_end_date?: string | null
+  mon_cycle?: string | null
+  expected_issue_date?: string | null
+  expected_credits?: number | null
+  unit_price?: number | null
+  issued_credits?: number | null
+  issued_at?: string | null
+  manager_id?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// tb_project_client_map — 참여 고객사 매핑·정산 (SCR-06 상세 / SCR-07)
+// ---------------------------------------------------------------------------
+export type SettlementStatus = 'STANDBY' | 'BILLED' | 'COMPLETED'
+
+export interface ProjectClientMap {
+  map_id: string
+  project_id: string
+  client_id: string
+  asset_id?: string | null
+  allocation_ratio?: number | null // 배분 비율(%)
+  success_fee_rate?: number | null // 성공 보수율(%) 🔒
+  expected_amount?: number | null // 서버 계산 (§10.3) 🔒 — 단가 미입력 시 null="미정"
+  settlement_status?: SettlementStatus | string | null
+  billed_at?: string | null
+  completed_at?: string | null
+  paid_amount?: number | null
+  payment_type?: string | null
+  created_at?: string
+  updated_at?: string
+  // 조인 보강 (schemas.ProjectMapOut / SettlementRow)
+  client_name?: string | null
+  /** 연결 자산 요약 (분류·제원) */
+  asset_summary?: string | null
+  project_name?: string | null
+  unit_price?: number | null
+  expected_credits?: number | null
+}
+
+/** 매핑 등록/수정 payload (schemas.ProjectMapIn) — 동일 고객사는 upsert */
+export interface MappingPayload {
+  client_id: string
+  asset_id?: string | null
+  allocation_ratio: number
+  success_fee_rate: number
 }
 
 // ---------------------------------------------------------------------------

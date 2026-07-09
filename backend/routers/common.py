@@ -41,6 +41,23 @@ def get_or_404(db: Session, model, pk: Optional[str], label: str):
     return obj
 
 
+def compute_expected_amount(expected_credits, allocation_ratio, unit_price, success_fee_rate):
+    """§10.3 정산 산식 — 예상 정산액 = 예상 발행량(tCO₂) × 배분율(%) × 단가 × 성공 보수율(%).
+
+    구성 요소가 하나라도 없으면(특히 단가 미입력) None → 프론트 '미정' 표시.
+    """
+    values = (expected_credits, allocation_ratio, unit_price, success_fee_rate)
+    if any(v is None for v in values):
+        return None
+    return round(
+        float(expected_credits)
+        * (float(allocation_ratio) / 100.0)
+        * float(unit_price)
+        * (float(success_fee_rate) / 100.0),
+        2,
+    )
+
+
 def user_name_map(db: Session, user_ids: Iterable[Optional[str]]) -> Dict[str, str]:
     ids = {uid for uid in user_ids if uid}
     if not ids:
