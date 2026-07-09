@@ -13,6 +13,9 @@ const inputCls =
   'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
 const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
 
+/** 고객사 select에서 '신규 업체 직접 입력'을 나타내는 특수 값 */
+const NEW_CLIENT = '__new__'
+
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: 'CALL', label: '전화' },
   { value: 'MEETING', label: '미팅' },
@@ -57,6 +60,9 @@ export function ActivityForm({
   const queryClient = useQueryClient()
 
   const [clientId, setClientId] = useState(defaultClientId ?? '')
+  // 신규 업체 인라인 등록 (clientId === NEW_CLIENT일 때)
+  const [newCompanyName, setNewCompanyName] = useState('')
+  const [newClientType, setNewClientType] = useState<'TRANSPORT' | 'FACILITY'>('TRANSPORT')
   const [activityDate, setActivityDate] = useState(() => toDatetimeLocal(new Date()))
   const [activityType, setActivityType] = useState<ActivityType>(defaultType)
   const [retentionStage, setRetentionStage] = useState('')
@@ -71,6 +77,8 @@ export function ActivityForm({
   useEffect(() => {
     if (open) {
       setClientId(defaultClientId ?? '')
+      setNewCompanyName('')
+      setNewClientType('TRANSPORT')
       setActivityDate(toDatetimeLocal(new Date()))
       setActivityType(defaultType)
       setRetentionStage('')
@@ -105,13 +113,27 @@ export function ActivityForm({
       showToast('고객사를 선택해 주세요.', 'danger')
       return
     }
+    if (clientId === NEW_CLIENT && !newCompanyName.trim()) {
+      showToast('신규 업체명을 입력해 주세요.', 'danger')
+      return
+    }
     if (!title.trim() || !content.trim()) {
       showToast('제목과 상세 내용을 입력해 주세요.', 'danger')
       return
     }
     try {
+      let resolvedClientId = clientId
+      if (clientId === NEW_CLIENT) {
+        // 업체명·구분만으로 간편 등록 — 상세 정보는 고객사 마스터에서 보완
+        const { data: created } = await api.post('/clients', {
+          company_name: newCompanyName.trim(),
+          client_type: newClientType,
+        })
+        resolvedClientId = created.client_id
+        queryClient.invalidateQueries({ queryKey: ['clients'] })
+      }
       await create.mutateAsync({
-        client_id: clientId,
+        client_id: resolvedClientId,
         activity_date: activityDate,
         activity_type: activityType,
         retention_stage: retentionStage || null,
@@ -151,8 +173,38 @@ export function ActivityForm({
                   {c.company_name}
                 </option>
               ))}
+              {!lockClient && <option value={NEW_CLIENT}>＋ 신규 업체 직접 입력</option>}
             </select>
           </div>
+          {clientId === NEW_CLIENT && (
+            <div className="sm:col-span-2 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 sm:grid-cols-[1fr_160px]">
+              <div>
+                <label className={labelCls}>
+                  신규 업체명<span className="ml-0.5 text-rose-500">*</span>
+                </label>
+                <input
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className={inputCls}
+                  placeholder="업체명 입력 — 상세 정보는 고객사 마스터에서 보완"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={labelCls}>구분</label>
+                <select
+                  value={newClientType}
+                  onChange={(e) =>
+                    setNewClientType(e.target.value as 'TRANSPORT' | 'FACILITY')
+                  }
+                  className={inputCls}
+                >
+                  <option value="TRANSPORT">운수사</option>
+                  <option value="FACILITY">건물·농장</option>
+                </select>
+              </div>
+            </div>
+          )}
           <div>
             <label className={labelCls}>
               일시<span className="ml-0.5 text-rose-500">*</span>
