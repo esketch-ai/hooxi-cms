@@ -14,6 +14,13 @@ os.environ["UPLOAD_DIR"] = "/tmp/test_p1_uploads"
 os.environ.pop("GMAIL_SENDER", None)
 os.environ.pop("GMAIL_APP_PASSWORD", None)
 os.environ.pop("GCS_BUCKET", None)
+# 카카오 연동(P3) — 로컬 환경변수 격리 (미설정 상태에서 테스트 시작)
+for _key in (
+    "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "SOLAPI_SENDER", "KAKAO_PF_ID",
+    "KAKAO_TEMPLATE_REPORT", "KAKAO_TEMPLATE_REPLY", "KAKAO_BOT_ID",
+    "KAKAO_EVENT_API_KEY", "KAKAO_WEBHOOK_SECRET", "KAKAO_EVENT_NAME", "APP_BASE_URL",
+):
+    os.environ.pop(_key, None)
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

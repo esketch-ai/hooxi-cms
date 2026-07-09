@@ -20,6 +20,8 @@ export interface NavItem {
   label: string
   path: string
   icon: Icon
+  /** 지정 시 해당 카운트 뱃지 폴링 표시 (chat: GET /chat/badge waiting) */
+  badgeKey?: 'chat'
 }
 
 export interface NavGroup {
@@ -52,7 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'CRM / COMM',
     items: [
       { label: '영업 활동 이력', path: '/histories', icon: ClockCounterClockwise },
-      { label: '카카오톡 상담 관제', path: '/chat', icon: ChatCircleDots },
+      { label: '카카오톡 상담 관제', path: '/chat', icon: ChatCircleDots, badgeKey: 'chat' },
     ],
   },
   {

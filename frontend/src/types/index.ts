@@ -492,6 +492,80 @@ export interface DashboardStats {
   open_issues: ActivityHistory[]
 }
 
+// ---------------------------------------------------------------------------
+// tb_chat_thread / tb_chat_message / tb_kakao_contact — 카카오톡 상담 관제 (SCR-08)
+// ---------------------------------------------------------------------------
+export type ChatMode = 'AI' | 'HUMAN'
+export type ChatThreadStatus = 'OPEN' | 'WAITING' | 'CLOSED'
+export type ChatSenderType = 'CUSTOMER' | 'AI' | 'STAFF' | 'SYSTEM'
+/** POST /chat/threads/{id}/reply 응답 delivery */
+export type ChatDelivery = 'SENT' | 'FAILED' | 'NOT_CONFIGURED'
+
+export interface ChatThread {
+  thread_id: string
+  client_id?: string | null
+  kakao_contact_id?: string | null
+  mode: ChatMode
+  status: ChatThreadStatus
+  last_message_at?: string | null
+  assigned_manager_id?: string | null
+  created_at?: string
+  updated_at?: string
+  // 조인 보강 (백엔드 리스트 응답)
+  client_name?: string | null
+  contact_name?: string | null
+  contact_phone?: string | null
+  contract_status?: string | null
+  asset_summary?: string | null
+  assigned_manager_name?: string | null
+  last_message_preview?: string | null
+  unread_count?: number | null
+}
+
+export interface ChatMessage {
+  message_id: string
+  thread_id: string
+  sender_type: ChatSenderType
+  sender_id?: string | null
+  content?: string | null
+  created_at: string
+  // 조인·부가 필드 (백엔드 부여 시)
+  sender_name?: string | null
+  delivery_status?: string | null // SENT/FAILED/NOT_CONFIGURED
+}
+
+/** POST /chat/threads/{id}/reply 응답 */
+export interface ChatReplyResponse {
+  delivery: ChatDelivery
+  message?: ChatMessage | null
+  message_id?: string | null
+  detail?: string | null
+}
+
+/** GET /chat/badge — LNB 뱃지 (직원 연결 대기 건수) */
+export interface ChatBadge {
+  waiting: number
+}
+
+export type KakaoContactStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'BLOCKED'
+
+export interface KakaoContact {
+  contact_id: string
+  kakao_user_key?: string
+  client_id?: string | null
+  name?: string | null
+  phone?: string | null
+  contact_role?: string | null
+  status: KakaoContactStatus
+  requested_at?: string | null
+  approved_by?: string | null
+  approved_at?: string | null
+  memo?: string | null
+  created_at?: string
+  updated_at?: string
+  client_name?: string | null
+}
+
 // 보고서 목록 응답 (schemas.ReportListResponse)
 export interface ReportSummary {
   target: number

@@ -1,7 +1,7 @@
 // 공용 서버 상태 훅 — 여러 화면에서 재사용하는 셀렉트 옵션(고객사·사용자) 등
 import { useQuery } from '@tanstack/react-query'
 import { api } from './client'
-import type { Client, Paginated, User } from '../../types'
+import type { ChatBadge, Client, Paginated, User } from '../../types'
 
 /** 배열/Paginated 어느 쪽이 와도 items·total로 정규화 */
 export function unwrapList<T>(data: T[] | Paginated<T> | null | undefined): {
@@ -24,6 +24,24 @@ export function useClientOptions() {
       return unwrapList(data).items
     },
     staleTime: 60_000,
+  })
+}
+
+/** 카카오 상담 LNB 뱃지 — GET /chat/badge 15초 폴링 (Sidebar·BottomNav 공용) */
+export function useChatBadge() {
+  return useQuery({
+    queryKey: ['chat', 'badge'],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<ChatBadge>('/chat/badge')
+        return { waiting: data?.waiting ?? 0 }
+      } catch {
+        // 백엔드 미배포·미설정 시 뱃지 숨김 (콘솔 에러 폴링 방지)
+        return { waiting: 0 }
+      }
+    },
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   })
 }
 

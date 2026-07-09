@@ -2,25 +2,30 @@
 
 플로우(확정): 파일 업로드(tb_document 버전 적재) → 검토 → Gmail SMTP 발송(SENT)
 → tb_report_send_log 회차 적재 + 활동 이력 EMAIL "[자동]" 적재 → 고객 확인(CONFIRMED, 수기).
-카카오 알림톡은 P2 활성화 — 본 라우터는 EMAIL 채널만 가동.
+
+P3 확장: 구독 채널 KAKAO/BOTH + APPROVED 카카오 연락처(전화번호 보유) 존재 시
+이메일 성공 후 SOLAPI 알림톡 시도 — KAKAO send_log(동일 seq) 적재, 성공 시 sent_channel=BOTH.
+알림톡 실패해도 이메일 성공이면 SENT 유지(이메일 단독 폴백 — 기존 확정 정책).
 """
 
 import json
 import os
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+import jwt
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import schemas
-from auth import get_current_user, require_permission
+from auth import JWT_SECRET, get_current_user, require_permission
 from models import (
     ActivityHistory,
     Client,
     Document,
+    KakaoContact,
     ReportDelivery,
     ReportRecipient,
     ReportSendLog,
@@ -31,7 +36,7 @@ from models import (
     utcnow,
 )
 from routers import common
-from services import email_service, storage
+from services import email_service, kakao_service, storage
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -56,6 +61,93 @@ def _due_date_for(period: str, due_day: Optional[int]) -> date:
     year, month = int(period[:4]), int(period[5:7])
     last_day = monthrange(year, month)[1]
     return date(year, month, min(due_day or last_day, last_day))
+
+
+VIEW_TOKEN_TTL_HOURS = 72  # 열람 링크 유효 시간 (확정: 서명 토큰 + 72시간 만료)
+
+
+def create_view_token(doc_id: str, report_id: str) -> str:
+    """열람 토큰 발급 — 자족(self-contained) JWT. GET /r/{token}에서 검증(DB 컬럼 불필요)."""
+    payload = {
+        "type": "view",
+        "doc_id": doc_id,
+        "report_id": report_id,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=VIEW_TOKEN_TTL_HOURS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def _send_report_alimtalk(
+    db: Session, delivery: ReportDelivery, client: Client, doc: Document,
+    seq: int, month: int, user: User, reason: Optional[str],
+) -> None:
+    """이메일 성공 후 카카오 알림톡 시도 (구독 채널 KAKAO/BOTH).
+
+    - APPROVED + 전화번호 보유 연락처가 없거나 알림톡 미설정이면 조용히 건너뜀(이메일 단독)
+    - 성공: KAKAO send_log(동일 seq, SUCCESS) + sent_channel=BOTH
+    - 실패: KAKAO send_log(동일 seq, FAIL) — 이메일 성공이므로 SENT 유지(폴백)
+    """
+    template_code = os.getenv("KAKAO_TEMPLATE_REPORT")
+    if not (kakao_service.is_configured_alimtalk() and template_code):
+        return
+
+    contact = (
+        db.query(KakaoContact)
+        .filter(
+            KakaoContact.client_id == delivery.client_id,
+            KakaoContact.status == "APPROVED",
+            KakaoContact.phone.isnot(None),
+            KakaoContact.phone != "",
+        )
+        .order_by(KakaoContact.approved_at.desc())
+        .first()
+    )
+    if contact is None:
+        return
+
+    view_url = "{0}/r/{1}".format(
+        kakao_service.app_base_url(), create_view_token(doc.doc_id, delivery.report_id)
+    )
+    kakao_snapshot = json.dumps(
+        {"kakao_to": contact.phone, "contact_name": contact.name}, ensure_ascii=False
+    )
+    try:
+        kakao_service.send_alimtalk(
+            to=contact.phone,
+            template_code=template_code,
+            variables={
+                "고객사명": client.company_name,
+                "월": str(month),
+                "보고서유형": delivery.report_type,
+            },
+            buttons=[
+                {
+                    "buttonType": "WL",
+                    "buttonName": "보고서 열람",
+                    "linkMo": view_url,
+                    "linkPc": view_url,
+                }
+            ],
+        )
+    except Exception:
+        # 알림톡 실패 — 이메일 성공이므로 SENT 유지(이메일 단독 폴백)
+        db.add(
+            ReportSendLog(
+                report_id=delivery.report_id, seq=seq, sent_doc_id=doc.doc_id,
+                recipients=kakao_snapshot, channel="KAKAO", result="FAIL",
+                sent_by=user.user_id, reason=reason,
+            )
+        )
+        return
+
+    db.add(
+        ReportSendLog(
+            report_id=delivery.report_id, seq=seq, sent_doc_id=doc.doc_id,
+            recipients=kakao_snapshot, channel="KAKAO", result="SUCCESS",
+            sent_by=user.user_id, reason=reason,
+        )
+    )
+    delivery.sent_channel = "BOTH"
 
 
 def _next_seq(db: Session, report_id: str) -> int:
@@ -375,6 +467,10 @@ def send_report(
     delivery.status = "SENT"
     delivery.sent_at = now
     delivery.sent_channel = "EMAIL"
+
+    # 카카오 알림톡 시도 — 구독 채널 KAKAO/BOTH (동일 seq KAKAO 행, 성공 시 BOTH)
+    if sub and (sub.channel or "EMAIL") in ("KAKAO", "BOTH"):
+        _send_report_alimtalk(db, delivery, client, doc, seq, month, user, reason)
 
     # 활동 이력 EMAIL 자동 적재 (§9-3)
     db.add(

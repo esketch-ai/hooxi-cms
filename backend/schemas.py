@@ -1,5 +1,5 @@
 """Pydantic 스키마 — P0(auth·users·health) + P1(고객사·이력·일정·보고서·문서·대시보드)
-+ P2(자산·감축 사업·정산)."""
++ P2(자산·감축 사업·정산) + P3(카카오 채널·채팅 상담)."""
 
 from datetime import date, datetime
 from typing import List, Optional
@@ -716,6 +716,114 @@ class ReportDetailOut(ReportRow):
     documents: List[DocumentOut] = []
     send_logs: List[SendLogOut] = []
     comments: List[CommentOut] = []
+
+
+# ---------------------------------------------------------------------------
+# P3 — 카카오 채널 연동 (SCR-08 / CR-3)
+# ---------------------------------------------------------------------------
+class KakaoContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    contact_id: str
+    kakao_user_key: str
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    contact_role: Optional[str] = None
+    status: str
+    requested_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class KakaoContactListResponse(BaseModel):
+    items: List[KakaoContactOut]
+    total: int
+
+
+class KakaoContactUpdate(BaseModel):
+    """연락처 승인 게이트 (CR-3) — APPROVED는 client_id 매핑 필수. MANAGER 이상."""
+
+    status: str = Field(pattern="^(PENDING|APPROVED|REJECTED|BLOCKED)$")
+    client_id: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    contact_role: Optional[str] = Field(default=None, pattern="^(REPRESENTATIVE|CONTACT)$")
+    memo: Optional[str] = None
+
+
+class KakaoNotifyRequest(BaseModel):
+    """수동 알림톡 발송 — 템플릿 미지정 시 KAKAO_TEMPLATE_REPLY 사용."""
+
+    to: str = Field(min_length=9, max_length=20, description="수신자 휴대폰 번호")
+    template_code: Optional[str] = None
+    variables: dict = {}
+    buttons: Optional[List[dict]] = None
+
+
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    message_id: str
+    thread_id: str
+    sender_type: str
+    sender_id: Optional[str] = None
+    sender_name: Optional[str] = None
+    content: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class ChatThreadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    thread_id: str
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    kakao_contact_id: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    mode: Optional[str] = None
+    status: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    last_message_preview: Optional[str] = None
+    assigned_manager_id: Optional[str] = None
+    assigned_manager_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ChatThreadListResponse(BaseModel):
+    items: List[ChatThreadOut]
+    total: int
+
+
+class ChatReplyRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=1000)
+
+
+class ChatReplyResponse(BaseModel):
+    """delivery: SENT(Event API 발송 성공) / FAILED(발송 실패 — 메시지는 적재됨)
+    / NOT_CONFIGURED(Event API 미설정 — 메시지는 적재됨)."""
+
+    delivery: str
+    message: ChatMessageOut
+
+
+class ChatThreadUpdate(BaseModel):
+    """모드 전환·담당 배정·종료 — CLOSED 전환 시 대화 요약을 활동 이력(KAKAO)으로 적재."""
+
+    mode: Optional[str] = Field(default=None, pattern="^(AI|HUMAN)$")
+    status: Optional[str] = Field(default=None, pattern="^(OPEN|WAITING|CLOSED)$")
+    assigned_manager_id: Optional[str] = None
+
+
+class ChatBadgeResponse(BaseModel):
+    waiting: int
 
 
 # ---------------------------------------------------------------------------

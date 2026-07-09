@@ -10,6 +10,10 @@
 P2 확장: 자산 12건(고객사 분산·인증 방식 혼합 — ASSET_ENC_KEY 미설정 시 인증정보 비움) ·
 감축 사업 4건(상태 분포·단가 입력/미입력 혼합) · 참여 고객사 매핑 10건(배분율 합계 100% 이하,
 정산 상태 분포). expected_amount는 §10.3 산식으로 적재.
+
+P3 확장: 카카오 연락처 4건(APPROVED 3 — 고객사 매핑 + PENDING 1) ·
+채팅 스레드 3건(OPEN/WAITING/CLOSED, AI/HUMAN 혼합) ·
+채팅 메시지 15건(CUSTOMER/AI/STAFF/SYSTEM — 민감 키워드 알림 1건 포함).
 """
 
 import os
@@ -21,9 +25,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import (  # noqa: E402
     ActivityHistory,
     Asset,
+    ChatMessage,
+    ChatThread,
     Client,
     Document,
     IssueComment,
+    KakaoContact,
     Project,
     ProjectClientMap,
     ReportDelivery,
@@ -217,6 +224,44 @@ PROJECT_MAPS = [
     ("demo-m-08", "demo-p-04", "demo-cl-01", "demo-a-01", 50, 10, "BILLED"),
     ("demo-m-09", "demo-p-04", "demo-cl-02", "demo-a-03", 30, 12, "COMPLETED"),
     ("demo-m-10", "demo-p-04", "demo-cl-07", "demo-a-10", 20, 10, "STANDBY"),
+]
+
+
+# ---------------------------------------------------------------------------
+# P3 — 카카오 채널·채팅 상담 (SCR-08)
+# ---------------------------------------------------------------------------
+# (id, kakao_user_key, client, name, phone, status)
+KAKAO_CONTACTS = [
+    ("demo-kc-01", "demo-kakao-key-01", "demo-cl-01", "정한빛", "010-3000-0001", "APPROVED"),
+    ("demo-kc-02", "demo-kakao-key-02", "demo-cl-02", "차미래", "010-3000-0002", "APPROVED"),
+    ("demo-kc-03", "demo-kakao-key-03", "demo-cl-03", "송그린", "010-3000-0003", "APPROVED"),
+    ("demo-kc-04", "demo-kakao-key-04", None, "미확인 담당자", None, "PENDING"),
+]
+
+# (id, client, contact, mode, status, assigned_manager)
+CHAT_THREADS = [
+    ("demo-ct-01", "demo-cl-01", "demo-kc-01", "HUMAN", "OPEN", "demo-user-01"),
+    ("demo-ct-02", "demo-cl-02", "demo-kc-02", "AI", "WAITING", None),
+    ("demo-ct-03", "demo-cl-03", "demo-kc-03", "AI", "CLOSED", "demo-user-02"),
+]
+
+# (id, thread, sender_type, sender_id, minutes_ago, content) — 15건, SYSTEM 민감 알림 1건 포함
+CHAT_MESSAGES = [
+    ("demo-cm-01", "demo-ct-01", "CUSTOMER", None, 180, "안녕하세요, 7월 운행 보고서는 언제 발송되나요?"),
+    ("demo-cm-02", "demo-ct-01", "AI", None, 179, "안녕하세요, Hooxi Partners입니다. 월간 보고서는 매월 25일까지 발송됩니다."),
+    ("demo-cm-03", "demo-ct-01", "CUSTOMER", None, 150, "담당자 연결 부탁드립니다. 정산 수수료 관련 문의가 있습니다."),
+    ("demo-cm-04", "demo-ct-01", "SYSTEM", None, 150, "민감 키워드 감지: 수수료"),
+    ("demo-cm-05", "demo-ct-01", "STAFF", "demo-user-01", 120, "안녕하세요, 담당 김팀장입니다. 정산 관련 문의는 유선으로 상세히 안내드리겠습니다."),
+    ("demo-cm-06", "demo-ct-01", "CUSTOMER", None, 60, "네, 오후 3시 이후 통화 가능합니다."),
+    ("demo-cm-07", "demo-ct-02", "CUSTOMER", None, 300, "충전기 고장 신고는 어디로 하면 되나요?"),
+    ("demo-cm-08", "demo-ct-02", "AI", None, 299, "충전기 장애는 채널 상담으로 접수 가능합니다. 자산 위치와 증상을 남겨주세요."),
+    ("demo-cm-09", "demo-ct-02", "CUSTOMER", None, 240, "3번 차고지 급속충전기 2대가 어제부터 작동하지 않습니다."),
+    ("demo-cm-10", "demo-ct-02", "CUSTOMER", None, 230, "담당자 연결해 주세요. 급합니다."),
+    ("demo-cm-11", "demo-ct-03", "CUSTOMER", None, 2880, "태양광 발전량 리포트에 6월 데이터가 빠져 있는 것 같아요."),
+    ("demo-cm-12", "demo-ct-03", "AI", None, 2879, "확인 후 담당자가 안내드리겠습니다. 잠시만 기다려 주세요."),
+    ("demo-cm-13", "demo-ct-03", "STAFF", "demo-user-02", 2820, "확인 결과 6/28~30 데이터 수집 지연이 있었습니다. 정정본을 재발송드렸습니다."),
+    ("demo-cm-14", "demo-ct-03", "CUSTOMER", None, 2760, "정정본 확인했습니다. 감사합니다."),
+    ("demo-cm-15", "demo-ct-03", "STAFF", "demo-user-02", 2700, "추가 문의 있으시면 언제든 채널로 연락 주세요. 상담을 종료합니다."),
 ]
 
 
@@ -425,6 +470,51 @@ def seed():
                         if sstatus == "COMPLETED" else None
                     ),
                     payment_type="FULL" if sstatus == "COMPLETED" else None,
+                ),
+            )
+        db.flush()
+
+        # --- P3: 카카오 연락처(승인 게이트 분포) + 채팅 스레드·메시지 (SCR-08) ---
+        for kid, key, cid, name, phone, kstatus in KAKAO_CONTACTS:
+            add_if_absent(
+                KakaoContact, kid,
+                lambda kid=kid, key=key, cid=cid, name=name, phone=phone, kstatus=kstatus: KakaoContact(
+                    contact_id=kid, kakao_user_key=key, client_id=cid,
+                    name=name, phone=phone, contact_role="CONTACT",
+                    status=kstatus,
+                    requested_at=NOW - timedelta(days=7),
+                    approved_by="demo-user-01" if kstatus == "APPROVED" else None,
+                    approved_at=NOW - timedelta(days=6) if kstatus == "APPROVED" else None,
+                    memo="첫 발화: 보고서 문의" if kstatus == "PENDING" else None,
+                ),
+            )
+        db.flush()
+
+        last_message_at = {}
+        for _mid, tid, _stype, _sid, minutes_ago, _content in CHAT_MESSAGES:
+            at = NOW - timedelta(minutes=minutes_ago)
+            if tid not in last_message_at or at > last_message_at[tid]:
+                last_message_at[tid] = at
+
+        for tid, cid, kid, mode, tstatus, mgr in CHAT_THREADS:
+            add_if_absent(
+                ChatThread, tid,
+                lambda tid=tid, cid=cid, kid=kid, mode=mode, tstatus=tstatus, mgr=mgr: ChatThread(
+                    thread_id=tid, client_id=cid, kakao_contact_id=kid,
+                    mode=mode, status=tstatus, assigned_manager_id=mgr,
+                    last_message_at=last_message_at.get(tid),
+                ),
+            )
+        db.flush()
+
+        for mid, tid, stype, sid, minutes_ago, content in CHAT_MESSAGES:
+            add_if_absent(
+                ChatMessage, mid,
+                lambda mid=mid, tid=tid, stype=stype, sid=sid,
+                minutes_ago=minutes_ago, content=content: ChatMessage(
+                    message_id=mid, thread_id=tid, sender_type=stype,
+                    sender_id=sid, content=content,
+                    created_at=NOW - timedelta(minutes=minutes_ago),
                 ),
             )
         db.flush()

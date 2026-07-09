@@ -13,6 +13,13 @@ interface ReportDrawerProps {
   onClose: () => void
 }
 
+/** 발송 채널 한국어 라벨 (EMAIL/KAKAO/BOTH) */
+const CHANNEL_LABELS: Record<string, string> = {
+  EMAIL: '이메일',
+  KAKAO: '알림톡',
+  BOTH: '이메일+알림톡',
+}
+
 export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
   const { data: detail, isLoading } = useReportDetail(report?.report_id)
 
@@ -53,7 +60,10 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
           <div>
             <dt className="text-xs text-slate-400">발송일 / 채널</dt>
             <dd className="font-medium text-slate-700">
-              {fmtDate(merged.sent_at)} {merged.sent_channel ? `· ${merged.sent_channel}` : ''}
+              {fmtDate(merged.sent_at)}{' '}
+              {merged.sent_channel
+                ? `· ${CHANNEL_LABELS[merged.sent_channel] ?? merged.sent_channel}`
+                : ''}
             </dd>
           </div>
           {merged.confirmed_at && (

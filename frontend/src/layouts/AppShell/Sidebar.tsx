@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Leaf, SignOut, X } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
+import { useChatBadge } from '../../lib/api/queries'
 import { NAV_GROUPS } from './nav'
 
 interface SidebarProps {
@@ -11,6 +12,8 @@ interface SidebarProps {
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
+  const { data: chatBadge } = useChatBadge()
+  const waiting = chatBadge?.waiting ?? 0
 
   const groups = NAV_GROUPS.filter(
     (group) => !group.roles || (user && group.roles.includes(user.role)),
@@ -51,6 +54,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   >
                     <item.icon size={18} />
                     <span className="truncate">{item.label}</span>
+                    {item.badgeKey === 'chat' && waiting > 0 && (
+                      <span
+                        className="ml-auto inline-flex min-w-[18px] shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                        title={`직원 연결 대기 ${waiting}건`}
+                      >
+                        {waiting > 99 ? '99+' : waiting}
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}

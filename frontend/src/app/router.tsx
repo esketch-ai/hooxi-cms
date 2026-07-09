@@ -17,6 +17,7 @@ import { AssetsPage } from '../features/assets/AssetsPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { SettlementsPage } from '../features/settlements/SettlementsPage'
+import { ChatPage } from '../features/chat/ChatPage'
 
 /** 미인증(또는 PENDING·PIN 미설정) 접근 시 /login 리다이렉트 */
 function RequireAuth() {
@@ -47,7 +48,6 @@ interface PlaceholderRoute {
 }
 
 const PLACEHOLDER_ROUTES: PlaceholderRoute[] = [
-  { path: '/chat', title: '카카오톡 상담 관제', subtitle: 'AI·직원 응대 전환 관제 (SCR-08)', phase: 'P3' },
   { path: '/map', title: '전국 관제 지도', subtitle: '고객사 분포·계약 상태 관제 (SCR-09)', phase: 'P3' },
 ]
 
@@ -72,6 +72,8 @@ export const router = createBrowserRouter([
       { path: '/projects', element: <ProjectsPage /> }, // SCR-06
       { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
       { path: '/settlements', element: <SettlementsPage /> }, // SCR-07
+      // ── P3 구현 화면 ──────────────────────────────────────────────
+      { path: '/chat', element: <ChatPage /> }, // SCR-08
       // ── P3 플레이스홀더 ───────────────────────────────────────────
       ...PLACEHOLDER_ROUTES.map((route) => ({
         path: route.path,

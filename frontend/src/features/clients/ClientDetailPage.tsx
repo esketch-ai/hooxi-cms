@@ -21,6 +21,8 @@ import { downloadDocument } from '../../lib/download'
 import { fmtDate, fmtDateTime, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
+import { useClientThreads } from '../chat/api'
+import { ThreadModePill, ThreadWaitingBadge } from '../chat/ThreadBadges'
 import {
   useClient,
   useClientAssets,
@@ -200,13 +202,7 @@ export function ClientDetailPage() {
           description="감축 사업 관리(SCR-06)·정산 현황(SCR-07) 구축 시 이 탭에서 사업·지분율·예상 정산액을 확인할 수 있습니다."
         />
       )}
-      {tab === 'chat' && (
-        <EmptyState
-          icon={<ChatCircleDots size={36} />}
-          title="카카오 상담은 P3에서 제공됩니다"
-          description="카카오톡 상담 관제(SCR-08) 구축 시 이 고객사의 상담 스레드로 바로 이동할 수 있습니다."
-        />
-      )}
+      {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
       <ClientFormModal open={editOpen} onClose={() => setEditOpen(false)} client={client} />
       <ActivityForm
@@ -369,6 +365,55 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
         )}
       </section>
     </div>
+  )
+}
+
+// ── 상담 탭 (SCR-08 딥링크) ─────────────────────────────────────────
+function ChatTab({ clientId }: { clientId: string }) {
+  const { data: threads = [], isLoading } = useClientThreads(clientId)
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-800">카카오톡 상담 스레드 (최근순)</h2>
+        <Link
+          to={`/chat?client=${clientId}`}
+          className="flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+        >
+          <ChatCircleDots size={13} weight="fill" />
+          상담 관제에서 열기
+        </Link>
+      </div>
+      {isLoading ? (
+        <SkeletonTableRows rows={3} />
+      ) : threads.length === 0 ? (
+        <EmptyState
+          icon={<ChatCircleDots size={36} />}
+          title="상담 이력이 없습니다"
+          description="카카오 채널 연동 후 상담 이력이 표시됩니다."
+        />
+      ) : (
+        <ul className="divide-y divide-slate-50">
+          {threads.map((t) => (
+            <li key={t.thread_id}>
+              <Link
+                to={`/chat?client=${clientId}`}
+                className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-slate-50"
+              >
+                <ThreadModePill thread={t} />
+                <ThreadWaitingBadge thread={t} />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                  {t.last_message_preview ?? '메시지가 없습니다'}
+                </span>
+                <span className="shrink-0 text-xs text-slate-400">
+                  {fmtDateTime(t.last_message_at)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
