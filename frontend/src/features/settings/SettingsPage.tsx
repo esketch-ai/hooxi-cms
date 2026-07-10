@@ -15,7 +15,7 @@ import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { api } from '../../lib/api/client'
-import { fmtDate } from '../../lib/format'
+import { fmtServerDate } from '../../lib/format'
 import type { User, UserRole } from '../../types'
 import { SystemConfigTab } from './SystemConfigTab'
 import { AuditLogTab } from './AuditLogTab'
@@ -235,7 +235,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
     {
       key: 'created',
       header: '가입일',
-      render: (u) => <span className="text-xs text-slate-400">{fmtDate(u.created_at)}</span>,
+      render: (u) => <span className="text-xs text-slate-400">{fmtServerDate(u.created_at)}</span>,
     },
     {
       key: 'actions',

@@ -41,6 +41,8 @@ declare global {
     google?: { maps?: GoogleMapsApi }
     /** Google Maps 인증 실패 전역 훅 (잘못된 키·리퍼러 제한 등) */
     gm_authFailure?: () => void
+    /** loading=async 로딩 완료 콜백 (script URL의 callback= 파라미터) */
+    __hooxiGmapsCallback?: () => void
   }
 }
 
@@ -85,6 +87,7 @@ export function loadGoogleMaps(): Promise<GoogleMapsApi> {
 
     const fail = (reason: 'NETWORK' | 'INIT' | 'AUTH') => {
       loadPromise = null // 실패 시 재시도 허용
+      delete window.__hooxiGmapsCallback
       script.remove()
       reject(new MapsLoadError(reason))
     }
@@ -95,14 +98,18 @@ export function loadGoogleMaps(): Promise<GoogleMapsApi> {
       fail('AUTH')
     }
 
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&language=ko&region=KR`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
+    // loading=async(공식 권장 로딩) + callback= 파라미터 — API 준비 완료 시점에 콜백이 호출되어
+    // script.onload 타이밍 문제 없이 안전하게 resolve (L-5)
+    // TODO(후속 과제): google.maps.Marker deprecated — AdvancedMarkerElement 마이그레이션 필요
+    window.__hooxiGmapsCallback = () => {
+      delete window.__hooxiGmapsCallback
       const maps = window.google?.maps
       if (maps?.Map) resolve(maps)
       else fail('INIT')
     }
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&language=ko&region=KR&loading=async&callback=__hooxiGmapsCallback`
+    script.async = true
+    script.defer = true
     script.onerror = () => fail('NETWORK')
     document.head.appendChild(script)
   })

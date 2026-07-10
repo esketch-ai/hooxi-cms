@@ -11,7 +11,7 @@ import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { api } from '../../lib/api/client'
 import { unwrapList, useClientOptions, useUserOptions } from '../../lib/api/queries'
-import { dday, elapsed, fmtDate } from '../../lib/format'
+import { dday, elapsedServer, fmtDate, parseServerUtc } from '../../lib/format'
 import type { ActivityHistory, IssueStatus, Paginated, Schedule } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useChangeIssueStatus, useIssues } from './api'
@@ -80,7 +80,7 @@ export function IssuesPage() {
       if (pill === 'URGENT' && i.priority !== 'URGENT') return false
       if (managerFilter && i.manager_id !== managerFilter) return false
       if (i.issue_status === 'CLOSED') {
-        const t = new Date(i.updated_at ?? i.created_at ?? '').getTime()
+        const t = parseServerUtc(i.updated_at ?? i.created_at ?? '').getTime()
         return !Number.isNaN(t) && t >= weekAgo
       }
       return true
@@ -270,7 +270,7 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
         >
           {(issue.manager_name ?? '?').charAt(0)}
         </span>
-        <span className="text-[11px] text-slate-400">{elapsed(issue.created_at)}</span>
+        <span className="text-[11px] text-slate-400">{elapsedServer(issue.created_at)}</span>
         {due && issue.issue_status !== 'CLOSED' && (
           <span
             className={`ml-auto text-[11px] font-semibold ${

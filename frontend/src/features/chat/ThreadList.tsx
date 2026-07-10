@@ -2,7 +2,7 @@
 import { ChatCircleDots, MagnifyingGlass } from '@phosphor-icons/react'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
-import { elapsed } from '../../lib/format'
+import { elapsedServer } from '../../lib/format'
 import type { ChatThread } from '../../types'
 import { ThreadModePill, ThreadWaitingBadge } from './ThreadBadges'
 
@@ -121,7 +121,7 @@ export function ThreadList({
                     <ThreadWaitingBadge thread={thread} />
                   </div>
                   <span className="shrink-0 text-xs text-slate-400">
-                    {elapsed(thread.last_message_at)}
+                    {elapsedServer(thread.last_message_at)}
                   </span>
                 </div>
                 <p className="mb-2 truncate text-sm text-slate-500">

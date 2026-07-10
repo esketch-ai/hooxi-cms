@@ -10,6 +10,7 @@ import schemas
 from auth import get_current_user, require_permission
 from models import ActivityHistory, Client, IssueComment, User, get_db
 from routers import common
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/histories", tags=["histories"])
 
@@ -123,6 +124,15 @@ def update_issue_status(
                 content=content,
             )
         )
+        AuditLogger.log_action(
+            db, 
+            user.user_id, 
+            "ISSUE_STATUS_CHANGE",
+            target_type="HISTORY", 
+            target_id=history.history_id,
+            old_value=old_status,
+            new_value=payload.issue_status
+        )
         db.commit()
         db.refresh(history)
     return common.build_history_outs(db, [history])[0]
@@ -161,6 +171,13 @@ def create_comment(
         content=payload.content,
     )
     db.add(comment)
+    AuditLogger.log_action(
+        db, 
+        user.user_id, 
+        "COMMENT_ADD",
+        target_type="HISTORY_COMMENT", 
+        target_id=history_id
+    )
     db.commit()
     db.refresh(comment)
     return common.build_comment_outs(db, [comment])[0]

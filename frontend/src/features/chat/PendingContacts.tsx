@@ -6,7 +6,7 @@ import { useToast } from '../../components/Toast'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
 import { useClientOptions } from '../../lib/api/queries'
-import { fmtDateTime } from '../../lib/format'
+import { fmtServerDateTime } from '../../lib/format'
 import type { KakaoContact } from '../../types'
 import { useUpdateKakaoContact } from './api'
 
@@ -90,7 +90,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="text-sm font-bold text-slate-900">{contact.name ?? '이름 미상'}</span>
               <span className="text-[11px] text-slate-400">
-                요청 {fmtDateTime(contact.requested_at ?? contact.created_at)}
+                요청 {fmtServerDateTime(contact.requested_at ?? contact.created_at)}
               </span>
             </div>
             <p className="mb-2 text-xs text-slate-500">

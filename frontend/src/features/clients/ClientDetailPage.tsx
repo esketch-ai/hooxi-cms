@@ -17,8 +17,9 @@ import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
 import { Skeleton, SkeletonTableRows } from '../../components/Skeleton'
 import { AuditLine } from '../../components/AuditLine'
-import { downloadDocument } from '../../lib/download'
-import { fmtDate, fmtDateTime, telHref } from '../../lib/format'
+import { useToast } from '../../components/Toast'
+import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { fmtDate, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useClientThreads } from '../chat/api'
@@ -310,6 +311,16 @@ function HistoriesTab({ clientId, onAdd }: { clientId: string; onAdd: () => void
 function ReportsDocsTab({ clientId }: { clientId: string }) {
   const { data: reports = [], isLoading: reportsLoading } = useClientReports(clientId)
   const { data: documents = [], isLoading: docsLoading } = useClientDocuments(clientId)
+  const { showToast } = useToast()
+
+  // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
+  const handleDownload = async (docId: string, title?: string) => {
+    try {
+      await downloadDocument(docId, title)
+    } catch (err) {
+      showToast(downloadErrorMessage(err), 'danger')
+    }
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -327,7 +338,7 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
                   {r.report_type}
                 </span>
-                <span className="text-xs text-slate-400">{fmtDate(r.sent_at)}</span>
+                <span className="text-xs text-slate-400">{fmtServerDate(r.sent_at)}</span>
                 <StatusBadge domain="report" value={r.status} />
               </li>
             ))}
@@ -348,12 +359,12 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-700">{d.title}</p>
                   <p className="text-xs text-slate-400">
-                    {d.doc_type} · v{d.version} · {fmtDateTime(d.created_at)}
+                    {d.doc_type} · v{d.version} · {fmtServerDateTime(d.created_at)}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => downloadDocument(d.doc_id, d.title)}
+                  onClick={() => void handleDownload(d.doc_id, d.title)}
                   className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   title="다운로드"
                 >
@@ -406,7 +417,7 @@ function ChatTab({ clientId }: { clientId: string }) {
                   {t.last_message_preview ?? '메시지가 없습니다'}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">
-                  {fmtDateTime(t.last_message_at)}
+                  {fmtServerDateTime(t.last_message_at)}
                 </span>
               </Link>
             </li>

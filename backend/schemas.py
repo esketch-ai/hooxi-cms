@@ -4,7 +4,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +108,14 @@ class ReportSubscriptionIn(BaseModel):
     channel: str = Field(default="EMAIL", pattern="^(EMAIL|KAKAO|BOTH)$")
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     active: str = Field(default="Y", pattern="^[YN]$")
+
+    @field_validator("active", mode="before")
+    @classmethod
+    def _coerce_active(cls, v):
+        """JSON boolean도 수용 — true→"Y", false→"N" (외부 연동 혼동 방지)."""
+        if isinstance(v, bool):
+            return "Y" if v else "N"
+        return v
 
 
 class ReportSubscriptionOut(BaseModel):

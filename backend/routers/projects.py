@@ -16,6 +16,7 @@ import schemas
 from auth import get_current_user, require_permission
 from models import Asset, Client, Project, ProjectClientMap, User, get_db
 from routers import common
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -176,6 +177,14 @@ def create_project(
         **{f: getattr(payload, f) for f in _PROJECT_FIELDS}, price_source="MANUAL"
     )
     db.add(project)
+    db.flush()  # PK(gen_uuid)는 flush 시점에 생성 — 감사 대상 ID 확보
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_CREATE",
+        target_type="PROJECT",
+        target_id=project.project_id,
+    )
     db.commit()
     db.refresh(project)
     return _project_detail(db, project)
@@ -211,6 +220,15 @@ def update_project(
             setattr(project, field, data[field])
     if "unit_price" in data or "expected_credits" in data:
         _recalc_expected_amounts(db, project)
+
+    # 감사 로그는 커밋 전에 적재해야 함께 저장된다 (커밋 후 add는 유실)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_UPDATE",
+        target_type="PROJECT",
+        target_id=project.project_id,
+    )
     db.commit()
     db.refresh(project)
     return _project_detail(db, project)
@@ -236,6 +254,15 @@ def delete_project(
     for m in maps:
         db.delete(m)
     db.delete(project)
+    
+    AuditLogger.log_action(
+        db, 
+        user.user_id, 
+        "PROJECT_DELETE",
+        target_type="PROJECT", 
+        target_id=project.project_id
+    )
+    
     db.commit()
     return schemas.MessageResponse(message="감축 사업이 삭제되었습니다")
 

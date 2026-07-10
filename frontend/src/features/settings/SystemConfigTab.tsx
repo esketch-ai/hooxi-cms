@@ -12,7 +12,7 @@ import {
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonCards } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
-import { fmtDate, fmtDateTime, fmtTime } from '../../lib/format'
+import { fmtServerDate, fmtServerDateTime, fmtServerTime } from '../../lib/format'
 import {
   useConfigHistory,
   useConfigList,
@@ -192,7 +192,7 @@ function ConfigCard({ item }: { item: ConfigItem }) {
       )}
       {!item.is_default && item.updated_at && (
         <p className="mt-1 text-xs text-slate-400">
-          최종 수정 {fmtDateTime(item.updated_at)}
+          최종 수정 {fmtServerDateTime(item.updated_at)}
           {item.updated_by_name ? ` · ${item.updated_by_name}` : ''}
         </p>
       )}
@@ -252,7 +252,7 @@ function ConfigHistoryList({ configKey }: { configKey: string }) {
           className="border-b border-slate-100 pb-2 text-xs last:border-b-0 last:pb-0"
         >
           <p className="text-slate-500">
-            {h.created_at ? `${fmtDate(h.created_at)} ${fmtTime(h.created_at)}` : '—'}
+            {h.created_at ? `${fmtServerDate(h.created_at)} ${fmtServerTime(h.created_at)}` : '—'}
             {h.updated_by_name ? ` · ${h.updated_by_name}` : ''}
           </p>
           <p className="mt-0.5 break-all font-mono text-[11px] text-slate-400">

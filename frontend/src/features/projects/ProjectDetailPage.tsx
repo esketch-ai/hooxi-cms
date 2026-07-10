@@ -20,7 +20,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useClientOptions } from '../../lib/api/queries'
-import { dday, fmtDate, fmtDateTime, fmtMoney } from '../../lib/format'
+import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type { ProjectClientMap } from '../../types'
 import { isIssueImminent, useDeleteMapping, useProject, useUpdateUnitPrice } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
@@ -439,8 +439,8 @@ export function ProjectDetailPage() {
         </div>
         {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}
         <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-400">
-          {project.created_at && `등록 ${fmtDateTime(project.created_at)}`}
-          {project.updated_at && ` / 수정 ${fmtDateTime(project.updated_at)}`}
+          {project.created_at && `등록 ${fmtServerDateTime(project.created_at)}`}
+          {project.updated_at && ` / 수정 ${fmtServerDateTime(project.updated_at)}`}
         </p>
       </section>
 

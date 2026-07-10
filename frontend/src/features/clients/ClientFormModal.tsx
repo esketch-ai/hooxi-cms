@@ -10,9 +10,23 @@ import { useSaveClient } from './api'
 
 const inputCls =
   'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
+// 검증 실패 필드 — 빨간 테두리 (L-1 인라인 검증)
+const inputErrorCls =
+  'h-10 w-full rounded-lg border border-rose-300 px-3 text-sm focus:border-rose-400 focus:outline-none'
 const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  /** 인라인 에러 텍스트 — 존재 시 필드 아래 표시 */
+  error?: string
+  children: ReactNode
+}) {
   return (
     <div>
       <label className={labelCls}>
@@ -20,6 +34,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {required && <span className="ml-0.5 text-rose-500">*</span>}
       </label>
       {children}
+      {error && <p className="mt-1 text-xs text-rose-500">{error}</p>}
     </div>
   )
 }
@@ -41,6 +56,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
   const [subType, setSubType] = useState('')
   const [subChannel, setSubChannel] = useState<'EMAIL' | 'KAKAO' | 'BOTH'>('EMAIL')
   const [subDueDay, setSubDueDay] = useState<number | null>(null)
+  // 인라인 검증 에러 (L-1) — key: ClientPayload 키 또는 'subType'
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (open) {
@@ -49,11 +66,25 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
       setSubType(sub?.report_type ?? '')
       setSubChannel((sub?.channel as 'EMAIL' | 'KAKAO' | 'BOTH') ?? 'EMAIL')
       setSubDueDay(sub?.due_day ?? null)
+      setErrors({})
     }
   }, [open, client])
 
-  const set = <K extends keyof ClientPayload>(key: K, value: ClientPayload[K]) =>
+  const clearError = (key: string) =>
+    setErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+
+  const set = <K extends keyof ClientPayload>(key: K, value: ClientPayload[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+    clearError(key) // 입력 시 인라인 에러 해제
+  }
+
+  /** 검증 실패 필드는 빨간 테두리 */
+  const fieldCls = (key: string) => (errors[key] ? inputErrorCls : inputCls)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -69,16 +100,22 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
       ['main_contact_email', '주 담당자 이메일'],
       ['manager_id', '담당 PM'],
     ]
+    // 누락 필수 필드 전체 수집 → 인라인 표시 (L-1)
+    const nextErrors: Record<string, string> = {}
     for (const [key, label] of required) {
       if (!String(form[key] ?? '').trim()) {
-        showToast(`${label}을(를) 입력해 주세요.`, 'danger')
-        return
+        nextErrors[key] = `${label}을(를) 입력해 주세요.`
       }
     }
     if (form.report_yn === 'Y' && !subType.trim()) {
-      showToast('보고서 수신 시 보고서 유형을 입력해 주세요.', 'danger')
+      nextErrors.subType = '보고서 수신 시 보고서 유형을 입력해 주세요.'
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      showToast('필수 항목을 입력해 주세요.', 'danger')
       return
     }
+    setErrors({})
     try {
       await save.mutateAsync({
         ...form,
@@ -120,19 +157,19 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               <option value="FACILITY">건물·농장 (FACILITY)</option>
             </select>
           </Field>
-          <Field label="고객사명" required>
+          <Field label="고객사명" required error={errors.company_name}>
             <input
               value={form.company_name}
               onChange={(e) => set('company_name', e.target.value)}
-              className={inputCls}
+              className={fieldCls('company_name')}
               placeholder="예: 대성운수"
             />
           </Field>
-          <Field label="사업자번호" required>
+          <Field label="사업자번호" required error={errors.biz_reg_no}>
             <input
               value={form.biz_reg_no ?? ''}
               onChange={(e) => set('biz_reg_no', e.target.value)}
-              className={inputCls}
+              className={fieldCls('biz_reg_no')}
               placeholder="000-00-00000"
             />
           </Field>
@@ -145,26 +182,26 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             />
           </Field>
           <div className="sm:col-span-2">
-            <Field label="주소" required>
+            <Field label="주소" required error={errors.address}>
               <input
                 value={form.address ?? ''}
                 onChange={(e) => set('address', e.target.value)}
-                className={inputCls}
+                className={fieldCls('address')}
               />
             </Field>
           </div>
-          <Field label="대표자명" required>
+          <Field label="대표자명" required error={errors.ceo_name}>
             <input
               value={form.ceo_name ?? ''}
               onChange={(e) => set('ceo_name', e.target.value)}
-              className={inputCls}
+              className={fieldCls('ceo_name')}
             />
           </Field>
-          <Field label="대표 연락처" required>
+          <Field label="대표 연락처" required error={errors.ceo_contact_phone}>
             <input
               value={form.ceo_contact_phone ?? ''}
               onChange={(e) => set('ceo_contact_phone', e.target.value)}
-              className={inputCls}
+              className={fieldCls('ceo_contact_phone')}
               placeholder="02-0000-0000"
             />
           </Field>
@@ -191,27 +228,27 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             고객사 주 담당자
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="주 담당자명" required>
+            <Field label="주 담당자명" required error={errors.main_contact_name}>
               <input
                 value={form.main_contact_name ?? ''}
                 onChange={(e) => set('main_contact_name', e.target.value)}
-                className={inputCls}
+                className={fieldCls('main_contact_name')}
               />
             </Field>
-            <Field label="연락처 (카카오 매핑 기준)" required>
+            <Field label="연락처 (카카오 매핑 기준)" required error={errors.main_contact_phone}>
               <input
                 value={form.main_contact_phone ?? ''}
                 onChange={(e) => set('main_contact_phone', e.target.value)}
-                className={inputCls}
+                className={fieldCls('main_contact_phone')}
                 placeholder="010-0000-0000"
               />
             </Field>
-            <Field label="이메일 (보고서 발송 기준)" required>
+            <Field label="이메일 (보고서 발송 기준)" required error={errors.main_contact_email}>
               <input
                 type="email"
                 value={form.main_contact_email ?? ''}
                 onChange={(e) => set('main_contact_email', e.target.value)}
-                className={inputCls}
+                className={fieldCls('main_contact_email')}
               />
             </Field>
           </div>
@@ -242,11 +279,11 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 className={inputCls}
               />
             </Field>
-            <Field label="담당 PM" required>
+            <Field label="담당 PM" required error={errors.manager_id}>
               <select
                 value={form.manager_id ?? ''}
                 onChange={(e) => set('manager_id', e.target.value)}
-                className={inputCls}
+                className={fieldCls('manager_id')}
               >
                 <option value="">선택</option>
                 {users.map((u) => (
@@ -268,18 +305,24 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             <Field label="수신 여부">
               <select
                 value={form.report_yn ?? 'N'}
-                onChange={(e) => set('report_yn', e.target.value)}
+                onChange={(e) => {
+                  set('report_yn', e.target.value)
+                  if (e.target.value !== 'Y') clearError('subType')
+                }}
                 className={inputCls}
               >
                 <option value="Y">수신 (Y)</option>
                 <option value="N">미수신 (N)</option>
               </select>
             </Field>
-            <Field label="보고서 유형">
+            <Field label="보고서 유형" error={errors.subType}>
               <input
                 value={subType}
-                onChange={(e) => setSubType(e.target.value)}
-                className={inputCls}
+                onChange={(e) => {
+                  setSubType(e.target.value)
+                  clearError('subType')
+                }}
+                className={fieldCls('subType')}
                 placeholder="예: 월간 운행 보고서"
                 disabled={form.report_yn !== 'Y'}
               />

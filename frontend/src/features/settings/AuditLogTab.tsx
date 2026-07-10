@@ -6,7 +6,7 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { Pagination } from '../../components/Pagination'
-import { fmtDate, fmtTime } from '../../lib/format'
+import { fmtServerDate, fmtServerTime } from '../../lib/format'
 import { useAuditLogs, type AuditLogItem } from './api'
 
 const PAGE_SIZE = 20
@@ -32,6 +32,14 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
   BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
   BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  // 업무 이력 감사 (이슈·사업·보고서)
+  ISSUE_STATUS_CHANGE: { label: '이슈 상태 변경', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  COMMENT_ADD: { label: '코멘트 등록', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+  PROJECT_CREATE: { label: '사업 등록', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  PROJECT_UPDATE: { label: '사업 수정', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
 }
 
 const FALLBACK_SPEC = { label: '', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
@@ -47,6 +55,10 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   PROJECT_CLIENT_MAP: '정산 매핑',
   DOCUMENT: '문서',
   DATABASE: '데이터베이스',
+  PROJECT: '감축 사업',
+  HISTORY: '활동 이력',
+  HISTORY_COMMENT: '이슈 코멘트',
+  REPORT_DELIVERY: '보고서',
 }
 
 function ActionBadge({ action }: { action: string }) {
@@ -82,7 +94,7 @@ export function AuditLogTab() {
       header: '시각',
       render: (log) => (
         <span className="text-xs whitespace-nowrap text-slate-500">
-          {log.created_at ? `${fmtDate(log.created_at)} ${fmtTime(log.created_at)}` : '—'}
+          {log.created_at ? `${fmtServerDate(log.created_at)} ${fmtServerTime(log.created_at)}` : '—'}
         </span>
       ),
     },

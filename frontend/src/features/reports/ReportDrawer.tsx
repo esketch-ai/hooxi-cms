@@ -3,8 +3,9 @@ import { DownloadSimple } from '@phosphor-icons/react'
 import { Drawer } from '../../components/Drawer'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Skeleton } from '../../components/Skeleton'
-import { downloadDocument } from '../../lib/download'
-import { fmtDate, fmtDateTime } from '../../lib/format'
+import { useToast } from '../../components/Toast'
+import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { fmtDate, fmtServerDate, fmtServerDateTime } from '../../lib/format'
 import type { ReportDelivery } from '../../types'
 import { useReportDetail } from './api'
 
@@ -22,6 +23,16 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
   const { data: detail, isLoading } = useReportDetail(report?.report_id)
+  const { showToast } = useToast()
+
+  // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
+  const handleDownload = async (docId: string, title?: string) => {
+    try {
+      await downloadDocument(docId, title)
+    } catch (err) {
+      showToast(downloadErrorMessage(err), 'danger')
+    }
+  }
 
   if (!report) return null
   const merged = { ...report, ...(detail ?? {}) }
@@ -60,7 +71,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
           <div>
             <dt className="text-xs text-slate-400">발송일 / 채널</dt>
             <dd className="font-medium text-slate-700">
-              {fmtDate(merged.sent_at)}{' '}
+              {fmtServerDate(merged.sent_at)}{' '}
               {merged.sent_channel
                 ? `· ${CHANNEL_LABELS[merged.sent_channel] ?? merged.sent_channel}`
                 : ''}
@@ -70,7 +81,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
             <div className="col-span-2">
               <dt className="text-xs text-slate-400">고객 확인</dt>
               <dd className="font-medium text-emerald-700">
-                {fmtDateTime(merged.confirmed_at)}
+                {fmtServerDateTime(merged.confirmed_at)}
                 {merged.confirm_basis ? ` (${merged.confirm_basis})` : ''}
               </dd>
             </div>
@@ -109,12 +120,12 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-700">{d.title}</p>
                     <p className="text-[11px] text-slate-400">
-                      {d.uploaded_by_name ?? '—'} · {fmtDateTime(d.created_at)}
+                      {d.uploaded_by_name ?? '—'} · {fmtServerDateTime(d.created_at)}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => downloadDocument(d.doc_id, d.title)}
+                    onClick={() => void handleDownload(d.doc_id, d.title)}
                     className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                     title="다운로드"
                   >
@@ -162,7 +173,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
                             : (log.result ?? '')}
                     </span>
                     <span className="ml-auto text-[11px] text-slate-400">
-                      {fmtDateTime(log.created_at)}
+                      {fmtServerDateTime(log.created_at)}
                     </span>
                   </div>
                   {log.recipients && (
@@ -175,7 +186,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
                   )}
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     발송자 {log.sent_by_name ?? '—'}
-                    {log.confirmed_at ? ` · 고객확인 ${fmtDateTime(log.confirmed_at)}` : ''}
+                    {log.confirmed_at ? ` · 고객확인 ${fmtServerDateTime(log.confirmed_at)}` : ''}
                   </p>
                 </li>
               ))}

@@ -26,6 +26,41 @@ export function fmtTime(value?: string | Date | null): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// ── 서버 생성 시각(naive UTC) 전용 파서/포맷터 ─────────────────────────
+// 백엔드 utcnow()는 tz 정보 없는 UTC 문자열('Z' 없음)을 내려보낸다.
+// created_at·updated_at·last_message_at·requested_at·approved_at·sent_at·
+// billed_at·completed_at·confirmed_at 등 서버 기록 시각에만 사용할 것.
+// (activity_date·due_date·일정 시각 등 사용자 입력 벽시계는 fmtDate/fmtDateTime 유지)
+
+/** 서버 생성 시각(naive UTC) 파싱 — 타임존 정보 없으면 UTC로 간주 */
+export function parseServerUtc(iso: string): Date {
+  return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z')
+}
+
+function toServerDate(value?: string | Date | null): Date | null {
+  if (value === null || value === undefined || value === '') return null
+  const d = value instanceof Date ? value : parseServerUtc(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** 서버 시각 → 'YYYY-MM-DD' (로컬 시간대 기준) */
+export function fmtServerDate(value?: string | Date | null): string {
+  const d = toServerDate(value)
+  return d ? fmtDate(d) : value ? String(value) : '—'
+}
+
+/** 서버 시각 → 'MM-DD HH:mm' (로컬 시간대 기준) */
+export function fmtServerDateTime(value?: string | Date | null): string {
+  const d = toServerDate(value)
+  return d ? fmtDateTime(d) : value ? String(value) : '—'
+}
+
+/** 서버 시각 → 'HH:mm' (로컬 시간대 기준) */
+export function fmtServerTime(value?: string | Date | null): string {
+  const d = toServerDate(value)
+  return d ? fmtTime(d) : ''
+}
+
 /** 'YYYY-MM' */
 export function fmtMonth(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
@@ -40,6 +75,21 @@ export function toDatetimeLocal(d: Date): string {
 export function elapsed(value?: string | null): string {
   if (!value) return ''
   const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const diffMs = Date.now() - d.getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 경과`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 경과`
+  const days = Math.floor(hours / 24)
+  return `${days}일 경과`
+}
+
+/** 서버 시각 기준 경과 시간 — elapsed()의 서버 생성 시각(naive UTC) 버전 */
+export function elapsedServer(value?: string | null): string {
+  if (!value) return ''
+  const d = parseServerUtc(value)
   if (Number.isNaN(d.getTime())) return ''
   const diffMs = Date.now() - d.getTime()
   const mins = Math.floor(diffMs / 60_000)

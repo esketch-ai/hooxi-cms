@@ -20,8 +20,8 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FileUploader } from '../../components/FileUploader'
 import { useToast } from '../../components/Toast'
-import { downloadDocument } from '../../lib/download'
-import { dday, fmtDate, fmtMonth } from '../../lib/format'
+import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { dday, fmtDate, fmtMonth, fmtServerDate } from '../../lib/format'
 import type { ReportDelivery } from '../../types'
 import {
   useChangeReportStatus,
@@ -120,6 +120,15 @@ export function ReportsPage() {
     }
   }
 
+  // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
+  const handleDownload = async (docId: string, title?: string) => {
+    try {
+      await downloadDocument(docId, title)
+    } catch (err) {
+      showToast(downloadErrorMessage(err), 'danger')
+    }
+  }
+
   const columns: Column<ReportDelivery>[] = [
     {
       key: 'client',
@@ -151,7 +160,7 @@ export function ReportsPage() {
         return (
           <div className="text-xs">
             <span className="text-slate-500">
-              {r.sent_at ? fmtDate(r.sent_at) : fmtDate(r.due_date)}
+              {r.sent_at ? fmtServerDate(r.sent_at) : fmtDate(r.due_date)}
             </span>
             {d && (
               <span
@@ -175,7 +184,7 @@ export function ReportsPage() {
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              downloadDocument(r.latest_doc!.doc_id, r.latest_doc!.title)
+              void handleDownload(r.latest_doc!.doc_id, r.latest_doc!.title)
             }}
             className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:underline"
           >
@@ -208,7 +217,7 @@ export function ReportsPage() {
       header: '고객 확인',
       render: (r) =>
         r.status === 'CONFIRMED' ? (
-          <span className="text-xs font-semibold text-emerald-600">✓ {fmtDate(r.confirmed_at)}</span>
+          <span className="text-xs font-semibold text-emerald-600">✓ {fmtServerDate(r.confirmed_at)}</span>
         ) : r.status === 'SENT' ? (
           <button
             type="button"

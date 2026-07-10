@@ -8,6 +8,7 @@ import { Modal } from '../../components/Modal'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
+import { parseServerUtc } from '../../lib/format'
 
 interface BackupRun {
   backup_run_id: string
@@ -29,10 +30,10 @@ interface BackupOperation {
   error?: string | null
 }
 
-/** UTC ISO → KST 표기 */
+/** UTC ISO → KST 표기 — tz 정보 없는 서버 시각도 UTC로 간주 */
 function fmtKst(iso: string | null): string {
   if (!iso) return '—'
-  const d = new Date(iso)
+  const d = parseServerUtc(iso)
   return d.toLocaleString('ko-KR', {
     timeZone: 'Asia/Seoul',
     year: 'numeric',

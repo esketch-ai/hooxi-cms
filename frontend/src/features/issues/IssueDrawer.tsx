@@ -7,7 +7,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { AuditLine } from '../../components/AuditLine'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
-import { dday, elapsed, fmtDateTime } from '../../lib/format'
+import { dday, elapsedServer, fmtServerDateTime } from '../../lib/format'
 import type { ActivityHistory, IssueStatus } from '../../types'
 import { useAddIssueComment, useChangeIssueStatus, useIssueComments } from './api'
 
@@ -87,7 +87,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
             </span>
           )}
           <span className="text-xs text-slate-400">
-            접수 {fmtDateTime(issue.created_at)} · {elapsed(issue.created_at)}
+            접수 {fmtServerDateTime(issue.created_at)} · {elapsedServer(issue.created_at)}
           </span>
         </div>
 
@@ -162,7 +162,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
                     <div className="rounded-lg bg-slate-50 px-3 py-2">
                       <p className="text-sm whitespace-pre-wrap text-slate-700">{c.content}</p>
                       <p className="mt-1 text-[11px] text-slate-400">
-                        {c.manager_name ?? '—'} · {fmtDateTime(c.created_at)}
+                        {c.manager_name ?? '—'} · {fmtServerDateTime(c.created_at)}
                       </p>
                     </div>
                   ) : (
@@ -171,7 +171,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
                       <span className="mr-1 inline-flex rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium">
                         {c.comment_type === 'STATUS_CHANGE' ? '상태 변경' : '담당 변경'}
                       </span>
-                      {c.content} — {c.manager_name ?? '—'} · {fmtDateTime(c.created_at)}
+                      {c.content} — {c.manager_name ?? '—'} · {fmtServerDateTime(c.created_at)}
                     </p>
                   )}
                 </li>

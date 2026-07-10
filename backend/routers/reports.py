@@ -37,6 +37,7 @@ from models import (
 )
 from routers import common
 from services import email_service, kakao_service, storage
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -288,6 +289,14 @@ def generate_reports(
             )
         )
         created += 1
+        db.flush()  # PK(gen_uuid)는 flush 시점에 생성 — 감사 대상 ID 확보
+        AuditLogger.log_action(
+            db,
+            user.user_id,
+            "REPORT_CREATE",
+            target_type="REPORT_DELIVERY",
+            target_id=delivery.report_id,
+        )
 
     db.commit()
     return schemas.ReportGenerateResponse(
@@ -484,6 +493,14 @@ def send_report(
             content="수신자: {0}".format(", ".join(to + cc)),
         )
     )
+    # 감사 로그는 커밋 전에 적재해야 함께 저장된다 (커밋 후 add는 유실)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "REPORT_SEND",
+        target_type="REPORT_DELIVERY",
+        target_id=report_id,
+    )
     db.commit()
 
     return schemas.ReportSendResponse(
@@ -511,7 +528,10 @@ def update_report_status(
     delivery.status = payload.status
     if payload.status == "CANCELED":
         delivery.canceled_reason = payload.canceled_reason
-    elif payload.status == "CONFIRMED":
+    else:
+        # 취소 외 상태로 복귀 시 사유 잔존 방지 (QA 관찰 3)
+        delivery.canceled_reason = None
+    if payload.status == "CONFIRMED":
         delivery.confirmed_at = utcnow()
         delivery.confirm_basis = payload.confirm_basis or "수기"
     elif payload.status == "REVIEW":

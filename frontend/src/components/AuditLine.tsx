@@ -11,9 +11,12 @@ interface AuditLineProps {
   className?: string
 }
 
+import { parseServerUtc } from '../lib/format'
+
 function formatDateTime(value?: string | null): string {
   if (!value) return ''
-  const d = new Date(value)
+  // 작성/수정 시각은 서버 생성 시각(naive UTC) — UTC로 파싱해 로컬(KST)로 표시
+  const d = parseServerUtc(value)
   if (Number.isNaN(d.getTime())) return value
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`

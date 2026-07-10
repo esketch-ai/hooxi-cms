@@ -20,7 +20,7 @@ import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonKpi, SkeletonTableRows } from '../../components/Skeleton'
 import { api } from '../../lib/api/client'
-import { dday, elapsed, fmtMoney } from '../../lib/format'
+import { dday, elapsedServer, fmtMoney } from '../../lib/format'
 import type { DashboardStats } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 
@@ -254,7 +254,7 @@ export function DashboardPage() {
                       </div>
                       <p className="mt-0.5 text-xs text-slate-400">
                         {issue.client_name ?? '미지정 고객'} · {issue.manager_name ?? '—'} ·{' '}
-                        {elapsed(issue.created_at)}
+                        {elapsedServer(issue.created_at)}
                       </p>
                     </Link>
                   </li>

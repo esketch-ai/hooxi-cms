@@ -17,8 +17,8 @@ import { FileUploader } from '../../components/FileUploader'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { unwrapList, useClientOptions } from '../../lib/api/queries'
-import { downloadDocument } from '../../lib/download'
-import { fmtDateTime } from '../../lib/format'
+import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { fmtServerDateTime } from '../../lib/format'
 import type { DocType, Document, Paginated } from '../../types'
 
 const DOC_TYPE_OPTIONS: { value: DocType; label: string }[] = [
@@ -33,6 +33,16 @@ const docTypeLabel = (t: string) => DOC_TYPE_OPTIONS.find((o) => o.value === t)?
 
 export function DocumentsPage() {
   const { data: clients = [] } = useClientOptions()
+  const { showToast } = useToast()
+
+  // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
+  const handleDownload = async (docId: string, title?: string) => {
+    try {
+      await downloadDocument(docId, title)
+    } catch (err) {
+      showToast(downloadErrorMessage(err), 'danger')
+    }
+  }
 
   // 폴더 트리 선택: null=전체, 'COMMON'=공용(미지정), client_id
   const [folder, setFolder] = useState<string | null>(null)
@@ -102,7 +112,7 @@ export function DocumentsPage() {
     {
       key: 'date',
       header: '업로드일',
-      render: (d) => <span className="text-xs text-slate-500">{fmtDateTime(d.created_at)}</span>,
+      render: (d) => <span className="text-xs text-slate-500">{fmtServerDateTime(d.created_at)}</span>,
     },
     {
       key: 'download',
@@ -115,7 +125,7 @@ export function DocumentsPage() {
           title="다운로드"
           onClick={(e) => {
             e.stopPropagation()
-            downloadDocument(d.doc_id, d.title)
+            void handleDownload(d.doc_id, d.title)
           }}
         >
           <DownloadSimple size={16} />
@@ -228,12 +238,12 @@ export function DocumentsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">{d.title}</p>
                     <p className="text-xs text-slate-400">
-                      {docTypeLabel(d.doc_type)} · v{d.version} · {fmtDateTime(d.created_at)}
+                      {docTypeLabel(d.doc_type)} · v{d.version} · {fmtServerDateTime(d.created_at)}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => downloadDocument(d.doc_id, d.title)}
+                    onClick={() => void handleDownload(d.doc_id, d.title)}
                     className="rounded-md p-2 text-slate-400 hover:bg-slate-100"
                     aria-label="다운로드"
                   >

@@ -15,7 +15,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { BADGE_DICTIONARY } from '../../components/StatusBadge'
-import { fmtDate } from '../../lib/format'
+import { fmtServerDate, parseServerUtc } from '../../lib/format'
 import { useClient, useClientAssets } from '../clients/api'
 import type { ChatMessage, ChatThread } from '../../types'
 import { useChatMessages, useReplyThread, useUpdateThread } from './api'
@@ -23,17 +23,17 @@ import { threadTitle } from './ThreadList'
 
 const MAX_LEN = 1000
 
-/** '오후 4:30' */
+/** '오후 4:30' — 메시지 created_at은 서버 생성 시각(naive UTC) */
 function fmtKakaoTime(iso?: string | null): string {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = parseServerUtc(iso)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })
 }
 
-/** '2026년 7월 6일 월요일' */
+/** '2026년 7월 6일 월요일' — 서버 생성 시각(naive UTC) 기준 */
 function fmtDateHeading(iso: string): string {
-  const d = new Date(iso)
+  const d = parseServerUtc(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -180,7 +180,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
   const grouped = useMemo(() => {
     const out: { dateKey: string; heading: string; items: ChatMessage[] }[] = []
     for (const m of messages) {
-      const key = fmtDate(m.created_at)
+      const key = fmtServerDate(m.created_at)
       const last = out[out.length - 1]
       if (last && last.dateKey === key) last.items.push(m)
       else out.push({ dateKey: key, heading: fmtDateHeading(m.created_at), items: [m] })

@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { fmtDate, fmtMoney } from '../../lib/format'
+import { fmtMoney, fmtServerDate, parseServerUtc } from '../../lib/format'
 import type { ProjectClientMap, SettlementStatus } from '../../types'
 import { useProjectOptions } from '../projects/api'
 import { useSettlements, useUpdateSettlementStatus } from './api'
@@ -22,7 +22,7 @@ const PAGE_SIZE = 20
 /** 청구 후 30일 이상 미입금 여부 (SCR-07 §6) */
 function isOverdueBilled(row: ProjectClientMap): boolean {
   if (row.settlement_status !== 'BILLED' || !row.billed_at) return false
-  const billed = new Date(row.billed_at)
+  const billed = parseServerUtc(row.billed_at)
   if (Number.isNaN(billed.getTime())) return false
   return Date.now() - billed.getTime() > 30 * 86_400_000
 }
@@ -32,9 +32,9 @@ function SettlementStatusCell({ row }: { row: ProjectClientMap }) {
   const overdue = isOverdueBilled(row)
   let sub: string | null = null
   if (row.settlement_status === 'BILLED' && row.billed_at) {
-    sub = `청구 ${fmtDate(row.billed_at)}`
+    sub = `청구 ${fmtServerDate(row.billed_at)}`
   } else if (row.settlement_status === 'COMPLETED' && row.completed_at) {
-    sub = `입금 ${fmtDate(row.completed_at)}`
+    sub = `입금 ${fmtServerDate(row.completed_at)}`
   }
   return (
     <div>
@@ -351,9 +351,15 @@ export function SettlementsPage() {
               <br />
               예상 정산액{' '}
               <b>
-                {pending.row.expected_amount != null
-                  ? fmtMoney(Number(pending.row.expected_amount))
-                  : '미정'}
+                {pending.row.expected_amount != null ? (
+                  /* 보안 모드 시 확인 다이얼로그에서도 금액 마스킹 (L-4) */
+                  <SensitiveData
+                    type="money"
+                    value={fmtMoney(Number(pending.row.expected_amount))}
+                  />
+                ) : (
+                  '미정'
+                )}
               </b>
               {pending.next === 'BILLED'
                 ? ' 건을 청구(BILLED) 상태로 전환합니다. 청구 시점 금액이 증빙으로 동결됩니다.'
