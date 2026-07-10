@@ -49,6 +49,22 @@ class UserRoleRequest(BaseModel):
     role: str = Field(pattern="^(ADMIN|MANAGER|STAFF)$")
 
 
+class UserCreateRequest(BaseModel):
+    """관리자 직접 계정 생성 — 즉시 ACTIVE (최초 로그인 시 PIN 설정)."""
+
+    email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    name: Optional[str] = Field(default=None, max_length=50)
+    position: Optional[str] = Field(default=None, max_length=50)
+    role: str = Field(default="STAFF", pattern="^(ADMIN|MANAGER|STAFF)$")
+
+
+class UserUpdateRequest(BaseModel):
+    """계정 정보 수정 — 이름·직급만."""
+
+    name: Optional[str] = Field(default=None, max_length=50)
+    position: Optional[str] = Field(default=None, max_length=50)
+
+
 # ---------------------------------------------------------------------------
 # 인증
 # ---------------------------------------------------------------------------

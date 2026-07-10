@@ -143,6 +143,42 @@ class AuditLogger:
         )
 
     @staticmethod
+    def user_create(db: Session, actor_id: str, user_id: str, role: str) -> AuditLog:
+        """관리자 직접 계정 생성 — 즉시 ACTIVE."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "USER_CREATE",
+            target_type="USER",
+            target_id=user_id,
+            new_value="ACTIVE({0})".format(role),
+        )
+
+    @staticmethod
+    def user_update(db: Session, actor_id: str, user_id: str, changes: str) -> AuditLog:
+        """이름·직급 수정 — 변경 요약(old→new)만 기록."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "USER_UPDATE",
+            target_type="USER",
+            target_id=user_id,
+            new_value=changes,
+        )
+
+    @staticmethod
+    def user_reactivate(db: Session, actor_id: str, user_id: str) -> AuditLog:
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "USER_REACTIVATE",
+            target_type="USER",
+            target_id=user_id,
+            old_value="INACTIVE",
+            new_value="ACTIVE",
+        )
+
+    @staticmethod
     def user_pin_reset(db: Session, actor_id: str, user_id: str) -> AuditLog:
         """PIN 초기화 — 해시·값은 기록하지 않는다."""
         return AuditLogger.log_action(

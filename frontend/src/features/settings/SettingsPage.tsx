@@ -116,6 +116,15 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
   const [nextRole, setNextRole] = useState<UserRole>('STAFF')
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
   const [pinResetTarget, setPinResetTarget] = useState<User | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    name: '',
+    position: '',
+    role: 'STAFF' as UserRole,
+  })
+  const [editTarget, setEditTarget] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', position: '' })
 
   const { data: users = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['users', 'admin-list', statusFilter],
@@ -155,6 +164,35 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
   const pinReset = useMutation({
     mutationFn: async (userId: string) => {
       const { data } = await api.put(`/users/${userId}/pin-reset`)
+      return data
+    },
+    onSuccess: invalidate,
+  })
+  const createUser = useMutation({
+    mutationFn: async (form: typeof createForm) => {
+      const { data } = await api.post('/users', {
+        email: form.email.trim(),
+        name: form.name.trim() || null,
+        position: form.position.trim() || null,
+        role: form.role,
+      })
+      return data
+    },
+    onSuccess: invalidate,
+  })
+  const updateUser = useMutation({
+    mutationFn: async ({ userId, name, position }: { userId: string; name: string; position: string }) => {
+      const { data } = await api.put(`/users/${userId}`, {
+        name: name.trim() || null,
+        position: position.trim(),
+      })
+      return data
+    },
+    onSuccess: invalidate,
+  })
+  const reactivate = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data } = await api.put(`/users/${userId}/reactivate`)
       return data
     },
     onSuccess: invalidate,
@@ -273,6 +311,31 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                 역할 변경
               </button>
             )}
+            {u.status === 'INACTIVE' && (
+              <button
+                type="button"
+                onClick={() =>
+                  run(
+                    () => reactivate.mutateAsync(u.user_id),
+                    '계정이 재활성화되었습니다.',
+                    () => undefined,
+                  )
+                }
+                className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+              >
+                재활성화
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setEditTarget(u)
+                setEditForm({ name: u.name ?? '', position: u.position ?? '' })
+              }}
+              className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            >
+              편집
+            </button>
             {u.status !== 'INACTIVE' && u.user_id !== meId && (
               <button
                 type="button"
@@ -321,6 +384,20 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
           <span className="ml-auto rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
             승인 대기 {pendingCount}건
           </span>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => {
+              setCreateForm({ email: '', name: '', position: '', role: 'STAFF' })
+              setCreateOpen(true)
+            }}
+            className={`rounded-lg bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
+              pendingCount > 0 ? '' : 'ml-auto'
+            }`}
+          >
+            ＋ 계정 추가
+          </button>
         )}
       </div>
 
@@ -493,6 +570,136 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
         }
         onCancel={() => setPinResetTarget(null)}
       />
+
+      {/* 계정 추가 (관리자 직접 생성 — 즉시 활성) */}
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="계정 추가">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">
+            생성 즉시 활성 상태가 되며, 대상자는 회사 이메일로 로그인 후 PIN을 설정합니다.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              회사 이메일<span className="ml-0.5 text-rose-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={createForm.email}
+              onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+              placeholder="name@hooxipartners.com"
+              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">이름</label>
+              <input
+                value={createForm.name}
+                onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">직급</label>
+              <input
+                value={createForm.position}
+                onChange={(e) => setCreateForm((f) => ({ ...f, position: e.target.value }))}
+                placeholder="대리, 과장 …"
+                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">역할</label>
+            <select
+              value={createForm.role}
+              onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+            >
+              <option value="STAFF">실무 (STAFF)</option>
+              <option value="MANAGER">팀장 (MANAGER)</option>
+              <option value="ADMIN">관리자 (ADMIN)</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={!createForm.email.trim() || createUser.isPending}
+              onClick={() =>
+                run(
+                  () => createUser.mutateAsync(createForm),
+                  '계정이 생성되었습니다.',
+                  () => setCreateOpen(false),
+                )
+              }
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              생성
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 계정 편집 (이름·직급) */}
+      <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title="계정 정보 수정">
+        {editTarget && (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400">{editTarget.email}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">이름</label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">직급</label>
+                <input
+                  value={editForm.position}
+                  onChange={(e) => setEditForm((f) => ({ ...f, position: e.target.value }))}
+                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setEditTarget(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!editForm.name.trim() || updateUser.isPending}
+                onClick={() =>
+                  run(
+                    () =>
+                      updateUser.mutateAsync({
+                        userId: editTarget.user_id,
+                        name: editForm.name,
+                        position: editForm.position,
+                      }),
+                    '계정 정보가 수정되었습니다.',
+                    () => setEditTarget(null),
+                  )
+                }
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

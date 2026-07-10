@@ -29,6 +29,11 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+  USER_CREATE: { label: '계정 생성', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  USER_UPDATE: { label: '계정 정보 수정', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+  USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+  INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
   BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
   BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
@@ -59,6 +64,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   HISTORY: '활동 이력',
   HISTORY_COMMENT: '이슈 코멘트',
   REPORT_DELIVERY: '보고서',
+  INTEGRATION: '연동',
 }
 
 function ActionBadge({ action }: { action: string }) {
