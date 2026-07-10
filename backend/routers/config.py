@@ -16,6 +16,7 @@ import schemas
 from auth import require_role
 from models import Config, ConfigHistory, User, get_db
 from routers import common
+from routers.batch import DEFAULT_CHECK_AGENCIES
 from routers.dashboard import _DEFAULT_FUNNEL_MAPPING
 from routers.kakao import DEFAULT_SENSITIVE_KEYWORDS
 from services.audit_logger import AuditLogger
@@ -31,6 +32,10 @@ KNOWN_DEFAULTS = {
     "sensitive_keywords": (
         DEFAULT_SENSITIVE_KEYWORDS,
         "카카오 AI 응대 민감 키워드 — 감지 시 담당자 연결 (CR-3)",
+    ),
+    "account_check_agencies": (
+        DEFAULT_CHECK_AGENCIES,
+        "월초 계정 점검 대상 기관 키워드 — 자산 대상 기관명에 포함 시 점검",
     ),
 }
 
@@ -81,7 +86,7 @@ def _validate_config_value(key: str, raw_value: str):
                     status_code=422,
                     detail="funnel_mapping의 값은 리텐션 단계 문자열 배열이어야 합니다 (§10.2)",
                 )
-    elif key == "sensitive_keywords":
+    elif key in ("sensitive_keywords", "account_check_agencies"):
         if (
             not isinstance(parsed, list)
             or not parsed
@@ -89,7 +94,7 @@ def _validate_config_value(key: str, raw_value: str):
         ):
             raise HTTPException(
                 status_code=422,
-                detail="sensitive_keywords는 비어 있지 않은 문자열 배열이어야 합니다",
+                detail="{0}는 비어 있지 않은 문자열 배열이어야 합니다".format(key),
             )
     return parsed
 

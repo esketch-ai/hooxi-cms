@@ -34,6 +34,7 @@ from models import (
 )
 from routers import assets as assets_router
 from routers import audit as audit_router
+from routers import batch as batch_router
 from routers import backups as backups_router
 from routers import chat as chat_router
 from routers import clients as clients_router
@@ -135,6 +136,7 @@ app.include_router(config_router.router, prefix=API_V1_PREFIX)
 app.include_router(integrations_router.router, prefix=API_V1_PREFIX)
 app.include_router(audit_router.router, prefix=API_V1_PREFIX)
 app.include_router(backups_router.router, prefix=API_V1_PREFIX)
+app.include_router(batch_router.router, prefix=API_V1_PREFIX)
 
 
 @app.get(f"{API_V1_PREFIX}/health", response_model=schemas.HealthResponse)

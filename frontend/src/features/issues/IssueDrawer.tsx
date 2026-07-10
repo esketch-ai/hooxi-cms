@@ -1,14 +1,15 @@
 // SCR-02 이슈 카드 상세 Drawer — 내용·코멘트 스레드·상태 변경 이력·고객사 딥링크
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowSquareOut, CircleNotch, PaperPlaneRight } from '@phosphor-icons/react'
+import { ArrowSquareOut, CircleNotch, PaperPlaneRight, Phone } from '@phosphor-icons/react'
 import { Drawer } from '../../components/Drawer'
 import { StatusBadge } from '../../components/StatusBadge'
 import { AuditLine } from '../../components/AuditLine'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
-import { dday, elapsedServer, fmtServerDateTime } from '../../lib/format'
+import { dday, elapsedServer, fmtServerDateTime, telHref } from '../../lib/format'
 import type { ActivityHistory, IssueStatus } from '../../types'
+import { useClient } from '../clients/api'
 import { useAddIssueComment, useChangeIssueStatus, useIssueComments } from './api'
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
@@ -30,11 +31,14 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
   )
   const changeStatus = useChangeIssueStatus()
   const addComment = useAddIssueComment(issue?.history_id)
+  // 고객사 전화번호는 이슈 상세에 포함되지 않으므로 client_id로 고객사 상세를 조회한다.
+  const { data: client } = useClient(issue?.client_id ?? undefined)
   const [newComment, setNewComment] = useState('')
 
   if (!issue) return null
 
   const due = dday(issue.due_date)
+  const clientPhone = client?.main_contact_phone
 
   const handleStatusChange = async (next: IssueStatus) => {
     if (next === issue.issue_status) return
@@ -91,15 +95,26 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
           </span>
         </div>
 
-        {/* 고객사 딥링크 */}
+        {/* 고객사 딥링크 + 담당자 전화 (Click-to-Call) */}
         {issue.client_id && (
-          <Link
-            to={`/clients/${issue.client_id}`}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-          >
-            {issue.client_name ?? '고객사'}
-            <ArrowSquareOut size={14} className="text-slate-400" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to={`/clients/${issue.client_id}`}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              {issue.client_name ?? '고객사'}
+              <ArrowSquareOut size={14} className="text-slate-400" />
+            </Link>
+            {clientPhone && (
+              <a
+                href={telHref(clientPhone)}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                <Phone size={15} weight="fill" />
+                {clientPhone}
+              </a>
+            )}
+          </div>
         )}
 
         {/* 상태 변경 */}

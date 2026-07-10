@@ -1015,3 +1015,14 @@ class BackupOperationOut(BaseModel):
     operation_id: str
     status: str
     error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# 배치 — 공공기관 계정 월초 점검 (routers/batch.py)
+# ---------------------------------------------------------------------------
+class AccountCheckResponse(BaseModel):
+    period: str
+    targets: int
+    created: int
+    skipped: int
+    unreachable: int

@@ -47,10 +47,22 @@ const DEFAULT_FUNNEL_MAPPING: Record<string, string[]> = {
 // 알려진 키 한국어 제목 (미등록 키는 키 그대로 노출)
 const CONFIG_TITLES: Record<string, string> = {
   sensitive_keywords: '민감 키워드 (카카오 상담)',
+  account_check_agencies: '계정 점검 기관 (월초 배치)',
   funnel_mapping: '리텐션 퍼널 매핑 (대시보드)',
 }
 
-const CONFIG_ORDER = ['sensitive_keywords', 'funnel_mapping']
+const CONFIG_ORDER = ['sensitive_keywords', 'account_check_agencies', 'funnel_mapping']
+
+// 문자열 배열형 키 — chips 추가/삭제 UI로 편집 (백엔드 검증: 비어 있지 않은 문자열 배열)
+const ARRAY_CHIP_KEYS = ['sensitive_keywords', 'account_check_agencies']
+
+// 키별 chips 편집기 하단 안내 문구
+const CHIP_HINTS: Record<string, string> = {
+  sensitive_keywords:
+    '카카오 상담 발화에 포함되면 자동으로 담당자 연결(민감 정보 응대 차단)됩니다.',
+  account_check_agencies:
+    '월초 계정 점검 배치가 자산의 대상 기관명에 이 키워드가 포함되면 점검 이슈를 생성합니다.',
+}
 
 export function SystemConfigTab() {
   const { data: items, isLoading, isError, refetch } = useConfigList()
@@ -139,10 +151,11 @@ function ConfigCard({ item }: { item: ConfigItem }) {
   }
 
   let editor: ReactNode
-  if (item.key === 'sensitive_keywords') {
+  if (ARRAY_CHIP_KEYS.includes(item.key)) {
     editor = (
       <KeywordChipsEditor
         value={draft}
+        hint={CHIP_HINTS[item.key]}
         onChange={(next, valid) => {
           setDraft(next)
           setDraftValid(valid)
@@ -284,9 +297,12 @@ function parseKeywords(value: string): string[] {
 
 function KeywordChipsEditor({
   value,
+  hint,
   onChange,
 }: {
   value: string
+  /** 편집기 하단 안내 문구 (키별 상이) */
+  hint?: string
   /** 서버 검증(비어 있지 않은 문자열 배열)에 맞춰 빈 목록은 invalid */
   onChange: (serialized: string, valid: boolean) => void
 }) {
@@ -353,9 +369,7 @@ function KeywordChipsEditor({
           추가
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-slate-400">
-        카카오 상담 발화에 포함되면 자동으로 담당자 연결(민감 정보 응대 차단)됩니다.
-      </p>
+      {hint && <p className="mt-1.5 text-[11px] text-slate-400">{hint}</p>}
     </div>
   )
 }
