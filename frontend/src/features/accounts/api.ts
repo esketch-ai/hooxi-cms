@@ -1,0 +1,46 @@
+// 수집 계정 관리 API 훅 — GET /assets?credentials_only=true (로그인 계정 보유 자산만)
+// + POST /batch/account-check (ADMIN 수동 전체 점검). reveal은 assets/useRevealAuth 재사용.
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { api } from '../../lib/api/client'
+import { unwrapList } from '../../lib/api/queries'
+import type { AccountCheckResponse, Asset, Paginated } from '../../types'
+
+export interface AccountFilters {
+  /** 대분류 MOBILITY/FACILITY */
+  asset_category?: string
+  /** 인증 방식 API_KEY/ID_PW */
+  auth_method?: string
+  /** 고객사명 검색 */
+  search?: string
+  page: number
+  page_size: number
+}
+
+/** 로그인 계정 보유 자산 목록 — credentials_only로 백엔드가 auth_type != NONE만 반환 */
+export function useCredentialAssets(filters: AccountFilters) {
+  return useQuery({
+    queryKey: ['accounts', filters],
+    queryFn: async () => {
+      const params: Record<string, string | number | boolean> = {
+        credentials_only: true,
+        page: filters.page,
+        page_size: filters.page_size,
+      }
+      if (filters.asset_category) params.asset_category = filters.asset_category
+      if (filters.auth_method) params.auth_method = filters.auth_method
+      if (filters.search) params.search = filters.search
+      const { data } = await api.get<Asset[] | Paginated<Asset>>('/assets', { params })
+      return unwrapList(data)
+    },
+  })
+}
+
+/** 전체 계정 월별 점검 실행 (ADMIN) — 대상 자산별 점검 이슈 생성(멱등) */
+export function useAccountCheck() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<AccountCheckResponse>('/batch/account-check')
+      return data
+    },
+  })
+}

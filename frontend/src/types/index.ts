@@ -362,6 +362,15 @@ export interface AssetPayload {
   usage_purpose?: string | null
 }
 
+/** POST /batch/account-check 응답 (schemas.AccountCheckResponse) — 계정 월별 점검 배치 결과 */
+export interface AccountCheckResponse {
+  period: string
+  targets: number
+  created: number
+  skipped: number
+  unreachable: number
+}
+
 /** POST /assets/{id}/reveal-auth 응답 (schemas.AssetRevealOut) — 평문 일시 복호화 */
 export interface RevealAuthResponse {
   asset_id: string

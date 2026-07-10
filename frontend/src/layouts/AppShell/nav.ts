@@ -8,6 +8,7 @@ import {
   FolderOpen, // v2에서 ph-folder-notch-open → FolderOpen으로 통합
   Gear,
   Kanban,
+  LockKey,
   PaperPlaneTilt,
   Receipt,
   SquaresFour,
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
       { label: '자산 및 연동 현황', path: '/assets', icon: Truck },
+      { label: '수집 계정 관리', path: '/accounts', icon: LockKey },
     ],
   },
   {

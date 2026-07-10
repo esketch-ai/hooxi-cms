@@ -69,6 +69,7 @@ def list_assets(
     asset_category: Optional[str] = Query(None, description="대분류 MOBILITY/FACILITY"),
     monitoring_yn: Optional[str] = Query(None, description="관제 연동 Y/N"),
     auth_method: Optional[str] = Query(None, description="인증 방식 API_KEY/ID_PW/NONE"),
+    credentials_only: bool = Query(False, description="로그인 계정 보유 자산만 (계정 관리 뷰)"),
     client_id: Optional[str] = Query(None, description="고객사"),
     search: Optional[str] = Query(None, description="고객사명·자산 분류·제원·대상 기관 검색"),
     page: int = Query(1, ge=1),
@@ -84,6 +85,9 @@ def list_assets(
         query = query.filter(Asset.telemetry_yn == monitoring_yn)
     if auth_method:
         query = query.filter(Asset.auth_type == auth_method)
+    if credentials_only:
+        # 계정 관리 뷰 — 고객 제공 로그인 계정이 있는 자산만
+        query = query.filter(Asset.auth_type.isnot(None), Asset.auth_type != "NONE")
     if client_id:
         query = query.filter(Asset.client_id == client_id)
     if search:
