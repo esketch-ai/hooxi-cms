@@ -6,7 +6,6 @@
 - 폴링: GET messages?after=<message_id> 증분 조회(5초 폴링 대응).
 """
 
-import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,12 +25,14 @@ from models import (
     utcnow,
 )
 from routers import common
-from services import kakao_service
+from services import integration_config, kakao_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# 직원 답변 통지용 오픈빌더 이벤트 블록 이름 (운영 선행 절차에서 등록)
-EVENT_NAME_STAFF_REPLY = os.getenv("KAKAO_EVENT_NAME", "staff_reply")
+
+def _event_name_staff_reply() -> str:
+    """직원 답변 통지용 오픈빌더 이벤트 블록 이름 — 연동 설정(DB 우선 + env 폴백)."""
+    return integration_config.resolve("KAKAO_EVENT_NAME") or "staff_reply"
 
 # CLOSED 전환 시 활동 이력에 발췌할 최근 메시지 수
 SUMMARY_MESSAGE_COUNT = 10
@@ -193,7 +194,7 @@ def reply_thread(
             try:
                 kakao_service.send_event(
                     kakao_user_key=contact.kakao_user_key,
-                    event_name=EVENT_NAME_STAFF_REPLY,
+                    event_name=_event_name_staff_reply(),
                     params={"content": payload.content},
                 )
                 delivery = "SENT"

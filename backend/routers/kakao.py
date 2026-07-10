@@ -7,7 +7,6 @@
 """
 
 import json
-import os
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -27,7 +26,7 @@ from models import (
 )
 from routers import common
 from services.audit_logger import AuditLogger
-from services import kakao_service
+from services import integration_config, kakao_service
 
 router = APIRouter(tags=["kakao"])
 
@@ -290,7 +289,7 @@ def send_kakao_notify(
                 "SOLAPI_API_KEY / SOLAPI_API_SECRET / KAKAO_PF_ID 환경변수를 설정한 뒤 다시 시도하세요."
             ),
         )
-    template_code = payload.template_code or os.getenv("KAKAO_TEMPLATE_REPLY")
+    template_code = payload.template_code or integration_config.resolve("KAKAO_TEMPLATE_REPLY")
     if not template_code:
         raise HTTPException(
             status_code=422,

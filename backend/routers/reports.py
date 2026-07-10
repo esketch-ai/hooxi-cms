@@ -36,7 +36,7 @@ from models import (
     utcnow,
 )
 from routers import common
-from services import email_service, kakao_service, storage
+from services import email_service, integration_config, kakao_service, storage
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -88,7 +88,7 @@ def _send_report_alimtalk(
     - 성공: KAKAO send_log(동일 seq, SUCCESS) + sent_channel=BOTH
     - 실패: KAKAO send_log(동일 seq, FAIL) — 이메일 성공이므로 SENT 유지(폴백)
     """
-    template_code = os.getenv("KAKAO_TEMPLATE_REPORT")
+    template_code = integration_config.resolve("KAKAO_TEMPLATE_REPORT")
     if not (kakao_service.is_configured_alimtalk() and template_code):
         return
 

@@ -1,16 +1,18 @@
 """Gmail SMTP 발송 모듈 — CR-2 (보고서 발송 대표 계정: 지메일).
 
-- env: GMAIL_SENDER / GMAIL_APP_PASSWORD (2단계 인증 후 앱 비밀번호 발급)
+- 자격증명: GMAIL_SENDER / GMAIL_APP_PASSWORD — 연동 설정(DB) 우선, env 폴백
+  (services/integration_config.resolve — 2단계 인증 후 앱 비밀번호 발급)
 - 발신 표시명 "Hooxi Partners" 고정 + Reply-To 담당자 @hooxipartners.com (CR-2 완화책)
 - 일 발송 한도: 개인 Gmail 500통/일 — 일괄 발송 UI에서 한도 문구 표기(프론트 책임)
 """
 
 import mimetypes
-import os
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 from typing import List, Optional, Sequence, Tuple
+
+from services.integration_config import resolve
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465  # SSL
@@ -25,8 +27,8 @@ class EmailConfigError(RuntimeError):
 
 
 def _get_credentials() -> Tuple[str, str]:
-    sender = os.getenv("GMAIL_SENDER")
-    app_password = os.getenv("GMAIL_APP_PASSWORD")
+    sender = resolve("GMAIL_SENDER")
+    app_password = resolve("GMAIL_APP_PASSWORD")
     if not sender or not app_password:
         raise EmailConfigError(
             "Gmail SMTP가 설정되지 않았습니다. "
@@ -37,7 +39,7 @@ def _get_credentials() -> Tuple[str, str]:
 
 
 def is_configured() -> bool:
-    return bool(os.getenv("GMAIL_SENDER") and os.getenv("GMAIL_APP_PASSWORD"))
+    return bool(resolve("GMAIL_SENDER") and resolve("GMAIL_APP_PASSWORD"))
 
 
 def send_mail(

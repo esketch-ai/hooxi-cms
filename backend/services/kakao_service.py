@@ -1,14 +1,15 @@
 """카카오 비즈니스 채널 발송 모듈 — 알림톡(SOLAPI) + 오픈빌더 Event API.
 
 - 알림톡(발신): SOLAPI REST — HMAC-SHA256 서명 인증(date+salt).
-  env: SOLAPI_API_KEY / SOLAPI_API_SECRET / KAKAO_PF_ID(발신프로필)
+  설정: SOLAPI_API_KEY / SOLAPI_API_SECRET / KAKAO_PF_ID(발신프로필)
        KAKAO_TEMPLATE_REPORT(보고서 도착) / KAKAO_TEMPLATE_REPLY(답변 알림)
 - Event API(답변 통지): 오픈빌더 봇 이벤트 — 채널 친구 한정(15원/건).
-  env: KAKAO_BOT_ID / KAKAO_EVENT_API_KEY
-- 공통: KAKAO_WEBHOOK_SECRET(웹훅 시크릿) / APP_BASE_URL(열람 링크 베이스)
+  설정: KAKAO_BOT_ID / KAKAO_EVENT_API_KEY
+- 공통: KAKAO_WEBHOOK_SECRET(웹훅 시크릿) / APP_BASE_URL(열람 링크 베이스 — 인프라 env)
 
-email_service.py의 is_configured 게이트 패턴을 미러 — 미설정 시 KakaoConfigError를
-던지고 호출부가 503 한국어 메시지로 변환한다.
+SOLAPI_*·KAKAO_* 자격증명은 연동 설정(DB) 우선 + env 폴백
+(services/integration_config.resolve). email_service.py의 is_configured 게이트
+패턴을 미러 — 미설정 시 KakaoConfigError를 던지고 호출부가 503 한국어 메시지로 변환한다.
 """
 
 import hashlib
@@ -19,6 +20,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import httpx
+
+from services.integration_config import resolve
 
 SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send"
 EVENT_API_URL = "https://bot-api.kakao.com/v2/bots/{bot_id}/talk"
@@ -40,20 +43,20 @@ class KakaoSendError(RuntimeError):
 def is_configured_alimtalk() -> bool:
     """SOLAPI 알림톡 발송 가능 여부."""
     return bool(
-        os.getenv("SOLAPI_API_KEY")
-        and os.getenv("SOLAPI_API_SECRET")
-        and os.getenv("KAKAO_PF_ID")
+        resolve("SOLAPI_API_KEY")
+        and resolve("SOLAPI_API_SECRET")
+        and resolve("KAKAO_PF_ID")
     )
 
 
 def is_configured_event() -> bool:
     """오픈빌더 Event API 발송 가능 여부."""
-    return bool(os.getenv("KAKAO_BOT_ID") and os.getenv("KAKAO_EVENT_API_KEY"))
+    return bool(resolve("KAKAO_BOT_ID") and resolve("KAKAO_EVENT_API_KEY"))
 
 
 def webhook_secret() -> Optional[str]:
     """오픈빌더 스킬 웹훅 검증용 시크릿 — 미설정 시 None(웹훅 비활성)."""
-    return os.getenv("KAKAO_WEBHOOK_SECRET") or None
+    return resolve("KAKAO_WEBHOOK_SECRET") or None
 
 
 def app_base_url() -> str:
@@ -96,9 +99,9 @@ def send_alimtalk(
     - buttons: SOLAPI kakaoOptions.buttons 규격(웹링크 등) — 템플릿과 일치해야 함
     실패 시 KakaoSendError 전파(호출부가 send_log FAIL 기록).
     """
-    api_key = os.getenv("SOLAPI_API_KEY")
-    api_secret = os.getenv("SOLAPI_API_SECRET")
-    pf_id = os.getenv("KAKAO_PF_ID")
+    api_key = resolve("SOLAPI_API_KEY")
+    api_secret = resolve("SOLAPI_API_SECRET")
+    pf_id = resolve("KAKAO_PF_ID")
     if not (api_key and api_secret and pf_id):
         raise KakaoConfigError(
             "카카오 알림톡이 설정되지 않았습니다. "
@@ -123,7 +126,7 @@ def send_alimtalk(
             "kakaoOptions": kakao_options,
         }
     }
-    sender = os.getenv("SOLAPI_SENDER")  # 선택 — 등록 발신번호(문자 폴백용)
+    sender = resolve("SOLAPI_SENDER")  # 선택 — 등록 발신번호(문자 폴백용)
     if sender:
         payload["message"]["from"] = "".join(ch for ch in sender if ch.isdigit())
 
@@ -144,8 +147,8 @@ def send_event(kakao_user_key: str, event_name: str, params: Optional[dict] = No
 
     Authorization: KakaoAK {event_api_key}. 비친구 등 발송 불가 시 KakaoSendError 전파.
     """
-    bot_id = os.getenv("KAKAO_BOT_ID")
-    event_api_key = os.getenv("KAKAO_EVENT_API_KEY")
+    bot_id = resolve("KAKAO_BOT_ID")
+    event_api_key = resolve("KAKAO_EVENT_API_KEY")
     if not (bot_id and event_api_key):
         raise KakaoConfigError(
             "카카오 Event API가 설정되지 않았습니다. "

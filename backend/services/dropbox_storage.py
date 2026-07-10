@@ -1,21 +1,25 @@
 """Dropbox 저장소 백엔드 — 회사 Dropbox의 /Hooxi-CMS 아래 업체별 서브 폴더 관리.
 
 - 인증: refresh token(만료 없음) + SDK 자동 access token 갱신.
-  env: DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN
+  설정: DROPBOX_APP_KEY / DROPBOX_APP_SECRET / DROPBOX_REFRESH_TOKEN
        DROPBOX_ROOT (선택, 기본 "/Hooxi-CMS")
+  — 연동 설정(DB) 우선 + env 폴백 (services/integration_config.resolve)
 - 팀 계정(team space) 자동 감지: root_info가 team이면 Path-Root 헤더 적용.
 - file_url 스킴: "dropbox:" + Dropbox 절대 경로 (storage.py가 라우팅).
 - temporary link(4시간)는 항상 요청 시점 발급 — 저장·캐시 금지.
 """
 
-import os
 import time
 from typing import Optional
+
+from services import integration_config
+from services.integration_config import resolve
 
 _UPLOAD_SINGLE_LIMIT = 150 * 1024 * 1024  # /2/files/upload 한도
 _SESSION_CHUNK = 8 * 1024 * 1024  # 4MB 배수 권장
 
-_client = None  # 싱글턴 (프로세스당 1회 초기화)
+_client = None  # 싱글턴 — 연동 설정 버전이 바뀌면 재생성
+_client_version = None  # 클라이언트 생성 시점의 integration_config 버전
 
 
 class DropboxConfigError(RuntimeError):
@@ -24,20 +28,24 @@ class DropboxConfigError(RuntimeError):
 
 def is_configured() -> bool:
     return bool(
-        os.getenv("DROPBOX_APP_KEY")
-        and os.getenv("DROPBOX_APP_SECRET")
-        and os.getenv("DROPBOX_REFRESH_TOKEN")
+        resolve("DROPBOX_APP_KEY")
+        and resolve("DROPBOX_APP_SECRET")
+        and resolve("DROPBOX_REFRESH_TOKEN")
     )
 
 
 def root() -> str:
-    return (os.getenv("DROPBOX_ROOT") or "/Hooxi-CMS").rstrip("/")
+    return (resolve("DROPBOX_ROOT") or "/Hooxi-CMS").rstrip("/")
 
 
 def _get_client():
-    """SDK 클라이언트 싱글턴 — team space면 Path-Root를 루트 네임스페이스로 전환."""
-    global _client
-    if _client is not None:
+    """SDK 클라이언트 싱글턴 — team space면 Path-Root를 루트 네임스페이스로 전환.
+
+    연동 설정 저장(bump_version) 후 첫 호출 시 새 자격증명으로 재생성한다.
+    """
+    global _client, _client_version
+    current_version = integration_config.get_version()
+    if _client is not None and _client_version == current_version:
         return _client
     if not is_configured():
         raise DropboxConfigError(
@@ -47,9 +55,9 @@ def _get_client():
     import dropbox  # 선택적 import — 미설치 환경(구 이미지)에서도 모듈 로드는 가능
 
     dbx = dropbox.Dropbox(
-        oauth2_refresh_token=os.getenv("DROPBOX_REFRESH_TOKEN"),
-        app_key=os.getenv("DROPBOX_APP_KEY"),
-        app_secret=os.getenv("DROPBOX_APP_SECRET"),
+        oauth2_refresh_token=resolve("DROPBOX_REFRESH_TOKEN"),
+        app_key=resolve("DROPBOX_APP_KEY"),
+        app_secret=resolve("DROPBOX_APP_SECRET"),
         timeout=30,
     )
     try:
@@ -68,6 +76,7 @@ def _get_client():
     except Exception as exc:
         raise DropboxConfigError("Dropbox 계정 확인에 실패했습니다: {0}".format(exc))
     _client = dbx
+    _client_version = current_version
     return _client
 
 

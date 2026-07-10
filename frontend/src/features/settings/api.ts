@@ -116,6 +116,117 @@ export function useConfigHistory(key: string, enabled: boolean) {
   })
 }
 
+// ── 연동 관리 (외부 연동 자격증명) ───────────────────────────────────
+// 계약안 (backend/routers/integrations.py 배포 전 가정):
+// GET  /integrations → [{name, label, fields:[{key,label,secret,required,configured,source}]}]
+// PUT  /integrations/{name} {values:{KEY: value|null}} — 전달 키만 갱신, null은 삭제
+// POST /integrations/{name}/test → {ok, message}
+// POST /integrations/dropbox/oauth/authorize-url → {url}
+// POST /integrations/dropbox/oauth/exchange {code} → {ok, message}
+// GET  /integrations/kakao_bot/webhook-url → {url}
+
+export interface IntegrationField {
+  key: string
+  label: string
+  secret?: boolean
+  required?: boolean
+  configured?: boolean
+  source?: 'db' | 'env' | null
+}
+
+export interface Integration {
+  name: string
+  label: string
+  description?: string | null
+  fields: IntegrationField[]
+}
+
+export interface IntegrationTestResult {
+  ok: boolean
+  message?: string | null
+}
+
+export function useIntegrations(enabled = true) {
+  return useQuery({
+    queryKey: ['integrations'],
+    queryFn: async () => {
+      const { data } = await api.get<Integration[] | Paginated<Integration>>('/integrations')
+      return unwrapList(data).items.filter((i) => i.name)
+    },
+    enabled,
+    retry: false,
+  })
+}
+
+export function useSaveIntegration() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      name,
+      values,
+    }: {
+      name: string
+      values: Record<string, string | null>
+    }) => {
+      const { data } = await api.put(`/integrations/${encodeURIComponent(name)}`, { values })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+    },
+  })
+}
+
+export function useTestIntegration() {
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const { data } = await api.post<IntegrationTestResult>(
+        `/integrations/${encodeURIComponent(name)}/test`,
+      )
+      return data
+    },
+  })
+}
+
+export function useDropboxAuthorizeUrl() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ url: string }>('/integrations/dropbox/oauth/authorize-url')
+      return data
+    },
+  })
+}
+
+export function useDropboxExchange() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const { data } = await api.post<IntegrationTestResult>(
+        '/integrations/dropbox/oauth/exchange',
+        { code },
+      )
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+    },
+  })
+}
+
+/** 오픈빌더 폴백 블록에 등록할 웹훅 URL — 엔드포인트 미배포(404) 시 비노출 */
+export function useKakaoWebhookUrl(enabled: boolean) {
+  return useQuery({
+    queryKey: ['integrations', 'kakao-webhook-url'],
+    queryFn: async () => {
+      const { data } = await api.get<{ url: string }>('/integrations/kakao_bot/webhook-url')
+      return data
+    },
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  })
+}
+
 // ── 감사 로그 ────────────────────────────────────────────────────────
 export function useAuditLogs(filters: AuditLogFilters, enabled = true) {
   return useQuery({

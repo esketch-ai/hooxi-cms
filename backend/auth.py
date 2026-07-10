@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from models import User, get_db
+from services.integration_config import resolve
 
 # --- JWT 설정 ---
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-insecure-secret-change-me")
@@ -29,9 +30,8 @@ ACCESS_TOKEN_TTL = timedelta(hours=8)
 REFRESH_TOKEN_TTL = timedelta(days=7)
 
 # --- 네이버웍스 OAuth (CR-1) ---
-NW_CLIENT_ID = os.getenv("NW_CLIENT_ID")
-NW_CLIENT_SECRET = os.getenv("NW_CLIENT_SECRET")
-NW_REDIRECT_URI = os.getenv("NW_REDIRECT_URI")
+# NW_CLIENT_ID / NW_CLIENT_SECRET / NW_REDIRECT_URI는 연동 설정(DB 우선 + env 폴백)
+# — 호출 시점에 resolve()로 해석한다 (_require_works_config).
 NW_AUTHORIZE_URL = "https://auth.worksmobile.com/oauth2/v2.0/authorize"
 NW_TOKEN_URL = "https://auth.worksmobile.com/oauth2/v2.0/token"
 NW_USERINFO_URL = "https://www.worksapis.com/v1.0/users/me"
@@ -154,7 +154,14 @@ def _token_response(user: User) -> schemas.TokenResponse:
 # 네이버웍스 OAuth (CR-1)
 # ---------------------------------------------------------------------------
 def _require_works_config():
-    if not (NW_CLIENT_ID and NW_CLIENT_SECRET and NW_REDIRECT_URI):
+    """네이버웍스 OAuth 설정 해석(DB 우선 + env 폴백) — 미설정 시 501.
+
+    반환: (client_id, client_secret, redirect_uri)
+    """
+    client_id = resolve("NW_CLIENT_ID")
+    client_secret = resolve("NW_CLIENT_SECRET")
+    redirect_uri = resolve("NW_REDIRECT_URI")
+    if not (client_id and client_secret and redirect_uri):
         raise HTTPException(
             status_code=501,
             detail=(
@@ -163,6 +170,7 @@ def _require_works_config():
                 "(네이버웍스 Developer Console 앱 등록 필요 — CR-1)"
             ),
         )
+    return client_id, client_secret, redirect_uri
 
 
 def _create_state_token() -> str:
@@ -188,12 +196,12 @@ def _verify_state_token(state: str):
 @router.get("/works/authorize", response_model=schemas.AuthorizeResponse)
 def works_authorize():
     """네이버웍스 OAuth 시작 — 프론트가 리다이렉트할 URL 반환."""
-    _require_works_config()
+    client_id, _, redirect_uri = _require_works_config()
     state = _create_state_token()
     params = httpx.QueryParams(
         {
-            "client_id": NW_CLIENT_ID,
-            "redirect_uri": NW_REDIRECT_URI,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": "user",
             "state": state,
@@ -205,7 +213,7 @@ def works_authorize():
 @router.get("/works/callback")
 async def works_callback(code: str, state: str, db: Session = Depends(get_db)):
     """code→token→userinfo → 도메인 검증 → 계정 매칭/JIT → 자체 JWT 발급."""
-    _require_works_config()
+    client_id, client_secret, redirect_uri = _require_works_config()
     _verify_state_token(state)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -214,9 +222,9 @@ async def works_callback(code: str, state: str, db: Session = Depends(get_db)):
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "client_id": NW_CLIENT_ID,
-                "client_secret": NW_CLIENT_SECRET,
-                "redirect_uri": NW_REDIRECT_URI,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
             },
         )
         if token_resp.status_code != 200:

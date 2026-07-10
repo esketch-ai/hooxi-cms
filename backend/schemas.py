@@ -900,6 +900,56 @@ class ConfigHistoryListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# 연동 설정 (SCR-14 연동 탭 — tb_config "integration.*", ADMIN 전용)
+# ---------------------------------------------------------------------------
+class IntegrationFieldOut(BaseModel):
+    """연동 필드 상태 — 시크릿 값 자체는 어떤 응답에도 포함하지 않는다 (R2-E6)."""
+
+    key: str
+    label: str
+    secret: bool
+    required: bool
+    configured: bool
+    source: Optional[str] = None  # "db" | "env" | None
+
+
+class IntegrationOut(BaseModel):
+    name: str
+    label: str
+    fields: List[IntegrationFieldOut]
+    webhook_url: Optional[str] = None  # kakao_bot 전용 — 시크릿 마스킹 표시용
+
+
+class IntegrationListResponse(BaseModel):
+    items: List[IntegrationOut]
+
+
+class IntegrationUpdate(BaseModel):
+    """전달된 키만 갱신 — null/빈 문자열 = 삭제, 미전달 = 유지."""
+
+    values: dict  # {ENV_KEY: value | null}
+
+
+class IntegrationTestOut(BaseModel):
+    ok: bool
+    message: str
+
+
+class IntegrationWebhookUrlOut(BaseModel):
+    """오픈빌더 등록용 전체 웹훅 URL — ADMIN 전용, 열람 시 INTEGRATION_REVEAL 감사 기록."""
+
+    url: str
+
+
+class DropboxAuthorizeUrlOut(BaseModel):
+    url: str
+
+
+class DropboxOAuthExchangeRequest(BaseModel):
+    code: str = Field(min_length=1)
+
+
+# ---------------------------------------------------------------------------
 # 감사 로그 (SCR-14 감사 로그 탭 — tb_audit_log, ADMIN 전용)
 # ---------------------------------------------------------------------------
 class AuditLogOut(BaseModel):

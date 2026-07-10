@@ -185,6 +185,37 @@ class AuditLogger:
             new_value=new_value,
         )
 
+    # ── 연동 설정 (SCR-14 연동 탭) ─────────────────────────────────
+    @staticmethod
+    def integration_change(db: Session, actor_id: str, name: str, changed_keys) -> AuditLog:
+        """연동 설정 변경 — 변경한 '키 이름 목록'만 기록, 값은 절대 기록 금지 (R2-E6).
+
+        키 이름에 SECRET/PASSWORD 등이 포함되어 redact 안전망에 걸리므로
+        log_action을 우회해 직접 적재한다 (값이 아닌 키 이름이므로 안전).
+        """
+        audit_log = AuditLog(
+            actor_id=actor_id,
+            action="INTEGRATION_CHANGE",
+            target_type="INTEGRATION",
+            target_id=name,
+            new_value=", ".join(changed_keys),
+        )
+        db.add(audit_log)
+        return audit_log
+
+    @staticmethod
+    def integration_reveal(db: Session, actor_id: str, name: str, what: str) -> AuditLog:
+        """연동 시크릿 포함 정보 열람(웹훅 URL 등) — 무엇을 열람했는지만 기록, 값 금지."""
+        audit_log = AuditLog(
+            actor_id=actor_id,
+            action="INTEGRATION_REVEAL",
+            target_type="INTEGRATION",
+            target_id=name,
+            new_value=what,
+        )
+        db.add(audit_log)
+        return audit_log
+
     # ── 카카오 연락처 승인 게이트 (CR-3) ────────────────────────────
     @staticmethod
     def kakao_approval(

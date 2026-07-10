@@ -41,6 +41,7 @@ from routers import config as config_router
 from routers import dashboard as dashboard_router
 from routers import documents as documents_router
 from routers import histories as histories_router
+from routers import integrations as integrations_router
 from routers import kakao as kakao_router
 from routers import projects as projects_router
 from routers import reports as reports_router
@@ -131,6 +132,7 @@ app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(chat_router.router, prefix=API_V1_PREFIX)
 app.include_router(config_router.router, prefix=API_V1_PREFIX)
+app.include_router(integrations_router.router, prefix=API_V1_PREFIX)
 app.include_router(audit_router.router, prefix=API_V1_PREFIX)
 app.include_router(backups_router.router, prefix=API_V1_PREFIX)
 
