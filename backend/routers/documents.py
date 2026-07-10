@@ -18,6 +18,21 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 _DOC_TYPES = ("CONTRACT", "REPORT", "FORM", "PHOTO", "ETC")
 
+# 문서 유형 → 저장 폴더 (Dropbox: /Hooxi-CMS/{업체명}/{유형폴더}/)
+TYPE_DIR = {
+    "CONTRACT": "계약서",
+    "REPORT": "보고서",
+    "FORM": "양식",
+    "PHOTO": "현장사진",
+    "ETC": "기타",
+}
+
+
+def storage_folder(company_name: Optional[str], doc_type: str) -> str:
+    """업체별 서브 폴더 규칙 — 고객사 미지정(공용 양식 등)은 _공용."""
+    company = company_name or "_공용"
+    return "{0}/{1}".format(company, TYPE_DIR.get(doc_type, "기타"))
+
 
 @router.get("", response_model=schemas.DocumentListResponse)
 def list_documents(
@@ -67,15 +82,20 @@ async def upload_document(
     """문서 업로드 (multipart) — client_id 없으면 공용 양식(R2-C6)."""
     if doc_type not in _DOC_TYPES:
         raise HTTPException(status_code=422, detail="doc_type은 CONTRACT/REPORT/FORM/PHOTO/ETC 중 하나여야 합니다")
+    client = None
     if client_id:
-        common.get_or_404(db, Client, client_id, "고객사")
+        client = common.get_or_404(db, Client, client_id, "고객사")
     if history_id:
         common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
 
     content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
-    file_url = storage.save_file(content, file.filename or "document", folder="documents")
+    file_url = storage.save_file(
+        content,
+        file.filename or "document",
+        folder=storage_folder(client.company_name if client else None, doc_type),
+    )
 
     doc = Document(
         client_id=client_id,

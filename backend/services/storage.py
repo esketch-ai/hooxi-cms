@@ -1,7 +1,13 @@
-"""파일 저장소 — GCS_BUCKET 설정 시 Google Cloud Storage, 미설정 시 로컬 uploads/ 폴백.
+"""파일 저장소 — 스킴 라우터.
+
+저장 우선순위(신규 업로드): Dropbox(설정 시) > GCS(GCS_BUCKET) > 로컬 uploads/.
+읽기·URL·삭제는 file_url 스킴으로 라우팅해 3종이 공존한다(하위 호환):
+  - "dropbox:/Hooxi-CMS/..."  → Dropbox (services/dropbox_storage.py)
+  - "gs://{bucket}/{object}"  → Google Cloud Storage
+  - 그 외(상대 경로)           → 로컬 UPLOAD_DIR
 
 DB(tb_document.file_url)에는 본 모듈이 반환하는 경로/URL만 저장한다 (Server.pdf §3).
-google-cloud-storage는 선택적 import — 미설치 로컬 환경에서도 앱이 뜬다.
+google-cloud-storage·dropbox는 선택적 import — 미설치 환경에서도 앱이 뜬다.
 """
 
 import os
@@ -9,10 +15,14 @@ import re
 import uuid
 from typing import Optional
 
+from services import dropbox_storage
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOCAL_UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(BASE_DIR, "uploads"))
 
 GCS_BUCKET = os.getenv("GCS_BUCKET")
+
+DROPBOX_SCHEME = "dropbox:"
 
 
 class StorageError(RuntimeError):
@@ -24,9 +34,15 @@ def _sanitize_filename(filename: str) -> str:
     return re.sub(r"[^\w.\-가-힣]", "_", name)
 
 
+def sanitize_folder(folder: str) -> str:
+    """폴더 경로 세그먼트별 sanitize — 업체명 등 사용자 유래 문자열 안전화."""
+    parts = [p for p in (folder or "").split("/") if p.strip()]
+    return "/".join(re.sub(r"[^\w.\-가-힣 ]", "_", p).strip() for p in parts)
+
+
 def _object_name(filename: str, folder: str) -> str:
     safe = _sanitize_filename(filename)
-    folder = folder.strip("/")
+    folder = sanitize_folder(folder)
     return f"{folder}/{uuid.uuid4().hex[:8]}_{safe}" if folder else f"{uuid.uuid4().hex[:8]}_{safe}"
 
 
@@ -45,10 +61,19 @@ def _get_gcs_bucket():
 def save_file(content: bytes, filename: str, folder: str = "documents") -> str:
     """파일 저장 후 file_url(경로) 반환.
 
-    - GCS: "gs://{bucket}/{object}" 형태로 저장 경로 반환
-    - 로컬: uploads/ 하위 상대 경로 반환 (예: "documents/ab12cd34_report.pdf")
+    - Dropbox(설정 시): "dropbox:{DROPBOX_ROOT}/{folder}/{uuid8}_{파일명}"
+    - GCS: "gs://{bucket}/{object}"
+    - 로컬: uploads/ 하위 상대 경로 (예: "documents/ab12cd34_report.pdf")
     """
     object_name = _object_name(filename, folder)
+
+    if dropbox_storage.is_configured():
+        try:
+            path = "{0}/{1}".format(dropbox_storage.root(), object_name)
+            stored = dropbox_storage.upload(content, path)
+            return DROPBOX_SCHEME + stored
+        except dropbox_storage.DropboxConfigError as exc:
+            raise StorageError(str(exc))
 
     if GCS_BUCKET:
         bucket = _get_gcs_bucket()
@@ -65,6 +90,12 @@ def save_file(content: bytes, filename: str, folder: str = "documents") -> str:
 
 def read_file(file_url: str) -> Optional[bytes]:
     """저장 파일 바이트 반환 — 이메일 첨부용. 없으면 None."""
+    if file_url.startswith(DROPBOX_SCHEME):
+        try:
+            return dropbox_storage.download(file_url[len(DROPBOX_SCHEME):])
+        except dropbox_storage.DropboxConfigError as exc:
+            raise StorageError(str(exc))
+
     if file_url.startswith("gs://"):
         if not GCS_BUCKET:
             raise StorageError("GCS_BUCKET 미설정 상태에서 GCS 파일을 읽을 수 없습니다")
@@ -84,6 +115,12 @@ def read_file(file_url: str) -> Optional[bytes]:
 
 def delete_file(file_url: str) -> bool:
     """저장 파일 삭제. 존재하지 않으면 False."""
+    if file_url.startswith(DROPBOX_SCHEME):
+        try:
+            return dropbox_storage.delete(file_url[len(DROPBOX_SCHEME):])
+        except dropbox_storage.DropboxConfigError as exc:
+            raise StorageError(str(exc))
+
     if file_url.startswith("gs://"):
         if not GCS_BUCKET:
             raise StorageError("GCS_BUCKET 미설정 상태에서 GCS 경로를 삭제할 수 없습니다")
@@ -103,7 +140,14 @@ def delete_file(file_url: str) -> bool:
 
 
 def get_url(file_url: str, expires_seconds: int = 3600) -> Optional[str]:
-    """다운로드 가능 URL 반환 — GCS는 서명 URL, 로컬은 절대 경로."""
+    """다운로드 가능 URL 반환 — Dropbox는 4시간 임시 링크(요청 시점 발급),
+    GCS는 서명 URL, 로컬은 절대 경로."""
+    if file_url.startswith(DROPBOX_SCHEME):
+        try:
+            return dropbox_storage.temporary_link(file_url[len(DROPBOX_SCHEME):])
+        except dropbox_storage.DropboxConfigError as exc:
+            raise StorageError(str(exc))
+
     if file_url.startswith("gs://"):
         if not GCS_BUCKET:
             raise StorageError("GCS_BUCKET 미설정 상태에서 GCS URL을 생성할 수 없습니다")

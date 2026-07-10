@@ -230,9 +230,14 @@ def view_report_page(token: str, db: Session = Depends(get_db)):
     if actor_id:
         AuditLogger.report_view(db, actor_id, delivery.report_id)
         db.commit()
-    # 다운로드: GCS는 서명 URL, 로컬 저장소는 토큰 재검증 스트림 엔드포인트
-    if doc.file_url.startswith("gs://"):
-        download_url = storage.get_url(doc.file_url, expires_seconds=3600)
+    # 다운로드: 외부 URL(Dropbox 임시 링크·GCS 서명 URL)은 직접 링크,
+    # 로컬 저장소는 토큰 재검증 스트림 엔드포인트 (documents.py와 동일 규약)
+    try:
+        resolved = storage.get_url(doc.file_url, expires_seconds=3600)
+    except storage.StorageError:
+        resolved = None
+    if resolved and (resolved.startswith("http://") or resolved.startswith("https://")):
+        download_url = resolved
     else:
         download_url = "/r/{0}/file".format(token)
 

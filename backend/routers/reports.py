@@ -323,7 +323,14 @@ async def upload_report_file(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
-    file_url = storage.save_file(content, file.filename or "report", folder="reports/{0}".format(delivery.period))
+    # 업체별 서브 폴더: {업체명}/보고서/{YYYY-MM}/ (Dropbox 플랜 — 폴더 구조 규칙)
+    report_client = db.get(Client, delivery.client_id) if delivery.client_id else None
+    company = report_client.company_name if report_client else "_공용"
+    file_url = storage.save_file(
+        content,
+        file.filename or "report",
+        folder="{0}/보고서/{1}".format(company, delivery.period),
+    )
 
     max_version = (
         db.query(func.max(Document.version)).filter(Document.report_id == report_id).scalar()
