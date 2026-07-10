@@ -35,7 +35,8 @@ KNOWN_DEFAULTS = {
     ),
     "account_check_agencies": (
         DEFAULT_CHECK_AGENCIES,
-        "월초 계정 점검 대상 기관 키워드 — 자산 대상 기관명에 포함 시 점검",
+        "월초 계정 점검 좁히기 키워드 — 비우면 로그인 계정 보유 자산 전체 점검, "
+        "키워드 지정 시 대상 기관명에 포함된 자산만",
     ),
 }
 
@@ -86,7 +87,7 @@ def _validate_config_value(key: str, raw_value: str):
                     status_code=422,
                     detail="funnel_mapping의 값은 리텐션 단계 문자열 배열이어야 합니다 (§10.2)",
                 )
-    elif key in ("sensitive_keywords", "account_check_agencies"):
+    elif key == "sensitive_keywords":
         if (
             not isinstance(parsed, list)
             or not parsed
@@ -94,7 +95,16 @@ def _validate_config_value(key: str, raw_value: str):
         ):
             raise HTTPException(
                 status_code=422,
-                detail="{0}는 비어 있지 않은 문자열 배열이어야 합니다".format(key),
+                detail="sensitive_keywords는 비어 있지 않은 문자열 배열이어야 합니다",
+            )
+    elif key == "account_check_agencies":
+        # 빈 배열 허용 (= 전체 점검). 값이 있으면 모두 비지 않은 문자열이어야 함.
+        if not isinstance(parsed, list) or not all(
+            isinstance(k, str) and k.strip() for k in parsed
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="account_check_agencies는 문자열 배열이어야 합니다 (비우면 전체 점검)",
             )
     return parsed
 

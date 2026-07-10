@@ -28,7 +28,10 @@ from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/batch", tags=["batch"])
 
-DEFAULT_CHECK_AGENCIES = ["ETAS", "BMS"]
+# 점검 대상 좁히기용 기관 키워드 — 비어 있으면(기본) 로그인 계정 보유 자산 전체.
+# 운수사(ETAS·BMS)뿐 아니라 건물(태양광 발전사·히트펌프 등) 계정도 모두 대상이므로
+# 기본은 전체. 특정 기관만 점검하려면 config account_check_agencies에 키워드 지정.
+DEFAULT_CHECK_AGENCIES = []
 _SITE_TIMEOUT = 5.0
 _UA = "Mozilla/5.0 (compatible; HooxiCMS-AccountCheck/1.0)"
 
@@ -48,14 +51,16 @@ def _authorize(secret: Optional[str], db: Session, credentials_user: Optional[Us
 
 
 def check_agencies(db: Session) -> list:
-    """점검 대상 기관 키워드 — tb_config account_check_agencies(JSON 배열), 기본값 폴백."""
+    """점검 대상 좁히기 키워드 — tb_config account_check_agencies(JSON 배열).
+
+    비어 있으면 [] = 로그인 계정 보유 자산 전체 점검. 키워드가 있으면
+    agency_name에 해당 키워드가 포함된 자산만 점검(특정 기관 한정).
+    """
     row = db.get(Config, "account_check_agencies")
     if row and row.config_value:
         try:
             parsed = json.loads(row.config_value)
-            kws = [str(k).strip() for k in parsed if str(k).strip()]
-            if kws:
-                return kws
+            return [str(k).strip() for k in parsed if str(k).strip()]
         except ValueError:
             pass
     return DEFAULT_CHECK_AGENCIES
@@ -125,15 +130,20 @@ def account_check(
         raise HTTPException(status_code=503, detail="이슈 담당자로 지정할 관리자 계정이 없습니다")
 
     keywords = [k.upper() for k in check_agencies(db)]
+    # 대상 = 로그인 계정 보유 자산(auth_type != NONE). 운수사·건물 구분 없이 전체.
     assets = (
         db.query(Asset)
         .filter(Asset.auth_type.isnot(None), Asset.auth_type != "NONE")
         .all()
     )
-    targets = [
-        a for a in assets
-        if a.agency_name and any(kw in a.agency_name.upper() for kw in keywords)
-    ]
+    if keywords:
+        # 특정 기관만 좁혀 점검 (선택적)
+        targets = [
+            a for a in assets
+            if a.agency_name and any(kw in a.agency_name.upper() for kw in keywords)
+        ]
+    else:
+        targets = assets
 
     created = 0
     skipped = 0

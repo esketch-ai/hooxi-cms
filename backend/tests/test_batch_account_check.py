@@ -49,31 +49,50 @@ def test_secret_gate(client):
     assert resp.status_code == 403
 
 
-def test_admin_can_trigger_and_targets_filter(client, admin_headers, monkeypatch, staff_headers):
+def test_admin_can_trigger_targets_all_login_assets(client, admin_headers, monkeypatch, staff_headers):
     # STAFF 토큰은 거부
     assert client.post(CHECK + "?period=2030-02", headers=staff_headers).status_code == 403
 
     db = models.SessionLocal()
     cid, pm_id = _client_with_pm(db)
-    a_etas = _mk_asset(db, cid, "ETAS 운행기록", site="https://etas.test")
-    a_bms = _mk_asset(db, cid, "경기 BMS", site="https://bms.test")
-    _mk_asset(db, cid, "한국환경공단", site="https://env.test")  # 대상 아님(키워드 불일치)
-    _mk_asset(db, cid, "ETAS", auth_type="NONE", site="https://x")  # 대상 아님(계정 없음)
+    ids = {
+        "etas": _mk_asset(db, cid, "ETAS 운행기록", site="https://etas.test"),
+        "bms": _mk_asset(db, cid, "경기 BMS", site="https://bms.test"),
+        "solar": _mk_asset(db, cid, "한화 태양광 모니터링", site="https://solar.test"),
+        "hp": _mk_asset(db, cid, "삼성 히트펌프", auth_type="API_KEY", login_id="hp1", site="https://hp.test"),
+    }
+    none_id = _mk_asset(db, cid, "계정없는설비", auth_type="NONE", site="https://x")
     db.commit()
     db.close()
 
-    # 사이트: etas 정상, bms 장애
-    def fake_reachable(url):
-        if url and "bms" in url:
-            return False
-        return True
-
-    monkeypatch.setattr(batch, "_site_reachable", fake_reachable)
+    # 사이트: bms만 장애
+    monkeypatch.setattr(
+        batch, "_site_reachable", lambda url: False if (url and "bms" in url) else True
+    )
 
     resp = client.post(CHECK + "?period=2030-02", headers=admin_headers)
     assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["targets"] == 2 and body["created"] == 2 and body["unreachable"] == 1
+
+    # 전역 카운트가 아닌, 내가 만든 자산별로 검증 (공유 DB 격리)
+    db = models.SessionLocal()
+
+    def issue_for(asset_id):
+        return (
+            db.query(models.ActivityHistory)
+            .filter(
+                models.ActivityHistory.activity_type == "ISSUE",
+                models.ActivityHistory.content.like("%[점검:{0}:2030-02]%".format(asset_id)),
+            )
+            .first()
+        )
+
+    # 운수사·건물 계정 4종 모두 이슈 생성
+    assert issue_for(ids["etas"]) and issue_for(ids["solar"]) and issue_for(ids["hp"])
+    assert issue_for(ids["etas"]).priority == "NORMAL"   # 정상 접속
+    assert issue_for(ids["bms"]).priority == "URGENT"    # 사이트 장애
+    assert issue_for(ids["etas"]).manager_id == pm_id    # 담당 PM
+    assert issue_for(none_id) is None                    # 계정 없는 자산은 제외
+    db.close()
 
     db = models.SessionLocal()
     issues = {i.title: i for i in _issues_for(db, "2030-02")}
@@ -130,9 +149,9 @@ def test_config_keyword_customization(client, admin_headers, monkeypatch):
 
     body = client.post(CHECK + "?period=2030-05", headers=admin_headers).json()
     assert body["targets"] == 1  # TAXICHECK만
-    # 원복
+    # 원복 — 빈 배열(= 전체 점검, 기본 동작)로 복구
     client.put(
         "/api/v1/config/account_check_agencies",
-        json={"config_value": '["ETAS", "BMS"]'},
+        json={"config_value": "[]"},
         headers=admin_headers,
     )
