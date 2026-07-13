@@ -415,13 +415,18 @@ else:
     print("⚠ No dist folder found — API only. Run 'npm run build' in frontend directory.")
 
 
+# index.html은 배포마다 최신 해시 번들을 참조해야 하므로 캐시 금지(no-cache=매번 재검증).
+# 해시가 붙은 /assets는 불변이라 브라우저 기본 캐시로 둔다.
+_INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 @app.get("/")
 async def root():
     """Serve React app for frontend"""
     if dist_path:
         index_path = os.path.join(dist_path, "index.html")
         if os.path.exists(index_path):
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=_INDEX_HEADERS)
 
     # Fallback to API response if no static files found
     return {"Hello": "World", "API": f"Hooxi CMS v{API_VERSION}"}
@@ -438,7 +443,7 @@ async def spa_fallback(full_path: str):
     if dist_path:
         index_path = os.path.join(dist_path, "index.html")
         if os.path.exists(index_path):
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=_INDEX_HEADERS)
     return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
 
