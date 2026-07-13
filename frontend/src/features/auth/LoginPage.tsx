@@ -135,7 +135,7 @@ export function LoginPage() {
               alt="Hooxi Partners"
               className="h-10 w-auto dark:brightness-0 dark:invert"
             />
-            <span className="text-2xl font-bold tracking-tight text-teal-600 dark:text-teal-400">
+            <span className="text-2xl font-semibold tracking-tight text-red-600 dark:text-red-500">
               CMS
             </span>
           </div>

@@ -30,7 +30,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           alt="Hooxi Partners"
           className="h-7 w-auto dark:brightness-0 dark:invert"
         />
-        <span className="text-lg font-bold tracking-tight text-teal-600 dark:text-teal-400">
+        <span className="text-lg font-semibold tracking-tight text-red-600 dark:text-red-500">
           CMS
         </span>
       </div>
