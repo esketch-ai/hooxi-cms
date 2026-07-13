@@ -58,7 +58,7 @@ export function SensitiveData({ type, value, className = '' }: SensitiveDataProp
   if (revealed) {
     return (
       <span
-        className={`cursor-pointer rounded bg-amber-50 px-1 ${className}`}
+        className={`cursor-pointer rounded bg-amber-500/15 px-1 text-bone ${className}`}
         onMouseLeave={handleMouseLeave}
         title="잠시 후 자동으로 다시 가려집니다"
       >
@@ -74,7 +74,7 @@ export function SensitiveData({ type, value, className = '' }: SensitiveDataProp
         tabIndex={0}
         onClick={reveal}
         onKeyDown={(e) => e.key === 'Enter' && reveal()}
-        className={`cursor-pointer rounded bg-slate-100 px-1 blur-[5px] select-none ${className}`}
+        className={`cursor-pointer rounded bg-white/10 px-1 blur-[5px] select-none ${className}`}
         title="클릭하여 일시 표시"
         aria-label="민감 정보 — 클릭하여 일시 표시"
       >
@@ -89,7 +89,7 @@ export function SensitiveData({ type, value, className = '' }: SensitiveDataProp
       tabIndex={0}
       onClick={reveal}
       onKeyDown={(e) => e.key === 'Enter' && reveal()}
-      className={`cursor-pointer rounded bg-slate-100 px-1 font-mono tracking-tight text-slate-500 select-none ${className}`}
+      className={`cursor-pointer rounded bg-white/10 px-1 font-mono tracking-tight text-slatey select-none ${className}`}
       title="클릭하여 일시 표시"
       aria-label="민감 정보 — 클릭하여 일시 표시"
     >

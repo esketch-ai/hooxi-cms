@@ -26,8 +26,8 @@ function RequireAuth() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
-        <CircleNotch size={28} className="animate-spin text-slate-400" />
+      <div className="flex min-h-dvh items-center justify-center bg-void">
+        <CircleNotch size={28} className="animate-spin text-slatey" />
       </div>
     )
   }

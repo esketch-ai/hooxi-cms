@@ -9,11 +9,11 @@ import type { Client, ClientPayload, ClientType, ContractStatus } from '../../ty
 import { useSaveClient } from './api'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
 // 검증 실패 필드 — 빨간 테두리 (L-1 인라인 검증)
 const inputErrorCls =
-  'h-10 w-full rounded-lg border border-rose-300 px-3 text-sm focus:border-rose-400 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-rose-400/50 bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-rose-400 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 function Field({
   label,
@@ -223,8 +223,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
         </div>
 
         {/* 주 담당자 (고객사측) */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             고객사 주 담당자
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -255,8 +255,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
         </div>
 
         {/* 계약·담당 */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             계약·담당
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -297,8 +297,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
         </div>
 
         {/* 월간 보고서 설정 (tb_report_subscription) */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             월간 보고서 설정
           </p>
           <div className="grid gap-3 sm:grid-cols-4">
@@ -354,18 +354,18 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
         </div>
 
         {/* 액션 */}
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {client ? '수정 저장' : '등록'}

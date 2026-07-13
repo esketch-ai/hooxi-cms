@@ -30,7 +30,7 @@ export function Pagination({
     <div
       className={`flex flex-col items-center justify-between gap-3 sm:flex-row ${className}`}
     >
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-ash">
         총 {total.toLocaleString()}건 중 {from}~{to} 표시
       </p>
       <nav className="flex items-center gap-1" aria-label="페이지 이동">
@@ -38,7 +38,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page - 1)}
           disabled={page <= 1}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-white/5 disabled:opacity-40"
           aria-label="이전 페이지"
         >
           <CaretLeft size={14} />
@@ -51,8 +51,8 @@ export function Pagination({
             aria-current={p === page ? 'page' : undefined}
             className={`h-8 min-w-8 rounded-md border px-2 text-sm ${
               p === page
-                ? 'border-slate-800 bg-slate-800 font-semibold text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                ? 'border-snow bg-snow font-semibold text-graphite'
+                : 'border-hairline bg-graphite text-ash hover:bg-white/5'
             }`}
           >
             {p}
@@ -62,7 +62,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page + 1)}
           disabled={page >= totalPages}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-white/5 disabled:opacity-40"
           aria-label="다음 페이지"
         >
           <CaretRight size={14} />

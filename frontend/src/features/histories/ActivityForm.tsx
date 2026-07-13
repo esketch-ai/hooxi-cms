@@ -10,8 +10,8 @@ import { toDatetimeLocal } from '../../lib/format'
 import type { ActivityPayload, ActivityType, IssueStatus } from '../../types'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 /** 고객사 select에서 '신규 업체 직접 입력'을 나타내는 특수 값 */
 const NEW_CLIENT = '__new__'
@@ -165,7 +165,7 @@ export function ActivityForm({
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
               disabled={lockClient}
-              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-500`}
+              className={`${inputCls} disabled:bg-white/5 disabled:text-slatey`}
             >
               <option value="">선택</option>
               {clients.map((c) => (
@@ -177,7 +177,7 @@ export function ActivityForm({
             </select>
           </div>
           {clientId === NEW_CLIENT && (
-            <div className="sm:col-span-2 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 sm:grid-cols-[1fr_160px]">
+            <div className="sm:col-span-2 grid gap-3 rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 sm:grid-cols-[1fr_160px]">
               <div>
                 <label className={labelCls}>
                   신규 업체명<span className="ml-0.5 text-rose-500">*</span>
@@ -251,7 +251,7 @@ export function ActivityForm({
 
         {/* 유형=ISSUE일 때만 노출 */}
         {isIssue && (
-          <div className="grid gap-3 rounded-lg border border-rose-100 bg-rose-50/50 p-3 sm:grid-cols-3">
+          <div className="grid gap-3 rounded-lg border border-rose-400/25 bg-rose-500/10 p-3 sm:grid-cols-3">
             <div>
               <label className={labelCls}>이슈 상태</label>
               <select
@@ -307,7 +307,7 @@ export function ActivityForm({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={4}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-hairline bg-graphite px-3 py-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -330,18 +330,18 @@ export function ActivityForm({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={create.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {create.isPending && <CircleNotch size={14} className="animate-spin" />}
             등록

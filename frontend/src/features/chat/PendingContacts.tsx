@@ -78,7 +78,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <p className="border-b border-slate-100 bg-amber-50/60 px-4 py-2.5 text-[11px] leading-relaxed text-amber-800">
+      <p className="border-b border-hairline bg-amber-500/10 px-4 py-2.5 text-[11px] leading-relaxed text-amber-300">
         승인 전 고객에게는 AI가 일반 안내만 제공합니다. 신원 확인 후 고객사를 매핑해 승인해
         주세요.
         {!canApprove && ' (승인·거절은 MANAGER 이상 권한이 필요합니다)'}
@@ -86,14 +86,14 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
       {contacts.map((contact) => {
         const busy = pendingId === contact.contact_id && update.isPending
         return (
-          <div key={contact.contact_id} className="border-b border-slate-100 p-4">
+          <div key={contact.contact_id} className="border-b border-hairline p-4">
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-sm font-bold text-slate-900">{contact.name ?? '이름 미상'}</span>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-sm font-bold text-bone">{contact.name ?? '이름 미상'}</span>
+              <span className="text-[11px] text-slatey">
                 요청 {fmtServerDateTime(contact.requested_at ?? contact.created_at)}
               </span>
             </div>
-            <p className="mb-2 text-xs text-slate-500">
+            <p className="mb-2 text-xs text-ash">
               {contact.phone ?? '연락처 미확인'}
               {contact.memo ? ` · ${contact.memo}` : ''}
             </p>
@@ -105,7 +105,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
                     setMapping((prev) => ({ ...prev, [contact.contact_id]: e.target.value }))
                   }
                   disabled={busy}
-                  className="h-8 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-hairline bg-graphite px-2 text-xs text-bone focus:border-white/30 focus:outline-none"
                   aria-label="매핑할 고객사 선택"
                 >
                   <option value="">고객사 선택…</option>
@@ -119,7 +119,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
                   type="button"
                   onClick={() => handle(contact, 'APPROVED')}
                   disabled={busy || !mapping[contact.contact_id]}
-                  className="shrink-0 rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="shrink-0 rounded-full bg-snow px-3 py-1.5 text-xs font-semibold text-graphite hover:bg-white/90 disabled:opacity-50"
                 >
                   승인
                 </button>
@@ -127,7 +127,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
                   type="button"
                   onClick={() => handle(contact, 'REJECTED')}
                   disabled={busy}
-                  className="shrink-0 rounded-md border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                  className="shrink-0 rounded-full border border-rose-400/25 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
                 >
                   거절
                 </button>

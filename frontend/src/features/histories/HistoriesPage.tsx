@@ -98,7 +98,7 @@ export function HistoriesPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             이력 등록
@@ -126,20 +126,20 @@ export function HistoriesPage() {
           options={users.map((u) => ({ value: u.user_id, label: u.name }))}
         />
         <label className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-slate-500">기간</span>
+          <span className="text-xs font-medium text-ash">기간</span>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => resetPage(setDateFrom)(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="시작일"
           />
-          <span className="text-slate-300">~</span>
+          <span className="text-slatey">~</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => resetPage(setDateTo)(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="종료일"
           />
         </label>
@@ -152,7 +152,7 @@ export function HistoriesPage() {
       </FilterBar>
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-hairline bg-graphite p-5">
           <SkeletonTableRows rows={6} />
         </div>
       ) : isError ? (
@@ -163,7 +163,7 @@ export function HistoriesPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -178,9 +178,9 @@ export function HistoriesPage() {
       ) : (
         <>
           {/* 아코디언 테이블 */}
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-3xl border border-hairline bg-graphite">
             {/* 헤더 (데스크톱) */}
-            <div className="hidden grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3 text-xs font-semibold tracking-wide text-slate-500 lg:grid">
+            <div className="hidden grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] gap-3 border-b border-hairline bg-white/5 px-4 py-3 text-xs font-semibold tracking-wide text-ash lg:grid">
               <span>일시</span>
               <span>고객사</span>
               <span>유형</span>
@@ -194,44 +194,44 @@ export function HistoriesPage() {
                 const isOpen = expanded === h.history_id
                 const isAuto = !!h.is_auto
                 return (
-                  <li key={h.history_id} className="border-b border-slate-50 last:border-b-0">
+                  <li key={h.history_id} className="border-b border-white/10 last:border-b-0">
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : h.history_id)}
-                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 text-left hover:bg-slate-50/70 lg:grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] lg:gap-3"
+                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 text-left hover:bg-white/5 lg:grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] lg:gap-3"
                       aria-expanded={isOpen}
                     >
                       {/* 모바일: 2줄 요약 / 데스크톱: 그리드 셀 */}
                       <span className="min-w-0 lg:contents">
-                        <span className="block text-xs text-slate-400 lg:text-sm lg:text-slate-500">
+                        <span className="block text-xs text-slatey lg:text-sm lg:text-ash">
                           {fmtDateTime(h.activity_date)}
                         </span>
-                        <span className="block truncate text-sm font-semibold text-slate-800">
+                        <span className="block truncate text-sm font-semibold text-bone">
                           {h.client_name ?? (h.client_id ? '고객사' : '미지정 고객')}
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 lg:mt-0">
                           <StatusBadge domain="activity" value={h.activity_type} />
                           {isAuto && (
-                            <span className="inline-flex rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500">
+                            <span className="inline-flex rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-ash">
                               자동
                             </span>
                           )}
                         </span>
-                        <span className="block truncate text-sm text-slate-600">{h.title}</span>
-                        <span className="hidden truncate text-sm text-slate-500 lg:block">
+                        <span className="block truncate text-sm text-ash">{h.title}</span>
+                        <span className="hidden truncate text-sm text-ash lg:block">
                           {h.created_by_name ?? h.manager_name ?? '—'}
                         </span>
-                        <span className="hidden truncate text-xs text-slate-400 lg:block">
+                        <span className="hidden truncate text-xs text-slatey lg:block">
                           {h.next_action ?? '—'}
                         </span>
                       </span>
                       <CaretDown
                         size={14}
-                        className={`shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        className={`shrink-0 text-slatey transition-transform ${isOpen ? 'rotate-180' : ''}`}
                       />
                     </button>
                     {isOpen && (
-                      <div className="animate-fade-in space-y-3 border-t border-slate-50 bg-slate-50/50 px-5 py-4">
+                      <div className="animate-fade-in space-y-3 border-t border-white/10 bg-white/5 px-5 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {h.retention_stage && (
                             <StatusBadge domain="retention" value={h.retention_stage} />
@@ -242,28 +242,28 @@ export function HistoriesPage() {
                           {h.client_id && (
                             <Link
                               to={`/clients/${h.client_id}`}
-                              className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
+                              className="text-xs font-medium text-ash underline-offset-2 hover:underline"
                             >
                               고객사 상세 →
                             </Link>
                           )}
                         </div>
                         <div>
-                          <p className="text-xs font-semibold text-slate-400">상세</p>
-                          <p className="mt-0.5 text-sm whitespace-pre-wrap text-slate-700">
+                          <p className="text-xs font-semibold text-slatey">상세</p>
+                          <p className="mt-0.5 text-sm whitespace-pre-wrap text-bone">
                             {h.content || '—'}
                           </p>
                         </div>
                         {h.main_needs && (
                           <div>
-                            <p className="text-xs font-semibold text-slate-400">주요 니즈</p>
-                            <p className="mt-0.5 text-sm text-slate-700">{h.main_needs}</p>
+                            <p className="text-xs font-semibold text-slatey">주요 니즈</p>
+                            <p className="mt-0.5 text-sm text-bone">{h.main_needs}</p>
                           </div>
                         )}
                         {h.next_action && (
                           <div>
-                            <p className="text-xs font-semibold text-slate-400">Next Action</p>
-                            <p className="mt-0.5 text-sm text-slate-700">{h.next_action}</p>
+                            <p className="text-xs font-semibold text-slatey">Next Action</p>
+                            <p className="mt-0.5 text-sm text-bone">{h.next_action}</p>
                           </div>
                         )}
                         <AuditLine

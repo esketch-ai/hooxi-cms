@@ -21,7 +21,7 @@ const PAGE_SIZE = 20
 export function ClientAvatar({ name, className = '' }: { name?: string | null; className?: string }) {
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600 ${className}`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm font-bold text-bone ${className}`}
     >
       {name?.charAt(0) ?? '?'}
     </div>
@@ -71,12 +71,12 @@ export function ClientsPage() {
           <div className="min-w-0">
             <Link
               to={`/clients/${c.client_id}`}
-              className="block truncate font-semibold text-slate-800 hover:underline"
+              className="block truncate font-semibold text-bone hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               {c.company_name}
             </Link>
-            <p className="text-xs text-slate-400">{c.biz_reg_no ?? '—'}</p>
+            <p className="text-xs text-slatey">{c.biz_reg_no ?? '—'}</p>
           </div>
         </div>
       ),
@@ -85,7 +85,7 @@ export function ClientsPage() {
       key: 'type',
       header: '구분',
       render: (c) => (
-        <span className="text-xs font-medium text-slate-500">
+        <span className="text-xs font-medium text-ash">
           {c.client_type === 'TRANSPORT' ? '운수사' : '건물·농장'}
         </span>
       ),
@@ -95,8 +95,8 @@ export function ClientsPage() {
       header: '주 담당자',
       render: (c) => (
         <div>
-          <p className="text-sm text-slate-700">{c.main_contact_name ?? '—'}</p>
-          <p className="text-xs text-slate-400">{c.main_contact_phone ?? ''}</p>
+          <p className="text-sm text-bone">{c.main_contact_name ?? '—'}</p>
+          <p className="text-xs text-slatey">{c.main_contact_phone ?? ''}</p>
         </div>
       ),
     },
@@ -107,14 +107,14 @@ export function ClientsPage() {
         c.success_fee_rate != null ? (
           <SensitiveData type="rate" value={`${c.success_fee_rate} %`} />
         ) : (
-          <span className="text-slate-300">—</span>
+          <span className="text-slatey">—</span>
         ),
     },
     {
       key: 'lastActivity',
       header: '최근 활동',
       render: (c) => (
-        <span className="text-xs text-slate-500">{fmtDate(c.last_activity_at)}</span>
+        <span className="text-xs text-ash">{fmtDate(c.last_activity_at)}</span>
       ),
     },
     {
@@ -124,7 +124,7 @@ export function ClientsPage() {
         c.report_status_this_month ? (
           <StatusBadge domain="report" value={c.report_status_this_month} />
         ) : (
-          <span className="text-xs text-slate-300">대상 아님</span>
+          <span className="text-xs text-slatey">대상 아님</span>
         ),
     },
     {
@@ -143,7 +143,7 @@ export function ClientsPage() {
             e.stopPropagation()
             openEdit(c)
           }}
-          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
           title="수정"
           aria-label={`${c.company_name} 수정`}
         >
@@ -166,7 +166,7 @@ export function ClientsPage() {
               setEditing(null)
               setFormOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             신규 고객사 등록
@@ -229,7 +229,7 @@ export function ClientsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -253,8 +253,8 @@ export function ClientsPage() {
                 <div className="flex items-center gap-2.5">
                   <ClientAvatar name={c.company_name} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-slate-800">{c.company_name}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="truncate font-semibold text-bone">{c.company_name}</p>
+                    <p className="text-xs text-slatey">
                       {c.client_type === 'TRANSPORT' ? '운수사' : '건물·농장'} ·{' '}
                       {c.main_contact_name ?? '—'}
                     </p>
@@ -265,7 +265,7 @@ export function ClientsPage() {
                   {c.main_contact_phone && (
                     <a
                       href={telHref(c.main_contact_phone)}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-800 py-2 text-sm font-semibold text-white"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-snow py-2 text-sm font-medium text-graphite"
                     >
                       <Phone size={15} weight="fill" />
                       전화
@@ -273,7 +273,7 @@ export function ClientsPage() {
                   )}
                   <Link
                     to={`/clients/${c.client_id}`}
-                    className="flex flex-1 items-center justify-center rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-600"
+                    className="flex flex-1 items-center justify-center rounded-full border border-hairline py-2 text-sm font-medium text-bone"
                   >
                     상세 보기
                   </Link>

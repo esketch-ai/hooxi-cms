@@ -91,7 +91,7 @@ export function SystemConfigTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             다시 시도
           </button>
@@ -185,26 +185,26 @@ function ConfigCard({ item }: { item: ConfigItem }) {
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-col rounded-3xl border border-hairline bg-graphite p-5">
       {/* 헤더 */}
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-bold text-slate-900">
+        <h3 className="text-sm font-bold text-bone">
           {CONFIG_TITLES[item.key] ?? item.key}
         </h3>
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">
+        <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-ash">
           {item.key}
         </code>
         {item.is_default && (
-          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+          <span className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
             기본값 (미저장)
           </span>
         )}
       </div>
       {item.description && (
-        <p className="mt-1 text-xs text-slate-400">{item.description}</p>
+        <p className="mt-1 text-xs text-slatey">{item.description}</p>
       )}
       {!item.is_default && item.updated_at && (
-        <p className="mt-1 text-xs text-slate-400">
+        <p className="mt-1 text-xs text-slatey">
           최종 수정 {fmtServerDateTime(item.updated_at)}
           {item.updated_by_name ? ` · ${item.updated_by_name}` : ''}
         </p>
@@ -214,11 +214,11 @@ function ConfigCard({ item }: { item: ConfigItem }) {
       <div className="mt-3 flex-1">{editor}</div>
 
       {/* 푸터: 이력 토글 + 저장 */}
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+      <div className="mt-4 flex items-center justify-between border-t border-hairline pt-3">
         <button
           type="button"
           onClick={() => setHistoryOpen((v) => !v)}
-          className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+          className="flex items-center gap-1 text-xs font-medium text-ash hover:text-bone"
         >
           <ClockCounterClockwise size={14} />
           변경 이력
@@ -228,7 +228,7 @@ function ConfigCard({ item }: { item: ConfigItem }) {
           type="button"
           disabled={!dirty || save.isPending}
           onClick={handleSave}
-          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {save.isPending ? '저장 중…' : '저장'}
         </button>
@@ -244,7 +244,7 @@ function ConfigHistoryList({ configKey }: { configKey: string }) {
   const { data: history, isLoading, isError } = useConfigHistory(configKey, true)
 
   if (isLoading) {
-    return <p className="mt-3 text-xs text-slate-400">이력을 불러오는 중…</p>
+    return <p className="mt-3 text-xs text-slatey">이력을 불러오는 중…</p>
   }
   if (isError) {
     return (
@@ -254,24 +254,24 @@ function ConfigHistoryList({ configKey }: { configKey: string }) {
     )
   }
   if (!history || history.length === 0) {
-    return <p className="mt-3 text-xs text-slate-400">변경 이력이 없습니다.</p>
+    return <p className="mt-3 text-xs text-slatey">변경 이력이 없습니다.</p>
   }
 
   return (
-    <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
+    <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-lg bg-graphite-2 p-3">
       {history.map((h, idx) => (
         <li
           key={h.history_id ?? idx}
-          className="border-b border-slate-100 pb-2 text-xs last:border-b-0 last:pb-0"
+          className="border-b border-hairline pb-2 text-xs last:border-b-0 last:pb-0"
         >
-          <p className="text-slate-500">
+          <p className="text-ash">
             {h.created_at ? `${fmtServerDate(h.created_at)} ${fmtServerTime(h.created_at)}` : '—'}
             {h.updated_by_name ? ` · ${h.updated_by_name}` : ''}
           </p>
-          <p className="mt-0.5 break-all font-mono text-[11px] text-slate-400">
+          <p className="mt-0.5 break-all font-mono text-[11px] text-slatey">
             <span className="line-through">{truncate(h.old_value)}</span>
-            <span className="mx-1 text-slate-300">→</span>
-            <span className="text-slate-600">{truncate(h.new_value)}</span>
+            <span className="mx-1 text-smoke">→</span>
+            <span className="text-ash">{truncate(h.new_value)}</span>
           </p>
         </li>
       ))}
@@ -326,18 +326,18 @@ function KeywordChipsEditor({
     <div>
       <div className="flex flex-wrap gap-1.5">
         {keywords.length === 0 && (
-          <p className="text-xs text-slate-400">등록된 키워드가 없습니다.</p>
+          <p className="text-xs text-slatey">등록된 키워드가 없습니다.</p>
         )}
         {keywords.map((kw) => (
           <span
             key={kw}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700"
+            className="inline-flex items-center gap-1 rounded-full border border-hairline bg-white/10 px-2.5 py-1 text-xs font-medium text-bone"
           >
             {kw}
             <button
               type="button"
               onClick={() => commit(keywords.filter((k) => k !== kw))}
-              className="text-slate-400 hover:text-rose-500"
+              className="text-slatey hover:text-rose-400"
               aria-label={`${kw} 삭제`}
             >
               <X size={12} weight="bold" />
@@ -357,19 +357,19 @@ function KeywordChipsEditor({
             }
           }}
           placeholder="키워드 입력 후 Enter"
-          className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+          className="h-9 flex-1 rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
         />
         <button
           type="button"
           onClick={add}
           disabled={!input.trim()}
-          className="flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          className="flex h-9 items-center gap-1 rounded-full border border-hairline px-3 text-sm font-medium text-bone hover:bg-white/5 disabled:opacity-40"
         >
           <Plus size={14} weight="bold" />
           추가
         </button>
       </div>
-      {hint && <p className="mt-1.5 text-[11px] text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[11px] text-slatey">{hint}</p>}
     </div>
   )
 }
@@ -433,7 +433,7 @@ function FunnelMappingEditor({
     <div className="space-y-3">
       {funnelStages.map((stage) => (
         <div key={stage}>
-          <p className="mb-1.5 text-xs font-semibold text-slate-600">{stage}</p>
+          <p className="mb-1.5 text-xs font-semibold text-ash">{stage}</p>
           <div className="flex flex-wrap gap-1.5">
             {RETENTION_STAGES.map((s) => {
               const selected = (mapping[stage] ?? []).includes(s.label)
@@ -445,8 +445,8 @@ function FunnelMappingEditor({
                   aria-pressed={selected}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                     selected
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600'
+                      ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
+                      : 'border-hairline text-slatey hover:border-hairline-strong hover:text-ash'
                   }`}
                 >
                   {s.label}
@@ -457,7 +457,7 @@ function FunnelMappingEditor({
         </div>
       ))}
       {(duplicated.length > 0 || unassigned.length > 0) && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+        <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] text-amber-300">
           {duplicated.length > 0 && `중복 배정: ${duplicated.join(', ')}`}
           {duplicated.length > 0 && unassigned.length > 0 && ' · '}
           {unassigned.length > 0 && `미배정: ${unassigned.join(', ')}`}
@@ -502,8 +502,8 @@ function JsonEditor({
         }}
         rows={5}
         spellCheck={false}
-        className={`w-full rounded-lg border p-3 font-mono text-xs text-slate-700 focus:outline-none ${
-          valid ? 'border-slate-200 focus:border-slate-500' : 'border-rose-300 focus:border-rose-400'
+        className={`w-full rounded-lg border bg-graphite p-3 font-mono text-xs text-bone focus:outline-none ${
+          valid ? 'border-hairline focus:border-white/30' : 'border-rose-400/40 focus:border-rose-400/60'
         }`}
       />
       {!valid && (

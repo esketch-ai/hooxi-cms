@@ -55,7 +55,7 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -75,7 +75,7 @@ export function DashboardPage() {
             {/* SCR-01 → SCR-09 지도 진입 링크 (§2.1 보조 화면) */}
             <Link
               to="/map"
-              className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 sm:flex"
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
             >
               <MapTrifold size={16} />
               관제 지도
@@ -83,7 +83,7 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => setFormOpen(true)}
-              className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+              className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
             >
               <Plus size={16} weight="bold" />
               신규 이력 등록
@@ -113,7 +113,7 @@ export function DashboardPage() {
               kpi ? (
                 <span>
                   {kpi.report_sent}
-                  <span className="text-base font-semibold text-slate-400">
+                  <span className="text-base font-semibold text-slatey">
                     /{kpi.report_target}
                   </span>
                 </span>
@@ -153,8 +153,8 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-3">
         {/* 리텐션 퍼널 (자체 바 차트 — §10.2 4단계 매핑) */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-slate-800">영업 파이프라인 퍼널</h2>
+        <section className="rounded-3xl border border-hairline bg-graphite p-5">
+          <h2 className="mb-4 text-sm font-semibold text-bone">영업 파이프라인 퍼널</h2>
           {isLoading ? (
             <SkeletonTableRows rows={4} />
           ) : funnel.length === 0 ? (
@@ -168,10 +168,10 @@ export function DashboardPage() {
               {funnel.map((step, i) => (
                 <div key={step.stage}>
                   <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-slate-600">{step.stage}</span>
-                    <span className="font-bold text-slate-800">{step.count}</span>
+                    <span className="font-medium text-ash">{step.stage}</span>
+                    <span className="font-bold text-bone">{step.count}</span>
                   </div>
-                  <div className="h-5 overflow-hidden rounded bg-slate-100">
+                  <div className="h-5 overflow-hidden rounded bg-white/5">
                     <div
                       className={`h-full rounded transition-all ${FUNNEL_COLORS[i % FUNNEL_COLORS.length]}`}
                       style={{ width: `${Math.round((step.count / funnelMax) * 100)}%` }}
@@ -184,12 +184,12 @@ export function DashboardPage() {
         </section>
 
         {/* 최근 활동 타임라인 (전사, 작성자 표기) */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-hairline bg-graphite p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800">최근 활동</h2>
+            <h2 className="text-sm font-semibold text-bone">최근 활동</h2>
             <Link
               to="/histories"
-              className="text-xs font-medium text-slate-400 hover:text-slate-700"
+              className="text-xs font-medium text-smoke hover:text-bone"
             >
               전체 보기 →
             </Link>
@@ -208,12 +208,12 @@ export function DashboardPage() {
         </section>
 
         {/* 미처리 이슈 → /issues 딥링크 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-hairline bg-graphite p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800">미처리 이슈</h2>
+            <h2 className="text-sm font-semibold text-bone">미처리 이슈</h2>
             <Link
               to="/issues"
-              className="text-xs font-medium text-slate-400 hover:text-slate-700"
+              className="text-xs font-medium text-smoke hover:text-bone"
             >
               이슈 보드 →
             </Link>
@@ -227,32 +227,32 @@ export function DashboardPage() {
               className="border-0 py-10"
             />
           ) : (
-            <ul className="divide-y divide-slate-50">
+            <ul className="divide-y divide-white/10">
               {openIssues.map((issue) => {
                 const due = dday(issue.due_date)
                 return (
                   <li key={issue.history_id}>
-                    <Link to="/issues" className="block rounded-lg px-1 py-2.5 hover:bg-slate-50">
+                    <Link to="/issues" className="block rounded-lg px-1 py-2.5 hover:bg-white/5">
                       <div className="flex items-center gap-1.5">
                         {issue.priority === 'URGENT' && (
-                          <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
+                          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
                             긴급
                           </span>
                         )}
-                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium text-bone">
                           {issue.title}
                         </p>
                         {due && (
                           <span
                             className={`shrink-0 text-[11px] font-semibold ${
-                              due.overdue || due.imminent ? 'text-rose-600' : 'text-slate-400'
+                              due.overdue || due.imminent ? 'text-rose-300' : 'text-slatey'
                             }`}
                           >
                             {due.label}
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-slate-400">
+                      <p className="mt-0.5 text-xs text-slatey">
                         {issue.client_name ?? '미지정 고객'} · {issue.manager_name ?? '—'} ·{' '}
                         {elapsedServer(issue.created_at)}
                       </p>

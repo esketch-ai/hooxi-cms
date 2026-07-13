@@ -34,9 +34,9 @@ const AUTH_TYPE_LABEL: Record<string, string> = {
 
 /** 인증 방식 배지 */
 function AuthMethodBadge({ authType }: { authType?: string | null }) {
-  if (!authType || authType === 'NONE') return <span className="text-xs text-slate-300">—</span>
+  if (!authType || authType === 'NONE') return <span className="text-xs text-slatey">—</span>
   return (
-    <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
+    <span className="inline-flex items-center rounded border border-hairline bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ash">
       {AUTH_TYPE_LABEL[authType] ?? authType}
     </span>
   )
@@ -57,14 +57,14 @@ function SecretCell({
   onHide: () => void
 }) {
   if (!asset.has_credentials) {
-    return <span className="text-xs text-slate-300">미설정</span>
+    return <span className="text-xs text-slatey">미설정</span>
   }
   if (revealed != null) {
     return (
       <button
         type="button"
         onClick={onHide}
-        className="max-w-[200px] cursor-pointer truncate rounded bg-amber-50 px-1.5 py-0.5 font-mono text-xs text-slate-800"
+        className="max-w-[200px] cursor-pointer truncate rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-xs text-amber-100"
         title="잠시 후 자동으로 다시 가려집니다 — 클릭 시 즉시 숨김"
       >
         {revealed}
@@ -76,7 +76,7 @@ function SecretCell({
       type="button"
       onClick={onReveal}
       disabled={loading}
-      className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs tracking-tight text-slate-500 select-none hover:bg-slate-200 disabled:opacity-60"
+      className="flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs tracking-tight text-smoke select-none hover:bg-white/15 disabled:opacity-60"
       title="클릭하여 일시 표시 (감사 로그 기록)"
       aria-label="비밀번호/키 — 클릭하여 일시 표시"
     >
@@ -159,14 +159,14 @@ export function AccountsPage() {
         target="_blank"
         rel="noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 hover:underline"
+        className="inline-flex items-center gap-1 text-sm text-ash hover:text-bone hover:underline"
         title={a.site_url}
       >
         <span className="max-w-[180px] truncate">{a.site_url.replace(/^https?:\/\//, '')}</span>
         <ArrowSquareOut size={13} className="shrink-0" />
       </a>
     ) : (
-      <span className="text-xs text-slate-300">—</span>
+      <span className="text-xs text-slatey">—</span>
     )
 
   const columns: Column<Asset>[] = [
@@ -177,7 +177,7 @@ export function AccountsPage() {
         <Link
           to={`/clients/${a.client_id}`}
           onClick={(e) => e.stopPropagation()}
-          className="font-semibold text-slate-800 hover:underline"
+          className="font-semibold text-bone hover:underline"
         >
           {a.client_name ?? '—'}
         </Link>
@@ -188,9 +188,9 @@ export function AccountsPage() {
       header: '대상 기관',
       render: (a) =>
         a.agency_name ? (
-          <span className="text-sm text-slate-700">{a.agency_name}</span>
+          <span className="text-sm text-bone">{a.agency_name}</span>
         ) : (
-          <span className="text-xs text-slate-400">기관 미설정</span>
+          <span className="text-xs text-slatey">기관 미설정</span>
         ),
     },
     { key: 'site', header: '사이트', render: siteLink },
@@ -200,9 +200,9 @@ export function AccountsPage() {
       header: '로그인 ID',
       render: (a) =>
         a.auth_type === 'ID_PW' && a.login_id ? (
-          <span className="font-mono text-xs text-slate-600">{a.login_id}</span>
+          <span className="font-mono text-xs text-ash">{a.login_id}</span>
         ) : (
-          <span className="text-xs text-slate-300">—</span>
+          <span className="text-xs text-slatey">—</span>
         ),
     },
     { key: 'secret', header: '비밀번호/키', render: secretCell },
@@ -222,7 +222,7 @@ export function AccountsPage() {
             e.stopPropagation()
             openEdit(a)
           }}
-          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
           title="수정"
           aria-label="계정 수정"
         >
@@ -243,7 +243,7 @@ export function AccountsPage() {
               <button
                 type="button"
                 onClick={() => setConfirmOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-semibold text-bone hover:bg-white/5"
               >
                 <ShieldCheck size={16} weight="bold" />
                 지금 전체 점검
@@ -255,7 +255,7 @@ export function AccountsPage() {
                 setEditing(null)
                 setFormOpen(true)
               }}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              className="flex items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90"
             >
               <Plus size={16} weight="bold" />
               계정 등록
@@ -265,30 +265,30 @@ export function AccountsPage() {
       />
 
       {/* 안내 배너 */}
-      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
-        <KeyReturn size={18} className="mt-0.5 shrink-0 text-slate-400" />
-        <p className="text-sm leading-relaxed text-slate-600">
+      <div className="flex items-start gap-2.5 rounded-2xl border border-hairline bg-graphite px-4 py-3">
+        <KeyReturn size={18} className="mt-0.5 shrink-0 text-slatey" />
+        <p className="text-sm leading-relaxed text-ash">
           고객이 제공한 로그인 계정을 관리합니다. 매월 1일 자동 점검 이슈가 생성되며,
-          <span className="font-semibold text-slate-700"> [지금 전체 점검]</span>으로 즉시 생성할 수
+          <span className="font-semibold text-bone"> [지금 전체 점검]</span>으로 즉시 생성할 수
           있습니다.
         </p>
       </div>
 
       {/* 점검 실행 결과 — 이슈 보드 링크 (토스트는 자동 소멸하므로 결과는 배너로 유지) */}
       {lastResult && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <p className="text-sm text-emerald-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-400/25 bg-emerald-500/15 px-4 py-3">
+          <p className="text-sm text-emerald-300">
             <span className="font-semibold">계정 점검 완료</span> — 대상 {lastResult.targets} · 생성{' '}
             {lastResult.created} · 건너뜀 {lastResult.skipped} · 사이트장애 {lastResult.unreachable}
           </p>
           <div className="flex items-center gap-3">
-            <Link to="/issues" className="text-sm font-semibold text-emerald-700 hover:underline">
+            <Link to="/issues" className="text-sm font-semibold text-emerald-300 hover:underline">
               이슈 보드에서 보기 →
             </Link>
             <button
               type="button"
               onClick={() => setLastResult(null)}
-              className="text-sm text-emerald-600 hover:text-emerald-800"
+              className="text-sm text-emerald-300 hover:text-emerald-200"
               aria-label="결과 닫기"
             >
               닫기
@@ -342,7 +342,7 @@ export function AccountsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -363,31 +363,31 @@ export function AccountsPage() {
                   <div className="min-w-0">
                     <Link
                       to={`/clients/${a.client_id}`}
-                      className="truncate font-semibold text-slate-800"
+                      className="truncate font-semibold text-bone"
                     >
                       {a.client_name ?? '—'}
                     </Link>
-                    <p className="mt-0.5 text-xs text-slate-400">{a.agency_name ?? '기관 미설정'}</p>
+                    <p className="mt-0.5 text-xs text-slatey">{a.agency_name ?? '기관 미설정'}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     {a.status && <StatusBadge domain="assetStatus" value={a.status} />}
                     <button
                       type="button"
                       onClick={() => openEdit(a)}
-                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      className="rounded-lg p-1 text-smoke hover:bg-white/5 hover:text-bone"
                       aria-label="계정 수정"
                     >
                       <PencilSimple size={15} />
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                <div className="flex items-center justify-between gap-2 border-t border-hairline pt-2">
                   {siteLink(a)}
                   <AuthMethodBadge authType={a.auth_type} />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {a.auth_type === 'ID_PW' && a.login_id && (
-                    <span className="font-mono text-xs text-slate-600">{a.login_id}</span>
+                    <span className="font-mono text-xs text-ash">{a.login_id}</span>
                   )}
                   {secretCell(a)}
                 </div>

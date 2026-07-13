@@ -81,9 +81,9 @@ export function DocumentsPage() {
       header: '문서명',
       render: (d) => (
         <div className="min-w-0">
-          <p className="truncate font-medium text-slate-800">{d.title}</p>
+          <p className="truncate font-medium text-bone">{d.title}</p>
           {!folder && (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slatey">
               {d.client_name ?? (d.client_id ? '고객사' : '공용')}
             </p>
           )}
@@ -94,7 +94,7 @@ export function DocumentsPage() {
       key: 'type',
       header: '유형',
       render: (d) => (
-        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">
+        <span className="inline-flex rounded-full border border-hairline bg-white/10 px-2 py-0.5 text-xs font-medium text-ash">
           {docTypeLabel(d.doc_type)}
         </span>
       ),
@@ -102,17 +102,17 @@ export function DocumentsPage() {
     {
       key: 'version',
       header: '버전',
-      render: (d) => <span className="font-mono text-xs text-slate-500">v{d.version}</span>,
+      render: (d) => <span className="font-mono text-xs text-ash">v{d.version}</span>,
     },
     {
       key: 'uploader',
       header: '업로더',
-      render: (d) => <span className="text-slate-600">{d.uploaded_by_name ?? '—'}</span>,
+      render: (d) => <span className="text-ash">{d.uploaded_by_name ?? '—'}</span>,
     },
     {
       key: 'date',
       header: '업로드일',
-      render: (d) => <span className="text-xs text-slate-500">{fmtServerDateTime(d.created_at)}</span>,
+      render: (d) => <span className="text-xs text-ash">{fmtServerDateTime(d.created_at)}</span>,
     },
     {
       key: 'download',
@@ -121,7 +121,7 @@ export function DocumentsPage() {
       render: (d) => (
         <button
           type="button"
-          className="inline-flex rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="inline-flex rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
           title="다운로드"
           onClick={(e) => {
             e.stopPropagation()
@@ -143,7 +143,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             문서 업로드
@@ -159,20 +159,20 @@ export function DocumentsPage() {
           options={DOC_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
         <label className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-slate-500">기간</span>
+          <span className="text-xs font-medium text-ash">기간</span>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="시작일"
           />
-          <span className="text-slate-300">~</span>
+          <span className="text-slatey">~</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="종료일"
           />
         </label>
@@ -180,7 +180,7 @@ export function DocumentsPage() {
 
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         {/* 고객사 폴더 트리 */}
-        <aside className="h-fit rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <aside className="h-fit rounded-3xl border border-hairline bg-graphite p-2">
           <FolderButton
             active={folder === null}
             label="전체 문서"
@@ -191,7 +191,7 @@ export function DocumentsPage() {
             label="공용 (양식 등)"
             onClick={() => setFolder('COMMON')}
           />
-          <p className="mt-2 mb-1 px-2 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+          <p className="mt-2 mb-1 px-2 text-[11px] font-semibold tracking-wider text-slatey uppercase">
             고객사
           </p>
           <div className="max-h-[50vh] overflow-y-auto">
@@ -204,7 +204,7 @@ export function DocumentsPage() {
               />
             ))}
             {clients.length === 0 && (
-              <p className="px-2 py-2 text-xs text-slate-400">고객사가 없습니다</p>
+              <p className="px-2 py-2 text-xs text-slatey">고객사가 없습니다</p>
             )}
           </div>
         </aside>
@@ -219,7 +219,7 @@ export function DocumentsPage() {
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
                 >
                   다시 시도
                 </button>
@@ -236,15 +236,15 @@ export function DocumentsPage() {
               renderCard={(d) => (
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-800">{d.title}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="truncate text-sm font-medium text-bone">{d.title}</p>
+                    <p className="text-xs text-slatey">
                       {docTypeLabel(d.doc_type)} · v{d.version} · {fmtServerDateTime(d.created_at)}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void handleDownload(d.doc_id, d.title)}
-                    className="rounded-md p-2 text-slate-400 hover:bg-slate-100"
+                    className="rounded-lg p-2 text-smoke hover:bg-white/5"
                     aria-label="다운로드"
                   >
                     <DownloadSimple size={18} />
@@ -280,14 +280,14 @@ function FolderButton({
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
         active
-          ? 'bg-slate-100 font-semibold text-slate-900'
-          : 'text-slate-600 hover:bg-slate-50'
+          ? 'bg-white/10 font-semibold text-bone'
+          : 'text-ash hover:bg-white/5'
       }`}
     >
       {active ? (
-        <FolderOpen size={16} weight="fill" className="shrink-0 text-slate-500" />
+        <FolderOpen size={16} weight="fill" className="shrink-0 text-ash" />
       ) : (
-        <FolderSimple size={16} className="shrink-0 text-slate-400" />
+        <FolderSimple size={16} className="shrink-0 text-slatey" />
       )}
       <span className="truncate">{label}</span>
     </button>
@@ -354,21 +354,21 @@ function DocumentUploadModal({
       <form onSubmit={handleSubmit} className="space-y-3">
         <FileUploader file={file} onChange={setFile} />
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">문서명</label>
+          <label className="mb-1 block text-xs font-medium text-ash">문서명</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={file?.name ?? '미입력 시 파일명 사용'}
-            className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+            className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">고객사</label>
+            <label className="mb-1 block text-xs font-medium text-ash">고객사</label>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
             >
               <option value="">공용 (미지정)</option>
               {clients.map((c) => (
@@ -379,11 +379,11 @@ function DocumentUploadModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">문서 유형</label>
+            <label className="mb-1 block text-xs font-medium text-ash">문서 유형</label>
             <select
               value={docType}
               onChange={(e) => setDocType(e.target.value as DocType)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
             >
               {DOC_TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -393,18 +393,18 @@ function DocumentUploadModal({
             </select>
           </div>
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={upload.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {upload.isPending && <CircleNotch size={14} className="animate-spin" />}
             업로드

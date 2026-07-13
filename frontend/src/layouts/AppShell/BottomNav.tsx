@@ -24,7 +24,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 flex overflow-hidden rounded-[24px] border border-hairline bg-graphite/90 backdrop-blur lg:hidden"
       aria-label="하단 탭"
     >
       {TABS.map((tab) => (
@@ -32,8 +32,8 @@ export function BottomNav() {
           key={tab.path}
           to={tab.path}
           className={({ isActive }) =>
-            `flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] ${
-              isActive ? 'font-semibold text-slate-900' : 'text-slate-400'
+            `flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] transition-colors ${
+              isActive ? 'font-semibold text-bone' : 'text-slatey'
             }`
           }
         >

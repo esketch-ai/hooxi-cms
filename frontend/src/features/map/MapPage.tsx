@@ -280,7 +280,7 @@ export function MapPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -304,13 +304,13 @@ export function MapPage() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* ── 지도 영역 ──────────────────────────────────────────────── */}
-        <section className="relative order-1 min-h-[380px] flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:order-2 lg:min-h-0">
+        <section className="relative order-1 min-h-[380px] flex-1 overflow-hidden rounded-3xl border border-hairline bg-graphite lg:order-2 lg:min-h-0">
           <div ref={mapElRef} className="h-full w-full" />
 
           {mapStatus !== 'ready' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-50/95 p-4">
+            <div className="absolute inset-0 flex items-center justify-center bg-graphite/95 p-4">
               {mapStatus === 'loading' && (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
+                <div className="flex flex-col items-center gap-2 text-slatey">
                   <CircleNotch size={26} className="animate-spin" />
                   <p className="text-sm">지도를 불러오는 중…</p>
                 </div>
@@ -333,7 +333,7 @@ export function MapPage() {
                     <button
                       type="button"
                       onClick={() => setRetryToken((t) => t + 1)}
-                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
                     >
                       다시 시도
                     </button>
@@ -345,9 +345,9 @@ export function MapPage() {
 
           {/* 범례 오버레이 */}
           {mapStatus === 'ready' && (
-            <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 shadow-sm">
+            <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-hairline bg-graphite/95 px-3 py-2">
               {STATUS_ORDER.map((s) => (
-                <span key={s} className="flex items-center gap-1.5 text-xs text-slate-600">
+                <span key={s} className="flex items-center gap-1.5 text-xs text-ash">
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-full border border-white shadow"
                     style={{ backgroundColor: MARKER_COLORS[s] }}
@@ -362,15 +362,15 @@ export function MapPage() {
         {/* ── 좌측 필터·집계 패널 ────────────────────────────────────── */}
         <aside className="order-2 w-full shrink-0 space-y-3 lg:order-1 lg:w-80 lg:overflow-y-auto lg:pr-0.5">
           {/* 필터 */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-900">필터링 설정</h2>
+          <div className="rounded-3xl border border-hairline bg-graphite p-4">
+            <h2 className="text-sm font-bold text-bone">필터링 설정</h2>
 
-            <p className="mt-3 mb-2 text-xs font-semibold text-slate-500">계약 상태</p>
+            <p className="mt-3 mb-2 text-xs font-semibold text-ash">계약 상태</p>
             <div className="space-y-2">
               {STATUS_ORDER.map((s) => (
                 <label
                   key={s}
-                  className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
+                  className="flex cursor-pointer items-center gap-2 text-sm text-bone"
                 >
                   <input
                     type="checkbox"
@@ -378,25 +378,25 @@ export function MapPage() {
                     onChange={(e) =>
                       setStatusOn((prev) => ({ ...prev, [s]: e.target.checked }))
                     }
-                    className="rounded border-slate-300 accent-slate-800"
+                    className="rounded border-hairline accent-white"
                   />
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: MARKER_COLORS[s] }}
                   />
                   {STATUS_LABELS[s]}
-                  <span className="ml-auto text-xs text-slate-400">
+                  <span className="ml-auto text-xs text-slatey">
                     {isLoading ? '—' : `${statusCounts[s]}곳`}
                   </span>
                 </label>
               ))}
             </div>
 
-            <p className="mt-4 mb-2 text-xs font-semibold text-slate-500">마지막 컨택 기준</p>
+            <p className="mt-4 mb-2 text-xs font-semibold text-ash">마지막 컨택 기준</p>
             <select
               value={contactFilter}
               onChange={(e) => setContactFilter(e.target.value as ContactFilter)}
-              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             >
               <option value="">전체 기간</option>
               <option value="WITHIN_30">최근 30일 이내</option>
@@ -405,8 +405,8 @@ export function MapPage() {
           </div>
 
           {/* 지역별 집계 */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-bold text-slate-900">지역별 현황</h2>
+          <div className="rounded-3xl border border-hairline bg-graphite p-4">
+            <h2 className="mb-3 text-sm font-bold text-bone">지역별 현황</h2>
             {isLoading ? (
               <div className="space-y-3">
                 <Skeleton className="h-4 w-full" />
@@ -414,7 +414,7 @@ export function MapPage() {
                 <Skeleton className="h-4 w-2/3" />
               </div>
             ) : regionAgg.length === 0 ? (
-              <p className="py-2 text-center text-xs text-slate-400">
+              <p className="py-2 text-center text-xs text-slatey">
                 필터 조건에 맞는 고객사가 없습니다
               </p>
             ) : (
@@ -422,13 +422,13 @@ export function MapPage() {
                 {regionAgg.map(([region, agg]) => (
                   <li key={region}>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="truncate text-slate-600">{region}</span>
-                      <span className="ml-2 shrink-0 font-bold text-slate-800">
+                      <span className="truncate text-ash">{region}</span>
+                      <span className="ml-2 shrink-0 font-bold text-bone">
                         {agg.total}곳
                       </span>
                     </div>
                     {/* 상태 분포 미니 바 */}
-                    <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-white/5">
                       {STATUS_ORDER.filter((s) => agg[s] > 0).map((s) => (
                         <span
                           key={s}
@@ -448,12 +448,12 @@ export function MapPage() {
 
           {/* 좌표 미등록 고객사 */}
           {!isLoading && noCoords.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold text-slate-900">
-                <MapPinLine size={16} className="text-slate-400" />
+            <div className="rounded-3xl border border-hairline bg-graphite p-4">
+              <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold text-bone">
+                <MapPinLine size={16} className="text-slatey" />
                 좌표 미등록 {noCoords.length}곳
               </h2>
-              <p className="mb-2 text-xs text-slate-400">
+              <p className="mb-2 text-xs text-slatey">
                 주소 지오코딩(lat/lng) 미등록으로 지도에 표시되지 않는 고객사입니다.
               </p>
               <ul className="max-h-56 space-y-1 overflow-y-auto">
@@ -461,14 +461,14 @@ export function MapPage() {
                   <li key={c.client_id}>
                     <Link
                       to={`/clients/${c.client_id}`}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-bone hover:bg-white/5"
                     >
                       <span
                         className="inline-block h-2 w-2 shrink-0 rounded-full"
                         style={{ backgroundColor: MARKER_COLORS[c.contract_status] }}
                       />
                       <span className="truncate">{c.company_name}</span>
-                      <span className="ml-auto shrink-0 text-xs text-slate-400">
+                      <span className="ml-auto shrink-0 text-xs text-slatey">
                         {c.region ?? '—'}
                       </span>
                     </Link>

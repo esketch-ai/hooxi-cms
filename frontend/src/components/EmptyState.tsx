@@ -17,12 +17,12 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center ${className}`}
+      className={`flex flex-col items-center justify-center rounded-3xl border border-dashed border-hairline bg-graphite px-6 py-16 text-center ${className}`}
     >
-      {icon && <div className="mb-3 text-slate-300">{icon}</div>}
-      <p className="text-sm font-semibold text-slate-700">{title}</p>
+      {icon && <div className="mb-3 text-slatey">{icon}</div>}
+      <p className="text-sm font-semibold text-bone">{title}</p>
       {description && (
-        <p className="mt-1 max-w-sm text-sm text-slate-400">{description}</p>
+        <p className="mt-1 max-w-sm text-sm text-slatey">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>

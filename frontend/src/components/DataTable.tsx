@@ -41,7 +41,7 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-3xl border border-hairline bg-graphite p-5">
         <div className="hidden sm:block">
           <SkeletonTableRows rows={5} />
         </div>
@@ -62,17 +62,17 @@ export function DataTable<T>({
     <>
       {/* 데스크톱·태블릿: 테이블 */}
       <div
-        className={`overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm ${
+        className={`overflow-x-auto rounded-3xl border border-hairline bg-graphite ${
           renderCard ? 'hidden sm:block' : ''
         }`}
       >
         <table className="w-full min-w-max text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/60">
+            <tr className="border-b border-hairline bg-white/5">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3 text-xs font-semibold tracking-wide text-slate-500 ${col.className ?? ''}`}
+                  className={`px-4 py-3 text-xs font-semibold tracking-wide text-ash ${col.className ?? ''}`}
                 >
                   {col.header}
                 </th>
@@ -84,8 +84,8 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`border-b border-slate-50 last:border-b-0 ${
-                  onRowClick ? 'cursor-pointer hover:bg-slate-50/70' : ''
+                className={`border-b border-white/10 last:border-b-0 ${
+                  onRowClick ? 'cursor-pointer hover:bg-white/5' : ''
                 } ${rowClassName?.(row) ?? ''}`}
               >
                 {columns.map((col) => (
@@ -105,7 +105,7 @@ export function DataTable<T>({
           {rows.map((row) => (
             <div
               key={rowKey(row)}
-              className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${rowClassName?.(row) ?? ''}`}
+              className={`rounded-3xl border border-hairline bg-graphite p-4 ${rowClassName?.(row) ?? ''}`}
             >
               {renderCard(row)}
             </div>

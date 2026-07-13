@@ -8,15 +8,15 @@ import type { Asset, AssetPayload } from '../../types'
 import { useSaveAsset } from './api'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <div>
       <label className={labelCls}>
         {label}
-        {required && <span className="ml-0.5 text-rose-500">*</span>}
+        {required && <span className="ml-0.5 text-rose-400">*</span>}
       </label>
       {children}
     </div>
@@ -215,8 +215,8 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
         </div>
 
         {/* 외부기관 연동 */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             외부기관 연동
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -251,8 +251,8 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
         </div>
 
         {/* 보안 접속 정보 — 인증 방식에 따라 동적 표시 */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             보안 접속 정보
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -304,7 +304,7 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
             )}
           </div>
           {form.auth_type !== 'NONE' && (
-            <p className="mt-2 text-xs text-slate-400">
+            <p className="mt-2 text-xs text-slatey">
               인증 정보는 서버에 암호화 저장되며, 저장 후에는 목록의 일시 표시(reveal)로만 확인할 수
               있습니다.
             </p>
@@ -312,18 +312,18 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
         </div>
 
         {/* 액션 */}
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {asset ? '수정 저장' : '등록'}

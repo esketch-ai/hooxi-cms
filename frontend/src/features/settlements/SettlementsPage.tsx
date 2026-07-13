@@ -40,7 +40,7 @@ function SettlementStatusCell({ row }: { row: ProjectClientMap }) {
     <div>
       <StatusBadge domain="settlement" value={row.settlement_status ?? 'STANDBY'} />
       {sub && (
-        <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-rose-600' : 'text-slate-400'}`}>
+        <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-rose-300' : 'text-slatey'}`}>
           {sub}
           {overdue && ' · 30일+ 미입금'}
         </p>
@@ -114,7 +114,7 @@ export function SettlementsPage() {
 
   /** 상태별 액션 — STANDBY→발행 / BILLED→입금 완료 / COMPLETED→읽기 전용 */
   const actionCell = (row: ProjectClientMap) => {
-    if (!canManage) return <span className="text-xs text-slate-300">—</span>
+    if (!canManage) return <span className="text-xs text-slatey">—</span>
     if (row.settlement_status === 'STANDBY') {
       // 금액 미정(단가 NULL) 건은 발행 차단 (R2-A6)
       const blocked = row.expected_amount == null
@@ -123,7 +123,7 @@ export function SettlementsPage() {
           type="button"
           onClick={() => setPending({ row, next: 'BILLED' })}
           disabled={blocked}
-          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
           title={blocked ? '단가 미입력 — 금액 미정 건은 발행할 수 없습니다' : undefined}
         >
           청구서 발행
@@ -135,13 +135,13 @@ export function SettlementsPage() {
         <button
           type="button"
           onClick={() => setPending({ row, next: 'COMPLETED' })}
-          className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+          className="rounded-full bg-emerald-500/90 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
         >
           입금 완료 처리
         </button>
       )
     }
-    return <span className="text-xs text-slate-300">완료</span>
+    return <span className="text-xs text-slatey">완료</span>
   }
 
   const columns: Column<ProjectClientMap>[] = [
@@ -153,11 +153,11 @@ export function SettlementsPage() {
           <Link
             to={`/clients/${r.client_id}`}
             onClick={(e) => e.stopPropagation()}
-            className="font-semibold text-slate-800 hover:underline"
+            className="font-semibold text-bone hover:underline"
           >
             {r.client_name ?? '—'}
           </Link>
-          <p className="text-xs text-slate-400">{isPrimary(r) ? '대표자' : '참여자'}</p>
+          <p className="text-xs text-slatey">{isPrimary(r) ? '대표자' : '참여자'}</p>
         </div>
       ),
     },
@@ -169,7 +169,7 @@ export function SettlementsPage() {
           <Link
             to={`/projects/${r.project_id}`}
             onClick={(e) => e.stopPropagation()}
-            className="block truncate text-sm text-slate-700 hover:underline"
+            className="block truncate text-sm text-bone hover:underline"
           >
             {r.project_name ?? '—'}
           </Link>
@@ -180,7 +180,7 @@ export function SettlementsPage() {
       key: 'ratio',
       header: '지분율',
       render: (r) => (
-        <span className="text-sm font-semibold text-slate-700">
+        <span className="text-sm font-semibold text-bone">
           {r.allocation_ratio != null ? `${Number(r.allocation_ratio)} %` : '—'}
         </span>
       ),
@@ -192,7 +192,7 @@ export function SettlementsPage() {
         r.success_fee_rate != null ? (
           <SensitiveData type="rate" value={`${Number(r.success_fee_rate)} %`} />
         ) : (
-          <span className="text-slate-300">—</span>
+          <span className="text-slatey">—</span>
         ),
     },
     {
@@ -202,7 +202,7 @@ export function SettlementsPage() {
         r.expected_amount != null ? (
           <SensitiveData type="money" value={fmtMoney(Number(r.expected_amount))} />
         ) : (
-          <span className="text-xs font-medium text-amber-600">미정</span>
+          <span className="text-xs font-medium text-amber-300">미정</span>
         ),
     },
     {
@@ -246,7 +246,7 @@ export function SettlementsPage() {
           options={projects.map((p) => ({ value: p.project_id, label: p.project_name }))}
         />
         <label className="flex items-center gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-slate-500">정산 기준월</span>
+          <span className="shrink-0 text-xs font-medium text-ash">정산 기준월</span>
           <input
             type="month"
             value={period}
@@ -254,29 +254,29 @@ export function SettlementsPage() {
               setPeriod(e.target.value)
               setPage(1)
             }}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="정산 기준월"
           />
         </label>
       </FilterBar>
 
       {/* 합계 요약 바 — 대상 건수·예상 정산액 합 🔒 */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-3xl border border-hairline bg-graphite px-4 py-3">
         <div className="flex items-center gap-2 text-sm">
-          <Coins size={16} className="text-slate-400" />
-          <span className="text-slate-500">대상</span>
-          <b className="text-slate-800">{summaryCount.toLocaleString('ko-KR')}건</b>
+          <Coins size={16} className="text-slatey" />
+          <span className="text-ash">대상</span>
+          <b className="text-bone">{summaryCount.toLocaleString('ko-KR')}건</b>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-500">예상 정산액 합</span>
+          <span className="text-ash">예상 정산액 합</span>
           <SensitiveData
             type="money"
             value={fmtMoney(summaryExpected)}
-            className="font-bold text-slate-800"
+            className="font-bold text-bone"
           />
         </div>
         {total > rows.length && (
-          <span className="text-xs text-slate-300">(금액 합은 현재 페이지 기준)</span>
+          <span className="text-xs text-slatey">(금액 합은 현재 페이지 기준)</span>
         )}
       </div>
 
@@ -289,7 +289,7 @@ export function SettlementsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -309,26 +309,26 @@ export function SettlementsPage() {
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <Link to={`/clients/${r.client_id}`} className="font-semibold text-slate-800">
+                    <Link to={`/clients/${r.client_id}`} className="font-semibold text-bone">
                       {r.client_name ?? '—'}
                     </Link>
-                    <p className="truncate text-xs text-slate-400">
+                    <p className="truncate text-xs text-slatey">
                       {isPrimary(r) ? '대표자' : '참여자'} · {r.project_name ?? '—'}
                     </p>
                   </div>
                   <SettlementStatusCell row={r} />
                 </div>
-                <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
-                  <span className="text-slate-500">
+                <div className="flex items-center justify-between border-t border-hairline pt-2 text-sm">
+                  <span className="text-ash">
                     지분율{' '}
-                    <b className="text-slate-800">
+                    <b className="text-bone">
                       {r.allocation_ratio != null ? `${Number(r.allocation_ratio)} %` : '—'}
                     </b>
                   </span>
                   {r.expected_amount != null ? (
                     <SensitiveData type="money" value={fmtMoney(Number(r.expected_amount))} />
                   ) : (
-                    <span className="text-xs font-medium text-amber-600">미정</span>
+                    <span className="text-xs font-medium text-amber-300">미정</span>
                   )}
                 </div>
               </div>

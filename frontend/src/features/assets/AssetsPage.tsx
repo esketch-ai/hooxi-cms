@@ -20,17 +20,17 @@ function AssetSpecCell({ asset }: { asset: Asset }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {asset.asset_type && <StatusBadge domain="assetType" value={asset.asset_type} />}
-      <span className="text-sm text-slate-700">
+      <span className="text-sm text-bone">
         {asset.main_spec ?? (asset.asset_group === 'MOBILITY' ? '차량' : '설비')}
         {asset.quantity != null && (
-          <span className="ml-1 font-semibold text-slate-800">{asset.quantity}대</span>
+          <span className="ml-1 font-semibold text-bone">{asset.quantity}대</span>
         )}
       </span>
       <span
         className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
           asset.telemetry_yn === 'Y'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            : 'border-slate-200 bg-slate-50 text-slate-400'
+            ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
+            : 'border-hairline bg-white/10 text-ash'
         }`}
       >
         관제 {asset.telemetry_yn === 'Y' ? 'Y' : 'N'}
@@ -60,25 +60,25 @@ function AuthCell({
   onHide: () => void
 }) {
   if (!asset.auth_type || asset.auth_type === 'NONE') {
-    return <span className="text-xs text-slate-300">—</span>
+    return <span className="text-xs text-slatey">—</span>
   }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
+      <span className="inline-flex items-center rounded border border-hairline bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ash">
         {AUTH_TYPE_LABEL[asset.auth_type] ?? asset.auth_type}
       </span>
       {/* login_id는 평문 (SCR-04 §7) */}
       {asset.auth_type === 'ID_PW' && asset.login_id && (
-        <span className="font-mono text-xs text-slate-600">{asset.login_id}</span>
+        <span className="font-mono text-xs text-ash">{asset.login_id}</span>
       )}
       {!asset.has_credentials ? (
-        <span className="text-xs text-slate-300">미설정</span>
+        <span className="text-xs text-slatey">미설정</span>
       ) : revealed != null ? (
         <button
           type="button"
           onClick={onHide}
-          className="max-w-[180px] cursor-pointer truncate rounded bg-amber-50 px-1.5 py-0.5 font-mono text-xs text-slate-800"
+          className="max-w-[180px] cursor-pointer truncate rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-xs text-amber-100"
           title="잠시 후 자동으로 다시 가려집니다 — 클릭 시 즉시 숨김"
         >
           {revealed}
@@ -88,7 +88,7 @@ function AuthCell({
           type="button"
           onClick={onReveal}
           disabled={loading}
-          className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs tracking-tight text-slate-500 select-none hover:bg-slate-200 disabled:opacity-60"
+          className="flex items-center gap-1 rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs tracking-tight text-smoke select-none hover:bg-white/15 disabled:opacity-60"
           title="클릭하여 일시 표시 (감사 로그 기록)"
           aria-label="보안 접속 정보 — 클릭하여 일시 표시"
         >
@@ -101,7 +101,7 @@ function AuthCell({
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="text-slate-400 hover:text-slate-600"
+          className="text-ash hover:text-bone"
           title={asset.site_url}
           aria-label="연동 사이트 열기"
         >
@@ -162,7 +162,7 @@ export function AssetsPage() {
         <Link
           to={`/clients/${a.client_id}`}
           onClick={(e) => e.stopPropagation()}
-          className="font-semibold text-slate-800 hover:underline"
+          className="font-semibold text-bone hover:underline"
         >
           {a.client_name ?? '—'}
         </Link>
@@ -179,11 +179,11 @@ export function AssetsPage() {
       render: (a) =>
         a.agency_name ? (
           <div>
-            <p className="text-sm text-slate-700">{a.agency_name}</p>
-            {a.usage_purpose && <p className="text-xs text-slate-400">{a.usage_purpose}</p>}
+            <p className="text-sm text-bone">{a.agency_name}</p>
+            {a.usage_purpose && <p className="text-xs text-slatey">{a.usage_purpose}</p>}
           </div>
         ) : (
-          <span className="text-xs text-slate-400">기관 미설정</span>
+          <span className="text-xs text-slatey">기관 미설정</span>
         ),
     },
     {
@@ -207,7 +207,7 @@ export function AssetsPage() {
             e.stopPropagation()
             openEdit(a)
           }}
-          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
           title="수정"
           aria-label="자산 수정"
         >
@@ -230,7 +230,7 @@ export function AssetsPage() {
               setEditing(null)
               setFormOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             신규 자산 등록
@@ -296,7 +296,7 @@ export function AssetsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -318,18 +318,18 @@ export function AssetsPage() {
                   <div className="min-w-0">
                     <Link
                       to={`/clients/${a.client_id}`}
-                      className="truncate font-semibold text-slate-800"
+                      className="truncate font-semibold text-bone"
                     >
                       {a.client_name ?? '—'}
                     </Link>
-                    <p className="mt-0.5 text-xs text-slate-400">
+                    <p className="mt-0.5 text-xs text-slatey">
                       {a.agency_name ?? '기관 미설정'}
                     </p>
                   </div>
                   {a.status && <StatusBadge domain="assetStatus" value={a.status} />}
                 </div>
                 <AssetSpecCell asset={a} />
-                <div className="border-t border-slate-100 pt-2">{authCell(a)}</div>
+                <div className="border-t border-hairline pt-2">{authCell(a)}</div>
               </div>
             )}
           />

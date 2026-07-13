@@ -10,7 +10,7 @@ const DOT_COLORS: Record<string, string> = {
   CALL: 'bg-emerald-500',
   MEETING: 'bg-blue-500',
   SITE_VISIT: 'bg-purple-500',
-  EMAIL: 'bg-slate-400',
+  EMAIL: 'bg-white/40',
   ISSUE: 'bg-rose-500',
   KAKAO: 'bg-amber-400',
 }
@@ -24,12 +24,12 @@ interface TimelineProps {
 
 export function Timeline({ items, showClient = true, className = '' }: TimelineProps) {
   return (
-    <ol className={`relative space-y-5 border-l border-slate-200 pl-5 ${className}`}>
+    <ol className={`relative space-y-5 border-l border-hairline pl-5 ${className}`}>
       {items.map((item) => (
         <li key={item.history_id} className="relative">
           <span
-            className={`absolute top-1.5 -left-[26.5px] h-3 w-3 rounded-full border-2 border-white ${
-              DOT_COLORS[item.activity_type] ?? 'bg-slate-400'
+            className={`absolute top-1.5 -left-[26.5px] h-3 w-3 rounded-full border-2 border-graphite ${
+              DOT_COLORS[item.activity_type] ?? 'bg-white/40'
             }`}
             aria-hidden="true"
           />
@@ -42,18 +42,18 @@ export function Timeline({ items, showClient = true, className = '' }: TimelineP
               (item.client_id ? (
                 <Link
                   to={`/clients/${item.client_id}`}
-                  className="text-sm font-semibold text-slate-800 hover:underline"
+                  className="text-sm font-semibold text-bone hover:underline"
                 >
                   {item.client_name ?? '고객사'}
                 </Link>
               ) : (
-                <span className="text-sm text-slate-400">미지정 고객</span>
+                <span className="text-sm text-slatey">미지정 고객</span>
               ))}
-            <span className="text-xs text-slate-400">{fmtDateTime(item.activity_date)}</span>
+            <span className="text-xs text-slatey">{fmtDateTime(item.activity_date)}</span>
           </div>
-          <p className="mt-1 text-sm font-medium text-slate-800">{item.title}</p>
+          <p className="mt-1 text-sm font-medium text-bone">{item.title}</p>
           {item.content && (
-            <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{item.content}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-ash">{item.content}</p>
           )}
           <AuditLine
             createdByName={item.created_by_name ?? item.manager_name}

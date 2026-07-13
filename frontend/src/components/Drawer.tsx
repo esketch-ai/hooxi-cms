@@ -27,19 +27,19 @@ export function Drawer({ open, onClose, title, children, footer, size = 'md' }: 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <div
-        className="absolute inset-0 bg-slate-900/40"
+        className="absolute inset-0 bg-black/70"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
-        className={`absolute inset-y-0 right-0 flex w-full ${sizes[size]} animate-slide-in flex-col bg-white shadow-xl`}
+        className={`absolute inset-y-0 right-0 flex w-full ${sizes[size]} animate-slide-in flex-col border-l border-hairline bg-graphite`}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0 flex-1 text-base font-semibold text-slate-900">{title}</div>
+        <div className="flex shrink-0 items-center justify-between border-b border-hairline px-5 py-4">
+          <div className="min-w-0 flex-1 text-base font-semibold text-bone">{title}</div>
           <button
             type="button"
             onClick={onClose}
-            className="ml-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="ml-2 rounded-md p-1 text-smoke hover:bg-white/5 hover:text-bone"
             aria-label="닫기"
           >
             <X size={18} />
@@ -47,7 +47,7 @@ export function Drawer({ open, onClose, title, children, footer, size = 'md' }: 
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-hairline px-5 py-3">
             {footer}
           </div>
         )}

@@ -31,9 +31,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: '승인 대기', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  ACTIVE: { label: '활성', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  INACTIVE: { label: '비활성', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  PENDING: { label: '승인 대기', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
+  ACTIVE: { label: '활성', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  INACTIVE: { label: '비활성', cls: 'bg-white/10 text-ash border-hairline' },
 }
 
 export function SettingsPage() {
@@ -47,7 +47,7 @@ export function SettingsPage() {
       <PageHeader title="환경 설정" subtitle="계정·권한·시스템 설정·감사 로그 (SCR-14)" />
 
       {/* 탭 */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-hairline">
         {(
           [
             { key: 'accounts', label: '계정 관리' },
@@ -63,8 +63,8 @@ export function SettingsPage() {
             onClick={() => setTab(t.key)}
             className={`border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
               tab === t.key
-                ? 'border-slate-800 text-slate-900'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
+                ? 'border-snow text-bone'
+                : 'border-transparent text-slatey hover:text-ash'
             }`}
           >
             {t.label}
@@ -221,17 +221,17 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
       header: '사용자',
       render: (u) => (
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-bone">
             {u.name?.charAt(0) ?? '?'}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-800">
+            <p className="truncate text-sm font-semibold text-bone">
               {u.name ?? '—'}
               {u.user_id === meId && (
-                <span className="ml-1 text-[10px] font-normal text-slate-400">(본인)</span>
+                <span className="ml-1 text-[10px] font-normal text-slatey">(본인)</span>
               )}
             </p>
-            <p className="truncate text-xs text-slate-400">{u.email}</p>
+            <p className="truncate text-xs text-slatey">{u.email}</p>
           </div>
         </div>
       ),
@@ -239,15 +239,15 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
     {
       key: 'position',
       header: '직급',
-      render: (u) => <span className="text-slate-600">{u.position ?? '—'}</span>,
+      render: (u) => <span className="text-ash">{u.position ?? '—'}</span>,
     },
     {
       key: 'role',
       header: '역할',
       render: (u) => (
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-bone">
           {ROLE_LABELS[u.role] ?? u.role}
-          <span className="ml-1 text-xs text-slate-400">({u.role})</span>
+          <span className="ml-1 text-xs text-slatey">({u.role})</span>
         </span>
       ),
     },
@@ -269,7 +269,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
       key: 'pin',
       header: 'PIN',
       render: (u) => (
-        <span className={`text-xs ${u.pin_set ? 'text-emerald-600' : 'text-slate-300'}`}>
+        <span className={`text-xs ${u.pin_set ? 'text-emerald-400' : 'text-slatey'}`}>
           {u.pin_set ? '설정됨' : '미설정'}
         </span>
       ),
@@ -277,14 +277,14 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
     {
       key: 'created',
       header: '가입일',
-      render: (u) => <span className="text-xs text-slate-400">{fmtServerDate(u.created_at)}</span>,
+      render: (u) => <span className="text-xs text-slatey">{fmtServerDate(u.created_at)}</span>,
     },
     {
       key: 'actions',
       header: '관리',
       className: 'text-right',
       render: (u) => {
-        if (!isAdmin) return <span className="text-xs text-slate-300">ADMIN 전용</span>
+        if (!isAdmin) return <span className="text-xs text-slatey">ADMIN 전용</span>
         return (
           <div className="flex justify-end gap-1">
             {u.status === 'PENDING' && (
@@ -294,7 +294,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   setApproveTarget(u)
                   setApproveRole('STAFF')
                 }}
-                className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                className="rounded-full bg-emerald-500/90 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
               >
                 승인
               </button>
@@ -306,7 +306,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   setRoleTarget(u)
                   setNextRole(u.role)
                 }}
-                className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5"
               >
                 역할 변경
               </button>
@@ -321,7 +321,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                     () => undefined,
                   )
                 }
-                className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                className="rounded-full bg-emerald-500/90 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
               >
                 재활성화
               </button>
@@ -332,7 +332,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                 setEditTarget(u)
                 setEditForm({ name: u.name ?? '', position: u.position ?? '' })
               }}
-              className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5"
             >
               편집
             </button>
@@ -340,7 +340,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setDeactivateTarget(u)}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-300"
                 title="비활성화"
               >
                 <Prohibit size={15} />
@@ -350,7 +350,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setPinResetTarget(u)}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
                 title="PIN 초기화"
               >
                 <LockKeyOpen size={15} />
@@ -373,15 +373,15 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             onClick={() => setStatusFilter(s)}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
               statusFilter === s
-                ? 'border-slate-800 bg-slate-800 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                ? 'border-transparent bg-snow text-graphite'
+                : 'border-hairline text-ash hover:bg-white/5'
             }`}
           >
             {s === '' ? '전체' : (STATUS_BADGES[s]?.label ?? s)}
           </button>
         ))}
         {pendingCount > 0 && (
-          <span className="ml-auto rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
+          <span className="ml-auto rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-300">
             승인 대기 {pendingCount}건
           </span>
         )}
@@ -392,7 +392,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               setCreateForm({ email: '', name: '', position: '', role: 'STAFF' })
               setCreateOpen(true)
             }}
-            className={`rounded-lg bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 ${
+            className={`rounded-full bg-snow px-3.5 py-1.5 text-xs font-medium text-graphite hover:bg-white/90 ${
               pendingCount > 0 ? '' : 'ml-auto'
             }`}
           >
@@ -410,7 +410,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -438,7 +438,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setApproveTarget(null)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               취소
             </button>
@@ -454,18 +454,18 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   () => setApproveTarget(null),
                 )
               }
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+              className="rounded-full bg-emerald-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
             >
               승인
             </button>
           </>
         }
       >
-        <label className="mb-1 block text-xs font-medium text-slate-600">부여할 역할</label>
+        <label className="mb-1 block text-xs font-medium text-ash">부여할 역할</label>
         <select
           value={approveRole}
           onChange={(e) => setApproveRole(e.target.value as UserRole)}
-          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+          className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
         >
           {(['STAFF', 'MANAGER', 'ADMIN'] as UserRole[]).map((r) => (
             <option key={r} value={r}>
@@ -486,7 +486,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setRoleTarget(null)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               취소
             </button>
@@ -501,7 +501,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   () => setRoleTarget(null),
                 )
               }
-              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+              className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
             >
               변경
             </button>
@@ -511,7 +511,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
         <select
           value={nextRole}
           onChange={(e) => setNextRole(e.target.value as UserRole)}
-          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+          className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
         >
           {(['STAFF', 'MANAGER', 'ADMIN'] as UserRole[]).map((r) => (
             <option key={r} value={r}>
@@ -519,7 +519,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             </option>
           ))}
         </select>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slatey">
           역할 변경 시 대상자의 기존 로그인 토큰이 즉시 무효화됩니다 (token_version+1).
         </p>
       </Modal>
@@ -574,11 +574,11 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
       {/* 계정 추가 (관리자 직접 생성 — 즉시 활성) */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="계정 추가">
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ash">
             생성 즉시 활성 상태가 되며, 대상자는 회사 이메일로 로그인 후 PIN을 설정합니다.
           </p>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
+            <label className="mb-1 block text-xs font-medium text-ash">
               회사 이메일<span className="ml-0.5 text-rose-500">*</span>
             </label>
             <input
@@ -586,34 +586,34 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               value={createForm.email}
               onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
               placeholder="name@hooxipartners.com"
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">이름</label>
+              <label className="mb-1 block text-xs font-medium text-ash">이름</label>
               <input
                 value={createForm.name}
                 onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">직급</label>
+              <label className="mb-1 block text-xs font-medium text-ash">직급</label>
               <input
                 value={createForm.position}
                 onChange={(e) => setCreateForm((f) => ({ ...f, position: e.target.value }))}
                 placeholder="대리, 과장 …"
-                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
               />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">역할</label>
+            <label className="mb-1 block text-xs font-medium text-ash">역할</label>
             <select
               value={createForm.role}
               onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as UserRole }))}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+              className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
             >
               <option value="STAFF">실무 (STAFF)</option>
               <option value="MANAGER">팀장 (MANAGER)</option>
@@ -624,7 +624,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setCreateOpen(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               취소
             </button>
@@ -638,7 +638,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   () => setCreateOpen(false),
                 )
               }
-              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-50"
             >
               생성
             </button>
@@ -650,22 +650,22 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title="계정 정보 수정">
         {editTarget && (
           <div className="space-y-3">
-            <p className="text-xs text-slate-400">{editTarget.email}</p>
+            <p className="text-xs text-slatey">{editTarget.email}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">이름</label>
+                <label className="mb-1 block text-xs font-medium text-ash">이름</label>
                 <input
                   value={editForm.name}
                   onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                  className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">직급</label>
+                <label className="mb-1 block text-xs font-medium text-ash">직급</label>
                 <input
                   value={editForm.position}
                   onChange={(e) => setEditForm((f) => ({ ...f, position: e.target.value }))}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                  className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
                 />
               </div>
             </div>
@@ -673,7 +673,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setEditTarget(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
               >
                 취소
               </button>
@@ -692,7 +692,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                     () => setEditTarget(null),
                   )
                 }
-                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-50"
               >
                 저장
               </button>

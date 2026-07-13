@@ -45,9 +45,9 @@ export function AuditLine({
   if (parts.length === 0 && !auto) return null
 
   return (
-    <p className={`text-xs text-slate-400 ${className}`}>
+    <p className={`text-xs text-slatey ${className}`}>
       {auto && (
-        <span className="mr-1.5 inline-flex items-center rounded bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500">
+        <span className="mr-1.5 inline-flex items-center rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-ash">
           자동
         </span>
       )}

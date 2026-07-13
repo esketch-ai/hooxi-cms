@@ -103,7 +103,7 @@ export function IntegrationsTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             다시 시도
           </button>
@@ -137,12 +137,12 @@ function statusOf(fields: IntegrationField[]): { label: string; cls: string } {
   const target = required.length > 0 ? required : fields
   const configured = fields.filter((f) => f.configured)
   if (target.length > 0 && target.every((f) => f.configured)) {
-    return { label: '연동됨', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    return { label: '연동됨', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' }
   }
   if (configured.length > 0) {
-    return { label: '부분 설정', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+    return { label: '부분 설정', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' }
   }
-  return { label: '미설정', cls: 'bg-slate-100 text-slate-500 border-slate-200' }
+  return { label: '미설정', cls: 'bg-white/10 text-ash border-hairline' }
 }
 
 // ── 연동 카드 ────────────────────────────────────────────────────────
@@ -219,11 +219,11 @@ function IntegrationCard({ integration }: { integration: Integration }) {
     })
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-col rounded-3xl border border-hairline bg-graphite p-5">
       {/* 헤더: 이름 + 상태 뱃지 */}
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-bold text-slate-900">{integration.label}</h3>
-        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">
+        <h3 className="text-sm font-bold text-bone">{integration.label}</h3>
+        <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-ash">
           {integration.name}
         </code>
         <span
@@ -233,7 +233,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
         </span>
       </div>
       {integration.description && (
-        <p className="mt-1 text-xs text-slate-400">{integration.description}</p>
+        <p className="mt-1 text-xs text-slatey">{integration.description}</p>
       )}
 
       {/* 카카오 챗봇: 웹훅 URL 안내 */}
@@ -259,7 +259,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
                     setDraft(field.key, randomHex32())
                     showToast('시크릿이 생성되었습니다. [저장]을 눌러 적용하세요.', 'info')
                   }}
-                  className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                  className="flex items-center gap-1 rounded-lg border border-hairline px-2 py-1 text-[11px] font-medium text-bone hover:bg-white/5"
                 >
                   <Sparkle size={12} />
                   시크릿 자동 생성
@@ -269,7 +269,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
           />
         ))}
         {integration.fields.length === 0 && (
-          <p className="text-xs text-slate-400">설정할 필드가 없습니다.</p>
+          <p className="text-xs text-slatey">설정할 필드가 없습니다.</p>
         )}
       </div>
 
@@ -286,8 +286,8 @@ function IntegrationCard({ integration }: { integration: Integration }) {
         <div
           className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${
             testResult.ok
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              : 'border-rose-200 bg-rose-50 text-rose-700'
+              ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
+              : 'border-rose-400/25 bg-rose-500/15 text-rose-300'
           }`}
         >
           {testResult.ok ? (
@@ -302,15 +302,15 @@ function IntegrationCard({ integration }: { integration: Integration }) {
       )}
 
       {/* 푸터: 도움말 + 저장·테스트 */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
         {help ? (
-          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-slate-400">
+          <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-slatey">
             {help.text}{' '}
             <a
               href={help.href}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-0.5 font-medium text-slate-500 underline hover:text-slate-700"
+              className="inline-flex items-center gap-0.5 font-medium text-ash underline hover:text-bone"
             >
               {help.linkLabel}
               <ArrowSquareOut size={11} />
@@ -324,7 +324,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             type="button"
             onClick={runTest}
             disabled={test.isPending}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 disabled:opacity-50"
           >
             {test.isPending ? (
               <CircleNotch size={14} className="animate-spin" />
@@ -337,7 +337,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             type="button"
             onClick={handleSave}
             disabled={!dirty || save.isPending}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {save.isPending ? '저장 중…' : '저장'}
           </button>
@@ -374,8 +374,8 @@ function FieldRow({
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
-        <label className="text-xs font-medium text-slate-600">{field.label}</label>
-        <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-400">
+        <label className="text-xs font-medium text-ash">{field.label}</label>
+        <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[10px] text-slatey">
           {field.key}
         </code>
         {field.required && (
@@ -383,7 +383,7 @@ function FieldRow({
         )}
         {field.source === 'env' && (
           <span
-            className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-600"
+            className="inline-flex rounded-full border border-sky-400/25 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300"
             title="DB에 저장된 값이 없어 서버 환경변수 값을 사용 중입니다"
           >
             환경변수
@@ -396,10 +396,10 @@ function FieldRow({
               type="button"
               onClick={onToggleDelete}
               title={markedDelete ? '삭제 취소' : '저장된 값 삭제'}
-              className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${
+              className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${
                 markedDelete
-                  ? 'border-rose-300 bg-rose-50 text-rose-600'
-                  : 'border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600'
+                  ? 'border-rose-400/40 bg-rose-500/15 text-rose-300'
+                  : 'border-hairline text-ash hover:bg-rose-500/10 hover:text-rose-300'
               }`}
             >
               <Trash size={12} />
@@ -415,14 +415,14 @@ function FieldRow({
         disabled={markedDelete}
         placeholder={markedDelete ? '저장 시 이 값이 삭제됩니다' : placeholder}
         autoComplete="off"
-        className={`h-9 w-full rounded-lg border px-3 text-sm placeholder:text-slate-400 focus:outline-none disabled:bg-rose-50 disabled:placeholder:text-rose-400 ${
+        className={`h-9 w-full rounded-lg border bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:outline-none disabled:bg-rose-500/10 disabled:placeholder:text-rose-400 ${
           markedDelete
-            ? 'border-rose-200'
-            : 'border-slate-200 focus:border-slate-500'
+            ? 'border-rose-400/25'
+            : 'border-hairline focus:border-white/30'
         }`}
       />
       {field.secret && field.configured && !markedDelete && (
-        <p className="mt-0.5 text-[10px] text-slate-400">
+        <p className="mt-0.5 text-[10px] text-slatey">
           보안을 위해 저장된 값은 표시되지 않습니다. 빈 채로 저장하면 기존 값이 유지됩니다.
         </p>
       )}
@@ -447,19 +447,19 @@ function KakaoWebhookUrlBox() {
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <p className="text-[11px] font-medium text-slate-500">
+    <div className="mt-3 rounded-lg border border-hairline bg-graphite-2 p-3">
+      <p className="text-[11px] font-medium text-ash">
         스킬 서버 웹훅 URL — 카카오 오픈빌더 폴백 블록에 등록하세요
       </p>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1.5 font-mono text-[11px] text-slate-600 ring-1 ring-slate-200">
+        <code className="min-w-0 flex-1 truncate rounded bg-void px-2 py-1.5 font-mono text-[11px] text-ash ring-1 ring-hairline">
           {data.url}
         </code>
         <button
           type="button"
           onClick={copy}
           title="복사"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-hairline bg-graphite text-ash hover:bg-white/5 hover:text-bone"
         >
           <Copy size={14} />
         </button>
@@ -518,32 +518,32 @@ function DropboxOAuthWizard({
   }
 
   return (
-    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3.5">
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+    <div className="mt-4 rounded-lg border border-hairline bg-graphite-2 p-3.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-bone">
         <LinkSimple size={14} />
         OAuth 승인 마법사
         {connected && (
-          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+          <span className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
             승인 완료
           </span>
         )}
       </p>
 
       <ol className="mt-2.5 space-y-2.5">
-        <li className="flex gap-2 text-xs text-slate-600">
+        <li className="flex gap-2 text-xs text-ash">
           <StepBullet n={1} done={appKeyReady} />
           <span className="pt-0.5">
             위 App Key·App Secret을 입력하고 <b>[저장]</b>하세요.
           </span>
         </li>
-        <li className="flex gap-2 text-xs text-slate-600">
+        <li className="flex gap-2 text-xs text-ash">
           <StepBullet n={2} done={connected} />
           <span className="min-w-0 flex-1 pt-0.5">
             <button
               type="button"
               onClick={openAuthorize}
               disabled={!appKeyReady || authorizeUrl.isPending}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-lg border border-hairline bg-graphite px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5 disabled:opacity-40"
             >
               {authorizeUrl.isPending ? (
                 <CircleNotch size={12} className="animate-spin" />
@@ -552,12 +552,12 @@ function DropboxOAuthWizard({
               )}
               승인 URL 열기
             </button>
-            <span className="mt-1 block text-[11px] text-slate-400">
+            <span className="mt-1 block text-[11px] text-slatey">
               회사 Dropbox 계정으로 로그인된 브라우저에서 허용 후 표시되는 코드를 붙여넣으세요.
             </span>
           </span>
         </li>
-        <li className="flex gap-2 text-xs text-slate-600">
+        <li className="flex gap-2 text-xs text-ash">
           <StepBullet n={3} done={connected} />
           <span className="min-w-0 flex-1 pt-0.5">
             <span className="flex gap-1.5">
@@ -568,13 +568,13 @@ function DropboxOAuthWizard({
                 placeholder="승인 코드 붙여넣기"
                 autoComplete="off"
                 spellCheck={false}
-                className="h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2.5 font-mono text-xs placeholder:font-sans placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-hairline bg-graphite px-2.5 font-mono text-xs text-bone placeholder:font-sans placeholder:text-slatey focus:border-white/30 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={runExchange}
                 disabled={!code.trim() || exchange.isPending}
-                className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-slate-800 px-3 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-snow px-3 text-xs font-medium text-graphite hover:bg-white/90 disabled:opacity-40"
               >
                 {exchange.isPending && <CircleNotch size={12} className="animate-spin" />}
                 연동 완료
@@ -594,7 +594,7 @@ function StepBullet({ n, done }: { n: number; done: boolean }) {
   return (
     <span
       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-        done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+        done ? 'bg-emerald-500 text-white' : 'bg-white/10 text-ash'
       }`}
     >
       {done ? '✓' : n}

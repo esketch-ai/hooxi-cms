@@ -158,7 +158,7 @@ export function CalendarPage() {
               setFormDate(null)
               setFormOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             일정 등록
@@ -172,7 +172,7 @@ export function CalendarPage() {
           <button
             type="button"
             onClick={() => move(-1)}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-white/5"
             aria-label="이전"
           >
             <CaretLeft size={14} />
@@ -180,25 +180,25 @@ export function CalendarPage() {
           <button
             type="button"
             onClick={() => setCursor(new Date())}
-            className="h-8 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            className="h-8 rounded-md border border-hairline px-3 text-xs font-medium text-bone hover:bg-white/5"
           >
             오늘
           </button>
           <button
             type="button"
             onClick={() => move(1)}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-white/5"
             aria-label="다음"
           >
             <CaretRight size={14} />
           </button>
         </div>
-        <h2 className="text-base font-bold text-slate-800">{headerLabel}</h2>
+        <h2 className="text-base font-bold text-bone">{headerLabel}</h2>
         <div className="ml-auto flex items-center gap-2">
           <select
             value={scopeFilter}
             onChange={(e) => setScopeFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600 focus:outline-none"
+            className="h-8 rounded-lg border border-hairline bg-graphite px-2 text-xs text-bone focus:outline-none"
             aria-label="담당자 필터"
           >
             <option value="">전체 일정</option>
@@ -214,7 +214,7 @@ export function CalendarPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600 focus:outline-none"
+            className="h-8 rounded-lg border border-hairline bg-graphite px-2 text-xs text-bone focus:outline-none"
             aria-label="유형 필터"
           >
             <option value="">전체 유형</option>
@@ -224,14 +224,14 @@ export function CalendarPage() {
               </option>
             ))}
           </select>
-          <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
+          <div className="flex rounded-lg border border-hairline bg-graphite p-0.5">
             {(['month', 'week'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
                 className={`rounded-md px-3 py-1 text-xs font-medium ${
-                  mode === m ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'
+                  mode === m ? 'bg-snow text-graphite' : 'text-ash hover:text-bone'
                 }`}
               >
                 {m === 'month' ? '월간' : '주간'}
@@ -245,7 +245,7 @@ export function CalendarPage() {
         {/* 캘린더 본체 */}
         <div>
           {isLoading ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-3xl border border-hairline bg-graphite p-5">
               <Skeleton className="h-96 w-full" />
             </div>
           ) : isError ? (
@@ -256,7 +256,7 @@ export function CalendarPage() {
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
                 >
                   다시 시도
                 </button>
@@ -309,38 +309,38 @@ function ScheduleDetailModal({
     <Modal open onClose={onClose} title={schedule.title} size="md">
         <dl className="space-y-2.5 text-sm">
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">유형</dt>
-            <dd className="flex items-center gap-2 text-slate-700">
+            <dt className="w-20 shrink-0 text-xs font-medium text-slatey">유형</dt>
+            <dd className="flex items-center gap-2 text-bone">
               <span
                 className={`h-2 w-2 rounded-full ${managerColor(schedule.manager_id)}`}
                 aria-hidden="true"
               />
               {TYPE_LABELS[schedule.schedule_type] ?? schedule.schedule_type}
               {schedule.status !== 'PLANNED' && (
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slatey">
                   ({schedule.status === 'DONE' ? '완료' : '취소'})
                 </span>
               )}
             </dd>
           </div>
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">일시</dt>
-            <dd className="text-slate-700">
+            <dt className="w-20 shrink-0 text-xs font-medium text-slatey">일시</dt>
+            <dd className="text-bone">
               {fmtDateTime(schedule.start_at)}
               {schedule.end_at ? ` ~ ${fmtTime(schedule.end_at)}` : ''}
             </dd>
           </div>
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">담당자</dt>
-            <dd className="text-slate-700">{schedule.manager_name ?? '—'}</dd>
+            <dt className="w-20 shrink-0 text-xs font-medium text-slatey">담당자</dt>
+            <dd className="text-bone">{schedule.manager_name ?? '—'}</dd>
           </div>
           {schedule.client_id && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">고객사</dt>
+              <dt className="w-20 shrink-0 text-xs font-medium text-slatey">고객사</dt>
               <dd>
                 <Link
                   to={`/clients/${schedule.client_id}`}
-                  className="font-semibold text-slate-800 hover:underline"
+                  className="font-semibold text-bone hover:underline"
                   onClick={onClose}
                 >
                   {schedule.client_name ?? '고객사 상세 →'}
@@ -350,21 +350,21 @@ function ScheduleDetailModal({
           )}
           {schedule.location && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">장소</dt>
-              <dd className="flex items-center gap-1 text-slate-700">
-                <MapPin size={14} className="text-slate-400" />
+              <dt className="w-20 shrink-0 text-xs font-medium text-slatey">장소</dt>
+              <dd className="flex items-center gap-1 text-bone">
+                <MapPin size={14} className="text-slatey" />
                 {schedule.location}
               </dd>
             </div>
           )}
           {schedule.memo && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-xs font-medium text-slate-400">메모</dt>
-              <dd className="whitespace-pre-wrap text-slate-700">{schedule.memo}</dd>
+              <dt className="w-20 shrink-0 text-xs font-medium text-slatey">메모</dt>
+              <dd className="whitespace-pre-wrap text-bone">{schedule.memo}</dd>
             </div>
           )}
           {schedule.schedule_type === 'REPORT_DUE' && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            <p className="rounded-lg bg-white/5 px-3 py-2 text-xs text-ash">
               보고서 마감 일정은 월간 보고서 발송 관리(SCR-12)에서 자동 생성됩니다.
             </p>
           )}
@@ -411,16 +411,16 @@ function TodayChecklist({
   }
 
   return (
-    <aside className="h-fit rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-        <CheckCircle size={16} className="text-emerald-500" />
+    <aside className="h-fit rounded-3xl border border-hairline bg-graphite p-4">
+      <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-bone">
+        <CheckCircle size={16} className="text-emerald-400" />
         오늘의 일정
-        <span className="ml-auto text-xs font-normal text-slate-400">
+        <span className="ml-auto text-xs font-normal text-slatey">
           {items.filter((s) => s.status === 'DONE').length}/{items.length} 완료
         </span>
       </h2>
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400">
+        <p className="rounded-lg border border-dashed border-hairline py-6 text-center text-xs text-slatey">
           오늘 일정이 없습니다
         </p>
       ) : (
@@ -430,7 +430,7 @@ function TodayChecklist({
             const canceled = s.status === 'CANCELED'
             const isCompleting = completingId === s.schedule_id
             return (
-              <li key={s.schedule_id} className="rounded-lg px-1 py-1.5 hover:bg-slate-50">
+              <li key={s.schedule_id} className="rounded-lg px-1 py-1.5 hover:bg-white/5">
                 <div className="flex items-start gap-2">
                   <input
                     type="checkbox"
@@ -440,7 +440,7 @@ function TodayChecklist({
                       setCompletingId(s.schedule_id)
                       setResultNote('')
                     }}
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20"
                     aria-label={`${s.title} 완료`}
                   />
                   <button
@@ -451,16 +451,16 @@ function TodayChecklist({
                     <p
                       className={`truncate text-sm ${
                         done || canceled
-                          ? 'text-slate-300 line-through'
-                          : 'font-medium text-slate-700'
+                          ? 'text-slatey line-through'
+                          : 'font-medium text-bone'
                       }`}
                     >
-                      <span className="mr-1.5 font-mono text-xs text-slate-400">
+                      <span className="mr-1.5 font-mono text-xs text-slatey">
                         {fmtTime(s.start_at)}
                       </span>
                       {s.title}
                     </p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slatey">
                       {s.client_name ?? '내부'} · {s.manager_name ?? ''}
                     </p>
                   </button>
@@ -468,7 +468,7 @@ function TodayChecklist({
                   {s.client_phone && !done && (
                     <a
                       href={telHref(s.client_phone)}
-                      className="rounded-md p-1.5 text-emerald-600 hover:bg-emerald-50 sm:hidden"
+                      className="rounded-md p-1.5 text-emerald-400 hover:bg-emerald-500/10 sm:hidden"
                       aria-label="전화 걸기"
                     >
                       <Phone size={16} weight="fill" />
@@ -482,14 +482,14 @@ function TodayChecklist({
                       value={resultNote}
                       onChange={(e) => setResultNote(e.target.value)}
                       placeholder="조치 결과 입력 (활동 이력에 기록)"
-                      className="h-9 w-full rounded-lg border border-slate-200 px-2.5 text-xs focus:border-slate-500 focus:outline-none"
+                      className="h-9 w-full rounded-lg border border-hairline bg-graphite px-2.5 text-xs text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
                       autoFocus
                     />
                     <div className="flex justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => setCompletingId(null)}
-                        className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                        className="rounded-full border border-hairline px-2.5 py-1 text-xs text-bone hover:bg-white/5"
                       >
                         취소
                       </button>
@@ -497,7 +497,7 @@ function TodayChecklist({
                         type="button"
                         onClick={() => handleComplete(s.schedule_id)}
                         disabled={complete.isPending}
-                        className="flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                        className="flex items-center gap-1 rounded-full bg-snow px-2.5 py-1 text-xs font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
                       >
                         {complete.isPending && (
                           <CircleNotch size={11} className="animate-spin" />
@@ -513,7 +513,7 @@ function TodayChecklist({
         </ul>
       )}
       {/* 담당자 색상 범례는 일정 도트와 동일 규칙 */}
-      <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+      <p className="mt-3 border-t border-hairline pt-2 text-[11px] text-slatey">
         캘린더 도트 색상은 담당자별 자동 배정 · 완료 일정은 취소선 표시
       </p>
     </aside>

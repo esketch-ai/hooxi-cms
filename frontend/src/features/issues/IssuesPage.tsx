@@ -109,7 +109,7 @@ export function IssuesPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             이슈 등록
@@ -119,17 +119,17 @@ export function IssuesPage() {
 
       {/* 요약 4카드 + 팀/내것 토글 */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-slate-400">
+        <p className="text-xs font-medium text-slatey">
           {scope === 'team' ? '팀 전체 현황' : '내 담당 현황'}
         </p>
-        <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
+        <div className="flex rounded-lg border border-hairline bg-graphite p-0.5">
           {(['team', 'mine'] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setScope(s)}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
-                scope === s ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'
+                scope === s ? 'bg-snow text-graphite' : 'text-ash hover:text-bone'
               }`}
             >
               {s === 'team' ? '팀 전체' : '내 것'}
@@ -177,8 +177,8 @@ export function IssuesPage() {
             }}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
               pill === p.key && !managerFilter
-                ? 'border-slate-800 bg-slate-800 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                ? 'border-snow bg-snow text-graphite'
+                : 'border-hairline text-bone hover:bg-white/5'
             }`}
           >
             {p.label}
@@ -192,8 +192,8 @@ export function IssuesPage() {
           }}
           className={`h-8 rounded-full border px-2.5 text-xs font-medium focus:outline-none ${
             managerFilter
-              ? 'border-slate-800 bg-slate-800 text-white'
-              : 'border-slate-200 bg-white text-slate-600'
+              ? 'border-snow bg-snow text-graphite'
+              : 'border-hairline bg-graphite text-bone'
           }`}
           aria-label="담당자별 필터"
         >
@@ -215,7 +215,7 @@ export function IssuesPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -246,35 +246,35 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
   const actionable = urgent || (due && (due.overdue || due.imminent))
   return (
     <div
-      className={`rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
+      className={`rounded-2xl border bg-graphite p-3 transition-colors hover:bg-white/5 ${
         actionable && issue.issue_status !== 'CLOSED'
-          ? 'border-rose-200 ring-1 ring-rose-100'
-          : 'border-slate-200'
+          ? 'border-rose-400/40 ring-1 ring-rose-500/20'
+          : 'border-hairline'
       }`}
     >
       <div className="flex items-center gap-1.5">
-        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-500">
+        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-ash">
           {issue.client_name ?? (issue.client_id ? '고객사' : '미지정 고객')}
         </p>
         {urgent && (
-          <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
+          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
             긴급
           </span>
         )}
       </div>
-      <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-800">{issue.title}</p>
+      <p className="mt-1 line-clamp-2 text-sm font-medium text-bone">{issue.title}</p>
       <div className="mt-2.5 flex items-center gap-2">
         <span
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-white"
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-bone"
           title={issue.manager_name ?? '담당자'}
         >
           {(issue.manager_name ?? '?').charAt(0)}
         </span>
-        <span className="text-[11px] text-slate-400">{elapsedServer(issue.created_at)}</span>
+        <span className="text-[11px] text-slatey">{elapsedServer(issue.created_at)}</span>
         {due && issue.issue_status !== 'CLOSED' && (
           <span
             className={`ml-auto text-[11px] font-semibold ${
-              due.overdue || due.imminent ? 'text-rose-600' : 'text-slate-400'
+              due.overdue || due.imminent ? 'text-rose-300' : 'text-slatey'
             }`}
           >
             {due.label}

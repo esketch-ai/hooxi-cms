@@ -134,18 +134,18 @@ export function ReportsPage() {
       key: 'client',
       header: '고객사',
       render: (r) => (
-        <span className="font-semibold text-slate-800">{r.client_name ?? r.client_id}</span>
+        <span className="font-semibold text-bone">{r.client_name ?? r.client_id}</span>
       ),
     },
     {
       key: 'type',
       header: '보고서 유형',
-      render: (r) => <span className="text-slate-600">{r.report_type}</span>,
+      render: (r) => <span className="text-ash">{r.report_type}</span>,
     },
     {
       key: 'manager',
       header: '담당자',
-      render: (r) => <span className="text-slate-600">{r.manager_name ?? '—'}</span>,
+      render: (r) => <span className="text-ash">{r.manager_name ?? '—'}</span>,
     },
     {
       key: 'status',
@@ -159,13 +159,13 @@ export function ReportsPage() {
         const d = r.status === 'SENT' || r.status === 'CONFIRMED' ? null : dday(r.due_date)
         return (
           <div className="text-xs">
-            <span className="text-slate-500">
+            <span className="text-ash">
               {r.sent_at ? fmtServerDate(r.sent_at) : fmtDate(r.due_date)}
             </span>
             {d && (
               <span
                 className={`ml-1.5 font-bold ${
-                  d.overdue ? 'text-rose-600' : d.imminent ? 'text-rose-500' : 'text-slate-400'
+                  d.overdue ? 'text-rose-400' : d.imminent ? 'text-rose-400' : 'text-slatey'
                 }`}
               >
                 {d.label}
@@ -186,29 +186,29 @@ export function ReportsPage() {
               e.stopPropagation()
               void handleDownload(r.latest_doc!.doc_id, r.latest_doc!.title)
             }}
-            className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-ash hover:underline"
           >
             <DownloadSimple size={13} />
             v{r.latest_doc.version}
           </button>
         ) : r.doc_id ? (
-          <span className="text-xs text-slate-500">있음</span>
+          <span className="text-xs text-ash">있음</span>
         ) : (
-          <span className="text-xs text-slate-300">없음</span>
+          <span className="text-xs text-slatey">없음</span>
         ),
     },
     {
       key: 'channel',
       header: '채널',
       render: (r) => (
-        <span className="flex items-center gap-1 text-slate-400">
+        <span className="flex items-center gap-1 text-slatey">
           {(r.sent_channel === 'EMAIL' || r.sent_channel === 'BOTH') && (
-            <EnvelopeSimple size={15} className="text-slate-600" />
+            <EnvelopeSimple size={15} className="text-ash" />
           )}
           {(r.sent_channel === 'KAKAO' || r.sent_channel === 'BOTH') && (
-            <ChatCircleDots size={15} className="text-amber-500" />
+            <ChatCircleDots size={15} className="text-amber-400" />
           )}
-          {!r.sent_channel && <span className="text-xs text-slate-300">—</span>}
+          {!r.sent_channel && <span className="text-xs text-slatey">—</span>}
         </span>
       ),
     },
@@ -217,7 +217,7 @@ export function ReportsPage() {
       header: '고객 확인',
       render: (r) =>
         r.status === 'CONFIRMED' ? (
-          <span className="text-xs font-semibold text-emerald-600">✓ {fmtServerDate(r.confirmed_at)}</span>
+          <span className="text-xs font-semibold text-emerald-400">✓ {fmtServerDate(r.confirmed_at)}</span>
         ) : r.status === 'SENT' ? (
           <button
             type="button"
@@ -225,12 +225,12 @@ export function ReportsPage() {
               e.stopPropagation()
               handleConfirm(r)
             }}
-            className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-2 py-1 text-xs font-medium text-bone hover:bg-white/5"
           >
             확인 처리
           </button>
         ) : (
-          <span className="text-xs text-slate-300">—</span>
+          <span className="text-xs text-slatey">—</span>
         ),
     },
     {
@@ -251,7 +251,7 @@ export function ReportsPage() {
                   setUploadTarget(r)
                   setUploadFile(null)
                 }}
-                className="hidden rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 sm:block"
+                className="hidden rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone sm:block"
                 title="파일 업로드"
               >
                 <UploadSimple size={16} />
@@ -264,7 +264,7 @@ export function ReportsPage() {
                   e.stopPropagation()
                   setSendTarget(r)
                 }}
-                className="hidden items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 sm:flex"
+                className="hidden items-center gap-1 rounded-full bg-snow px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-white/90 sm:flex"
                 title="발송"
               >
                 <PaperPlaneRight size={13} weight="fill" />
@@ -288,7 +288,7 @@ export function ReportsPage() {
           <button
             type="button"
             onClick={() => setGenerateOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
           >
             <ListChecks size={16} />
             대상 생성
@@ -297,47 +297,47 @@ export function ReportsPage() {
       />
 
       {/* 월 선택기 + 발송 현황 요약 바 */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-3xl border border-hairline bg-graphite p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => movePeriod(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-white/5"
               aria-label="이전 달"
             >
               <CaretLeft size={14} />
             </button>
-            <span className="w-24 text-center font-mono text-sm font-bold text-slate-800">
+            <span className="w-24 text-center font-mono text-sm font-bold text-bone">
               {period}
             </span>
             <button
               type="button"
               onClick={() => movePeriod(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-white/5"
               aria-label="다음 달"
             >
               <CaretRight size={14} />
             </button>
           </div>
-          <p className="text-sm text-slate-600">
-            대상 <b className="text-slate-900">{summary.total}</b>개사
-            <span className="mx-2 text-slate-200">|</span>
+          <p className="text-sm text-ash">
+            대상 <b className="text-bone">{summary.total}</b>개사
+            <span className="mx-2 text-slatey">|</span>
             {SUMMARY_ORDER.map(({ key, label }, i) => (
               <span key={key}>
-                {i > 0 && <span className="mx-1 text-slate-300">·</span>}
-                {label} <b className="text-slate-800">{summary.counts[key] ?? 0}</b>
+                {i > 0 && <span className="mx-1 text-slatey">·</span>}
+                {label} <b className="text-bone">{summary.counts[key] ?? 0}</b>
               </span>
             ))}
           </p>
           <div className="ml-auto flex min-w-[160px] items-center gap-2">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
               <div
                 className="h-full rounded-full bg-emerald-500 transition-all"
                 style={{ width: `${summary.pct}%` }}
               />
             </div>
-            <span className="text-xs font-semibold text-slate-600">{summary.pct}%</span>
+            <span className="text-xs font-semibold text-ash">{summary.pct}%</span>
           </div>
         </div>
       </div>
@@ -350,7 +350,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -375,12 +375,12 @@ export function ReportsPage() {
               className="w-full text-left"
             >
               <div className="flex items-center gap-2">
-                <p className="min-w-0 flex-1 truncate font-semibold text-slate-800">
+                <p className="min-w-0 flex-1 truncate font-semibold text-bone">
                   {r.client_name ?? r.client_id}
                 </p>
                 <StatusBadge domain="report" value={r.status} />
               </div>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slatey">
                 {r.report_type} · {r.manager_name ?? '—'} · 마감 {fmtDate(r.due_date)}
               </p>
             </button>
@@ -402,7 +402,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => setUploadTarget(null)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               취소
             </button>
@@ -410,7 +410,7 @@ export function ReportsPage() {
               type="button"
               onClick={handleUpload}
               disabled={!uploadFile || upload.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
             >
               {upload.isPending && <CircleNotch size={14} className="animate-spin" />}
               업로드
@@ -424,7 +424,7 @@ export function ReportsPage() {
             onChange={setUploadFile}
             accept=".pdf,.docx,.xlsx,.pptx,.hwp,.hwpx"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slatey">
             업로드 시 새 버전으로 적재되며, 발송 시점의 파일 버전이 고정 기록됩니다.
           </p>
         </div>

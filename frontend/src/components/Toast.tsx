@@ -51,7 +51,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             role="status"
-            className="animate-fade-in pointer-events-auto flex w-full items-center gap-2 rounded-lg bg-slate-800 px-4 py-3 text-sm text-white shadow-lg"
+            className="animate-fade-in pointer-events-auto flex w-full items-center gap-2 rounded-2xl border border-hairline bg-graphite px-4 py-3 text-sm text-bone"
           >
             {ICONS[toast.type]}
             <span className="flex-1">{toast.message}</span>

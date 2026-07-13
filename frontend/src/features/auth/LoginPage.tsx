@@ -36,8 +36,8 @@ export function LoginPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-slate-50">
-        <CircleNotch size={28} className="animate-spin text-slate-400" />
+      <div className="flex min-h-dvh items-center justify-center bg-void">
+        <CircleNotch size={28} className="animate-spin text-slatey" />
       </div>
     )
   }
@@ -122,37 +122,37 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-void px-4">
       <div className="w-full max-w-md">
-        {/* 브랜드 */}
+        {/* 브랜드 — hero horizon 그라데이션 배지 */}
         <div className="mb-6 text-center">
-          <div className="mb-2 inline-flex items-center gap-2">
-            <Leaf size={28} weight="fill" className="text-emerald-500" />
-            <span className="text-2xl font-bold tracking-tight text-slate-900">
-              Carbon Fleet
-            </span>
+          <div className="hero-horizon mb-3 inline-flex h-14 w-14 items-center justify-center rounded-[20px]">
+            <Leaf size={28} weight="fill" className="text-white" />
           </div>
-          <p className="text-sm text-slate-500">Hooxi CMS 내부 시스템</p>
+          <div className="text-2xl font-bold tracking-tight text-bone">
+            Carbon Fleet
+          </div>
+          <p className="mt-1 text-sm text-ash">Hooxi CMS 내부 시스템</p>
         </div>
 
-        <div className="animate-fade-in rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="animate-fade-in rounded-[24px] border border-hairline bg-graphite p-8">
           {isPending ? (
             /* 승인 대기 화면 (status=PENDING) */
             <div className="text-center">
-              <HourglassMedium size={40} className="mx-auto mb-4 text-amber-500" />
-              <h1 className="text-lg font-bold text-slate-900">
+              <HourglassMedium size={40} className="mx-auto mb-4 text-amber-400" />
+              <h1 className="text-lg font-bold text-bone">
                 가입 요청이 접수되었습니다
               </h1>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              <p className="mt-2 text-sm leading-relaxed text-ash">
                 관리자 승인 후 이용할 수 있습니다.
                 <br />
                 승인이 완료되면 알림으로 안내됩니다.
               </p>
-              <p className="mt-4 text-xs text-slate-400">{user?.email}</p>
+              <p className="mt-4 text-xs text-slatey">{user?.email}</p>
               <button
                 type="button"
                 onClick={logout}
-                className="mt-6 w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="mt-6 w-full rounded-full border border-hairline px-4 py-2.5 text-sm font-medium text-bone hover:bg-white/5"
               >
                 다른 계정으로 로그인
               </button>
@@ -161,14 +161,14 @@ export function LoginPage() {
             /* PIN 설정 스텝 (최초 ACTIVE 로그인) */
             <form onSubmit={handlePinSubmit}>
               <div className="mb-5 text-center">
-                <LockKey size={36} className="mx-auto mb-3 text-slate-700" />
-                <h1 className="text-lg font-bold text-slate-900">PIN 설정</h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <LockKey size={36} className="mx-auto mb-3 text-bone" />
+                <h1 className="text-lg font-bold text-bone">PIN 설정</h1>
+                <p className="mt-1 text-sm text-ash">
                   미팅 모드·민감 정보 열람에 사용할 PIN(4~6자리 숫자)을 설정해
                   주세요.
                 </p>
               </div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
+              <label className="mb-1 block text-xs font-medium text-ash">
                 PIN 입력
               </label>
               <input
@@ -178,9 +178,9 @@ export function LoginPage() {
                 maxLength={6}
                 value={pin1}
                 onChange={(e) => setPin1(e.target.value.replace(/\D/g, ''))}
-                className="mb-3 h-11 w-full rounded-lg border border-slate-200 px-3 text-center text-lg tracking-[0.5em] focus:border-slate-500 focus:outline-none"
+                className="mb-3 h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
               />
-              <label className="mb-1 block text-xs font-medium text-slate-600">
+              <label className="mb-1 block text-xs font-medium text-ash">
                 PIN 다시 입력
               </label>
               <input
@@ -190,13 +190,13 @@ export function LoginPage() {
                 maxLength={6}
                 value={pin2}
                 onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))}
-                className="h-11 w-full rounded-lg border border-slate-200 px-3 text-center text-lg tracking-[0.5em] focus:border-slate-500 focus:outline-none"
+                className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
               />
-              {pinError && <p className="mt-2 text-sm text-rose-600">{pinError}</p>}
+              {pinError && <p className="mt-2 text-sm text-rose-400">{pinError}</p>}
               <button
                 type="submit"
                 disabled={pinLoading}
-                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-800 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-snow text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
               >
                 {pinLoading && <CircleNotch size={16} className="animate-spin" />}
                 PIN 설정 완료
@@ -206,7 +206,7 @@ export function LoginPage() {
             /* 로그인 — 이메일+PIN (회사 도메인 제한) + 네이버웍스 SSO(보조) */
             <div>
               <form onSubmit={handleEmailLogin}>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <label className="mb-1 block text-xs font-medium text-ash">
                   회사 이메일
                 </label>
                 <input
@@ -219,12 +219,12 @@ export function LoginPage() {
                   }}
                   placeholder="name@hooxipartners.com"
                   autoComplete="username"
-                  className="h-11 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none"
+                  className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
                   aria-label="회사 이메일"
                 />
                 {pinRequired && (
                   <>
-                    <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">
+                    <label className="mt-3 mb-1 block text-xs font-medium text-ash">
                       PIN (4~6자리)
                     </label>
                     <input
@@ -235,18 +235,18 @@ export function LoginPage() {
                       value={loginPin}
                       onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ''))}
                       autoFocus
-                      className="h-11 w-full rounded-lg border border-slate-200 px-3 text-center text-lg tracking-[0.5em] focus:border-slate-500 focus:outline-none"
+                      className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
                       aria-label="PIN"
                     />
                   </>
                 )}
                 {loginError && (
-                  <p className="mt-2 text-sm text-rose-600">{loginError}</p>
+                  <p className="mt-2 text-sm text-rose-400">{loginError}</p>
                 )}
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-800 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-snow text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
                 >
                   {loginLoading && <CircleNotch size={16} className="animate-spin" />}
                   로그인
@@ -254,9 +254,9 @@ export function LoginPage() {
               </form>
 
               <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" />
-                <span className="text-xs text-slate-400">또는</span>
-                <div className="h-px flex-1 bg-slate-200" />
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="text-xs text-slatey">또는</span>
+                <div className="h-px flex-1 bg-white/10" />
               </div>
 
               <button
@@ -275,11 +275,11 @@ export function LoginPage() {
                 네이버웍스로 로그인
               </button>
               {worksNotice && (
-                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                <p className="mt-3 rounded-[10px] border border-amber-400/25 bg-amber-500/15 px-3 py-2 text-sm text-amber-300">
                   {worksNotice}
                 </p>
               )}
-              <p className="mt-4 text-center text-xs leading-relaxed text-slate-400">
+              <p className="mt-4 text-center text-xs leading-relaxed text-slatey">
                 회사 계정(@hooxipartners.com)으로 로그인합니다
                 <br />
                 최초 로그인 시 가입 신청 후 관리자 승인이 필요합니다

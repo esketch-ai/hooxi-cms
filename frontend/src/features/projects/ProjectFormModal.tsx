@@ -9,8 +9,8 @@ import type { Project, ProjectPayload } from '../../types'
 import { MON_CYCLE_OPTIONS, PROJECT_STATUS_OPTIONS, useSaveProject } from './api'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 // 고유번호 형식: R-YYYY-KR-03-NNNNNN (SCR-06 §5)
 const REG_CODE_RE = /^R-\d{4}-KR-\d{2}-\d{6}$/
@@ -206,8 +206,8 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
 
         {/* 발급완료 전환 게이트 (R2-A1) */}
         {form.project_status === '발급완료' && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
-            <p className="mb-2 text-xs font-semibold text-emerald-700">
+          <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/15 p-3">
+            <p className="mb-2 text-xs font-semibold text-emerald-300">
               발급완료 전환 — 확정 발급량·발급일 입력 필수
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -234,8 +234,8 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
         )}
 
         {/* 기간 */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             유효·모니터링 기간
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -289,8 +289,8 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
         </div>
 
         {/* 발급·단가 */}
-        <div className="border-t border-slate-100 pt-3">
-          <p className="mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+        <div className="border-t border-hairline pt-3">
+          <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
             배출권 발급·단가
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -341,18 +341,18 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
         </div>
 
         {/* 액션 */}
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {project ? '수정 저장' : '등록'}

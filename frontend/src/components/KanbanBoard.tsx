@@ -52,7 +52,7 @@ export function KanbanBoard<T>({
     return (
       <div className="space-y-2.5">
         {colItems.length === 0 && (
-          <p className="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400">
+          <p className="rounded-lg border border-dashed border-hairline py-6 text-center text-xs text-slatey">
             카드 없음
           </p>
         )}
@@ -83,11 +83,11 @@ export function KanbanBoard<T>({
               onClick={() => setActiveTab(col.key)}
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 activeTab === col.key
-                  ? 'border-slate-800 bg-slate-800 text-white'
-                  : 'border-slate-200 bg-white text-slate-600'
+                  ? 'border-snow bg-snow text-graphite'
+                  : 'border-hairline bg-graphite text-ash'
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${col.dotClass ?? 'bg-slate-400'}`} />
+              <span className={`h-2 w-2 rounded-full ${col.dotClass ?? 'bg-white/40'}`} />
               {col.title}
               <span className="font-semibold">{byColumn(col.key).length}</span>
             </button>
@@ -111,7 +111,7 @@ export function KanbanBoard<T>({
                 key={col.key}
                 type="button"
                 onClick={() => setCollapsed((prev) => ({ ...prev, [col.key]: false }))}
-                className="flex w-12 shrink-0 flex-col items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-4 text-slate-500 hover:bg-slate-100"
+                className="flex w-12 shrink-0 flex-col items-center gap-2 rounded-3xl border border-hairline bg-graphite py-4 text-smoke hover:bg-white/5"
                 title={`${col.title} 펼치기`}
               >
                 <CaretRight size={14} />
@@ -131,23 +131,23 @@ export function KanbanBoard<T>({
               }}
               onDragLeave={() => setDragOverCol((prev) => (prev === col.key ? null : prev))}
               onDrop={(e) => handleDrop(e, col.key)}
-              className={`min-w-0 flex-1 rounded-xl border p-3 transition-colors ${
+              className={`min-w-0 flex-1 rounded-3xl border p-3 transition-colors ${
                 dragOverCol === col.key
-                  ? 'border-slate-400 bg-slate-100'
-                  : 'border-slate-200 bg-slate-50/70'
+                  ? 'border-white/30 bg-white/10'
+                  : 'border-hairline bg-graphite'
               }`}
             >
               <div className="mb-3 flex items-center gap-2 px-1">
-                <span className={`h-2.5 w-2.5 rounded-full ${col.dotClass ?? 'bg-slate-400'}`} />
-                <h3 className="text-sm font-semibold text-slate-700">{col.title}</h3>
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-500">
+                <span className={`h-2.5 w-2.5 rounded-full ${col.dotClass ?? 'bg-white/40'}`} />
+                <h3 className="text-sm font-semibold text-bone">{col.title}</h3>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-ash">
                   {colItems.length}
                 </span>
                 {col.collapsible && (
                   <button
                     type="button"
                     onClick={() => setCollapsed((prev) => ({ ...prev, [col.key]: true }))}
-                    className="ml-auto rounded p-0.5 text-slate-400 hover:bg-slate-200"
+                    className="ml-auto rounded p-0.5 text-smoke hover:bg-white/5"
                     aria-label={`${col.title} 접기`}
                   >
                     <CaretDown size={14} />

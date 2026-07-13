@@ -63,15 +63,15 @@ export function ChatPage() {
   ]
 
   return (
-    <div className="animate-fade-in -mx-4 -mt-5 -mb-24 flex h-[calc(100dvh-4rem-3.75rem)] overflow-hidden bg-white lg:-mx-6 lg:-mb-6 lg:h-[calc(100dvh-4rem)]">
+    <div className="animate-fade-in -mx-4 -mt-5 -mb-24 flex h-[calc(100dvh-4rem-3.75rem)] overflow-hidden bg-void lg:-mx-6 lg:-mb-6 lg:h-[calc(100dvh-4rem)]">
       {/* 좌측: 스레드 리스트 / 승인 대기 큐 */}
       <div
-        className={`w-full flex-col border-r border-slate-200 bg-slate-50 md:flex md:w-80 lg:w-96 ${
+        className={`w-full flex-col border-r border-hairline bg-void md:flex md:w-80 lg:w-96 ${
           selected ? 'hidden' : 'flex'
         }`}
       >
         {/* 상담 / 승인 대기 탭 */}
-        <div className="flex shrink-0 border-b border-slate-200 bg-white">
+        <div className="flex shrink-0 border-b border-hairline bg-graphite">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -79,8 +79,8 @@ export function ChatPage() {
               onClick={() => setTab(t.key)}
               className={`flex-1 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                 tab === t.key
-                  ? 'border-slate-800 text-slate-900'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
+                  ? 'border-snow text-bone'
+                  : 'border-transparent text-slatey hover:text-ash'
               }`}
             >
               {t.label}
@@ -114,7 +114,7 @@ export function ChatPage() {
         {selected ? (
           <ChatRoom thread={selected} onBack={() => setSelectedId(null)} />
         ) : (
-          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 bg-[#f5f5f5] text-slate-400">
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 bg-void text-slatey">
             <ChatCircleDots size={40} />
             <p className="text-sm font-medium">좌측 목록에서 상담을 선택하세요</p>
             <p className="text-xs">고객 카카오톡 문의가 5초 간격으로 자동 갱신됩니다.</p>

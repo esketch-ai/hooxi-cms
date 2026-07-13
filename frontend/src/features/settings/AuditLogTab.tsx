@@ -13,41 +13,41 @@ const PAGE_SIZE = 20
 
 // 액션 한국어 라벨 + 배지 톤
 const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
-  REVEAL_AUTH: { label: '인증정보 열람', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  REVEAL_AUTH: { label: '인증정보 열람', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
   SETTLEMENT_CHANGE: {
     label: '정산 상태 변경',
-    cls: 'bg-amber-50 text-amber-700 border-amber-200',
+    cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25',
   },
-  REPORT_VIEW: { label: '보고서 열람', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  REPORT_VIEW: { label: '보고서 열람', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
   KAKAO_APPROVAL: {
     label: '카카오 연락처 승인',
-    cls: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    cls: 'bg-yellow-500/15 text-yellow-300 border-yellow-400/25',
   },
-  CONFIG_CHANGE: { label: '설정 변경', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+  CONFIG_CHANGE: { label: '설정 변경', cls: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
   // 내부 사용자 감사 이력 (SCR-14 계정 관리)
-  USER_APPROVE: { label: '가입 승인', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
-  USER_CREATE: { label: '계정 생성', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  USER_UPDATE: { label: '계정 정보 수정', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
-  USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
-  INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
-  BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
-  BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  USER_APPROVE: { label: '가입 승인', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
+  USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-white/10 text-ash border-hairline' },
+  USER_CREATE: { label: '계정 생성', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  USER_UPDATE: { label: '계정 정보 수정', cls: 'bg-white/10 text-ash border-hairline' },
+  USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
+  INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-500/15 text-sky-300 border-sky-400/25' },
+  BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-500/15 text-teal-300 border-teal-400/25' },
+  BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
   // 업무 이력 감사 (이슈·사업·보고서)
-  ISSUE_STATUS_CHANGE: { label: '이슈 상태 변경', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  COMMENT_ADD: { label: '코멘트 등록', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
-  PROJECT_CREATE: { label: '사업 등록', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  PROJECT_UPDATE: { label: '사업 수정', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
-  REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  ISSUE_STATUS_CHANGE: { label: '이슈 상태 변경', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
+  COMMENT_ADD: { label: '코멘트 등록', cls: 'bg-white/10 text-ash border-hairline' },
+  PROJECT_CREATE: { label: '사업 등록', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  PROJECT_UPDATE: { label: '사업 수정', cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
+  PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-500/15 text-sky-300 border-sky-400/25' },
+  REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
 }
 
-const FALLBACK_SPEC = { label: '', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
+const FALLBACK_SPEC = { label: '', cls: 'bg-white/10 text-ash border-hairline' }
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
   ASSET: '자산',
@@ -99,7 +99,7 @@ export function AuditLogTab() {
       key: 'created_at',
       header: '시각',
       render: (log) => (
-        <span className="text-xs whitespace-nowrap text-slate-500">
+        <span className="text-xs whitespace-nowrap text-ash">
           {log.created_at ? `${fmtServerDate(log.created_at)} ${fmtServerTime(log.created_at)}` : '—'}
         </span>
       ),
@@ -113,12 +113,12 @@ export function AuditLogTab() {
       key: 'target',
       header: '대상',
       render: (log) => (
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-ash">
           {log.target_type
             ? (TARGET_TYPE_LABELS[log.target_type] ?? log.target_type)
             : '—'}
           {log.target_id && (
-            <code className="ml-1.5 rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] text-slate-400">
+            <code className="ml-1.5 rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-slatey">
               {log.target_id}
             </code>
           )}
@@ -129,7 +129,7 @@ export function AuditLogTab() {
       key: 'actor',
       header: '수행자',
       render: (log) => (
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-bone">
           {log.actor_name ?? log.actor_id ?? '—'}
         </span>
       ),
@@ -146,7 +146,7 @@ export function AuditLogTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             다시 시도
           </button>
@@ -171,7 +171,7 @@ export function AuditLogTab() {
           }}
         />
         <label className="flex items-center gap-1.5">
-          <span className="shrink-0 text-xs font-medium text-slate-500">기간</span>
+          <span className="shrink-0 text-xs font-medium text-ash">기간</span>
           <input
             type="date"
             value={dateFrom}
@@ -180,10 +180,10 @@ export function AuditLogTab() {
               setDateFrom(e.target.value)
               resetPage()
             }}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="시작일"
           />
-          <span className="text-xs text-slate-400">~</span>
+          <span className="text-xs text-slatey">~</span>
           <input
             type="date"
             value={dateTo}
@@ -192,7 +192,7 @@ export function AuditLogTab() {
               setDateTo(e.target.value)
               resetPage()
             }}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
             aria-label="종료일"
           />
         </label>
@@ -205,7 +205,7 @@ export function AuditLogTab() {
               setDateTo('')
               resetPage()
             }}
-            className="text-xs font-medium text-slate-400 hover:text-slate-600"
+            className="text-xs font-medium text-slatey hover:text-ash"
           >
             필터 초기화
           </button>

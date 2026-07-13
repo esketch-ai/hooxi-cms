@@ -50,10 +50,10 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const STATUS_SPECS: Record<string, { label: string; cls: string }> = {
-  SUCCESSFUL: { label: '성공', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  FAILED: { label: '실패', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
-  RUNNING: { label: '진행중', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  ENQUEUED: { label: '대기', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  SUCCESSFUL: { label: '성공', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  FAILED: { label: '실패', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  RUNNING: { label: '진행중', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
+  ENQUEUED: { label: '대기', cls: 'bg-white/10 text-ash border-hairline' },
 }
 
 export function BackupTab() {
@@ -149,10 +149,10 @@ export function BackupTab() {
   return (
     <div className="space-y-4">
       {/* 정책 + 수동 백업 */}
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-3xl border border-hairline bg-graphite p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm font-semibold text-slate-800">자동 백업 정책</div>
-          <div className="mt-1 text-sm text-slate-500">
+          <div className="text-sm font-semibold text-bone">자동 백업 정책</div>
+          <div className="mt-1 text-sm text-ash">
             {data?.policy.schedule} 데이터베이스 백업 · 최근 {data?.policy.retention_days}일치
             보관 · 아래 목록에서 일자를 선택해 복구할 수 있습니다
           </div>
@@ -161,7 +161,7 @@ export function BackupTab() {
           type="button"
           onClick={() => createBackup.mutate()}
           disabled={createBackup.isPending || !!pendingOp}
-          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-snow px-4 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
         >
           {createBackup.isPending || pendingOp?.kind === '백업' ? (
             <CircleNotch size={15} className="animate-spin" />
@@ -173,7 +173,7 @@ export function BackupTab() {
       </div>
 
       {pendingOp && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-700">
+        <div className="flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/15 px-3 py-2.5 text-sm text-blue-300">
           <CircleNotch size={15} className="animate-spin" />
           {pendingOp.kind} 작업이 진행 중입니다{pendingOp.kind === '복구' && ' — 완료까지 서비스가 일시 중단될 수 있습니다'}
         </div>
@@ -186,10 +186,10 @@ export function BackupTab() {
           description="첫 자동 백업은 다음 05:00(KST)에 생성됩니다. [지금 백업]으로 즉시 생성할 수도 있습니다."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <tr className="border-b border-hairline text-left text-xs text-ash">
                 <th className="px-4 py-3 font-medium">백업 시각 (KST)</th>
                 <th className="px-4 py-3 font-medium">유형</th>
                 <th className="px-4 py-3 font-medium">상태</th>
@@ -201,14 +201,14 @@ export function BackupTab() {
               {items.map((run) => {
                 const status = STATUS_SPECS[run.status ?? ''] ?? {
                   label: run.status ?? '—',
-                  cls: 'bg-slate-100 text-slate-600 border-slate-200',
+                  cls: 'bg-white/10 text-ash border-hairline',
                 }
                 return (
-                  <tr key={run.backup_run_id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-4 py-3 font-medium text-slate-800">
+                  <tr key={run.backup_run_id} className="border-b border-hairline last:border-0">
+                    <td className="px-4 py-3 font-medium text-bone">
                       {fmtKst(run.start_time)}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3 text-ash">
                       {TYPE_LABELS[run.backup_type ?? ''] ?? run.backup_type ?? '—'}
                     </td>
                     <td className="px-4 py-3">
@@ -218,7 +218,7 @@ export function BackupTab() {
                         {status.label}
                       </span>
                     </td>
-                    <td className="max-w-[200px] truncate px-4 py-3 text-xs text-slate-400">
+                    <td className="max-w-[200px] truncate px-4 py-3 text-xs text-slatey">
                       {run.description ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -229,7 +229,7 @@ export function BackupTab() {
                           setRestoreTarget(run)
                         }}
                         disabled={run.status !== 'SUCCESSFUL' || !!pendingOp}
-                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
                       >
                         <ArrowCounterClockwise size={13} />이 시점으로 복구
                       </button>
@@ -250,7 +250,7 @@ export function BackupTab() {
       >
         {restoreTarget && (
           <div className="space-y-4">
-            <div className="flex gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm leading-relaxed text-rose-700">
+            <div className="flex gap-2.5 rounded-lg border border-rose-400/25 bg-rose-500/15 p-3 text-sm leading-relaxed text-rose-300">
               <Warning size={20} className="mt-0.5 shrink-0" />
               <div>
                 <b>{fmtKst(restoreTarget.start_time)}</b> 백업 시점으로 데이터베이스 전체가
@@ -261,13 +261,13 @@ export function BackupTab() {
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">
-                계속하려면 <b className="text-rose-600">복구</b>를 입력하세요
+              <label className="mb-1 block text-xs font-medium text-ash">
+                계속하려면 <b className="text-rose-300">복구</b>를 입력하세요
               </label>
               <input
                 value={confirmWord}
                 onChange={(e) => setConfirmWord(e.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-rose-400 focus:outline-none"
+                className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-rose-400/60 focus:outline-none"
                 placeholder="복구"
               />
             </div>
@@ -275,7 +275,7 @@ export function BackupTab() {
               <button
                 type="button"
                 onClick={() => setRestoreTarget(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
               >
                 취소
               </button>
@@ -283,7 +283,7 @@ export function BackupTab() {
                 type="button"
                 disabled={confirmWord.trim() !== '복구' || restore.isPending}
                 onClick={() => restore.mutate(restoreTarget)}
-                className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-full bg-rose-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
               >
                 {restore.isPending && <CircleNotch size={14} className="animate-spin" />}
                 복구 실행

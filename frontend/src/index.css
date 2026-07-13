@@ -1,49 +1,104 @@
-/* Carbon Fleet — Hooxi CMS Design Tokens (SCREEN_DESIGN_PLAN §3) */
+/* Hooxi CMS — Dimension dark theme (DESIGN.md) */
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", "Pretendard Variable", Pretendard, -apple-system,
+  /* Fonts */
+  --font-sans: "DM Sans", "Pretendard Variable", Pretendard, Inter, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  --font-dm-sans: "DM Sans", "Pretendard Variable", Pretendard, Inter, sans-serif;
+  --font-geist: "Geist", "Pretendard Variable", Pretendard, Inter, sans-serif;
+
+  /* Dimension color tokens */
+  --color-void: #0a0a0a;
+  --color-graphite: #161616;
+  --color-graphite-2: #1e1e1e;
+  --color-frost: #d4d4d4;
+  --color-snow: #ffffff;
+  --color-bone: #ededed;
+  --color-ash: #c2c2c2;
+  --color-slatey: #686868;
+  --color-smoke: #b2b2b2;
+  --color-hairline: rgba(255, 255, 255, 0.1);
+  --color-hairline-strong: rgba(255, 255, 255, 0.16);
+  --color-violet: #6b62f2;
+
+  /* Radii */
+  --radius-ui: 10px;
+  --radius-card: 24px;
+  --radius-panel: 42px;
+  --radius-largecard: 40px;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc; /* slate-50 */
-  color: #1e293b; /* slate-800 */
+  background-color: #0a0a0a;
+  color: #ededed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — dark */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* slate-300 */
+  background-color: rgba(255, 255, 255, 0.14);
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* slate-400 */
+  background-color: rgba(255, 255, 255, 0.24);
 }
 
 /* Focus Styles */
 *:focus-visible {
-  outline: 2px solid #334155; /* slate-700 */
+  outline: 2px solid rgba(255, 255, 255, 0.55);
   outline-offset: 2px;
   border-radius: 0.375rem;
 }
 
 /* Selection */
 ::selection {
-  background-color: #e2e8f0; /* slate-200 */
-  color: #0f172a; /* slate-900 */
+  background-color: rgba(107, 98, 242, 0.4);
+  color: #ffffff;
+}
+
+/* Date/time input calendar icon → visible on dark */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
+/* Frosted glass panel utility */
+.glass-panel {
+  background-color: rgba(212, 212, 212, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+}
+
+/* Dusk violet accent wash strip */
+.dusk-wash {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0),
+    rgba(0, 0, 0, 0) 40%,
+    rgba(107, 98, 242, 0.565) 50%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0)
+  );
+}
+
+/* Hero horizon gradient (login/spotlight only) */
+.hero-horizon {
+  background: linear-gradient(105deg, #d98c5f 0%, #7a5cc4 48%, #3b5bdb 100%);
 }
 
 /* Fade In */
@@ -57,12 +112,11 @@ body {
     transform: translateY(0);
   }
 }
-
 .animate-fade-in {
   animation: fade-in 0.25s ease-out;
 }
 
-/* Drawer Slide In (우측 패널) */
+/* Drawer Slide In */
 @keyframes slide-in {
   from {
     transform: translateX(100%);
@@ -71,7 +125,6 @@ body {
     transform: translateX(0);
   }
 }
-
 .animate-slide-in {
   animation: slide-in 0.22s ease-out;
 }

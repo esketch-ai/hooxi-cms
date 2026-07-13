@@ -191,35 +191,35 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
   const customerName = thread.contact_name ?? threadTitle(thread)
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f5f5f5]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-void">
       {/* 대화창 헤더 */}
-      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 sm:px-5">
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-graphite px-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-1.5">
           <button
             type="button"
             onClick={onBack}
-            className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 md:hidden"
+            className="shrink-0 rounded-lg p-1.5 text-smoke hover:bg-white/5 md:hidden"
             aria-label="상담 목록으로"
           >
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-base font-bold text-slate-900">
+              <h2 className="truncate text-base font-bold text-bone">
                 {threadTitle(thread)}
               </h2>
               {thread.contact_name && thread.client_name && (
-                <span className="shrink-0 text-xs text-slate-500">{thread.contact_name}</span>
+                <span className="shrink-0 text-xs text-ash">{thread.contact_name}</span>
               )}
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{contextLine}</p>
+            <p className="mt-0.5 truncate text-xs text-ash">{contextLine}</p>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
           {/* AI↔직원 모드 토글 (세그먼트) */}
           <div
-            className="hidden items-center rounded-md border border-slate-200 bg-slate-100 p-1 sm:flex"
+            className="hidden items-center rounded-full border border-hairline bg-graphite-2 p-1 sm:flex"
             role="group"
             aria-label="응대 모드"
           >
@@ -227,10 +227,10 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               type="button"
               onClick={() => switchMode('HUMAN')}
               disabled={closed || update.isPending}
-              className={`rounded px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
+              className={`rounded-full px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
                 thread.mode === 'HUMAN'
-                  ? 'bg-white font-bold text-slate-800 shadow-sm'
-                  : 'font-medium text-slate-500 hover:text-slate-700'
+                  ? 'bg-snow font-bold text-graphite'
+                  : 'font-medium text-ash hover:text-bone'
               }`}
             >
               직원 개입
@@ -239,10 +239,10 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               type="button"
               onClick={() => switchMode('AI')}
               disabled={closed || update.isPending}
-              className={`rounded px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
+              className={`rounded-full px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
                 thread.mode === 'AI'
-                  ? 'bg-white font-bold text-slate-800 shadow-sm'
-                  : 'font-medium text-slate-500 hover:text-slate-700'
+                  ? 'bg-snow font-bold text-graphite'
+                  : 'font-medium text-ash hover:text-bone'
               }`}
             >
               AI 응대
@@ -252,7 +252,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
           {thread.client_id && (
             <Link
               to={`/clients/${thread.client_id}`}
-              className="rounded border border-slate-200 bg-white p-1.5 text-slate-400 shadow-sm hover:text-slate-700"
+              className="rounded-lg border border-hairline bg-graphite p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
               title="고객사 상세 열기"
               aria-label="고객사 상세 열기"
             >
@@ -264,7 +264,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <button
               type="button"
               onClick={() => setCloseOpen(true)}
-              className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-500 shadow-sm hover:bg-slate-50 hover:text-slate-700"
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-ash hover:bg-white/5 hover:text-bone"
             >
               상담 종료
             </button>
@@ -274,16 +274,16 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
 
       {/* 모바일 모드 토글 */}
       {!closed && (
-        <div className="flex shrink-0 items-center justify-center gap-1 border-b border-slate-200 bg-white p-2 sm:hidden">
-          <div className="flex items-center rounded-md border border-slate-200 bg-slate-100 p-1">
+        <div className="flex shrink-0 items-center justify-center gap-1 border-b border-hairline bg-graphite p-2 sm:hidden">
+          <div className="flex items-center rounded-full border border-hairline bg-graphite-2 p-1">
             <button
               type="button"
               onClick={() => switchMode('HUMAN')}
               disabled={update.isPending}
-              className={`rounded px-3 py-1 text-xs ${
+              className={`rounded-full px-3 py-1 text-xs ${
                 thread.mode === 'HUMAN'
-                  ? 'bg-white font-bold text-slate-800 shadow-sm'
-                  : 'font-medium text-slate-500'
+                  ? 'bg-snow font-bold text-graphite'
+                  : 'font-medium text-ash'
               }`}
             >
               직원 개입
@@ -292,10 +292,10 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               type="button"
               onClick={() => switchMode('AI')}
               disabled={update.isPending}
-              className={`rounded px-3 py-1 text-xs ${
+              className={`rounded-full px-3 py-1 text-xs ${
                 thread.mode === 'AI'
-                  ? 'bg-white font-bold text-slate-800 shadow-sm'
-                  : 'font-medium text-slate-500'
+                  ? 'bg-snow font-bold text-graphite'
+                  : 'font-medium text-ash'
               }`}
             >
               AI 응대
@@ -313,7 +313,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <Skeleton className="h-14 w-3/5" />
           </div>
         ) : messages.length === 0 ? (
-          <p className="pt-10 text-center text-sm text-slate-400">
+          <p className="pt-10 text-center text-sm text-slatey">
             아직 메시지가 없습니다. 고객이 카카오 채널로 문의하면 여기에 표시됩니다.
           </p>
         ) : (
@@ -321,7 +321,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <div key={group.dateKey} className="space-y-5">
               {/* 날짜 구분선 */}
               <div className="flex justify-center">
-                <span className="rounded-full bg-slate-200/60 px-3 py-1 text-[10px] font-medium text-slate-500">
+                <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-medium text-slatey">
                   {group.heading}
                 </span>
               </div>
@@ -339,15 +339,15 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
       </div>
 
       {/* 입력 영역 */}
-      <div className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+      <div className="shrink-0 border-t border-hairline bg-graphite p-3 sm:p-4">
         {closed ? (
-          <p className="py-2 text-center text-xs text-slate-400">
+          <p className="py-2 text-center text-xs text-slatey">
             종료된 상담입니다. 고객이 다시 문의하면 새 대화가 이어집니다.
           </p>
         ) : (
           <>
             <div className="flex items-end gap-2 sm:gap-3">
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition-colors focus-within:border-slate-400 focus-within:bg-white">
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-hairline bg-graphite-2 transition-colors focus-within:border-white/30">
                 <textarea
                   ref={taRef}
                   rows={2}
@@ -359,7 +359,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                   }}
                   onKeyDown={onKeyDown}
                   placeholder="고객에게 전송할 메시지를 입력하세요. (Enter 전송 · Shift+Enter 줄바꿈)"
-                  className="w-full resize-none bg-transparent p-3 text-sm text-slate-800 outline-none"
+                  className="w-full resize-none bg-transparent p-3 text-sm text-bone outline-none placeholder:text-slatey"
                   aria-label="메시지 입력"
                 />
               </div>
@@ -367,7 +367,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                 type="button"
                 onClick={send}
                 disabled={!text.trim() || reply.isPending}
-                className="flex shrink-0 flex-col items-center justify-center rounded-lg bg-slate-800 px-3.5 py-3 text-white shadow-sm transition-colors hover:bg-slate-700 disabled:opacity-50"
+                className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-snow px-3.5 py-3 text-graphite transition-colors hover:bg-white/90 disabled:opacity-50"
                 aria-label="전송"
               >
                 {reply.isPending ? (
@@ -378,13 +378,13 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                 <span className="mt-0.5 text-[10px] font-medium">전송</span>
               </button>
             </div>
-            <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-slate-400">
+            <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-slatey">
               <span className="truncate">
                 {thread.mode === 'HUMAN'
                   ? '직원 개입 모드 — 메시지를 보내면 고객의 카카오톡으로 즉시 전송됩니다.'
                   : 'AI 자동 응대 모드 — 메시지를 보내면 직원 개입 모드로 자동 전환됩니다.'}
               </span>
-              <span className={`shrink-0 ${text.length >= MAX_LEN ? 'font-bold text-rose-500' : ''}`}>
+              <span className={`shrink-0 ${text.length >= MAX_LEN ? 'font-bold text-rose-400' : ''}`}>
                 {text.length} / {MAX_LEN}자
               </span>
             </div>
@@ -429,12 +429,12 @@ function MessageBubble({
   if (message.sender_type === 'SYSTEM') {
     return (
       <div className="my-4 flex justify-center">
-        <div className="max-w-md rounded-md border border-rose-100 bg-rose-50 px-4 py-2 text-center">
-          <div className="flex items-center justify-center gap-1 text-xs font-bold text-rose-700">
+        <div className="max-w-md rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-center">
+          <div className="flex items-center justify-center gap-1 text-xs font-bold text-rose-300">
             <WarningCircle size={13} weight="fill" />
             시스템 알림
           </div>
-          <div className="mt-0.5 text-[10px] whitespace-pre-wrap text-slate-600">
+          <div className="mt-0.5 text-[10px] whitespace-pre-wrap text-ash">
             {message.content}
           </div>
         </div>
@@ -447,19 +447,19 @@ function MessageBubble({
       <div className="flex flex-col items-end gap-1">
         <div className="mr-1 flex items-center gap-2">
           {undelivered && (
-            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-600">
+            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-400">
               <WarningCircle size={11} weight="fill" />
               미전달
             </span>
           )}
-          <span className="text-[10px] text-slate-400">{time}</span>
-          <span className="text-xs font-bold text-slate-700">
+          <span className="text-[10px] text-slatey">{time}</span>
+          <span className="text-xs font-bold text-bone">
             {message.sender_name ?? '직원'}
           </span>
         </div>
         <div
-          className={`max-w-md rounded-lg rounded-tr-none bg-slate-800 p-3 text-sm whitespace-pre-wrap text-white shadow-sm ${
-            undelivered ? 'opacity-80 ring-1 ring-rose-300' : ''
+          className={`max-w-md rounded-2xl rounded-tr-none bg-snow p-3 text-sm whitespace-pre-wrap text-graphite ${
+            undelivered ? 'opacity-80 ring-1 ring-rose-400/40' : ''
           }`}
         >
           {message.content}
@@ -473,18 +473,18 @@ function MessageBubble({
     <div className="flex flex-col items-start gap-1">
       <div className="ml-1 flex items-center gap-2">
         {isAi && (
-          <span className="rounded bg-slate-200 p-1">
-            <Robot size={12} weight="fill" className="text-slate-600" />
+          <span className="rounded bg-white/10 p-1">
+            <Robot size={12} weight="fill" className="text-ash" />
           </span>
         )}
-        <span className="text-xs font-bold text-slate-700">
+        <span className="text-xs font-bold text-bone">
           {isAi ? 'AI 어시스턴트' : (message.sender_name ?? customerName)}
         </span>
-        <span className="text-[10px] text-slate-400">{time}</span>
+        <span className="text-[10px] text-slatey">{time}</span>
       </div>
       <div
-        className={`max-w-md rounded-lg rounded-tl-none border border-slate-200 p-3 text-sm whitespace-pre-wrap ${
-          isAi ? 'bg-slate-100 text-slate-700' : 'bg-white text-slate-800 shadow-sm'
+        className={`max-w-md rounded-2xl rounded-tl-none border border-hairline p-3 text-sm whitespace-pre-wrap ${
+          isAi ? 'bg-graphite-2 text-ash' : 'bg-white/5 text-bone'
         }`}
       >
         {message.content}

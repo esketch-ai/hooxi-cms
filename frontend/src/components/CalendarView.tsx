@@ -76,12 +76,12 @@ export function CalendarView<T>({
       .sort((a, b) => a.start.getTime() - b.start.getTime())
 
   const dayHeaderColor = (idx: number) =>
-    idx % 7 === 0 ? 'text-rose-500' : idx % 7 === 6 ? 'text-blue-500' : 'text-slate-500'
+    idx % 7 === 0 ? 'text-rose-400' : idx % 7 === 6 ? 'text-blue-400' : 'text-ash'
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-3xl border border-hairline bg-graphite">
       {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/60">
+      <div className="grid grid-cols-7 border-b border-hairline bg-white/5">
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
@@ -103,19 +103,19 @@ export function CalendarView<T>({
             <div
               key={idx}
               onClick={onDayClick ? () => onDayClick(d) : undefined}
-              className={`border-b border-slate-50 p-1.5 align-top ${
+              className={`border-b border-white/10 p-1.5 align-top ${
                 idx % 7 !== 6 ? 'border-r' : ''
               } ${mode === 'month' ? 'min-h-[92px]' : 'min-h-[200px]'} ${
-                inMonth ? 'bg-white' : 'bg-slate-50/50'
-              } ${onDayClick ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                inMonth ? 'bg-graphite' : 'bg-white/5'
+              } ${onDayClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
             >
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
                   isToday
-                    ? 'bg-slate-800 font-bold text-white'
+                    ? 'bg-snow font-bold text-graphite'
                     : inMonth
-                      ? 'font-medium text-slate-700'
-                      : 'text-slate-300'
+                      ? 'font-medium text-bone'
+                      : 'text-slatey'
                 }`}
               >
                 {d.getDate()}
@@ -129,8 +129,8 @@ export function CalendarView<T>({
                       e.stopPropagation()
                       onEventClick?.(event.data)
                     }}
-                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-100 ${
-                      event.muted ? 'text-slate-300 line-through' : 'text-slate-700'
+                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-white/5 ${
+                      event.muted ? 'text-slatey line-through' : 'text-bone'
                     }`}
                     title={event.title}
                   >
@@ -139,7 +139,7 @@ export function CalendarView<T>({
                       aria-hidden="true"
                     />
                     {mode === 'week' && (
-                      <span className="shrink-0 font-mono text-[10px] text-slate-400">
+                      <span className="shrink-0 font-mono text-[10px] text-slatey">
                         {fmtTime(event.start)}
                       </span>
                     )}
@@ -147,7 +147,7 @@ export function CalendarView<T>({
                   </button>
                 ))}
                 {dayEvents.length > maxShow && (
-                  <p className="px-1 text-[10px] text-slate-400">
+                  <p className="px-1 text-[10px] text-slatey">
                     +{dayEvents.length - maxShow}건 더보기
                   </p>
                 )}

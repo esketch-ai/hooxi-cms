@@ -10,8 +10,8 @@ import { toDatetimeLocal } from '../../lib/format'
 import type { SchedulePayload, ScheduleType } from '../../types'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 const TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
   { value: 'MEETING', label: '미팅' },
@@ -173,31 +173,31 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-hairline bg-graphite px-3 py-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 text-sm text-ash">
           <input
             type="checkbox"
             checked={monthly}
             onChange={(e) => setMonthly(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
+            className="h-4 w-4 rounded border-white/20"
           />
           매월 반복 (MONTHLY)
         </label>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={create.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {create.isPending && <CircleNotch size={14} className="animate-spin" />}
             등록

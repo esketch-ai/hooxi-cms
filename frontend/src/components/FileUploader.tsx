@@ -32,17 +32,17 @@ export function FileUploader({
   if (file) {
     return (
       <div
-        className={`flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 ${className}`}
+        className={`flex items-center gap-2.5 rounded-lg border border-hairline bg-white/5 px-3 py-2.5 ${className}`}
       >
-        <FileText size={20} className="shrink-0 text-slate-500" />
+        <FileText size={20} className="shrink-0 text-smoke" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-slate-700">{file.name}</p>
-          <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(0)} KB</p>
+          <p className="truncate text-sm font-medium text-bone">{file.name}</p>
+          <p className="text-xs text-slatey">{(file.size / 1024).toFixed(0)} KB</p>
         </div>
         <button
           type="button"
           onClick={() => onChange(null)}
-          className="rounded-md p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+          className="rounded-md p-1 text-smoke hover:bg-white/5 hover:text-bone"
           aria-label="파일 제거"
         >
           <X size={16} />
@@ -64,15 +64,15 @@ export function FileUploader({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors ${
-        dragOver ? 'border-slate-500 bg-slate-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+        dragOver ? 'border-white/30 bg-white/5' : 'border-hairline bg-graphite hover:bg-white/5'
       } ${disabled ? 'cursor-not-allowed opacity-50' : ''} ${className}`}
       aria-label="파일 업로드"
     >
-      <CloudArrowUp size={28} className="mb-2 text-slate-400" />
-      <p className="text-sm font-medium text-slate-600">
+      <CloudArrowUp size={28} className="mb-2 text-smoke" />
+      <p className="text-sm font-medium text-ash">
         파일을 끌어다 놓거나 클릭하여 선택
       </p>
-      {accept && <p className="mt-1 text-xs text-slate-400">{accept}</p>}
+      {accept && <p className="mt-1 text-xs text-slatey">{accept}</p>}
       <input
         ref={inputRef}
         type="file"

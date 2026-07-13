@@ -9,8 +9,8 @@ import type { MappingPayload, ProjectClientMap } from '../../types'
 import { useSaveMapping } from './api'
 
 const inputCls =
-  'h-10 w-full rounded-lg border border-slate-200 px-3 text-sm focus:border-slate-500 focus:outline-none'
-const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
+const labelCls = 'mb-1 block text-xs font-medium text-ash'
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
@@ -176,8 +176,8 @@ export function MappingFormModal({ open, onClose, projectId, mapping, mappings }
         <div
           className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
             exceeds
-              ? 'border-rose-200 bg-rose-50 text-rose-700'
-              : 'border-slate-200 bg-slate-50 text-slate-500'
+              ? 'border-rose-400/25 bg-rose-500/15 text-rose-300'
+              : 'border-hairline bg-white/5 text-ash'
           }`}
         >
           {exceeds && <Warning size={14} weight="fill" />}
@@ -185,23 +185,23 @@ export function MappingFormModal({ open, onClose, projectId, mapping, mappings }
           {exceeds && ' — 100%를 초과하여 저장할 수 없습니다.'}
         </div>
 
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slatey">
           예상 정산액은 발행량 × 배분율 × 단가 × 보수율로 서버가 자동 계산합니다. 단가 미입력 시
           &ldquo;미정&rdquo;으로 표시됩니다. (§10.3)
         </p>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+        <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending || exceeds}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {mapping ? '수정 저장' : '추가'}

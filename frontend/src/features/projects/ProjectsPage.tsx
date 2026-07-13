@@ -23,24 +23,24 @@ export function ProjectNameCell({ project, link = true }: { project: Project; li
     <Link
       to={`/projects/${project.project_id}`}
       onClick={(e) => e.stopPropagation()}
-      className="block truncate font-semibold text-slate-800 hover:underline"
+      className="block truncate font-semibold text-bone hover:underline"
     >
       {project.project_name}
     </Link>
   ) : (
-    <p className="truncate font-semibold text-slate-800">{project.project_name}</p>
+    <p className="truncate font-semibold text-bone">{project.project_name}</p>
   )
   return (
     <div className="min-w-0">
       {name}
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {project.reg_code && (
-          <span className="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+          <span className="inline-flex items-center rounded border border-hairline bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-ash">
             {project.reg_code}
           </span>
         )}
         {project.client_count != null && (
-          <span className="text-xs text-slate-400">참여 {project.client_count}개사</span>
+          <span className="text-xs text-slatey">참여 {project.client_count}개사</span>
         )}
       </div>
     </div>
@@ -49,15 +49,15 @@ export function ProjectNameCell({ project, link = true }: { project: Project; li
 
 /** 예상 발급일 + D-day — 7일 이내·경과 시 빨강 (SCR-06 §4.1) */
 export function IssueDateCell({ date, className = '' }: { date?: string | null; className?: string }) {
-  if (!date) return <span className="text-xs text-slate-400">미정</span>
+  if (!date) return <span className="text-xs text-slatey">미정</span>
   const dd = dday(date)
   const imminent = isIssueImminent(dd)
   return (
     <div className={className}>
-      <p className="text-sm text-slate-700">{fmtDate(date)}</p>
+      <p className="text-sm text-bone">{fmtDate(date)}</p>
       {dd && (
         <span
-          className={`text-xs font-bold ${imminent ? 'text-rose-600' : 'text-slate-400'}`}
+          className={`text-xs font-bold ${imminent ? 'text-rose-400' : 'text-slatey'}`}
         >
           {dd.label}
         </span>
@@ -115,7 +115,7 @@ export function ProjectsPage() {
       key: 'period',
       header: '유효 / 모니터링 기간',
       render: (p) => (
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-ash">
           <p>유효 {periodLabel(p.credit_start_date, p.credit_end_date)}</p>
           <p className="mt-0.5">
             모니터링 {periodLabel(p.mon_start_date, p.mon_end_date)}
@@ -134,7 +134,7 @@ export function ProjectsPage() {
             value={`${Number(p.expected_credits).toLocaleString('ko-KR')} tCO₂`}
           />
         ) : (
-          <span className="text-slate-300">—</span>
+          <span className="text-smoke">—</span>
         ),
     },
     {
@@ -153,7 +153,7 @@ export function ProjectsPage() {
             <Link
               to={`/projects/${p.project_id}`}
               onClick={(e) => e.stopPropagation()}
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
               title="상세"
               aria-label={`${p.project_name} 상세`}
             >
@@ -162,7 +162,7 @@ export function ProjectsPage() {
             {planning ? (
               /* 기획 단계는 정산 매핑 비활성 (SCR-06 §6) */
               <span
-                className="cursor-not-allowed rounded-md p-1.5 text-slate-200"
+                className="cursor-not-allowed rounded-md p-1.5 text-slatey"
                 title="등록 완료 후 매핑 가능"
                 aria-disabled="true"
               >
@@ -172,7 +172,7 @@ export function ProjectsPage() {
               <Link
                 to={`/settlements?project_id=${p.project_id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
                 title="정산 매핑"
                 aria-label={`${p.project_name} 정산 매핑`}
               >
@@ -195,7 +195,7 @@ export function ProjectsPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-700 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-semibold text-graphite hover:bg-white/90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             신규 사업 등록
@@ -251,7 +251,7 @@ export function ProjectsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
             >
               다시 시도
             </button>
@@ -274,14 +274,14 @@ export function ProjectsPage() {
                   <ProjectNameCell project={p} link={false} />
                   <StatusBadge domain="project" value={p.project_status} />
                 </div>
-                <div className="flex items-end justify-between border-t border-slate-100 pt-2">
+                <div className="flex items-end justify-between border-t border-hairline pt-2">
                   <div>
-                    <p className="text-[10px] font-medium tracking-wider text-slate-400 uppercase">
+                    <p className="text-[10px] font-medium tracking-wider text-slatey uppercase">
                       예상 발급일
                     </p>
                     <IssueDateCell date={p.expected_issue_date} className="mt-0.5" />
                   </div>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slatey">
                     {p.mon_cycle ? `모니터링 ${p.mon_cycle}` : ''}
                   </span>
                 </div>
