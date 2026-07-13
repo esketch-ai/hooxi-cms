@@ -1,25 +1,42 @@
-/* Hooxi CMS — Dimension dark theme (DESIGN.md) */
+/* Hooxi CMS — Dimension theme (light/dark switchable, DESIGN.md) */
 @import "tailwindcss";
 
+/* dark: variant는 <html data-theme="dark">일 때 적용 (ThemeProvider가 항상 세팅) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------------------------------------------------------------------------
+ * Semantic palette — 값은 :root(light) / [data-theme=dark]에서 스왑된다.
+ * Tailwind 유틸 이름(bg-graphite·text-bone·border-hairline 등)은 그대로 두고
+ * 값만 var()로 참조 → 컴포넌트 수정 없이 테마 전환.
+ * ------------------------------------------------------------------------- */
 @theme {
-  /* Fonts */
   --font-sans: "DM Sans", "Pretendard Variable", Pretendard, Inter, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
   --font-dm-sans: "DM Sans", "Pretendard Variable", Pretendard, Inter, sans-serif;
   --font-geist: "Geist", "Pretendard Variable", Pretendard, Inter, sans-serif;
 
-  /* Dimension color tokens */
-  --color-void: #0a0a0a;
-  --color-graphite: #161616;
-  --color-graphite-2: #1e1e1e;
-  --color-frost: #d4d4d4;
+  /* Surfaces / text / lines — theme-swapped */
+  --color-void: var(--s-canvas);
+  --color-graphite: var(--s-elevated);
+  --color-graphite-2: var(--s-elevated-2);
+  --color-bone: var(--t-primary);
+  --color-ash: var(--t-secondary);
+  --color-slatey: var(--t-muted);
+  --color-smoke: var(--t-disabled);
+  --color-hairline: var(--line);
+  --color-hairline-strong: var(--line-strong);
+
+  /* Overlay fills — replace hardcoded white/5·white/10 so light theme works */
+  --color-elevate: var(--overlay);
+  --color-elevate-strong: var(--overlay-strong);
+
+  /* Primary action (White Pill on dark → dark pill on light) */
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+
+  /* Fixed accents */
   --color-snow: #ffffff;
-  --color-bone: #ededed;
-  --color-ash: #c2c2c2;
-  --color-slatey: #686868;
-  --color-smoke: #b2b2b2;
-  --color-hairline: rgba(255, 255, 255, 0.1);
-  --color-hairline-strong: rgba(255, 255, 255, 0.16);
+  --color-frost: #d4d4d4;
   --color-violet: #6b62f2;
 
   /* Radii */
@@ -29,19 +46,72 @@
   --radius-largecard: 40px;
 }
 
-html {
+/* Light theme (default) */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --s-canvas: #f6f6f7;
+  --s-elevated: #ffffff;
+  --s-elevated-2: #f0f0f2;
+  --t-primary: #1a1a1a;
+  --t-secondary: #52525b;
+  --t-muted: #8a8a94;
+  --t-disabled: #a8a8b0;
+  --line: rgba(0, 0, 0, 0.1);
+  --line-strong: rgba(0, 0, 0, 0.16);
+  --overlay: rgba(0, 0, 0, 0.04);
+  --overlay-strong: rgba(0, 0, 0, 0.07);
+  --primary: #18181b;
+  --on-primary: #ffffff;
+}
+
+/* Dark theme (Dimension) */
+:root[data-theme="dark"] {
   color-scheme: dark;
+  --s-canvas: #0a0a0a;
+  --s-elevated: #161616;
+  --s-elevated-2: #1e1e1e;
+  --t-primary: #ededed;
+  --t-secondary: #c2c2c2;
+  --t-muted: #686868;
+  --t-disabled: #b2b2b2;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --overlay: rgba(255, 255, 255, 0.05);
+  --overlay-strong: rgba(255, 255, 255, 0.1);
+  --primary: #ffffff;
+  --on-primary: #161616;
+}
+
+/* Follow OS when no explicit choice is stored */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --s-canvas: #0a0a0a;
+    --s-elevated: #161616;
+    --s-elevated-2: #1e1e1e;
+    --t-primary: #ededed;
+    --t-secondary: #c2c2c2;
+    --t-muted: #686868;
+    --t-disabled: #b2b2b2;
+    --line: rgba(255, 255, 255, 0.1);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --overlay: rgba(255, 255, 255, 0.05);
+    --overlay-strong: rgba(255, 255, 255, 0.1);
+    --primary: #ffffff;
+    --on-primary: #161616;
+  }
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #0a0a0a;
-  color: #ededed;
+  background-color: var(--s-canvas);
+  color: var(--t-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Scrollbar — dark */
+/* Scrollbar — theme aware */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -50,41 +120,39 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.14);
+  background-color: var(--line-strong);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.24);
+  background-color: var(--t-muted);
 }
 
-/* Focus Styles */
 *:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline: 2px solid var(--t-muted);
   outline-offset: 2px;
   border-radius: 0.375rem;
 }
 
-/* Selection */
 ::selection {
   background-color: rgba(107, 98, 242, 0.4);
   color: #ffffff;
 }
 
-/* Date/time input calendar icon → visible on dark */
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-input[type="month"]::-webkit-calendar-picker-indicator {
+/* Date/time picker icon visibility on dark */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
 }
 
-/* Frosted glass panel utility */
+/* Frosted glass panel */
 .glass-panel {
-  background-color: rgba(212, 212, 212, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--overlay);
+  border: 1px solid var(--line);
   backdrop-filter: blur(6px);
 }
 
-/* Dusk violet accent wash strip */
+/* Dusk violet accent wash */
 .dusk-wash {
   background: linear-gradient(
     90deg,
@@ -96,12 +164,11 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   );
 }
 
-/* Hero horizon gradient (login/spotlight only) */
+/* Hero horizon gradient (login/spotlight) */
 .hero-horizon {
   background: linear-gradient(105deg, #d98c5f 0%, #7a5cc4 48%, #3b5bdb 100%);
 }
 
-/* Fade In */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -116,7 +183,6 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   animation: fade-in 0.25s ease-out;
 }
 
-/* Drawer Slide In */
 @keyframes slide-in {
   from {
     transform: translateX(100%);

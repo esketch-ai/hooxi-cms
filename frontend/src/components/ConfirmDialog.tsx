@@ -39,7 +39,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5 disabled:opacity-60"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-60"
           >
             {cancelLabel}
           </button>
@@ -50,7 +50,7 @@ export function ConfirmDialog({
             className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
               danger
                 ? 'bg-rose-500/90 text-white hover:bg-rose-500'
-                : 'bg-snow text-graphite hover:bg-white/90'
+                : 'bg-primary text-on-primary hover:opacity-90'
             }`}
           >
             {loading && <CircleNotch size={14} className="animate-spin" />}

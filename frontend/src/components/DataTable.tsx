@@ -68,7 +68,7 @@ export function DataTable<T>({
       >
         <table className="w-full min-w-max text-left text-sm">
           <thead>
-            <tr className="border-b border-hairline bg-white/5">
+            <tr className="border-b border-hairline bg-elevate">
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -84,8 +84,8 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`border-b border-white/10 last:border-b-0 ${
-                  onRowClick ? 'cursor-pointer hover:bg-white/5' : ''
+                className={`border-b border-hairline last:border-b-0 ${
+                  onRowClick ? 'cursor-pointer hover:bg-elevate' : ''
                 } ${rowClassName?.(row) ?? ''}`}
               >
                 {columns.map((col) => (

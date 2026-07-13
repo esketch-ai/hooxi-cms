@@ -18,7 +18,7 @@ export function PageHeader({
       className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${className}`}
     >
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-snow">
+        <h1 className="text-xl font-bold tracking-tight text-bone">
           {title}
         </h1>
         {subtitle && <p className="mt-0.5 text-sm text-ash">{subtitle}</p>}

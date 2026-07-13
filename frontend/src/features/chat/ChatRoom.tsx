@@ -198,7 +198,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
           <button
             type="button"
             onClick={onBack}
-            className="shrink-0 rounded-lg p-1.5 text-smoke hover:bg-white/5 md:hidden"
+            className="shrink-0 rounded-lg p-1.5 text-smoke hover:bg-elevate md:hidden"
             aria-label="상담 목록으로"
           >
             <ArrowLeft size={18} />
@@ -229,7 +229,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               disabled={closed || update.isPending}
               className={`rounded-full px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
                 thread.mode === 'HUMAN'
-                  ? 'bg-snow font-bold text-graphite'
+                  ? 'bg-primary font-bold text-on-primary'
                   : 'font-medium text-ash hover:text-bone'
               }`}
             >
@@ -241,7 +241,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               disabled={closed || update.isPending}
               className={`rounded-full px-3 py-1.5 text-xs transition-colors disabled:opacity-60 ${
                 thread.mode === 'AI'
-                  ? 'bg-snow font-bold text-graphite'
+                  ? 'bg-primary font-bold text-on-primary'
                   : 'font-medium text-ash hover:text-bone'
               }`}
             >
@@ -252,7 +252,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
           {thread.client_id && (
             <Link
               to={`/clients/${thread.client_id}`}
-              className="rounded-lg border border-hairline bg-graphite p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+              className="rounded-lg border border-hairline bg-graphite p-1.5 text-smoke hover:bg-elevate hover:text-bone"
               title="고객사 상세 열기"
               aria-label="고객사 상세 열기"
             >
@@ -264,7 +264,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <button
               type="button"
               onClick={() => setCloseOpen(true)}
-              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-ash hover:bg-white/5 hover:text-bone"
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-ash hover:bg-elevate hover:text-bone"
             >
               상담 종료
             </button>
@@ -282,7 +282,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               disabled={update.isPending}
               className={`rounded-full px-3 py-1 text-xs ${
                 thread.mode === 'HUMAN'
-                  ? 'bg-snow font-bold text-graphite'
+                  ? 'bg-primary font-bold text-on-primary'
                   : 'font-medium text-ash'
               }`}
             >
@@ -294,7 +294,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
               disabled={update.isPending}
               className={`rounded-full px-3 py-1 text-xs ${
                 thread.mode === 'AI'
-                  ? 'bg-snow font-bold text-graphite'
+                  ? 'bg-primary font-bold text-on-primary'
                   : 'font-medium text-ash'
               }`}
             >
@@ -321,7 +321,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <div key={group.dateKey} className="space-y-5">
               {/* 날짜 구분선 */}
               <div className="flex justify-center">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-medium text-slatey">
+                <span className="rounded-full bg-elevate-strong px-3 py-1 text-[10px] font-medium text-slatey">
                   {group.heading}
                 </span>
               </div>
@@ -367,7 +367,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                 type="button"
                 onClick={send}
                 disabled={!text.trim() || reply.isPending}
-                className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-snow px-3.5 py-3 text-graphite transition-colors hover:bg-white/90 disabled:opacity-50"
+                className="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-primary px-3.5 py-3 text-on-primary transition-colors hover:opacity-90 disabled:opacity-50"
                 aria-label="전송"
               >
                 {reply.isPending ? (
@@ -430,7 +430,7 @@ function MessageBubble({
     return (
       <div className="my-4 flex justify-center">
         <div className="max-w-md rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-center">
-          <div className="flex items-center justify-center gap-1 text-xs font-bold text-rose-300">
+          <div className="flex items-center justify-center gap-1 text-xs font-bold text-rose-700 dark:text-rose-300">
             <WarningCircle size={13} weight="fill" />
             시스템 알림
           </div>
@@ -458,7 +458,7 @@ function MessageBubble({
           </span>
         </div>
         <div
-          className={`max-w-md rounded-2xl rounded-tr-none bg-snow p-3 text-sm whitespace-pre-wrap text-graphite ${
+          className={`max-w-md rounded-2xl rounded-tr-none bg-primary p-3 text-sm whitespace-pre-wrap text-on-primary ${
             undelivered ? 'opacity-80 ring-1 ring-rose-400/40' : ''
           }`}
         >
@@ -473,7 +473,7 @@ function MessageBubble({
     <div className="flex flex-col items-start gap-1">
       <div className="ml-1 flex items-center gap-2">
         {isAi && (
-          <span className="rounded bg-white/10 p-1">
+          <span className="rounded bg-elevate-strong p-1">
             <Robot size={12} weight="fill" className="text-ash" />
           </span>
         )}
@@ -484,7 +484,7 @@ function MessageBubble({
       </div>
       <div
         className={`max-w-md rounded-2xl rounded-tl-none border border-hairline p-3 text-sm whitespace-pre-wrap ${
-          isAi ? 'bg-graphite-2 text-ash' : 'bg-white/5 text-bone'
+          isAi ? 'bg-graphite-2 text-ash' : 'bg-elevate text-bone'
         }`}
       >
         {message.content}

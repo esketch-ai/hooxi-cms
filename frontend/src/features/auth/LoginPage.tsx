@@ -124,15 +124,19 @@ export function LoginPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-void px-4">
       <div className="w-full max-w-md">
-        {/* 브랜드 — hero horizon 그라데이션 배지 */}
+        {/* 브랜드 — hero horizon 그라데이션 배지 + 로고 */}
         <div className="mb-6 text-center">
-          <div className="hero-horizon mb-3 inline-flex h-14 w-14 items-center justify-center rounded-[20px]">
-            <Leaf size={28} weight="fill" className="text-white" />
+          <div className="hero-horizon mb-4 inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
+            <Leaf size={30} weight="fill" className="text-white" />
           </div>
-          <div className="text-2xl font-bold tracking-tight text-bone">
-            Carbon Fleet
+          <div className="flex justify-center">
+            <img
+              src="/Hooxi-CMS_logo.png"
+              alt="Hooxi CMS"
+              className="h-9 w-auto rounded-md bg-white px-2 py-1"
+            />
           </div>
-          <p className="mt-1 text-sm text-ash">Hooxi CMS 내부 시스템</p>
+          <p className="mt-2 text-sm text-ash">내부 관리 시스템</p>
         </div>
 
         <div className="animate-fade-in rounded-[24px] border border-hairline bg-graphite p-8">
@@ -152,7 +156,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={logout}
-                className="mt-6 w-full rounded-full border border-hairline px-4 py-2.5 text-sm font-medium text-bone hover:bg-white/5"
+                className="mt-6 w-full rounded-full border border-hairline px-4 py-2.5 text-sm font-medium text-bone hover:bg-elevate"
               >
                 다른 계정으로 로그인
               </button>
@@ -178,7 +182,7 @@ export function LoginPage() {
                 maxLength={6}
                 value={pin1}
                 onChange={(e) => setPin1(e.target.value.replace(/\D/g, ''))}
-                className="mb-3 h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
+                className="mb-3 h-11 w-full rounded-[10px] border border-hairline bg-elevate px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
               />
               <label className="mb-1 block text-xs font-medium text-ash">
                 PIN 다시 입력
@@ -190,13 +194,13 @@ export function LoginPage() {
                 maxLength={6}
                 value={pin2}
                 onChange={(e) => setPin2(e.target.value.replace(/\D/g, ''))}
-                className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
+                className="h-11 w-full rounded-[10px] border border-hairline bg-elevate px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
               />
               {pinError && <p className="mt-2 text-sm text-rose-400">{pinError}</p>}
               <button
                 type="submit"
                 disabled={pinLoading}
-                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-snow text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
               >
                 {pinLoading && <CircleNotch size={16} className="animate-spin" />}
                 PIN 설정 완료
@@ -219,7 +223,7 @@ export function LoginPage() {
                   }}
                   placeholder="name@hooxipartners.com"
                   autoComplete="username"
-                  className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+                  className="h-11 w-full rounded-[10px] border border-hairline bg-elevate px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
                   aria-label="회사 이메일"
                 />
                 {pinRequired && (
@@ -235,7 +239,7 @@ export function LoginPage() {
                       value={loginPin}
                       onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ''))}
                       autoFocus
-                      className="h-11 w-full rounded-[10px] border border-hairline bg-white/5 px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
+                      className="h-11 w-full rounded-[10px] border border-hairline bg-elevate px-3 text-center text-lg tracking-[0.5em] text-bone focus:border-white/30 focus:outline-none"
                       aria-label="PIN"
                     />
                   </>
@@ -246,7 +250,7 @@ export function LoginPage() {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-snow text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
                 >
                   {loginLoading && <CircleNotch size={16} className="animate-spin" />}
                   로그인
@@ -254,9 +258,9 @@ export function LoginPage() {
               </form>
 
               <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-white/10" />
+                <div className="h-px flex-1 bg-elevate-strong" />
                 <span className="text-xs text-slatey">또는</span>
-                <div className="h-px flex-1 bg-white/10" />
+                <div className="h-px flex-1 bg-elevate-strong" />
               </div>
 
               <button
@@ -275,7 +279,7 @@ export function LoginPage() {
                 네이버웍스로 로그인
               </button>
               {worksNotice && (
-                <p className="mt-3 rounded-[10px] border border-amber-400/25 bg-amber-500/15 px-3 py-2 text-sm text-amber-300">
+                <p className="mt-3 rounded-[10px] border border-amber-400/25 bg-amber-500/15 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                   {worksNotice}
                 </p>
               )}

@@ -47,7 +47,7 @@ export function AuditLine({
   return (
     <p className={`text-xs text-slatey ${className}`}>
       {auto && (
-        <span className="mr-1.5 inline-flex items-center rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-ash">
+        <span className="mr-1.5 inline-flex items-center rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
           자동
         </span>
       )}

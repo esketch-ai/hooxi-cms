@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Leaf, SignOut, X } from '@phosphor-icons/react'
+import { SignOut, X } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
 import { useChatBadge } from '../../lib/api/queries'
 import { NAV_GROUPS } from './nav'
@@ -23,11 +23,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 로고 */}
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-hairline px-5">
-        <Leaf size={22} weight="fill" className="text-emerald-500" />
-        <span className="text-base font-bold tracking-tight text-bone">
-          Carbon Fleet
+      {/* 로고 — 다크에서도 보이도록 밝은 배지 위에 원본 로고 */}
+      <div className="flex h-16 shrink-0 items-center border-b border-hairline px-5">
+        <span className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5">
+          <img src="/Hooxi-CMS_logo.png" alt="Hooxi CMS" className="h-6 w-auto" />
         </span>
       </div>
 
@@ -47,8 +46,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     className={({ isActive }) =>
                       `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                         isActive
-                          ? 'bg-white/10 font-semibold text-bone'
-                          : 'text-ash hover:bg-white/5 hover:text-bone'
+                          ? 'bg-elevate-strong font-semibold text-bone'
+                          : 'text-ash hover:bg-elevate hover:text-bone'
                       }`
                     }
                   >
@@ -73,7 +72,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* 하단 프로필 + 로그아웃 */}
       <div className="shrink-0 border-t border-hairline p-3">
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-bone">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-elevate-strong text-sm font-semibold text-bone">
             {initial}
           </div>
           <div className="min-w-0 flex-1">
@@ -87,7 +86,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <button
             type="button"
             onClick={logout}
-            className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
             title="로그아웃"
             aria-label="로그아웃"
           >
@@ -119,7 +118,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <button
               type="button"
               onClick={onMobileClose}
-              className="absolute top-4 right-3 z-10 rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+              className="absolute top-4 right-3 z-10 rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
               aria-label="메뉴 닫기"
             >
               <X size={20} />

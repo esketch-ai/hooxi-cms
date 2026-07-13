@@ -109,7 +109,7 @@ export function IssuesPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             이슈 등록
@@ -129,7 +129,7 @@ export function IssuesPage() {
               type="button"
               onClick={() => setScope(s)}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
-                scope === s ? 'bg-snow text-graphite' : 'text-ash hover:text-bone'
+                scope === s ? 'bg-primary text-on-primary' : 'text-ash hover:text-bone'
               }`}
             >
               {s === 'team' ? '팀 전체' : '내 것'}
@@ -177,8 +177,8 @@ export function IssuesPage() {
             }}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
               pill === p.key && !managerFilter
-                ? 'border-snow bg-snow text-graphite'
-                : 'border-hairline text-bone hover:bg-white/5'
+                ? 'border-snow bg-primary text-on-primary'
+                : 'border-hairline text-bone hover:bg-elevate'
             }`}
           >
             {p.label}
@@ -192,7 +192,7 @@ export function IssuesPage() {
           }}
           className={`h-8 rounded-full border px-2.5 text-xs font-medium focus:outline-none ${
             managerFilter
-              ? 'border-snow bg-snow text-graphite'
+              ? 'border-snow bg-primary text-on-primary'
               : 'border-hairline bg-graphite text-bone'
           }`}
           aria-label="담당자별 필터"
@@ -215,7 +215,7 @@ export function IssuesPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -246,7 +246,7 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
   const actionable = urgent || (due && (due.overdue || due.imminent))
   return (
     <div
-      className={`rounded-2xl border bg-graphite p-3 transition-colors hover:bg-white/5 ${
+      className={`rounded-2xl border bg-graphite p-3 transition-colors hover:bg-elevate ${
         actionable && issue.issue_status !== 'CLOSED'
           ? 'border-rose-400/40 ring-1 ring-rose-500/20'
           : 'border-hairline'
@@ -257,7 +257,7 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
           {issue.client_name ?? (issue.client_id ? '고객사' : '미지정 고객')}
         </p>
         {urgent && (
-          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
             긴급
           </span>
         )}
@@ -265,7 +265,7 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
       <p className="mt-1 line-clamp-2 text-sm font-medium text-bone">{issue.title}</p>
       <div className="mt-2.5 flex items-center gap-2">
         <span
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-bone"
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-elevate-strong text-[10px] font-bold text-bone"
           title={issue.manager_name ?? '담당자'}
         >
           {(issue.manager_name ?? '?').charAt(0)}
@@ -274,7 +274,7 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
         {due && issue.issue_status !== 'CLOSED' && (
           <span
             className={`ml-auto text-[11px] font-semibold ${
-              due.overdue || due.imminent ? 'text-rose-300' : 'text-slatey'
+              due.overdue || due.imminent ? 'text-rose-700 dark:text-rose-300' : 'text-slatey'
             }`}
           >
             {due.label}

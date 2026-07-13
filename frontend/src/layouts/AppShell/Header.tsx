@@ -3,10 +3,13 @@ import {
   Bell,
   List,
   MagnifyingGlass,
+  Moon,
   ShieldCheck,
   ShieldSlash,
+  Sun,
 } from '@phosphor-icons/react'
 import { usePrivacy } from '../../app/PrivacyProvider'
+import { useTheme } from '../../app/ThemeProvider'
 import { EmptyState } from '../../components/EmptyState'
 
 interface HeaderProps {
@@ -15,6 +18,7 @@ interface HeaderProps {
 
 export function Header({ onOpenMobileMenu }: HeaderProps) {
   const { privacyOn, togglePrivacy } = usePrivacy()
+  const { theme, toggleTheme } = useTheme()
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
 
@@ -35,7 +39,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
       <button
         type="button"
         onClick={onOpenMobileMenu}
-        className="rounded-md p-2 text-smoke hover:bg-white/5 hover:text-bone lg:hidden"
+        className="rounded-md p-2 text-smoke hover:bg-elevate hover:text-bone lg:hidden"
         aria-label="전체 메뉴 열기"
       >
         <List size={22} />
@@ -50,17 +54,28 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
         <input
           type="search"
           placeholder="고객사명·연락처·이슈 통합 검색"
-          className="h-9 w-full rounded-lg border border-hairline bg-white/5 pr-3 pl-9 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+          className="h-9 w-full rounded-lg border border-hairline bg-elevate pr-3 pl-9 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           aria-label="통합 검색"
         />
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        {/* 라이트/다크 테마 토글 */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="rounded-md p-2 text-smoke hover:bg-elevate hover:text-bone"
+          title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          aria-label="테마 전환"
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
         {/* 보안 모드 토글 */}
         <button
           type="button"
           onClick={togglePrivacy}
-          className="flex items-center gap-2 rounded-lg border border-hairline px-2.5 py-1.5 hover:bg-white/5"
+          className="flex items-center gap-2 rounded-lg border border-hairline px-2.5 py-1.5 hover:bg-elevate"
           title={privacyOn ? '보안 모드 켜짐 — 민감 데이터 마스킹 중' : '보안 모드 꺼짐'}
           aria-pressed={privacyOn}
         >
@@ -75,7 +90,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
           {/* 스위치 */}
           <span
             className={`relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors ${
-              privacyOn ? 'bg-snow' : 'bg-white/20'
+              privacyOn ? 'bg-primary' : 'bg-white/20'
             }`}
             aria-hidden="true"
           >
@@ -92,7 +107,7 @@ export function Header({ onOpenMobileMenu }: HeaderProps) {
           <button
             type="button"
             onClick={() => setNotifOpen((v) => !v)}
-            className="rounded-md p-2 text-smoke hover:bg-white/5 hover:text-bone"
+            className="rounded-md p-2 text-smoke hover:bg-elevate hover:text-bone"
             aria-label="알림"
           >
             <Bell size={20} />

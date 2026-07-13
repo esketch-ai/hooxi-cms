@@ -39,7 +39,7 @@ export function Drawer({ open, onClose, title, children, footer, size = 'md' }: 
           <button
             type="button"
             onClick={onClose}
-            className="ml-2 rounded-md p-1 text-smoke hover:bg-white/5 hover:text-bone"
+            className="ml-2 rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
             aria-label="닫기"
           >
             <X size={18} />

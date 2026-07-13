@@ -50,10 +50,10 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const STATUS_SPECS: Record<string, { label: string; cls: string }> = {
-  SUCCESSFUL: { label: '성공', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  FAILED: { label: '실패', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
-  RUNNING: { label: '진행중', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
-  ENQUEUED: { label: '대기', cls: 'bg-white/10 text-ash border-hairline' },
+  SUCCESSFUL: { label: '성공', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  FAILED: { label: '실패', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  RUNNING: { label: '진행중', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25' },
+  ENQUEUED: { label: '대기', cls: 'bg-elevate-strong text-ash border-hairline' },
 }
 
 export function BackupTab() {
@@ -161,7 +161,7 @@ export function BackupTab() {
           type="button"
           onClick={() => createBackup.mutate()}
           disabled={createBackup.isPending || !!pendingOp}
-          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-snow px-4 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
         >
           {createBackup.isPending || pendingOp?.kind === '백업' ? (
             <CircleNotch size={15} className="animate-spin" />
@@ -173,7 +173,7 @@ export function BackupTab() {
       </div>
 
       {pendingOp && (
-        <div className="flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/15 px-3 py-2.5 text-sm text-blue-300">
+        <div className="flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/15 px-3 py-2.5 text-sm text-blue-700 dark:text-blue-300">
           <CircleNotch size={15} className="animate-spin" />
           {pendingOp.kind} 작업이 진행 중입니다{pendingOp.kind === '복구' && ' — 완료까지 서비스가 일시 중단될 수 있습니다'}
         </div>
@@ -201,7 +201,7 @@ export function BackupTab() {
               {items.map((run) => {
                 const status = STATUS_SPECS[run.status ?? ''] ?? {
                   label: run.status ?? '—',
-                  cls: 'bg-white/10 text-ash border-hairline',
+                  cls: 'bg-elevate-strong text-ash border-hairline',
                 }
                 return (
                   <tr key={run.backup_run_id} className="border-b border-hairline last:border-0">
@@ -229,7 +229,7 @@ export function BackupTab() {
                           setRestoreTarget(run)
                         }}
                         disabled={run.status !== 'SUCCESSFUL' || !!pendingOp}
-                        className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 px-3 py-1.5 text-xs font-medium text-rose-700 dark:text-rose-300 hover:bg-rose-500/10 disabled:opacity-40"
                       >
                         <ArrowCounterClockwise size={13} />이 시점으로 복구
                       </button>
@@ -250,7 +250,7 @@ export function BackupTab() {
       >
         {restoreTarget && (
           <div className="space-y-4">
-            <div className="flex gap-2.5 rounded-lg border border-rose-400/25 bg-rose-500/15 p-3 text-sm leading-relaxed text-rose-300">
+            <div className="flex gap-2.5 rounded-lg border border-rose-400/25 bg-rose-500/15 p-3 text-sm leading-relaxed text-rose-700 dark:text-rose-300">
               <Warning size={20} className="mt-0.5 shrink-0" />
               <div>
                 <b>{fmtKst(restoreTarget.start_time)}</b> 백업 시점으로 데이터베이스 전체가
@@ -262,7 +262,7 @@ export function BackupTab() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ash">
-                계속하려면 <b className="text-rose-300">복구</b>를 입력하세요
+                계속하려면 <b className="text-rose-700 dark:text-rose-300">복구</b>를 입력하세요
               </label>
               <input
                 value={confirmWord}
@@ -275,7 +275,7 @@ export function BackupTab() {
               <button
                 type="button"
                 onClick={() => setRestoreTarget(null)}
-                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
               >
                 취소
               </button>

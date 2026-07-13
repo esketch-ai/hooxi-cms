@@ -207,7 +207,7 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
         {/* 발급완료 전환 게이트 (R2-A1) */}
         {form.project_status === '발급완료' && (
           <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/15 p-3">
-            <p className="mb-2 text-xs font-semibold text-emerald-300">
+            <p className="mb-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
               발급완료 전환 — 확정 발급량·발급일 입력 필수
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -345,14 +345,14 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending}
-            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {project ? '수정 저장' : '등록'}

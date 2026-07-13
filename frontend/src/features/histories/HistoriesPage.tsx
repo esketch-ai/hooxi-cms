@@ -98,7 +98,7 @@ export function HistoriesPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             이력 등록
@@ -163,7 +163,7 @@ export function HistoriesPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -180,7 +180,7 @@ export function HistoriesPage() {
           {/* 아코디언 테이블 */}
           <div className="overflow-hidden rounded-3xl border border-hairline bg-graphite">
             {/* 헤더 (데스크톱) */}
-            <div className="hidden grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] gap-3 border-b border-hairline bg-white/5 px-4 py-3 text-xs font-semibold tracking-wide text-ash lg:grid">
+            <div className="hidden grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] gap-3 border-b border-hairline bg-elevate px-4 py-3 text-xs font-semibold tracking-wide text-ash lg:grid">
               <span>일시</span>
               <span>고객사</span>
               <span>유형</span>
@@ -194,11 +194,11 @@ export function HistoriesPage() {
                 const isOpen = expanded === h.history_id
                 const isAuto = !!h.is_auto
                 return (
-                  <li key={h.history_id} className="border-b border-white/10 last:border-b-0">
+                  <li key={h.history_id} className="border-b border-hairline last:border-b-0">
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : h.history_id)}
-                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 text-left hover:bg-white/5 lg:grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] lg:gap-3"
+                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 text-left hover:bg-elevate lg:grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] lg:gap-3"
                       aria-expanded={isOpen}
                     >
                       {/* 모바일: 2줄 요약 / 데스크톱: 그리드 셀 */}
@@ -212,7 +212,7 @@ export function HistoriesPage() {
                         <span className="mt-0.5 flex items-center gap-1.5 lg:mt-0">
                           <StatusBadge domain="activity" value={h.activity_type} />
                           {isAuto && (
-                            <span className="inline-flex rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-ash">
+                            <span className="inline-flex rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
                               자동
                             </span>
                           )}
@@ -231,7 +231,7 @@ export function HistoriesPage() {
                       />
                     </button>
                     {isOpen && (
-                      <div className="animate-fade-in space-y-3 border-t border-white/10 bg-white/5 px-5 py-4">
+                      <div className="animate-fade-in space-y-3 border-t border-hairline bg-elevate px-5 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {h.retention_stage && (
                             <StatusBadge domain="retention" value={h.retention_stage} />

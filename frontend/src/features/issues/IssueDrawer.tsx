@@ -69,7 +69,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
       title={
         <div className="flex items-center gap-2">
           {issue.priority === 'URGENT' && (
-            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
               긴급
             </span>
           )}
@@ -84,7 +84,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
           {due && (
             <span
               className={`text-xs font-semibold ${
-                due.overdue || due.imminent ? 'text-rose-300' : 'text-ash'
+                due.overdue || due.imminent ? 'text-rose-700 dark:text-rose-300' : 'text-ash'
               }`}
             >
               마감 {due.label}
@@ -100,7 +100,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               to={`/clients/${issue.client_id}`}
-              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-white/5 px-3 py-2 text-sm font-semibold text-bone hover:bg-white/10"
+              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-elevate px-3 py-2 text-sm font-semibold text-bone hover:bg-elevate-strong"
             >
               {issue.client_name ?? '고객사'}
               <ArrowSquareOut size={14} className="text-slatey" />
@@ -108,7 +108,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
             {clientPhone && (
               <a
                 href={telHref(clientPhone)}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25"
               >
                 <Phone size={15} weight="fill" />
                 {clientPhone}
@@ -129,8 +129,8 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
                 disabled={changeStatus.isPending}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium disabled:opacity-60 ${
                   issue.issue_status === opt.value
-                    ? 'border-snow bg-snow text-graphite'
-                    : 'border-hairline text-bone hover:bg-white/5'
+                    ? 'border-snow bg-primary text-on-primary'
+                    : 'border-hairline text-bone hover:bg-elevate'
                 }`}
               >
                 {opt.label}
@@ -174,7 +174,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
               {comments.map((c) => (
                 <li key={c.comment_id}>
                   {c.comment_type === 'COMMENT' ? (
-                    <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="rounded-lg bg-elevate px-3 py-2">
                       <p className="text-sm whitespace-pre-wrap text-bone">{c.content}</p>
                       <p className="mt-1 text-[11px] text-slatey">
                         {c.manager_name ?? '—'} · {fmtServerDateTime(c.created_at)}
@@ -183,7 +183,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
                   ) : (
                     /* 상태·담당 변경 자동 적재 (GAN A4) */
                     <p className="px-1 text-[11px] text-slatey">
-                      <span className="mr-1 inline-flex rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-ash">
+                      <span className="mr-1 inline-flex rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
                         {c.comment_type === 'STATUS_CHANGE' ? '상태 변경' : '담당 변경'}
                       </span>
                       {c.content} — {c.manager_name ?? '—'} · {fmtServerDateTime(c.created_at)}
@@ -205,7 +205,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
             <button
               type="submit"
               disabled={addComment.isPending || !newComment.trim()}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-snow text-graphite hover:bg-white/90 disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary hover:opacity-90 disabled:opacity-50"
               aria-label="코멘트 등록"
             >
               {addComment.isPending ? (

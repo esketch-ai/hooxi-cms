@@ -87,7 +87,7 @@ function UnitPriceEditor({
           type="button"
           onClick={submit}
           disabled={update.isPending}
-          className="rounded-md bg-snow p-1.5 text-graphite hover:bg-white/90 disabled:opacity-60"
+          className="rounded-md bg-primary p-1.5 text-on-primary hover:opacity-90 disabled:opacity-60"
           title="저장"
           aria-label="단가 저장"
         >
@@ -100,7 +100,7 @@ function UnitPriceEditor({
         <button
           type="button"
           onClick={() => setEditing(false)}
-          className="rounded-md border border-hairline p-1.5 text-ash hover:bg-white/5"
+          className="rounded-md border border-hairline p-1.5 text-ash hover:bg-elevate"
           title="취소"
           aria-label="편집 취소"
         >
@@ -120,7 +120,7 @@ function UnitPriceEditor({
       <button
         type="button"
         onClick={startEdit}
-        className="rounded-md p-1 text-smoke hover:bg-white/5 hover:text-bone"
+        className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
         title="단가 수기 입력"
         aria-label="단가 수기 입력"
       >
@@ -141,9 +141,9 @@ function AllocationGauge({ sum }: { sum: number }) {
           {sum.toFixed(1)}% / 100%
         </span>
       </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-elevate">
         <div
-          className={`h-full rounded-full transition-all ${over ? 'bg-rose-500' : 'bg-snow'}`}
+          className={`h-full rounded-full transition-all ${over ? 'bg-rose-500' : 'bg-primary'}`}
           style={{ width: `${Math.min(sum, 100)}%` }}
         />
       </div>
@@ -220,8 +220,8 @@ export function ProjectDetailPage() {
           <span
             className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
               isPrimary(m)
-                ? 'border-blue-400/25 bg-blue-500/15 text-blue-300'
-                : 'border-hairline bg-white/10 text-ash'
+                ? 'border-blue-400/25 bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                : 'border-hairline bg-elevate-strong text-ash'
             }`}
           >
             {isPrimary(m) ? '대표자' : '참여자'}
@@ -286,7 +286,7 @@ export function ProjectDetailPage() {
               setEditingMapping(m)
               setMappingOpen(true)
             }}
-            className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
             title="매핑 수정"
             aria-label={`${m.client_name ?? ''} 매핑 수정`}
           >
@@ -328,7 +328,7 @@ export function ProjectDetailPage() {
         action={
           <Link
             to="/projects"
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             목록으로
           </Link>
@@ -355,7 +355,7 @@ export function ProjectDetailPage() {
           <button
             type="button"
             onClick={() => setEditOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
           >
             <PencilSimple size={15} />
             사업 수정
@@ -368,7 +368,7 @@ export function ProjectDetailPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <StatusBadge domain="project" value={project.project_status} />
           {project.reg_code && (
-            <span className="inline-flex items-center rounded border border-hairline bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-ash">
+            <span className="inline-flex items-center rounded border border-hairline bg-elevate px-1.5 py-0.5 font-mono text-[10px] text-ash">
               {project.reg_code}
             </span>
           )}
@@ -455,7 +455,7 @@ export function ProjectDetailPage() {
               setEditingMapping(null)
               setMappingOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-semibold text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-semibold text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={15} weight="bold" />
             참여 고객사 추가

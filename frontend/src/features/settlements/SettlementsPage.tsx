@@ -40,7 +40,7 @@ function SettlementStatusCell({ row }: { row: ProjectClientMap }) {
     <div>
       <StatusBadge domain="settlement" value={row.settlement_status ?? 'STANDBY'} />
       {sub && (
-        <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-rose-300' : 'text-slatey'}`}>
+        <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-rose-700 dark:text-rose-300' : 'text-slatey'}`}>
           {sub}
           {overdue && ' · 30일+ 미입금'}
         </p>
@@ -123,7 +123,7 @@ export function SettlementsPage() {
           type="button"
           onClick={() => setPending({ row, next: 'BILLED' })}
           disabled={blocked}
-          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-40"
           title={blocked ? '단가 미입력 — 금액 미정 건은 발행할 수 없습니다' : undefined}
         >
           청구서 발행
@@ -202,7 +202,7 @@ export function SettlementsPage() {
         r.expected_amount != null ? (
           <SensitiveData type="money" value={fmtMoney(Number(r.expected_amount))} />
         ) : (
-          <span className="text-xs font-medium text-amber-300">미정</span>
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-300">미정</span>
         ),
     },
     {
@@ -289,7 +289,7 @@ export function SettlementsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -328,7 +328,7 @@ export function SettlementsPage() {
                   {r.expected_amount != null ? (
                     <SensitiveData type="money" value={fmtMoney(Number(r.expected_amount))} />
                   ) : (
-                    <span className="text-xs font-medium text-amber-300">미정</span>
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">미정</span>
                   )}
                 </div>
               </div>

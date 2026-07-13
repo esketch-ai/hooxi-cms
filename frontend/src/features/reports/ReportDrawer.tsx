@@ -55,7 +55,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
     >
       <div className="space-y-5">
         {/* 요약 */}
-        <dl className="grid grid-cols-2 gap-2 rounded-2xl bg-white/5 p-3 text-sm">
+        <dl className="grid grid-cols-2 gap-2 rounded-2xl bg-elevate p-3 text-sm">
           <div>
             <dt className="text-xs text-slatey">보고서 유형</dt>
             <dd className="font-medium text-bone">{merged.report_type}</dd>
@@ -111,10 +111,10 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
               업로드된 파일이 없습니다
             </p>
           ) : (
-            <ul className="divide-y divide-white/10 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline rounded-2xl border border-hairline">
               {versions.map((d) => (
                 <li key={d.doc_id} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ash">
+                  <span className="rounded bg-elevate-strong px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ash">
                     v{d.version}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -126,7 +126,7 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
                   <button
                     type="button"
                     onClick={() => void handleDownload(d.doc_id, d.title)}
-                    className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+                    className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
                     title="다운로드"
                   >
                     <DownloadSimple size={16} />
@@ -145,11 +145,11 @@ export function ReportDrawer({ report, onClose }: ReportDrawerProps) {
               발송 기록이 없습니다
             </p>
           ) : (
-            <ul className="divide-y divide-white/10 rounded-2xl border border-hairline">
+            <ul className="divide-y divide-hairline rounded-2xl border border-hairline">
               {sendLogs.map((log) => (
                 <li key={log.send_id} className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ash">
+                    <span className="rounded bg-elevate-strong px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ash">
                       #{log.seq}
                     </span>
                     <span className="text-xs font-medium text-ash">

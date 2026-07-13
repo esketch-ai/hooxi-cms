@@ -55,7 +55,7 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -75,7 +75,7 @@ export function DashboardPage() {
             {/* SCR-01 → SCR-09 지도 진입 링크 (§2.1 보조 화면) */}
             <Link
               to="/map"
-              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
             >
               <MapTrifold size={16} />
               관제 지도
@@ -83,7 +83,7 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={() => setFormOpen(true)}
-              className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+              className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
             >
               <Plus size={16} weight="bold" />
               신규 이력 등록
@@ -171,7 +171,7 @@ export function DashboardPage() {
                     <span className="font-medium text-ash">{step.stage}</span>
                     <span className="font-bold text-bone">{step.count}</span>
                   </div>
-                  <div className="h-5 overflow-hidden rounded bg-white/5">
+                  <div className="h-5 overflow-hidden rounded bg-elevate">
                     <div
                       className={`h-full rounded transition-all ${FUNNEL_COLORS[i % FUNNEL_COLORS.length]}`}
                       style={{ width: `${Math.round((step.count / funnelMax) * 100)}%` }}
@@ -227,15 +227,15 @@ export function DashboardPage() {
               className="border-0 py-10"
             />
           ) : (
-            <ul className="divide-y divide-white/10">
+            <ul className="divide-y divide-hairline">
               {openIssues.map((issue) => {
                 const due = dday(issue.due_date)
                 return (
                   <li key={issue.history_id}>
-                    <Link to="/issues" className="block rounded-lg px-1 py-2.5 hover:bg-white/5">
+                    <Link to="/issues" className="block rounded-lg px-1 py-2.5 hover:bg-elevate">
                       <div className="flex items-center gap-1.5">
                         {issue.priority === 'URGENT' && (
-                          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+                          <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
                             긴급
                           </span>
                         )}
@@ -245,7 +245,7 @@ export function DashboardPage() {
                         {due && (
                           <span
                             className={`shrink-0 text-[11px] font-semibold ${
-                              due.overdue || due.imminent ? 'text-rose-300' : 'text-slatey'
+                              due.overdue || due.imminent ? 'text-rose-700 dark:text-rose-300' : 'text-slatey'
                             }`}
                           >
                             {due.label}

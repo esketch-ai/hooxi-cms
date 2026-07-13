@@ -38,7 +38,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page - 1)}
           disabled={page <= 1}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-white/5 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-elevate disabled:opacity-40"
           aria-label="이전 페이지"
         >
           <CaretLeft size={14} />
@@ -51,8 +51,8 @@ export function Pagination({
             aria-current={p === page ? 'page' : undefined}
             className={`h-8 min-w-8 rounded-md border px-2 text-sm ${
               p === page
-                ? 'border-snow bg-snow font-semibold text-graphite'
-                : 'border-hairline bg-graphite text-ash hover:bg-white/5'
+                ? 'border-snow bg-primary font-semibold text-on-primary'
+                : 'border-hairline bg-graphite text-ash hover:bg-elevate'
             }`}
           >
             {p}
@@ -62,7 +62,7 @@ export function Pagination({
           type="button"
           onClick={() => onChange(page + 1)}
           disabled={page >= totalPages}
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-white/5 disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline bg-graphite text-smoke hover:bg-elevate disabled:opacity-40"
           aria-label="다음 페이지"
         >
           <CaretRight size={14} />

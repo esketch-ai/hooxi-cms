@@ -176,8 +176,8 @@ export function MappingFormModal({ open, onClose, projectId, mapping, mappings }
         <div
           className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
             exceeds
-              ? 'border-rose-400/25 bg-rose-500/15 text-rose-300'
-              : 'border-hairline bg-white/5 text-ash'
+              ? 'border-rose-400/25 bg-rose-500/15 text-rose-700 dark:text-rose-300'
+              : 'border-hairline bg-elevate text-ash'
           }`}
         >
           {exceeds && <Warning size={14} weight="fill" />}
@@ -194,14 +194,14 @@ export function MappingFormModal({ open, onClose, projectId, mapping, mappings }
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={save.isPending || exceeds}
-            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:opacity-60"
           >
             {save.isPending && <CircleNotch size={14} className="animate-spin" />}
             {mapping ? '수정 저장' : '추가'}

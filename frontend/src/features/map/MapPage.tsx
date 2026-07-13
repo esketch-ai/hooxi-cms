@@ -280,7 +280,7 @@ export function MapPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -333,7 +333,7 @@ export function MapPage() {
                     <button
                       type="button"
                       onClick={() => setRetryToken((t) => t + 1)}
-                      className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+                      className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
                     >
                       다시 시도
                     </button>
@@ -428,7 +428,7 @@ export function MapPage() {
                       </span>
                     </div>
                     {/* 상태 분포 미니 바 */}
-                    <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-white/5">
+                    <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-elevate">
                       {STATUS_ORDER.filter((s) => agg[s] > 0).map((s) => (
                         <span
                           key={s}
@@ -461,7 +461,7 @@ export function MapPage() {
                   <li key={c.client_id}>
                     <Link
                       to={`/clients/${c.client_id}`}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-bone hover:bg-white/5"
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-bone hover:bg-elevate"
                     >
                       <span
                         className="inline-block h-2 w-2 shrink-0 rounded-full"

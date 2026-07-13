@@ -91,7 +91,7 @@ export function SystemConfigTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             다시 시도
           </button>
@@ -191,11 +191,11 @@ function ConfigCard({ item }: { item: ConfigItem }) {
         <h3 className="text-sm font-bold text-bone">
           {CONFIG_TITLES[item.key] ?? item.key}
         </h3>
-        <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-ash">
+        <code className="rounded bg-elevate-strong px-1.5 py-0.5 font-mono text-[11px] text-ash">
           {item.key}
         </code>
         {item.is_default && (
-          <span className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+          <span className="inline-flex rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
             기본값 (미저장)
           </span>
         )}
@@ -228,7 +228,7 @@ function ConfigCard({ item }: { item: ConfigItem }) {
           type="button"
           disabled={!dirty || save.isPending}
           onClick={handleSave}
-          className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {save.isPending ? '저장 중…' : '저장'}
         </button>
@@ -331,7 +331,7 @@ function KeywordChipsEditor({
         {keywords.map((kw) => (
           <span
             key={kw}
-            className="inline-flex items-center gap-1 rounded-full border border-hairline bg-white/10 px-2.5 py-1 text-xs font-medium text-bone"
+            className="inline-flex items-center gap-1 rounded-full border border-hairline bg-elevate-strong px-2.5 py-1 text-xs font-medium text-bone"
           >
             {kw}
             <button
@@ -363,7 +363,7 @@ function KeywordChipsEditor({
           type="button"
           onClick={add}
           disabled={!input.trim()}
-          className="flex h-9 items-center gap-1 rounded-full border border-hairline px-3 text-sm font-medium text-bone hover:bg-white/5 disabled:opacity-40"
+          className="flex h-9 items-center gap-1 rounded-full border border-hairline px-3 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-40"
         >
           <Plus size={14} weight="bold" />
           추가
@@ -445,7 +445,7 @@ function FunnelMappingEditor({
                   aria-pressed={selected}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                     selected
-                      ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
+                      ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                       : 'border-hairline text-slatey hover:border-hairline-strong hover:text-ash'
                   }`}
                 >
@@ -457,7 +457,7 @@ function FunnelMappingEditor({
         </div>
       ))}
       {(duplicated.length > 0 || unassigned.length > 0) && (
-        <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] text-amber-300">
+        <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
           {duplicated.length > 0 && `중복 배정: ${duplicated.join(', ')}`}
           {duplicated.length > 0 && unassigned.length > 0 && ' · '}
           {unassigned.length > 0 && `미배정: ${unassigned.join(', ')}`}

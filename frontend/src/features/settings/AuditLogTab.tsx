@@ -13,41 +13,41 @@ const PAGE_SIZE = 20
 
 // 액션 한국어 라벨 + 배지 톤
 const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
-  REVEAL_AUTH: { label: '인증정보 열람', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  REVEAL_AUTH: { label: '인증정보 열람', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   SETTLEMENT_CHANGE: {
     label: '정산 상태 변경',
-    cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25',
+    cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25',
   },
-  REPORT_VIEW: { label: '보고서 열람', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
+  REPORT_VIEW: { label: '보고서 열람', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25' },
   KAKAO_APPROVAL: {
     label: '카카오 연락처 승인',
-    cls: 'bg-yellow-500/15 text-yellow-300 border-yellow-400/25',
+    cls: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-400/25',
   },
-  CONFIG_CHANGE: { label: '설정 변경', cls: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
+  CONFIG_CHANGE: { label: '설정 변경', cls: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400/25' },
   // 내부 사용자 감사 이력 (SCR-14 계정 관리)
-  USER_APPROVE: { label: '가입 승인', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
-  USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
-  USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-white/10 text-ash border-hairline' },
-  USER_CREATE: { label: '계정 생성', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  USER_UPDATE: { label: '계정 정보 수정', cls: 'bg-white/10 text-ash border-hairline' },
-  USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
-  INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
-  DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-500/15 text-sky-300 border-sky-400/25' },
-  BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-500/15 text-teal-300 border-teal-400/25' },
-  BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
+  USER_APPROVE: { label: '가입 승인', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  USER_ROLE_CHANGE: { label: '역할 변경', cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-400/25' },
+  USER_DEACTIVATE: { label: '계정 비활성화', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  USER_PIN_RESET: { label: 'PIN 초기화', cls: 'bg-elevate-strong text-ash border-hairline' },
+  USER_CREATE: { label: '계정 생성', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  USER_UPDATE: { label: '계정 정보 수정', cls: 'bg-elevate-strong text-ash border-hairline' },
+  USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400/25' },
+  INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
+  BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-400/25' },
+  BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   // 업무 이력 감사 (이슈·사업·보고서)
-  ISSUE_STATUS_CHANGE: { label: '이슈 상태 변경', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
-  COMMENT_ADD: { label: '코멘트 등록', cls: 'bg-white/10 text-ash border-hairline' },
-  PROJECT_CREATE: { label: '사업 등록', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  PROJECT_UPDATE: { label: '사업 수정', cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
-  PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-500/15 text-rose-300 border-rose-400/25' },
-  REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-500/15 text-sky-300 border-sky-400/25' },
-  REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
+  ISSUE_STATUS_CHANGE: { label: '이슈 상태 변경', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
+  COMMENT_ADD: { label: '코멘트 등록', cls: 'bg-elevate-strong text-ash border-hairline' },
+  PROJECT_CREATE: { label: '사업 등록', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  PROJECT_UPDATE: { label: '사업 수정', cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-400/25' },
+  PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
+  REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25' },
 }
 
-const FALLBACK_SPEC = { label: '', cls: 'bg-white/10 text-ash border-hairline' }
+const FALLBACK_SPEC = { label: '', cls: 'bg-elevate-strong text-ash border-hairline' }
 
 const TARGET_TYPE_LABELS: Record<string, string> = {
   ASSET: '자산',
@@ -118,7 +118,7 @@ export function AuditLogTab() {
             ? (TARGET_TYPE_LABELS[log.target_type] ?? log.target_type)
             : '—'}
           {log.target_id && (
-            <code className="ml-1.5 rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-slatey">
+            <code className="ml-1.5 rounded bg-elevate-strong px-1 py-0.5 font-mono text-[11px] text-slatey">
               {log.target_id}
             </code>
           )}
@@ -146,7 +146,7 @@ export function AuditLogTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             다시 시도
           </button>

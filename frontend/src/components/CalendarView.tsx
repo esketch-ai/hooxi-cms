@@ -81,7 +81,7 @@ export function CalendarView<T>({
   return (
     <div className="overflow-hidden rounded-3xl border border-hairline bg-graphite">
       {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 border-b border-hairline bg-white/5">
+      <div className="grid grid-cols-7 border-b border-hairline bg-elevate">
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
@@ -103,16 +103,16 @@ export function CalendarView<T>({
             <div
               key={idx}
               onClick={onDayClick ? () => onDayClick(d) : undefined}
-              className={`border-b border-white/10 p-1.5 align-top ${
+              className={`border-b border-hairline p-1.5 align-top ${
                 idx % 7 !== 6 ? 'border-r' : ''
               } ${mode === 'month' ? 'min-h-[92px]' : 'min-h-[200px]'} ${
-                inMonth ? 'bg-graphite' : 'bg-white/5'
-              } ${onDayClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
+                inMonth ? 'bg-graphite' : 'bg-elevate'
+              } ${onDayClick ? 'cursor-pointer hover:bg-elevate' : ''}`}
             >
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
                   isToday
-                    ? 'bg-snow font-bold text-graphite'
+                    ? 'bg-primary font-bold text-on-primary'
                     : inMonth
                       ? 'font-medium text-bone'
                       : 'text-slatey'
@@ -129,7 +129,7 @@ export function CalendarView<T>({
                       e.stopPropagation()
                       onEventClick?.(event.data)
                     }}
-                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-white/5 ${
+                    className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-elevate ${
                       event.muted ? 'text-slatey line-through' : 'text-bone'
                     }`}
                     title={event.title}

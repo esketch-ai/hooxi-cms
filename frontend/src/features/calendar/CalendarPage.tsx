@@ -158,7 +158,7 @@ export function CalendarPage() {
               setFormDate(null)
               setFormOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             일정 등록
@@ -172,7 +172,7 @@ export function CalendarPage() {
           <button
             type="button"
             onClick={() => move(-1)}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-white/5"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-elevate"
             aria-label="이전"
           >
             <CaretLeft size={14} />
@@ -180,14 +180,14 @@ export function CalendarPage() {
           <button
             type="button"
             onClick={() => setCursor(new Date())}
-            className="h-8 rounded-md border border-hairline px-3 text-xs font-medium text-bone hover:bg-white/5"
+            className="h-8 rounded-md border border-hairline px-3 text-xs font-medium text-bone hover:bg-elevate"
           >
             오늘
           </button>
           <button
             type="button"
             onClick={() => move(1)}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-white/5"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-hairline text-ash hover:bg-elevate"
             aria-label="다음"
           >
             <CaretRight size={14} />
@@ -231,7 +231,7 @@ export function CalendarPage() {
                 type="button"
                 onClick={() => setMode(m)}
                 className={`rounded-md px-3 py-1 text-xs font-medium ${
-                  mode === m ? 'bg-snow text-graphite' : 'text-ash hover:text-bone'
+                  mode === m ? 'bg-primary text-on-primary' : 'text-ash hover:text-bone'
                 }`}
               >
                 {m === 'month' ? '월간' : '주간'}
@@ -256,7 +256,7 @@ export function CalendarPage() {
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
                 >
                   다시 시도
                 </button>
@@ -364,7 +364,7 @@ function ScheduleDetailModal({
             </div>
           )}
           {schedule.schedule_type === 'REPORT_DUE' && (
-            <p className="rounded-lg bg-white/5 px-3 py-2 text-xs text-ash">
+            <p className="rounded-lg bg-elevate px-3 py-2 text-xs text-ash">
               보고서 마감 일정은 월간 보고서 발송 관리(SCR-12)에서 자동 생성됩니다.
             </p>
           )}
@@ -430,7 +430,7 @@ function TodayChecklist({
             const canceled = s.status === 'CANCELED'
             const isCompleting = completingId === s.schedule_id
             return (
-              <li key={s.schedule_id} className="rounded-lg px-1 py-1.5 hover:bg-white/5">
+              <li key={s.schedule_id} className="rounded-lg px-1 py-1.5 hover:bg-elevate">
                 <div className="flex items-start gap-2">
                   <input
                     type="checkbox"
@@ -440,7 +440,7 @@ function TodayChecklist({
                       setCompletingId(s.schedule_id)
                       setResultNote('')
                     }}
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-hairline-strong"
                     aria-label={`${s.title} 완료`}
                   />
                   <button
@@ -489,7 +489,7 @@ function TodayChecklist({
                       <button
                         type="button"
                         onClick={() => setCompletingId(null)}
-                        className="rounded-full border border-hairline px-2.5 py-1 text-xs text-bone hover:bg-white/5"
+                        className="rounded-full border border-hairline px-2.5 py-1 text-xs text-bone hover:bg-elevate"
                       >
                         취소
                       </button>
@@ -497,7 +497,7 @@ function TodayChecklist({
                         type="button"
                         onClick={() => handleComplete(s.schedule_id)}
                         disabled={complete.isPending}
-                        className="flex items-center gap-1 rounded-full bg-snow px-2.5 py-1 text-xs font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+                        className="flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
                       >
                         {complete.isPending && (
                           <CircleNotch size={11} className="animate-spin" />

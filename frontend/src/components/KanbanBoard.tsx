@@ -83,7 +83,7 @@ export function KanbanBoard<T>({
               onClick={() => setActiveTab(col.key)}
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
                 activeTab === col.key
-                  ? 'border-snow bg-snow text-graphite'
+                  ? 'border-snow bg-primary text-on-primary'
                   : 'border-hairline bg-graphite text-ash'
               }`}
             >
@@ -111,7 +111,7 @@ export function KanbanBoard<T>({
                 key={col.key}
                 type="button"
                 onClick={() => setCollapsed((prev) => ({ ...prev, [col.key]: false }))}
-                className="flex w-12 shrink-0 flex-col items-center gap-2 rounded-3xl border border-hairline bg-graphite py-4 text-smoke hover:bg-white/5"
+                className="flex w-12 shrink-0 flex-col items-center gap-2 rounded-3xl border border-hairline bg-graphite py-4 text-smoke hover:bg-elevate"
                 title={`${col.title} 펼치기`}
               >
                 <CaretRight size={14} />
@@ -133,21 +133,21 @@ export function KanbanBoard<T>({
               onDrop={(e) => handleDrop(e, col.key)}
               className={`min-w-0 flex-1 rounded-3xl border p-3 transition-colors ${
                 dragOverCol === col.key
-                  ? 'border-white/30 bg-white/10'
+                  ? 'border-white/30 bg-elevate-strong'
                   : 'border-hairline bg-graphite'
               }`}
             >
               <div className="mb-3 flex items-center gap-2 px-1">
                 <span className={`h-2.5 w-2.5 rounded-full ${col.dotClass ?? 'bg-white/40'}`} />
                 <h3 className="text-sm font-semibold text-bone">{col.title}</h3>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-ash">
+                <span className="rounded-full bg-elevate-strong px-2 py-0.5 text-xs font-semibold text-ash">
                   {colItems.length}
                 </span>
                 {col.collapsible && (
                   <button
                     type="button"
                     onClick={() => setCollapsed((prev) => ({ ...prev, [col.key]: true }))}
-                    className="ml-auto rounded p-0.5 text-smoke hover:bg-white/5"
+                    className="ml-auto rounded p-0.5 text-smoke hover:bg-elevate"
                     aria-label={`${col.title} 접기`}
                   >
                     <CaretDown size={14} />

@@ -31,9 +31,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: '승인 대기', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
-  ACTIVE: { label: '활성', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  INACTIVE: { label: '비활성', cls: 'bg-white/10 text-ash border-hairline' },
+  PENDING: { label: '승인 대기', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
+  ACTIVE: { label: '활성', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  INACTIVE: { label: '비활성', cls: 'bg-elevate-strong text-ash border-hairline' },
 }
 
 export function SettingsPage() {
@@ -221,7 +221,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
       header: '사용자',
       render: (u) => (
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-bone">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-elevate-strong text-xs font-bold text-bone">
             {u.name?.charAt(0) ?? '?'}
           </div>
           <div className="min-w-0">
@@ -306,7 +306,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   setRoleTarget(u)
                   setNextRole(u.role)
                 }}
-                className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5"
+                className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
               >
                 역할 변경
               </button>
@@ -332,7 +332,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                 setEditTarget(u)
                 setEditForm({ name: u.name ?? '', position: u.position ?? '' })
               }}
-              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
             >
               편집
             </button>
@@ -340,7 +340,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setDeactivateTarget(u)}
-                className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-300"
+                className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300"
                 title="비활성화"
               >
                 <Prohibit size={15} />
@@ -350,7 +350,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setPinResetTarget(u)}
-                className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+                className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
                 title="PIN 초기화"
               >
                 <LockKeyOpen size={15} />
@@ -373,15 +373,15 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             onClick={() => setStatusFilter(s)}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
               statusFilter === s
-                ? 'border-transparent bg-snow text-graphite'
-                : 'border-hairline text-ash hover:bg-white/5'
+                ? 'border-transparent bg-primary text-on-primary'
+                : 'border-hairline text-ash hover:bg-elevate'
             }`}
           >
             {s === '' ? '전체' : (STATUS_BADGES[s]?.label ?? s)}
           </button>
         ))}
         {pendingCount > 0 && (
-          <span className="ml-auto rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-300">
+          <span className="ml-auto rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
             승인 대기 {pendingCount}건
           </span>
         )}
@@ -392,7 +392,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               setCreateForm({ email: '', name: '', position: '', role: 'STAFF' })
               setCreateOpen(true)
             }}
-            className={`rounded-full bg-snow px-3.5 py-1.5 text-xs font-medium text-graphite hover:bg-white/90 ${
+            className={`rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-on-primary hover:opacity-90 ${
               pendingCount > 0 ? '' : 'ml-auto'
             }`}
           >
@@ -410,7 +410,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -438,7 +438,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setApproveTarget(null)}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               취소
             </button>
@@ -486,7 +486,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setRoleTarget(null)}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               취소
             </button>
@@ -501,7 +501,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   () => setRoleTarget(null),
                 )
               }
-              className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
             >
               변경
             </button>
@@ -624,7 +624,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
             <button
               type="button"
               onClick={() => setCreateOpen(false)}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               취소
             </button>
@@ -638,7 +638,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                   () => setCreateOpen(false),
                 )
               }
-              className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-50"
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
             >
               생성
             </button>
@@ -673,7 +673,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <button
                 type="button"
                 onClick={() => setEditTarget(null)}
-                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
               >
                 취소
               </button>
@@ -692,7 +692,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
                     () => setEditTarget(null),
                   )
                 }
-                className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-50"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
               >
                 저장
               </button>

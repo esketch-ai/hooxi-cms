@@ -103,7 +103,7 @@ export function IntegrationsTab() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             다시 시도
           </button>
@@ -137,12 +137,12 @@ function statusOf(fields: IntegrationField[]): { label: string; cls: string } {
   const target = required.length > 0 ? required : fields
   const configured = fields.filter((f) => f.configured)
   if (target.length > 0 && target.every((f) => f.configured)) {
-    return { label: '연동됨', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' }
+    return { label: '연동됨', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' }
   }
   if (configured.length > 0) {
-    return { label: '부분 설정', cls: 'bg-amber-500/15 text-amber-300 border-amber-400/25' }
+    return { label: '부분 설정', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' }
   }
-  return { label: '미설정', cls: 'bg-white/10 text-ash border-hairline' }
+  return { label: '미설정', cls: 'bg-elevate-strong text-ash border-hairline' }
 }
 
 // ── 연동 카드 ────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
       {/* 헤더: 이름 + 상태 뱃지 */}
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-bold text-bone">{integration.label}</h3>
-        <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-ash">
+        <code className="rounded bg-elevate-strong px-1.5 py-0.5 font-mono text-[11px] text-ash">
           {integration.name}
         </code>
         <span
@@ -259,7 +259,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
                     setDraft(field.key, randomHex32())
                     showToast('시크릿이 생성되었습니다. [저장]을 눌러 적용하세요.', 'info')
                   }}
-                  className="flex items-center gap-1 rounded-lg border border-hairline px-2 py-1 text-[11px] font-medium text-bone hover:bg-white/5"
+                  className="flex items-center gap-1 rounded-lg border border-hairline px-2 py-1 text-[11px] font-medium text-bone hover:bg-elevate"
                 >
                   <Sparkle size={12} />
                   시크릿 자동 생성
@@ -286,8 +286,8 @@ function IntegrationCard({ integration }: { integration: Integration }) {
         <div
           className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${
             testResult.ok
-              ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-300'
-              : 'border-rose-400/25 bg-rose-500/15 text-rose-300'
+              ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+              : 'border-rose-400/25 bg-rose-500/15 text-rose-700 dark:text-rose-300'
           }`}
         >
           {testResult.ok ? (
@@ -324,7 +324,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             type="button"
             onClick={runTest}
             disabled={test.isPending}
-            className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
           >
             {test.isPending ? (
               <CircleNotch size={14} className="animate-spin" />
@@ -337,7 +337,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
             type="button"
             onClick={handleSave}
             disabled={!dirty || save.isPending}
-            className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {save.isPending ? '저장 중…' : '저장'}
           </button>
@@ -375,7 +375,7 @@ function FieldRow({
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         <label className="text-xs font-medium text-ash">{field.label}</label>
-        <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-[10px] text-slatey">
+        <code className="rounded bg-elevate-strong px-1 py-0.5 font-mono text-[10px] text-slatey">
           {field.key}
         </code>
         {field.required && (
@@ -383,7 +383,7 @@ function FieldRow({
         )}
         {field.source === 'env' && (
           <span
-            className="inline-flex rounded-full border border-sky-400/25 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-300"
+            className="inline-flex rounded-full border border-sky-400/25 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
             title="DB에 저장된 값이 없어 서버 환경변수 값을 사용 중입니다"
           >
             환경변수
@@ -398,8 +398,8 @@ function FieldRow({
               title={markedDelete ? '삭제 취소' : '저장된 값 삭제'}
               className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${
                 markedDelete
-                  ? 'border-rose-400/40 bg-rose-500/15 text-rose-300'
-                  : 'border-hairline text-ash hover:bg-rose-500/10 hover:text-rose-300'
+                  ? 'border-rose-400/40 bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                  : 'border-hairline text-ash hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300'
               }`}
             >
               <Trash size={12} />
@@ -459,7 +459,7 @@ function KakaoWebhookUrlBox() {
           type="button"
           onClick={copy}
           title="복사"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-hairline bg-graphite text-ash hover:bg-white/5 hover:text-bone"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-hairline bg-graphite text-ash hover:bg-elevate hover:text-bone"
         >
           <Copy size={14} />
         </button>
@@ -523,7 +523,7 @@ function DropboxOAuthWizard({
         <LinkSimple size={14} />
         OAuth 승인 마법사
         {connected && (
-          <span className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+          <span className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
             승인 완료
           </span>
         )}
@@ -543,7 +543,7 @@ function DropboxOAuthWizard({
               type="button"
               onClick={openAuthorize}
               disabled={!appKeyReady || authorizeUrl.isPending}
-              className="inline-flex items-center gap-1 rounded-lg border border-hairline bg-graphite px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-white/5 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-lg border border-hairline bg-graphite px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate disabled:opacity-40"
             >
               {authorizeUrl.isPending ? (
                 <CircleNotch size={12} className="animate-spin" />
@@ -574,7 +574,7 @@ function DropboxOAuthWizard({
                 type="button"
                 onClick={runExchange}
                 disabled={!code.trim() || exchange.isPending}
-                className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-snow px-3 text-xs font-medium text-graphite hover:bg-white/90 disabled:opacity-40"
+                className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-xs font-medium text-on-primary hover:opacity-90 disabled:opacity-40"
               >
                 {exchange.isPending && <CircleNotch size={12} className="animate-spin" />}
                 연동 완료
@@ -594,7 +594,7 @@ function StepBullet({ n, done }: { n: number; done: boolean }) {
   return (
     <span
       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-        done ? 'bg-emerald-500 text-white' : 'bg-white/10 text-ash'
+        done ? 'bg-emerald-500 text-white' : 'bg-elevate-strong text-ash'
       }`}
     >
       {done ? '✓' : n}

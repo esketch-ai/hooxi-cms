@@ -74,7 +74,7 @@ export function SensitiveData({ type, value, className = '' }: SensitiveDataProp
         tabIndex={0}
         onClick={reveal}
         onKeyDown={(e) => e.key === 'Enter' && reveal()}
-        className={`cursor-pointer rounded bg-white/10 px-1 blur-[5px] select-none ${className}`}
+        className={`cursor-pointer rounded bg-elevate-strong px-1 blur-[5px] select-none ${className}`}
         title="클릭하여 일시 표시"
         aria-label="민감 정보 — 클릭하여 일시 표시"
       >
@@ -89,7 +89,7 @@ export function SensitiveData({ type, value, className = '' }: SensitiveDataProp
       tabIndex={0}
       onClick={reveal}
       onKeyDown={(e) => e.key === 'Enter' && reveal()}
-      className={`cursor-pointer rounded bg-white/10 px-1 font-mono tracking-tight text-slatey select-none ${className}`}
+      className={`cursor-pointer rounded bg-elevate-strong px-1 font-mono tracking-tight text-slatey select-none ${className}`}
       title="클릭하여 일시 표시"
       aria-label="민감 정보 — 클릭하여 일시 표시"
     >

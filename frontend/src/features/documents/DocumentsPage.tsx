@@ -94,7 +94,7 @@ export function DocumentsPage() {
       key: 'type',
       header: '유형',
       render: (d) => (
-        <span className="inline-flex rounded-full border border-hairline bg-white/10 px-2 py-0.5 text-xs font-medium text-ash">
+        <span className="inline-flex rounded-full border border-hairline bg-elevate-strong px-2 py-0.5 text-xs font-medium text-ash">
           {docTypeLabel(d.doc_type)}
         </span>
       ),
@@ -121,7 +121,7 @@ export function DocumentsPage() {
       render: (d) => (
         <button
           type="button"
-          className="inline-flex rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+          className="inline-flex rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
           title="다운로드"
           onClick={(e) => {
             e.stopPropagation()
@@ -143,7 +143,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             문서 업로드
@@ -219,7 +219,7 @@ export function DocumentsPage() {
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
                 >
                   다시 시도
                 </button>
@@ -244,7 +244,7 @@ export function DocumentsPage() {
                   <button
                     type="button"
                     onClick={() => void handleDownload(d.doc_id, d.title)}
-                    className="rounded-lg p-2 text-smoke hover:bg-white/5"
+                    className="rounded-lg p-2 text-smoke hover:bg-elevate"
                     aria-label="다운로드"
                   >
                     <DownloadSimple size={18} />
@@ -280,8 +280,8 @@ function FolderButton({
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
         active
-          ? 'bg-white/10 font-semibold text-bone'
-          : 'text-ash hover:bg-white/5'
+          ? 'bg-elevate-strong font-semibold text-bone'
+          : 'text-ash hover:bg-elevate'
       }`}
     >
       {active ? (
@@ -397,14 +397,14 @@ function DocumentUploadModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={upload.isPending}
-            className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
           >
             {upload.isPending && <CircleNotch size={14} className="animate-spin" />}
             업로드

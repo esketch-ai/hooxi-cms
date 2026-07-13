@@ -50,7 +50,7 @@ export function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-smoke hover:bg-white/5 hover:text-bone"
+            className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
             aria-label="닫기"
           >
             <X size={18} />

@@ -35,7 +35,7 @@ export function ProjectNameCell({ project, link = true }: { project: Project; li
       {name}
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {project.reg_code && (
-          <span className="inline-flex items-center rounded border border-hairline bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-ash">
+          <span className="inline-flex items-center rounded border border-hairline bg-elevate px-1.5 py-0.5 font-mono text-[10px] text-ash">
             {project.reg_code}
           </span>
         )}
@@ -153,7 +153,7 @@ export function ProjectsPage() {
             <Link
               to={`/projects/${p.project_id}`}
               onClick={(e) => e.stopPropagation()}
-              className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+              className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
               title="상세"
               aria-label={`${p.project_name} 상세`}
             >
@@ -172,7 +172,7 @@ export function ProjectsPage() {
               <Link
                 to={`/settlements?project_id=${p.project_id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-md p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+                className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
                 title="정산 매핑"
                 aria-label={`${p.project_name} 정산 매핑`}
               >
@@ -195,7 +195,7 @@ export function ProjectsPage() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-semibold text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-semibold text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             신규 사업 등록
@@ -251,7 +251,7 @@ export function ProjectsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>

@@ -47,7 +47,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-white/10 py-2.5 last:border-b-0 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-0.5 border-b border-hairline py-2.5 last:border-b-0 sm:flex-row sm:items-center">
       <dt className="w-40 shrink-0 text-xs font-medium text-slatey">{label}</dt>
       <dd className="text-sm text-bone">{children}</dd>
     </div>
@@ -91,13 +91,13 @@ export function ClientDetailPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
             <Link
               to="/clients"
-              className="rounded-full bg-snow px-4 py-2 text-sm font-medium text-graphite hover:bg-white/90"
+              className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90"
             >
               목록으로
             </Link>
@@ -163,7 +163,7 @@ export function ClientDetailPage() {
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
             >
               <PencilSimple size={15} />
               수정
@@ -290,7 +290,7 @@ function HistoriesTab({ clientId, onAdd }: { clientId: string; onAdd: () => void
         <button
           type="button"
           onClick={onAdd}
-          className="flex items-center gap-1 rounded-full bg-snow px-3 py-1.5 text-xs font-medium text-graphite hover:bg-white/90"
+          className="flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:opacity-90"
         >
           <Plus size={13} weight="bold" />
           이력 등록
@@ -331,7 +331,7 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
         ) : reports.length === 0 ? (
           <EmptyState title="보고서 발송 이력이 없습니다" />
         ) : (
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-hairline">
             {reports.map((r) => (
               <li key={r.report_id} className="flex items-center gap-3 py-2.5">
                 <span className="w-16 shrink-0 font-mono text-xs text-ash">{r.period}</span>
@@ -353,7 +353,7 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
         ) : documents.length === 0 ? (
           <EmptyState title="등록된 문서가 없습니다" />
         ) : (
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-hairline">
             {documents.map((d) => (
               <li key={d.doc_id} className="flex items-center gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
@@ -365,7 +365,7 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
                 <button
                   type="button"
                   onClick={() => void handleDownload(d.doc_id, d.title)}
-                  className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+                  className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
                   title="다운로드"
                 >
                   <DownloadSimple size={16} />
@@ -389,7 +389,7 @@ function ChatTab({ clientId }: { clientId: string }) {
         <h2 className="text-sm font-semibold text-bone">카카오톡 상담 스레드 (최근순)</h2>
         <Link
           to={`/chat?client=${clientId}`}
-          className="flex items-center gap-1 rounded-full bg-snow px-3 py-1.5 text-xs font-medium text-graphite hover:bg-white/90"
+          className="flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:opacity-90"
         >
           <ChatCircleDots size={13} weight="fill" />
           상담 관제에서 열기
@@ -404,12 +404,12 @@ function ChatTab({ clientId }: { clientId: string }) {
           description="카카오 채널 연동 후 상담 이력이 표시됩니다."
         />
       ) : (
-        <ul className="divide-y divide-white/10">
+        <ul className="divide-y divide-hairline">
           {threads.map((t) => (
             <li key={t.thread_id}>
               <Link
                 to={`/chat?client=${clientId}`}
-                className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-white/5"
+                className="flex items-center gap-3 rounded-md px-1 py-2.5 hover:bg-elevate"
               >
                 <ThreadModePill thread={t} />
                 <ThreadWaitingBadge thread={t} />
@@ -458,7 +458,7 @@ function AssetsTab({ clientId }: { clientId: string }) {
             </thead>
             <tbody>
               {assets.map((a) => (
-                <tr key={a.asset_id} className="border-b border-white/10 last:border-b-0">
+                <tr key={a.asset_id} className="border-b border-hairline last:border-b-0">
                   <td className="px-3 py-2.5">
                     {a.asset_type ? (
                       <StatusBadge domain="assetType" value={a.asset_type} />

@@ -21,7 +21,7 @@ const PAGE_SIZE = 20
 export function ClientAvatar({ name, className = '' }: { name?: string | null; className?: string }) {
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-sm font-bold text-bone ${className}`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-elevate-strong text-sm font-bold text-bone ${className}`}
     >
       {name?.charAt(0) ?? '?'}
     </div>
@@ -143,7 +143,7 @@ export function ClientsPage() {
             e.stopPropagation()
             openEdit(c)
           }}
-          className="rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone"
+          className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
           title="수정"
           aria-label={`${c.company_name} 수정`}
         >
@@ -166,7 +166,7 @@ export function ClientsPage() {
               setEditing(null)
               setFormOpen(true)
             }}
-            className="hidden items-center gap-1.5 rounded-full bg-snow px-3.5 py-2 text-sm font-medium text-graphite hover:bg-white/90 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
           >
             <Plus size={16} weight="bold" />
             신규 고객사 등록
@@ -229,7 +229,7 @@ export function ClientsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -265,7 +265,7 @@ export function ClientsPage() {
                   {c.main_contact_phone && (
                     <a
                       href={telHref(c.main_contact_phone)}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-snow py-2 text-sm font-medium text-graphite"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary py-2 text-sm font-medium text-on-primary"
                     >
                       <Phone size={15} weight="fill" />
                       전화

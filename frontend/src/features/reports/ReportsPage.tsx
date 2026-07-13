@@ -225,7 +225,7 @@ export function ReportsPage() {
               e.stopPropagation()
               handleConfirm(r)
             }}
-            className="rounded-full border border-hairline px-2 py-1 text-xs font-medium text-bone hover:bg-white/5"
+            className="rounded-full border border-hairline px-2 py-1 text-xs font-medium text-bone hover:bg-elevate"
           >
             확인 처리
           </button>
@@ -251,7 +251,7 @@ export function ReportsPage() {
                   setUploadTarget(r)
                   setUploadFile(null)
                 }}
-                className="hidden rounded-lg p-1.5 text-smoke hover:bg-white/5 hover:text-bone sm:block"
+                className="hidden rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone sm:block"
                 title="파일 업로드"
               >
                 <UploadSimple size={16} />
@@ -264,7 +264,7 @@ export function ReportsPage() {
                   e.stopPropagation()
                   setSendTarget(r)
                 }}
-                className="hidden items-center gap-1 rounded-full bg-snow px-2.5 py-1.5 text-xs font-semibold text-graphite hover:bg-white/90 sm:flex"
+                className="hidden items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-xs font-semibold text-on-primary hover:opacity-90 sm:flex"
                 title="발송"
               >
                 <PaperPlaneRight size={13} weight="fill" />
@@ -288,7 +288,7 @@ export function ReportsPage() {
           <button
             type="button"
             onClick={() => setGenerateOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-white/5 sm:flex"
+            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
           >
             <ListChecks size={16} />
             대상 생성
@@ -303,7 +303,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => movePeriod(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-white/5"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-elevate"
               aria-label="이전 달"
             >
               <CaretLeft size={14} />
@@ -314,7 +314,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => movePeriod(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-white/5"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline text-ash hover:bg-elevate"
               aria-label="다음 달"
             >
               <CaretRight size={14} />
@@ -331,7 +331,7 @@ export function ReportsPage() {
             ))}
           </p>
           <div className="ml-auto flex min-w-[160px] items-center gap-2">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevate">
               <div
                 className="h-full rounded-full bg-emerald-500 transition-all"
                 style={{ width: `${summary.pct}%` }}
@@ -350,7 +350,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               다시 시도
             </button>
@@ -402,7 +402,7 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={() => setUploadTarget(null)}
-              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-white/5"
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
             >
               취소
             </button>
@@ -410,7 +410,7 @@ export function ReportsPage() {
               type="button"
               onClick={handleUpload}
               disabled={!uploadFile || upload.isPending}
-              className="flex items-center gap-1.5 rounded-full bg-snow px-4 py-2 text-sm font-semibold text-graphite hover:bg-white/90 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:opacity-60"
             >
               {upload.isPending && <CircleNotch size={14} className="animate-spin" />}
               업로드

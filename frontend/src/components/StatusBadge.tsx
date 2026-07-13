@@ -16,12 +16,12 @@ interface BadgeSpec {
   className: string
 }
 
-const green = 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25'
-const yellow = 'bg-amber-500/15 text-amber-300 border-amber-400/25'
-const red = 'bg-rose-500/15 text-rose-300 border-rose-400/25'
-const blue = 'bg-blue-500/15 text-blue-300 border-blue-400/25'
-const purple = 'bg-purple-500/15 text-purple-300 border-purple-400/25'
-const gray = 'bg-white/10 text-ash border-white/10'
+const green = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25'
+const yellow = 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25'
+const red = 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25'
+const blue = 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25'
+const purple = 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400/25'
+const gray = 'bg-elevate-strong text-ash border-hairline'
 const grayStrike = `${gray} line-through`
 
 export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = {
@@ -39,7 +39,7 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
     ICE: { label: '내연기관', className: blue },
     EV: { label: '전기차', className: gray },
     SOLAR: { label: '태양광', className: yellow },
-    HEATPUMP: { label: '히트펌프', className: 'bg-amber-500/20 text-amber-200 border-amber-400/30' },
+    HEATPUMP: { label: '히트펌프', className: 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-400/30' },
   },
   activity: {
     CALL: { label: '전화', className: green },
@@ -85,13 +85,13 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
   },
   retention: {
     AWARENESS: { label: '인지', className: gray },
-    INTEREST: { label: '관심', className: 'bg-white/10 text-bone border-white/15' },
+    INTEREST: { label: '관심', className: 'bg-elevate-strong text-bone border-hairline-strong' },
     REVIEW: { label: '검토', className: blue },
-    DECISION: { label: '구매결정', className: 'bg-blue-500/20 text-blue-200 border-blue-400/30' },
+    DECISION: { label: '구매결정', className: 'bg-blue-500/20 text-blue-800 dark:text-blue-200 border-blue-400/30' },
     ONBOARDING: { label: '온보딩', className: green },
     UTILIZATION: { label: '활용', className: green },
-    RENEWAL: { label: '재계약', className: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30' },
-    EXPANSION: { label: '확장', className: 'bg-emerald-500/25 text-emerald-200 border-emerald-400/35' },
+    RENEWAL: { label: '재계약', className: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border-emerald-400/30' },
+    EXPANSION: { label: '확장', className: 'bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border-emerald-400/35' },
   },
 }
 

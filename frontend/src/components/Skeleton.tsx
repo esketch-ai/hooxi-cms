@@ -1,7 +1,7 @@
 // 로딩 표준 (01_COMMON §5): 테이블 행 5개 / 카드 3개 / KPI 블록 — 스피너 단독 사용 금지
 
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-white/5 ${className}`} />
+  return <div className={`animate-pulse rounded-md bg-elevate ${className}`} />
 }
 
 export function SkeletonTableRows({ rows = 5 }: { rows?: number }) {

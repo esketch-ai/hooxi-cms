@@ -20,11 +20,12 @@ export function KpiCard({
   const base = 'rounded-3xl p-5 border'
   const variants: Record<NonNullable<KpiCardProps['variant']>, string> = {
     default: 'bg-graphite border-hairline',
-    // danger: 좌측 빨간 바 (플랜 §4.2)
-    danger: 'bg-graphite border-hairline border-l-4 border-l-rose-500',
+    // danger: 값 색으로만 강조 (좌측 컬러 바는 제거 — 기본 테마 인상 방지)
+    danger: 'bg-graphite border-hairline',
     // dark: 민감(금액) variant
     dark: 'bg-graphite-2 border-hairline text-bone',
   }
+  const valueColor = variant === 'danger' ? 'text-rose-600 dark:text-rose-300' : ''
   const titleColor = variant === 'dark' ? 'text-ash' : 'text-ash'
   const subColor = variant === 'dark' ? 'text-slatey' : 'text-slatey'
 
@@ -38,7 +39,7 @@ export function KpiCard({
           </span>
         )}
       </div>
-      <div className="mt-2 text-2xl font-bold tracking-tight">{value}</div>
+      <div className={`mt-2 text-2xl font-bold tracking-tight ${valueColor}`}>{value}</div>
       {sub && <div className={`mt-1 text-xs ${subColor}`}>{sub}</div>}
     </div>
   )
