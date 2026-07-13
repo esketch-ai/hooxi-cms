@@ -69,6 +69,10 @@ const CATEGORIES: { value: string; label: string; hint: string }[] = [
 const NO_COLOR_CATEGORIES = new Set(['CLIENT_TYPE', 'AGENCY'])
 // 한글 코드값을 허용하는 카테고리(저장값이 한글)
 const KOREAN_CODE_CATEGORIES = new Set(['PROJECT_STATUS', 'AGENCY'])
+// 부가값(extra) 라벨 — 해당 카테고리만 부가값 입력을 노출
+const EXTRA_LABELS: Record<string, string> = {
+  AGENCY: '기본 접속 URL',
+}
 
 function extractDetail(error: unknown, fallback: string): string {
   return (
@@ -112,14 +116,15 @@ export function CodesTab() {
   const [category, setCategory] = useState(CATEGORIES[0].value)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({ code: '', label: '', color: '', sort_order: 0 })
+  const [createForm, setCreateForm] = useState({ code: '', label: '', color: '', extra: '', sort_order: 0 })
   const [editTarget, setEditTarget] = useState<Code | null>(null)
-  const [editForm, setEditForm] = useState({ label: '', color: '', sort_order: 0 })
+  const [editForm, setEditForm] = useState({ label: '', color: '', extra: '', sort_order: 0 })
   const [deleteTarget, setDeleteTarget] = useState<Code | null>(null)
 
   // 색상 사용 카테고리(상태 배지가 있는 도메인)
   const usesColor = !NO_COLOR_CATEGORIES.has(category)
   const allowsKoreanCode = KOREAN_CODE_CATEGORIES.has(category)
+  const extraLabel = EXTRA_LABELS[category]
 
   const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0]
 
@@ -145,6 +150,7 @@ export function CodesTab() {
         code: form.code.trim().toUpperCase(),
         label: form.label.trim(),
         color: form.color || null,
+        extra: form.extra.trim() || null,
         sort_order: form.sort_order,
       })
       return data
@@ -214,8 +220,17 @@ export function CodesTab() {
     },
     {
       key: 'code',
-      header: '코드값',
-      render: (c) => <span className="font-mono text-xs text-ash">{c.code}</span>,
+      header: extraLabel ? '코드값 / ' + extraLabel : '코드값',
+      render: (c) => (
+        <div className="min-w-0">
+          <span className="font-mono text-xs text-ash">{c.code}</span>
+          {extraLabel && c.extra && (
+            <p className="truncate text-[11px] text-slatey" title={c.extra}>
+              {c.extra}
+            </p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'usage',
@@ -254,7 +269,12 @@ export function CodesTab() {
             type="button"
             onClick={() => {
               setEditTarget(c)
-              setEditForm({ label: c.label, color: c.color ?? '', sort_order: c.sort_order })
+              setEditForm({
+                label: c.label,
+                color: c.color ?? '',
+                extra: c.extra ?? '',
+                sort_order: c.sort_order,
+              })
             }}
             className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
           >
@@ -303,7 +323,7 @@ export function CodesTab() {
         <button
           type="button"
           onClick={() => {
-            setCreateForm({ code: '', label: '', color: '', sort_order: (codes.length + 1) * 10 })
+            setCreateForm({ code: '', label: '', color: '', extra: '', sort_order: (codes.length + 1) * 10 })
             setCreateOpen(true)
           }}
           className="ml-auto rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-on-primary hover:opacity-90"
@@ -372,6 +392,17 @@ export function CodesTab() {
               />
             </div>
           )}
+          {extraLabel && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ash">{extraLabel}</label>
+              <input
+                value={createForm.extra}
+                onChange={(e) => setCreateForm((f) => ({ ...f, extra: e.target.value }))}
+                placeholder="예: https://etas.kotsa.or.kr"
+                className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-ash">정렬 순서</label>
             <input
@@ -431,6 +462,17 @@ export function CodesTab() {
                 />
               </div>
             )}
+            {extraLabel && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-ash">{extraLabel}</label>
+                <input
+                  value={editForm.extra}
+                  onChange={(e) => setEditForm((f) => ({ ...f, extra: e.target.value }))}
+                  placeholder="예: https://etas.kotsa.or.kr"
+                  className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+                />
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-ash">정렬 순서</label>
               <input
@@ -459,6 +501,7 @@ export function CodesTab() {
                         body: {
                           label: editForm.label.trim(),
                           color: editForm.color || null,
+                          extra: editForm.extra.trim() || null,
                           sort_order: editForm.sort_order,
                         },
                       }),

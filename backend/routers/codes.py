@@ -148,6 +148,7 @@ def create_code(
         code=code,
         label=payload.label.strip(),
         color=payload.color or None,
+        extra=(payload.extra.strip() if payload.extra else None),
         sort_order=payload.sort_order,
         active="Y",
         is_system="N",
@@ -191,6 +192,8 @@ def update_code(
         row.label = payload.label.strip()
     if payload.color is not None:
         row.color = payload.color or None
+    if payload.extra is not None:
+        row.extra = payload.extra.strip() or None
     if payload.sort_order is not None:
         row.sort_order = payload.sort_order
     if payload.active is not None:

@@ -385,6 +385,7 @@ class Code(Base):
     code = Column(String(40), nullable=False)  # TRANSPORT (불변)
     label = Column(String(100), nullable=False)  # 운수사 (수정 가능)
     color = Column(String(20))  # 상태 배지·지도·칸반 색상(시맨틱 팔레트명, 예: emerald)
+    extra = Column(String(255))  # 카테고리별 부가값 — AGENCY는 기본 접속 URL
     sort_order = Column(Integer, default=0)
     active = Column(String(1), nullable=False, default="Y")  # Y/N
     is_system = Column(String(1), nullable=False, default="N")  # 내장 코드 보호
@@ -498,6 +499,7 @@ def ensure_schema():
     # (table, column, DDL 타입) — 배포 이후 모델에 추가된 컬럼
     required = [
         ("tb_code", "color", "VARCHAR(20)"),
+        ("tb_code", "extra", "VARCHAR(255)"),
     ]
     try:
         insp = _inspect(engine)

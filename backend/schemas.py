@@ -933,6 +933,7 @@ class CodeOut(BaseModel):
     code: str
     label: str
     color: Optional[str] = None  # 시맨틱 팔레트명(emerald/amber/rose/...)
+    extra: Optional[str] = None  # 부가값 — AGENCY는 기본 접속 URL
     sort_order: int = 0
     active: str = "Y"
     is_system: str = "N"
@@ -946,13 +947,15 @@ class CodeCreate(BaseModel):
     code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_가-힣]+$")
     label: str = Field(min_length=1, max_length=100)
     color: Optional[str] = Field(default=None, max_length=20)
+    extra: Optional[str] = Field(default=None, max_length=255)
     sort_order: int = 0
 
 
 class CodeUpdate(BaseModel):
-    # code(코드값)·category는 불변 — label·색상·정렬·활성만 수정 가능
+    # code(코드값)·category는 불변 — label·색상·부가값·정렬·활성만 수정 가능
     label: Optional[str] = Field(default=None, min_length=1, max_length=100)
     color: Optional[str] = Field(default=None, max_length=20)
+    extra: Optional[str] = Field(default=None, max_length=255)
     sort_order: Optional[int] = None
     active: Optional[str] = Field(default=None, pattern="^[YN]$")
 

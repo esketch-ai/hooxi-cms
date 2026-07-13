@@ -90,58 +90,60 @@ def seed_codes():
     기존 고객사 데이터의 구분 표시가 유지되게 한다. 이미 있으면 건너뜀.
     """
     builtin = [
-        # (category, code, label, color, sort_order) — color는 시맨틱 팔레트명
-        ("CLIENT_TYPE", "TRANSPORT", "운수사", None, 10),
-        ("CLIENT_TYPE", "FACILITY", "건물·농장", None, 20),
+        # (category, code, label, color, extra, sort_order)
+        # color=시맨틱 팔레트명 / extra=부가값(AGENCY는 기본 접속 URL)
+        ("CLIENT_TYPE", "TRANSPORT", "운수사", None, None, 10),
+        ("CLIENT_TYPE", "FACILITY", "건물·농장", None, None, 20),
         # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
-        ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", 10),
-        ("CONTRACT_STATUS", "HOLD", "보류", "amber", 20),
-        ("CONTRACT_STATUS", "END", "종료", "gray", 30),
+        ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
+        ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),
+        ("CONTRACT_STATUS", "END", "종료", "gray", None, 30),
         # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
-        ("ACTIVITY_TYPE", "CALL", "전화", "emerald", 10),
-        ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", 20),
-        ("ACTIVITY_TYPE", "SITE_VISIT", "현장방문", "purple", 30),
-        ("ACTIVITY_TYPE", "EMAIL", "이메일", "gray", 40),
-        ("ACTIVITY_TYPE", "ISSUE", "이슈", "rose", 50),
-        ("ACTIVITY_TYPE", "KAKAO", "카카오", "yellow", 60),
+        ("ACTIVITY_TYPE", "CALL", "전화", "emerald", None, 10),
+        ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", None, 20),
+        ("ACTIVITY_TYPE", "SITE_VISIT", "현장방문", "purple", None, 30),
+        ("ACTIVITY_TYPE", "EMAIL", "이메일", "gray", None, 40),
+        ("ACTIVITY_TYPE", "ISSUE", "이슈", "rose", None, 50),
+        ("ACTIVITY_TYPE", "KAKAO", "카카오", "yellow", None, 60),
         # 자산 대분류
-        ("ASSET_GROUP", "MOBILITY", "모빌리티", "blue", 10),
-        ("ASSET_GROUP", "FACILITY", "설비", "teal", 20),
+        ("ASSET_GROUP", "MOBILITY", "모빌리티", "blue", None, 10),
+        ("ASSET_GROUP", "FACILITY", "설비", "teal", None, 20),
         # 자산 소분류(연료)
-        ("ASSET_TYPE", "ICE", "내연기관", "blue", 10),
-        ("ASSET_TYPE", "EV", "전기차", "gray", 20),
-        ("ASSET_TYPE", "SOLAR", "태양광", "yellow", 30),
-        ("ASSET_TYPE", "HEATPUMP", "히트펌프", "amber", 40),
+        ("ASSET_TYPE", "ICE", "내연기관", "blue", None, 10),
+        ("ASSET_TYPE", "EV", "전기차", "gray", None, 20),
+        ("ASSET_TYPE", "SOLAR", "태양광", "yellow", None, 30),
+        ("ASSET_TYPE", "HEATPUMP", "히트펌프", "amber", None, 40),
         # 자산 운영 상태
-        ("ASSET_STATUS", "ACTIVE", "운영중", "emerald", 10),
-        ("ASSET_STATUS", "INACTIVE", "비활성", "gray", 20),
-        ("ASSET_STATUS", "ERROR", "오류", "rose", 30),
+        ("ASSET_STATUS", "ACTIVE", "운영중", "emerald", None, 10),
+        ("ASSET_STATUS", "INACTIVE", "비활성", "gray", None, 20),
+        ("ASSET_STATUS", "ERROR", "오류", "rose", None, 30),
         # 감축사업 진행상태 (한글 코드값 유지 — 기획/발급완료는 로직 참조)
-        ("PROJECT_STATUS", "기획", "기획", "gray", 10),
-        ("PROJECT_STATUS", "등록완료", "등록완료", "blue", 20),
-        ("PROJECT_STATUS", "모니터링", "모니터링", "blue", 30),
-        ("PROJECT_STATUS", "검증", "검증", "purple", 40),
-        ("PROJECT_STATUS", "발급완료", "발급완료", "emerald", 50),
+        ("PROJECT_STATUS", "기획", "기획", "gray", None, 10),
+        ("PROJECT_STATUS", "등록완료", "등록완료", "blue", None, 20),
+        ("PROJECT_STATUS", "모니터링", "모니터링", "blue", None, 30),
+        ("PROJECT_STATUS", "검증", "검증", "purple", None, 40),
+        ("PROJECT_STATUS", "발급완료", "발급완료", "emerald", None, 50),
         # 정산 상태 (상태전이 머신 — 전 값 로직 참조)
-        ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", 10),
-        ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", 20),
-        ("SETTLEMENT_STATUS", "COMPLETED", "입금완료", "emerald", 30),
+        ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", None, 10),
+        ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", None, 20),
+        ("SETTLEMENT_STATUS", "COMPLETED", "입금완료", "emerald", None, 30),
         # 이슈 상태 (이슈 칸반 — OPEN/CLOSED 로직 참조)
-        ("ISSUE_STATUS", "OPEN", "접수", "rose", 10),
-        ("ISSUE_STATUS", "IN_PROGRESS", "처리중", "amber", 20),
-        ("ISSUE_STATUS", "HOLD", "보류", "gray", 30),
-        ("ISSUE_STATUS", "CLOSED", "완료", "emerald", 40),
-        # 대상 기관/사이트 (수집 계정 — 콤보박스 선택지, 자유입력도 허용)
-        ("AGENCY", "ETAS", "ETAS", None, 10),
-        ("AGENCY", "BMS", "BMS", None, 20),
-        ("AGENCY", "KECO", "한국환경공단", None, 30),
-        ("AGENCY", "K_FMS", "K-FMS", None, 40),
+        ("ISSUE_STATUS", "OPEN", "접수", "rose", None, 10),
+        ("ISSUE_STATUS", "IN_PROGRESS", "처리중", "amber", None, 20),
+        ("ISSUE_STATUS", "HOLD", "보류", "gray", None, 30),
+        ("ISSUE_STATUS", "CLOSED", "완료", "emerald", None, 40),
+        # 대상 기관/사이트 (수집 계정 — 기본 접속 URL을 extra에 저장, 폼 자동채움)
+        ("AGENCY", "ETAS", "ETAS", None, "https://etas.kotsa.or.kr", 10),
+        ("AGENCY", "BMS", "BMS", None, "https://gbms.gg.go.kr", 20),
+        ("AGENCY", "KECO", "한국환경공단", None, "https://www.keco.or.kr", 30),
+        ("AGENCY", "K_FMS", "K-FMS", None, None, 40),
     ]
     try:
         db = SessionLocal()
         try:
             added = 0
-            for category, code, label, color, sort_order in builtin:
+            backfilled = 0
+            for category, code, label, color, extra, sort_order in builtin:
                 exists = (
                     db.query(Code)
                     .filter(Code.category == category, Code.code == code)
@@ -154,15 +156,28 @@ def seed_codes():
                             code=code,
                             label=label,
                             color=color,
+                            extra=extra,
                             sort_order=sort_order,
                             active="Y",
                             is_system="Y",
                         )
                     )
                     added += 1
-            if added:
+                elif exists.is_system == "Y":
+                    # 내장 코드 — 이미 배포됐으나 신규 필드(color/extra)가 비어 있으면 backfill.
+                    # 관리자가 채운 값(non-null)은 덮어쓰지 않는다.
+                    changed = False
+                    if color and not exists.color:
+                        exists.color = color
+                        changed = True
+                    if extra and not exists.extra:
+                        exists.extra = extra
+                        changed = True
+                    if changed:
+                        backfilled += 1
+            if added or backfilled:
                 db.commit()
-                print(f"✓ Seeded {added} built-in code(s)")
+                print(f"✓ Seeded {added} / backfilled {backfilled} built-in code(s)")
         finally:
             db.close()
     except Exception as exc:

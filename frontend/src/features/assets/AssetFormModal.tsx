@@ -72,7 +72,7 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
   const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
   const { options: assetTypeOptions } = useCodes('ASSET_TYPE')
   const { options: assetStatusOptions } = useCodes('ASSET_STATUS')
-  const { options: agencyOptions } = useCodes('AGENCY')
+  const { options: agencyOptions, codes: agencyCodes } = useCodes('AGENCY')
   const save = useSaveAsset(asset?.asset_id)
 
   const [form, setForm] = useState<FormState>(() => initForm(asset))
@@ -83,6 +83,16 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
+
+  // 대상 기관 선택 시, 접속 URL이 비어 있으면 그 기관의 기본 URL을 자동 채움
+  // (사용자가 이미 입력한 URL은 덮어쓰지 않는다)
+  const handleAgencyChange = (value: string) =>
+    setForm((prev) => {
+      const match = agencyCodes.find((c) => c.label === value || c.code === value)
+      const next = { ...prev, agency_name: value }
+      if (match?.extra && !prev.site_url.trim()) next.site_url = match.extra
+      return next
+    })
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -246,7 +256,7 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
               {/* 콤보박스 — 마스터(AGENCY)에서 선택하거나 직접 입력 */}
               <input
                 value={form.agency_name}
-                onChange={(e) => set('agency_name', e.target.value)}
+                onChange={(e) => handleAgencyChange(e.target.value)}
                 className={inputCls}
                 placeholder="예: 한국환경공단, K-FMS"
                 list="agency-options"

@@ -64,6 +64,7 @@ export interface Code {
   code: string
   label: string
   color?: string | null // 시맨틱 팔레트명(emerald/amber/...)
+  extra?: string | null // 부가값 — AGENCY는 기본 접속 URL
   sort_order: number
   active: string // Y/N
   is_system: string // Y/N

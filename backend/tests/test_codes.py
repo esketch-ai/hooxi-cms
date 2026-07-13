@@ -185,6 +185,32 @@ def test_phase3_4_categories_seeded_and_locked(client, admin_headers):
     assert agency["KECO"]["label"] == "한국환경공단"
 
 
+def test_agency_seeded_with_url_and_editable_extra(client, admin_headers):
+    rows = {
+        c["code"]: c
+        for c in client.get(
+            f"{API}/codes", params={"category": "AGENCY", "include_inactive": True}, headers=admin_headers
+        ).json()
+    }
+    assert rows["ETAS"]["extra"] == "https://etas.kotsa.or.kr"
+    assert rows["BMS"]["extra"] == "https://gbms.gg.go.kr"
+
+    # 신규 기관 추가 시 URL(extra) 저장
+    created = client.post(
+        f"{API}/codes",
+        json={"category": "AGENCY", "code": "GBMS2", "label": "경기BMS", "extra": "https://example.gg.go.kr"},
+        headers=admin_headers,
+    ).json()
+    assert created["extra"] == "https://example.gg.go.kr"
+    # URL 수정
+    upd = client.put(
+        f"{API}/codes/{created['code_id']}",
+        json={"extra": "https://new.gg.go.kr"},
+        headers=admin_headers,
+    )
+    assert upd.status_code == 200 and upd.json()["extra"] == "https://new.gg.go.kr"
+
+
 def test_korean_code_create_allowed(client, admin_headers):
     resp = client.post(
         f"{API}/codes",
