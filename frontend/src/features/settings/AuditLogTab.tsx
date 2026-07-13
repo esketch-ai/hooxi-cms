@@ -34,6 +34,10 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   USER_REACTIVATE: { label: '계정 재활성화', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
   INTEGRATION_CHANGE: { label: '연동 설정 변경', cls: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400/25' },
   INTEGRATION_REVEAL: { label: '연동 정보 열람', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  // 공통 코드 관리 (SCR-14)
+  CODE_CREATE: { label: '코드 추가', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  CODE_UPDATE: { label: '코드 수정', cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-400/25' },
+  CODE_DELETE: { label: '코드 삭제', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
   BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-400/25' },
   BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
@@ -59,6 +63,7 @@ const TARGET_TYPE_LABELS: Record<string, string> = {
   KAKAO_CONTACT: '카카오 연락처',
   PROJECT_CLIENT_MAP: '정산 매핑',
   DOCUMENT: '문서',
+  CODE: '공통 코드',
   DATABASE: '데이터베이스',
   PROJECT: '감축 사업',
   HISTORY: '활동 이력',

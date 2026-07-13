@@ -368,6 +368,29 @@ class ConfigHistory(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class Code(Base):
+    """공통 코드 마스터 — 화면에서 추가·수정·비활성 가능한 분류값 (예: 고객사 구분).
+
+    - code: DB에 저장되는 불변 코드값(예: TRANSPORT). 생성 후 변경 불가.
+    - label: 화면 표시명(예: 운수사). 언제든 수정 가능(기존 데이터 안 깨짐).
+    - active: 'N'이면 신규 선택지에서 숨김(기존 데이터는 유지·표시).
+    - is_system: 'Y'는 내장 코드 — 삭제 불가(비활성만 가능).
+    """
+
+    __tablename__ = "tb_code"
+    __table_args__ = (UniqueConstraint("category", "code", name="uq_code_category_code"),)
+
+    code_id = Column(String(50), primary_key=True, default=gen_uuid)
+    category = Column(String(40), nullable=False, index=True)  # CLIENT_TYPE 등
+    code = Column(String(40), nullable=False)  # TRANSPORT (불변)
+    label = Column(String(100), nullable=False)  # 운수사 (수정 가능)
+    sort_order = Column(Integer, default=0)
+    active = Column(String(1), nullable=False, default="Y")  # Y/N
+    is_system = Column(String(1), nullable=False, default="N")  # 내장 코드 보호
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class AuditLog(Base):
     """감사 로그 — GAN A10. 비밀번호·해시·인증정보 값 기록 절대 금지 (R2-E6)."""
 

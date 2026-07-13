@@ -1,7 +1,46 @@
 // 공용 서버 상태 훅 — 여러 화면에서 재사용하는 셀렉트 옵션(고객사·사용자) 등
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './client'
-import type { ChatBadge, Client, Paginated, User } from '../../types'
+import type { ChatBadge, Client, Code, Paginated, User } from '../../types'
+
+/**
+ * 공통 코드 마스터 조회 (tb_code). 드롭다운 옵션 + 코드값→표시명 매핑을 함께 제공.
+ * - options: 활성 코드만 (신규 선택지용)
+ * - labelOf(code): 표시명 반환, 없으면 코드값 원문(구분 삭제/변동 시에도 오표시 방지)
+ * include_inactive=true로 전체를 받아 비활성 코드도 라벨 해석은 되게 한다.
+ */
+export function useCodes(category: string) {
+  const query = useQuery({
+    queryKey: ['codes', category],
+    queryFn: async () => {
+      const { data } = await api.get<Code[]>('/codes', {
+        params: { category, include_inactive: true },
+      })
+      return data
+    },
+    staleTime: 5 * 60_000,
+  })
+
+  const codes = query.data ?? []
+  const labelMap = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const c of codes) m[c.code] = c.label
+    return m
+  }, [codes])
+
+  const options = useMemo(
+    () =>
+      codes
+        .filter((c) => c.active === 'Y')
+        .map((c) => ({ value: c.code, label: c.label })),
+    [codes],
+  )
+
+  const labelOf = (code?: string | null) => (code ? labelMap[code] ?? code : '')
+
+  return { ...query, codes, options, labelOf }
+}
 
 /** 배열/Paginated 어느 쪽이 와도 items·total로 정규화 */
 export function unwrapList<T>(data: T[] | Paginated<T> | null | undefined): {

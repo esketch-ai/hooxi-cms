@@ -24,6 +24,7 @@ import auth
 import schemas
 from models import (
     Client,
+    Code,
     Document,
     ReportDelivery,
     SessionLocal,
@@ -38,6 +39,7 @@ from routers import batch as batch_router
 from routers import backups as backups_router
 from routers import chat as chat_router
 from routers import clients as clients_router
+from routers import codes as codes_router
 from routers import config as config_router
 from routers import dashboard as dashboard_router
 from routers import documents as documents_router
@@ -81,10 +83,53 @@ def seed_admin():
         print(f"⚠ Admin seed skipped (database unavailable): {exc}")
 
 
+def seed_codes():
+    """공통 코드 마스터 부트스트랩 — 내장 구분(CLIENT_TYPE) 보장 (멱등).
+
+    기존 하드코딩 값(TRANSPORT/FACILITY)을 내장 코드로 이관해, 마스터 전환 후에도
+    기존 고객사 데이터의 구분 표시가 유지되게 한다. 이미 있으면 건너뜀.
+    """
+    builtin = [
+        # (category, code, label, sort_order)
+        ("CLIENT_TYPE", "TRANSPORT", "운수사", 10),
+        ("CLIENT_TYPE", "FACILITY", "건물·농장", 20),
+    ]
+    try:
+        db = SessionLocal()
+        try:
+            added = 0
+            for category, code, label, sort_order in builtin:
+                exists = (
+                    db.query(Code)
+                    .filter(Code.category == category, Code.code == code)
+                    .first()
+                )
+                if exists is None:
+                    db.add(
+                        Code(
+                            category=category,
+                            code=code,
+                            label=label,
+                            sort_order=sort_order,
+                            active="Y",
+                            is_system="Y",
+                        )
+                    )
+                    added += 1
+            if added:
+                db.commit()
+                print(f"✓ Seeded {added} built-in code(s)")
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f"⚠ Code seed skipped (database unavailable): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if init_db():
         seed_admin()
+        seed_codes()
     yield
 
 
@@ -122,6 +167,7 @@ API_V1_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_V1_PREFIX)
 app.include_router(users_router.router, prefix=API_V1_PREFIX)
 app.include_router(clients_router.router, prefix=API_V1_PREFIX)
+app.include_router(codes_router.router, prefix=API_V1_PREFIX)
 app.include_router(histories_router.router, prefix=API_V1_PREFIX)
 app.include_router(schedules_router.router, prefix=API_V1_PREFIX)
 app.include_router(reports_router.router, prefix=API_V1_PREFIX)

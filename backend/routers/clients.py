@@ -25,6 +25,7 @@ from models import (
     get_db,
 )
 from routers import common
+from routers.codes import validate_active_code
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -176,6 +177,7 @@ def create_client(
     db: Session = Depends(get_db),
 ):
     """고객사 등록 (SCR-03) — 월간 보고서 설정(subscription) 동시 등록 지원."""
+    validate_active_code(db, "CLIENT_TYPE", payload.client_type)
     if payload.manager_id:
         common.get_or_404(db, User, payload.manager_id, "담당 PM")
     client = Client(**{f: getattr(payload, f) for f in _CLIENT_FIELDS})
@@ -209,6 +211,8 @@ def update_client(
     """고객사 수정 — 전달된 필드만 반영."""
     client = common.get_or_404(db, Client, client_id, "고객사")
     data = payload.model_dump(exclude_unset=True)
+    if "client_type" in data:
+        validate_active_code(db, "CLIENT_TYPE", data["client_type"])
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
     for field in _CLIENT_FIELDS:

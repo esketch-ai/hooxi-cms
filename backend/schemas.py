@@ -151,7 +151,9 @@ class ReportSubscriptionOut(BaseModel):
 # P1 — 고객사 (SCR-03 / 03D)
 # ---------------------------------------------------------------------------
 class ClientCreate(BaseModel):
-    client_type: str = Field(pattern="^(TRANSPORT|FACILITY)$")
+    # 구분(client_type)은 공통 코드 마스터(tb_code, category=CLIENT_TYPE)로 관리.
+    # 유효성은 라우터에서 활성 코드 존재 여부로 검증(정규식 하드코딩 제거).
+    client_type: str = Field(min_length=1, max_length=40)
     company_name: str = Field(min_length=1, max_length=100)
     biz_reg_no: Optional[str] = None
     region: Optional[str] = None
@@ -173,7 +175,7 @@ class ClientCreate(BaseModel):
 
 
 class ClientUpdate(BaseModel):
-    client_type: Optional[str] = Field(default=None, pattern="^(TRANSPORT|FACILITY)$")
+    client_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
     company_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     biz_reg_no: Optional[str] = None
     region: Optional[str] = None
@@ -913,6 +915,36 @@ class ConfigHistoryOut(BaseModel):
 class ConfigHistoryListResponse(BaseModel):
     items: List[ConfigHistoryOut]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# 공통 코드 마스터 (SCR-14 공통 코드 관리 — tb_code)
+# ---------------------------------------------------------------------------
+class CodeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code_id: str
+    category: str
+    code: str
+    label: str
+    sort_order: int = 0
+    active: str = "Y"
+    is_system: str = "N"
+    usage_count: Optional[int] = None  # 이 코드를 사용 중인 레코드 수(삭제 가능 판단용)
+
+
+class CodeCreate(BaseModel):
+    category: str = Field(min_length=1, max_length=40)
+    code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_]+$")
+    label: str = Field(min_length=1, max_length=100)
+    sort_order: int = 0
+
+
+class CodeUpdate(BaseModel):
+    # code(코드값)·category는 불변 — label·정렬·활성만 수정 가능
+    label: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    sort_order: Optional[int] = None
+    active: Optional[str] = Field(default=None, pattern="^[YN]$")
 
 
 # ---------------------------------------------------------------------------

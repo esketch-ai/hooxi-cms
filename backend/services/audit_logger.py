@@ -221,6 +221,27 @@ class AuditLogger:
             new_value=new_value,
         )
 
+    # ── 공통 코드 마스터 (SCR-14 공통 코드 관리) ───────────────────
+    @staticmethod
+    def code_change(
+        db: Session,
+        actor_id: str,
+        action: str,  # CODE_CREATE/CODE_UPDATE/CODE_DELETE
+        code_id: str,
+        old_value: Optional[str] = None,
+        new_value: Optional[str] = None,
+    ) -> AuditLog:
+        """공통 코드 추가·수정·삭제 — category:code / label 등 표시값만 기록."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            action,
+            target_type="CODE",
+            target_id=code_id,
+            old_value=old_value,
+            new_value=new_value,
+        )
+
     # ── 연동 설정 (SCR-14 연동 탭) ─────────────────────────────────
     @staticmethod
     def integration_change(db: Session, actor_id: str, name: str, changed_keys) -> AuditLog:

@@ -21,8 +21,9 @@ import { SystemConfigTab } from './SystemConfigTab'
 import { AuditLogTab } from './AuditLogTab'
 import { BackupTab } from './BackupTab'
 import { IntegrationsTab } from './IntegrationsTab'
+import { CodesTab } from './CodesTab'
 
-type TabKey = 'accounts' | 'system' | 'integrations' | 'backup' | 'audit'
+type TabKey = 'accounts' | 'codes' | 'system' | 'integrations' | 'backup' | 'audit'
 
 const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: '관리자',
@@ -51,6 +52,7 @@ export function SettingsPage() {
         {(
           [
             { key: 'accounts', label: '계정 관리' },
+            { key: 'codes', label: '공통 코드 관리' },
             { key: 'system', label: '시스템 설정' },
             { key: 'integrations', label: '연동 관리' },
             { key: 'backup', label: '백업·복구' },
@@ -82,6 +84,8 @@ export function SettingsPage() {
             description="계정 관리는 관리자(ADMIN)·팀장(MANAGER)만 조회할 수 있습니다."
           />
         ))}
+      {tab === 'codes' &&
+        (isAdmin ? <CodesTab /> : <AdminOnlyNotice feature="공통 코드 관리" />)}
       {tab === 'system' &&
         (isAdmin ? <SystemConfigTab /> : <AdminOnlyNotice feature="시스템 설정" />)}
       {tab === 'integrations' &&

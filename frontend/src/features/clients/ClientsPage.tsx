@@ -9,7 +9,7 @@ import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
-import { useUserOptions } from '../../lib/api/queries'
+import { useCodes, useUserOptions } from '../../lib/api/queries'
 import { fmtDate, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { useClients } from './api'
@@ -31,6 +31,7 @@ export function ClientAvatar({ name, className = '' }: { name?: string | null; c
 export function ClientsPage() {
   const navigate = useNavigate()
   const { data: users = [] } = useUserOptions()
+  const { labelOf: clientTypeLabel, options: clientTypeOptions } = useCodes('CLIENT_TYPE')
 
   const [clientType, setClientType] = useState('')
   const [contractStatus, setContractStatus] = useState('')
@@ -86,7 +87,7 @@ export function ClientsPage() {
       header: '구분',
       render: (c) => (
         <span className="text-xs font-medium text-ash">
-          {c.client_type === 'TRANSPORT' ? '운수사' : '건물·농장'}
+          {clientTypeLabel(c.client_type)}
         </span>
       ),
     },
@@ -182,10 +183,7 @@ export function ClientsPage() {
             setClientType(v)
             setPage(1)
           }}
-          options={[
-            { value: 'TRANSPORT', label: '운수사' },
-            { value: 'FACILITY', label: '건물·농장' },
-          ]}
+          options={clientTypeOptions}
         />
         <FilterSelect
           label="계약 상태"
@@ -255,7 +253,7 @@ export function ClientsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-bone">{c.company_name}</p>
                     <p className="text-xs text-slatey">
-                      {c.client_type === 'TRANSPORT' ? '운수사' : '건물·농장'} ·{' '}
+                      {clientTypeLabel(c.client_type)} ·{' '}
                       {c.main_contact_name ?? '—'}
                     </p>
                   </div>

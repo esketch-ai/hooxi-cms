@@ -19,6 +19,7 @@ import { Skeleton, SkeletonTableRows } from '../../components/Skeleton'
 import { AuditLine } from '../../components/AuditLine'
 import { useToast } from '../../components/Toast'
 import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { useCodes } from '../../lib/api/queries'
 import { fmtDate, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
@@ -57,6 +58,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 export function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>()
   const { data: client, isLoading, isError, refetch } = useClient(clientId)
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
 
   const [tab, setTab] = useState<TabKey>('overview')
   const [editOpen, setEditOpen] = useState(false)
@@ -125,7 +127,7 @@ export function ClientDetailPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-bold text-bone">{client.company_name}</h1>
               <span className="text-xs font-medium text-slatey">
-                {client.client_type === 'TRANSPORT' ? '운수사' : '건물·농장'}
+                {clientTypeLabel(client.client_type)}
               </span>
               <StatusBadge domain="contract" value={client.contract_status} />
             </div>
@@ -218,6 +220,7 @@ export function ClientDetailPage() {
 
 // ── 개요 탭 ─────────────────────────────────────────────────────────
 function OverviewTab({ client }: { client: Client }) {
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="rounded-3xl border border-hairline bg-graphite p-5">
@@ -225,7 +228,8 @@ function OverviewTab({ client }: { client: Client }) {
         <dl>
           <InfoRow label="고객사명">{client.company_name}</InfoRow>
           <InfoRow label="구분">
-            {client.client_type === 'TRANSPORT' ? '운수사 (TRANSPORT)' : '건물·농장 (FACILITY)'}
+            {clientTypeLabel(client.client_type)}
+            <span className="ml-1 text-xs text-slatey">({client.client_type})</span>
           </InfoRow>
           <InfoRow label="사업자번호">{client.biz_reg_no ?? '—'}</InfoRow>
           <InfoRow label="지역 / 주소">

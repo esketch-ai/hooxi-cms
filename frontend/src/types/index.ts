@@ -51,8 +51,22 @@ export interface AuditFields {
 // ---------------------------------------------------------------------------
 // tb_client — 고객사 마스터 (SCR-03)
 // ---------------------------------------------------------------------------
-export type ClientType = 'TRANSPORT' | 'FACILITY'
+// 구분(client_type)은 공통 코드 마스터(tb_code, category=CLIENT_TYPE)로 관리 →
+// 특정 리터럴로 고정하지 않고 문자열. 표시명은 useCodes('CLIENT_TYPE')로 해석.
+export type ClientType = string
 export type ContractStatus = 'ACTIVE' | 'HOLD' | 'END'
+
+/** 공통 코드 마스터 (tb_code / GET /codes) */
+export interface Code {
+  code_id: string
+  category: string
+  code: string
+  label: string
+  sort_order: number
+  active: string // Y/N
+  is_system: string // Y/N
+  usage_count?: number | null
+}
 
 export interface Client {
   client_id: string

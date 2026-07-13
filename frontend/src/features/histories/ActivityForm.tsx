@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { useClientOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { toDatetimeLocal } from '../../lib/format'
 import type { ActivityPayload, ActivityType, IssueStatus } from '../../types'
 
@@ -57,12 +57,13 @@ export function ActivityForm({
 }: ActivityFormProps) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
   const queryClient = useQueryClient()
 
   const [clientId, setClientId] = useState(defaultClientId ?? '')
   // 신규 업체 인라인 등록 (clientId === NEW_CLIENT일 때)
   const [newCompanyName, setNewCompanyName] = useState('')
-  const [newClientType, setNewClientType] = useState<'TRANSPORT' | 'FACILITY'>('TRANSPORT')
+  const [newClientType, setNewClientType] = useState('TRANSPORT')
   const [activityDate, setActivityDate] = useState(() => toDatetimeLocal(new Date()))
   const [activityType, setActivityType] = useState<ActivityType>(defaultType)
   const [retentionStage, setRetentionStage] = useState('')
@@ -78,7 +79,7 @@ export function ActivityForm({
     if (open) {
       setClientId(defaultClientId ?? '')
       setNewCompanyName('')
-      setNewClientType('TRANSPORT')
+      setNewClientType(clientTypeOptions[0]?.value ?? 'TRANSPORT')
       setActivityDate(toDatetimeLocal(new Date()))
       setActivityType(defaultType)
       setRetentionStage('')
@@ -194,13 +195,14 @@ export function ActivityForm({
                 <label className={labelCls}>구분</label>
                 <select
                   value={newClientType}
-                  onChange={(e) =>
-                    setNewClientType(e.target.value as 'TRANSPORT' | 'FACILITY')
-                  }
+                  onChange={(e) => setNewClientType(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="TRANSPORT">운수사</option>
-                  <option value="FACILITY">건물·농장</option>
+                  {clientTypeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

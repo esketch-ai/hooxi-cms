@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
-import { useUserOptions } from '../../lib/api/queries'
+import { useCodes, useUserOptions } from '../../lib/api/queries'
 import { fmtDate } from '../../lib/format'
 import type { Client, ClientPayload, ClientType, ContractStatus } from '../../types'
 import { useSaveClient } from './api'
@@ -49,6 +49,7 @@ interface ClientFormModalProps {
 export function ClientFormModal({ open, onClose, client }: ClientFormModalProps) {
   const { showToast } = useToast()
   const { data: users = [] } = useUserOptions()
+  const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
   const save = useSaveClient(client?.client_id)
 
   const [form, setForm] = useState<ClientPayload>(() => initForm(client))
@@ -153,8 +154,16 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               onChange={(e) => set('client_type', e.target.value as ClientType)}
               className={inputCls}
             >
-              <option value="TRANSPORT">운수사 (TRANSPORT)</option>
-              <option value="FACILITY">건물·농장 (FACILITY)</option>
+              {/* 기존 값이 비활성 코드라도 선택 상태가 유지되도록 폴백 옵션 노출 */}
+              {form.client_type &&
+                !clientTypeOptions.some((o) => o.value === form.client_type) && (
+                  <option value={form.client_type}>{form.client_type}</option>
+                )}
+              {clientTypeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="고객사명" required error={errors.company_name}>
