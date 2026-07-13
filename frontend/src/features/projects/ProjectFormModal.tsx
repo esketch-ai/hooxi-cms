@@ -3,10 +3,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
-import { useClientOptions, useUserOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes, useUserOptions } from '../../lib/api/queries'
 import { fmtDate } from '../../lib/format'
 import type { Project, ProjectPayload } from '../../types'
-import { MON_CYCLE_OPTIONS, PROJECT_STATUS_OPTIONS, useSaveProject } from './api'
+import { MON_CYCLE_OPTIONS, useSaveProject } from './api'
 
 const inputCls =
   'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
@@ -81,6 +81,7 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
   const { data: clients = [] } = useClientOptions()
   const { data: users = [] } = useUserOptions()
   const save = useSaveProject(project?.project_id)
+  const { options: projectStatusOptions } = useCodes('PROJECT_STATUS')
 
   const [form, setForm] = useState<FormState>(() => initForm(project))
 
@@ -187,7 +188,11 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
               onChange={(e) => set('project_status', e.target.value)}
               className={inputCls}
             >
-              {PROJECT_STATUS_OPTIONS.map((o) => (
+              {form.project_status &&
+                !projectStatusOptions.some((o) => o.value === form.project_status) && (
+                  <option value={form.project_status}>{form.project_status}</option>
+                )}
+              {projectStatusOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

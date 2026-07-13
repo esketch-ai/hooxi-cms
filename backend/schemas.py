@@ -338,7 +338,8 @@ class ProjectCreate(BaseModel):
     client_id: Optional[str] = None  # 묶음 사업 시 대표사
     project_name: str = Field(min_length=1, max_length=200)
     reg_code: Optional[str] = None  # 예: R-2024-KR-03-000528
-    project_status: str = Field(default="기획", pattern=_PROJECT_STATUS_PATTERN)
+    # project_status는 공통 코드 마스터(PROJECT_STATUS)로 관리 → 라우터에서 검증
+    project_status: str = Field(default="기획", min_length=1, max_length=40)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
@@ -358,7 +359,7 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[str] = None
     project_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     reg_code: Optional[str] = None
-    project_status: Optional[str] = Field(default=None, pattern=_PROJECT_STATUS_PATTERN)
+    project_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
@@ -502,7 +503,8 @@ class HistoryCreate(BaseModel):
     # activity_type은 공통 코드 마스터(ACTIVITY_TYPE)로 관리 → 라우터에서 검증
     activity_type: str = Field(min_length=1, max_length=40)
     retention_stage: Optional[str] = None
-    issue_status: Optional[str] = Field(default=None, pattern="^(OPEN|IN_PROGRESS|HOLD|CLOSED)$")
+    # issue_status는 공통 코드 마스터(ISSUE_STATUS)로 관리 → 라우터에서 검증
+    issue_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     priority: Optional[str] = Field(default=None, pattern="^(URGENT|NORMAL)$")
     due_date: Optional[date] = None
     next_action: Optional[str] = None
@@ -546,7 +548,7 @@ class HistoryListResponse(BaseModel):
 class IssueStatusUpdate(BaseModel):
     """SCR-02 칸반 드래그 — 이슈 상태 변경."""
 
-    issue_status: str = Field(pattern="^(OPEN|IN_PROGRESS|HOLD|CLOSED)$")
+    issue_status: str = Field(min_length=1, max_length=40)
     comment: Optional[str] = None  # 상태 변경 사유(선택)
 
 
@@ -940,7 +942,8 @@ class CodeOut(BaseModel):
 
 class CodeCreate(BaseModel):
     category: str = Field(min_length=1, max_length=40)
-    code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_]+$")
+    # 영문/숫자/_ 권장이나 한글 코드 허용(감축사업 진행상태·대상 기관은 한글 저장값 유지)
+    code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_가-힣]+$")
     label: str = Field(min_length=1, max_length=100)
     color: Optional[str] = Field(default=None, max_length=20)
     sort_order: int = 0

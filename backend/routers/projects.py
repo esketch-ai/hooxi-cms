@@ -16,6 +16,7 @@ import schemas
 from auth import get_current_user, require_permission
 from models import Asset, Client, Project, ProjectClientMap, User, get_db
 from routers import common
+from routers.codes import validate_active_code
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -169,6 +170,7 @@ def create_project(
     db: Session = Depends(get_db),
 ):
     """사업 등록 (SCR-06) — 단가는 수기 입력(price_source=MANUAL, §10.3)."""
+    validate_active_code(db, "PROJECT_STATUS", payload.project_status)
     if payload.client_id:
         common.get_or_404(db, Client, payload.client_id, "고객사")
     if payload.manager_id:
@@ -211,6 +213,8 @@ def update_project(
     """사업 수정 — 전달된 필드만 반영. 발행량·단가 변경 시 매핑 금액 재계산(§10.3)."""
     project = common.get_or_404(db, Project, project_id, "감축 사업")
     data = payload.model_dump(exclude_unset=True)
+    if "project_status" in data:
+        validate_active_code(db, "PROJECT_STATUS", data["project_status"])
     if data.get("client_id"):
         common.get_or_404(db, Client, data["client_id"], "고객사")
     if data.get("manager_id"):

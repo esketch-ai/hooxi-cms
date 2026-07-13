@@ -18,7 +18,16 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_role
-from models import ActivityHistory, Asset, Client, Code, User, get_db
+from models import (
+    ActivityHistory,
+    Asset,
+    Client,
+    Code,
+    Project,
+    ProjectClientMap,
+    User,
+    get_db,
+)
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/codes", tags=["codes"])
@@ -31,6 +40,10 @@ CATEGORY_LABELS = {
     "ASSET_GROUP": "자산 대분류",
     "ASSET_TYPE": "자산 소분류(연료)",
     "ASSET_STATUS": "자산 운영 상태",
+    "PROJECT_STATUS": "감축사업 진행상태",
+    "SETTLEMENT_STATUS": "정산 상태",
+    "ISSUE_STATUS": "이슈 상태",
+    "AGENCY": "대상 기관/사이트",
 }
 
 # 코드 사용처 매핑 — 삭제 가능 판단(참조 카운트)용.
@@ -42,6 +55,10 @@ USAGE_REFS = {
     "ASSET_GROUP": (Asset, "asset_group"),
     "ASSET_TYPE": (Asset, "asset_type"),
     "ASSET_STATUS": (Asset, "status"),
+    "PROJECT_STATUS": (Project, "project_status"),
+    "SETTLEMENT_STATUS": (ProjectClientMap, "settlement_status"),
+    "ISSUE_STATUS": (ActivityHistory, "issue_status"),
+    "AGENCY": (Asset, "agency_name"),
 }
 
 # 시스템 로직이 코드값 자체를 참조하는 코드 — 삭제·비활성 불가(라벨·색상·정렬만 수정).
@@ -50,7 +67,10 @@ USAGE_REFS = {
 LOGIC_LOCKED_CODES = {
     "CONTRACT_STATUS": {"ACTIVE", "HOLD"},  # dashboard KPI·구독 리포트 대상
     "ACTIVITY_TYPE": {"CALL", "MEETING", "SITE_VISIT", "EMAIL", "ISSUE", "KAKAO"},
-    # 자산 대분류/유형/상태는 현재 로직 분기 없음 → 잠금 없음(추가·비활성 자유)
+    "SETTLEMENT_STATUS": {"STANDBY", "BILLED", "COMPLETED"},  # 상태전이 머신 고정
+    "PROJECT_STATUS": {"기획", "발급완료"},  # 프론트 게이트(정산·발급 조건) 참조
+    "ISSUE_STATUS": {"OPEN", "CLOSED"},  # dashboard 미처리/긴급 집계·배치 참조
+    # 자산 대분류/유형/상태·AGENCY는 현재 로직 분기 없음 → 잠금 없음(추가·비활성 자유)
 }
 
 # 색상 팔레트(시맨틱명) — 프론트 CODE_PALETTE와 일치. None/미지정 허용.

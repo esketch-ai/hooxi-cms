@@ -9,7 +9,8 @@ import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
 import { api } from '../../lib/api/client'
-import { unwrapList } from '../../lib/api/queries'
+import { unwrapList, useCodes } from '../../lib/api/queries'
+import { hexOf } from '../../lib/codePalette'
 import { fmtDateTime } from '../../lib/format'
 import {
   MAPS_AUTH_FAILURE_EVENT,
@@ -23,20 +24,16 @@ import {
 } from '../../lib/googleMaps'
 import type { Client, ContractStatus, Paginated } from '../../types'
 
-// §3.2·§3.3 지도 마커 색 — 계약중 / 보류 / 종료
-const MARKER_COLORS: Record<ContractStatus, string> = {
+// 계약상태 마커 색/라벨은 공통 코드 마스터(CONTRACT_STATUS)에서 파생(컴포넌트 내부).
+// 범례·집계는 3개 상태(ACTIVE/HOLD/END) 구조 유지 — 상태 추가 시 지도 확장은 별도 작업.
+const STATUS_ORDER: ContractStatus[] = ['ACTIVE', 'HOLD', 'END']
+
+// 코드 미로딩·색상 미지정 시 폴백 hex
+const FALLBACK_MARKER_HEX: Record<string, string> = {
   ACTIVE: '#10b981',
   HOLD: '#f59e0b',
-  END: '#ef4444',
+  END: '#6b7280',
 }
-
-const STATUS_LABELS: Record<ContractStatus, string> = {
-  ACTIVE: '계약중',
-  HOLD: '보류',
-  END: '종료',
-}
-
-const STATUS_ORDER: ContractStatus[] = ['ACTIVE', 'HOLD', 'END']
 
 type ContactFilter = '' | 'WITHIN_30' | 'OVER_30'
 
@@ -62,6 +59,19 @@ type MapStatus = 'loading' | 'ready' | 'no-key' | 'error'
 
 export function MapPage() {
   const navigate = useNavigate()
+  const { codes: contractCodes } = useCodes('CONTRACT_STATUS')
+
+  // 계약상태 코드 → 마커 색(hex)·표시명 파생. 색 미지정/미로딩은 폴백.
+  const MARKER_COLORS = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = { ...FALLBACK_MARKER_HEX }
+    for (const c of contractCodes) if (c.color) m[c.code] = hexOf(c.color)
+    return m
+  }, [contractCodes])
+  const STATUS_LABELS = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = { ACTIVE: '계약중', HOLD: '보류', END: '종료' }
+    for (const c of contractCodes) m[c.code] = c.label
+    return m
+  }, [contractCodes])
 
   // ── 데이터: 기존 GET /clients 재사용 (page_size 최대 200) ─────────────
   const {

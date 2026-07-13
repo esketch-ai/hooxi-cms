@@ -8,16 +8,10 @@ import { AuditLine } from '../../components/AuditLine'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { dday, elapsedServer, fmtServerDateTime, telHref } from '../../lib/format'
+import { useCodes } from '../../lib/api/queries'
 import type { ActivityHistory, IssueStatus } from '../../types'
 import { useClient } from '../clients/api'
 import { useAddIssueComment, useChangeIssueStatus, useIssueComments } from './api'
-
-const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
-  { value: 'OPEN', label: '접수' },
-  { value: 'IN_PROGRESS', label: '처리중' },
-  { value: 'HOLD', label: '보류' },
-  { value: 'CLOSED', label: '완료' },
-]
 
 interface IssueDrawerProps {
   issue: ActivityHistory | null
@@ -26,6 +20,7 @@ interface IssueDrawerProps {
 
 export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
   const { showToast } = useToast()
+  const { options: statusOptions } = useCodes('ISSUE_STATUS')
   const { data: comments = [], isLoading: commentsLoading } = useIssueComments(
     issue?.history_id,
   )
@@ -121,11 +116,11 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
         <div>
           <p className="mb-1.5 text-xs font-semibold text-slatey">상태 변경</p>
           <div className="flex gap-1.5">
-            {STATUS_OPTIONS.map((opt) => (
+            {statusOptions.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => handleStatusChange(opt.value)}
+                onClick={() => handleStatusChange(opt.value as IssueStatus)}
                 disabled={changeStatus.isPending}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium disabled:opacity-60 ${
                   issue.issue_status === opt.value

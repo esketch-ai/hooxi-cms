@@ -116,6 +116,26 @@ def seed_codes():
         ("ASSET_STATUS", "ACTIVE", "운영중", "emerald", 10),
         ("ASSET_STATUS", "INACTIVE", "비활성", "gray", 20),
         ("ASSET_STATUS", "ERROR", "오류", "rose", 30),
+        # 감축사업 진행상태 (한글 코드값 유지 — 기획/발급완료는 로직 참조)
+        ("PROJECT_STATUS", "기획", "기획", "gray", 10),
+        ("PROJECT_STATUS", "등록완료", "등록완료", "blue", 20),
+        ("PROJECT_STATUS", "모니터링", "모니터링", "blue", 30),
+        ("PROJECT_STATUS", "검증", "검증", "purple", 40),
+        ("PROJECT_STATUS", "발급완료", "발급완료", "emerald", 50),
+        # 정산 상태 (상태전이 머신 — 전 값 로직 참조)
+        ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", 10),
+        ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", 20),
+        ("SETTLEMENT_STATUS", "COMPLETED", "입금완료", "emerald", 30),
+        # 이슈 상태 (이슈 칸반 — OPEN/CLOSED 로직 참조)
+        ("ISSUE_STATUS", "OPEN", "접수", "rose", 10),
+        ("ISSUE_STATUS", "IN_PROGRESS", "처리중", "amber", 20),
+        ("ISSUE_STATUS", "HOLD", "보류", "gray", 30),
+        ("ISSUE_STATUS", "CLOSED", "완료", "emerald", 40),
+        # 대상 기관/사이트 (수집 계정 — 콤보박스 선택지, 자유입력도 허용)
+        ("AGENCY", "ETAS", "ETAS", None, 10),
+        ("AGENCY", "BMS", "BMS", None, 20),
+        ("AGENCY", "KECO", "한국환경공단", None, 30),
+        ("AGENCY", "K_FMS", "K-FMS", None, 40),
     ]
     try:
         db = SessionLocal()

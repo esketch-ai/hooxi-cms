@@ -106,6 +106,9 @@ const DOMAIN_TO_CATEGORY: Partial<Record<BadgeDomain, string>> = {
   activity: 'ACTIVITY_TYPE',
   assetStatus: 'ASSET_STATUS',
   assetType: 'ASSET_TYPE',
+  project: 'PROJECT_STATUS',
+  settlement: 'SETTLEMENT_STATUS',
+  issue: 'ISSUE_STATUS',
 }
 
 interface StatusBadgeProps {

@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
+import { useCodes } from '../../lib/api/queries'
 import { fmtMoney, fmtServerDate, parseServerUtc } from '../../lib/format'
 import type { ProjectClientMap, SettlementStatus } from '../../types'
 import { useProjectOptions } from '../projects/api'
@@ -63,6 +64,7 @@ export function SettlementsPage() {
   const [searchParams] = useSearchParams()
   const { data: projects = [] } = useProjectOptions()
 
+  const { options: settlementStatusOptions } = useCodes('SETTLEMENT_STATUS')
   const [status, setStatus] = useState('')
   // SCR-06 관리 열의 '정산 매핑' 딥링크(?project_id=) 수신
   const [projectId, setProjectId] = useState(searchParams.get('project_id') ?? '')
@@ -230,11 +232,7 @@ export function SettlementsPage() {
             setStatus(v)
             setPage(1)
           }}
-          options={[
-            { value: 'STANDBY', label: '대기' },
-            { value: 'BILLED', label: '청구' },
-            { value: 'COMPLETED', label: '입금완료' },
-          ]}
+          options={settlementStatusOptions}
         />
         <FilterSelect
           label="감축 사업"

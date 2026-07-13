@@ -72,6 +72,7 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
   const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
   const { options: assetTypeOptions } = useCodes('ASSET_TYPE')
   const { options: assetStatusOptions } = useCodes('ASSET_STATUS')
+  const { options: agencyOptions } = useCodes('AGENCY')
   const save = useSaveAsset(asset?.asset_id)
 
   const [form, setForm] = useState<FormState>(() => initForm(asset))
@@ -242,12 +243,19 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="대상 기관">
+              {/* 콤보박스 — 마스터(AGENCY)에서 선택하거나 직접 입력 */}
               <input
                 value={form.agency_name}
                 onChange={(e) => set('agency_name', e.target.value)}
                 className={inputCls}
                 placeholder="예: 한국환경공단, K-FMS"
+                list="agency-options"
               />
+              <datalist id="agency-options">
+                {agencyOptions.map((o) => (
+                  <option key={o.value} value={o.label} />
+                ))}
+              </datalist>
             </Field>
             <Field label="연동 목적">
               <input

@@ -43,7 +43,32 @@ const CATEGORIES: { value: string; label: string; hint: string }[] = [
     label: '자산 운영 상태',
     hint: '자산 운영 상태(운영중·비활성·오류 등).',
   },
+  {
+    value: 'PROJECT_STATUS',
+    label: '감축사업 진행상태',
+    hint: '감축사업 진행 단계(기획·등록완료·모니터링·검증·발급완료 등). 코드값은 한글로 저장됩니다.',
+  },
+  {
+    value: 'SETTLEMENT_STATUS',
+    label: '정산 상태',
+    hint: '정산 상태(대기·청구·입금완료). 상태 전이 순서가 로직에 고정돼 표시명·색상만 변경할 수 있습니다.',
+  },
+  {
+    value: 'ISSUE_STATUS',
+    label: '이슈 상태',
+    hint: '이슈 보드(칸반) 컬럼. 표시명·색상·정렬이 칸반에 반영됩니다. 새 상태를 추가하면 컬럼이 늘어납니다.',
+  },
+  {
+    value: 'AGENCY',
+    label: '대상 기관/사이트',
+    hint: '수집 계정의 대상 기관(ETAS·BMS·한국환경공단 등). 자산 등록 시 선택하거나 직접 입력할 수 있습니다.',
+  },
 ]
+
+// 색상을 쓰지 않는 카테고리(단순 분류·기관 목록)
+const NO_COLOR_CATEGORIES = new Set(['CLIENT_TYPE', 'AGENCY'])
+// 한글 코드값을 허용하는 카테고리(저장값이 한글)
+const KOREAN_CODE_CATEGORIES = new Set(['PROJECT_STATUS', 'AGENCY'])
 
 function extractDetail(error: unknown, fallback: string): string {
   return (
@@ -92,8 +117,9 @@ export function CodesTab() {
   const [editForm, setEditForm] = useState({ label: '', color: '', sort_order: 0 })
   const [deleteTarget, setDeleteTarget] = useState<Code | null>(null)
 
-  // 색상 사용 카테고리(상태 배지가 있는 도메인) — CLIENT_TYPE은 색상 미사용
-  const usesColor = category !== 'CLIENT_TYPE'
+  // 색상 사용 카테고리(상태 배지가 있는 도메인)
+  const usesColor = !NO_COLOR_CATEGORIES.has(category)
+  const allowsKoreanCode = KOREAN_CODE_CATEGORIES.has(category)
 
   const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0]
 
@@ -309,17 +335,20 @@ export function CodesTab() {
           <div>
             <label className="mb-1 block text-xs font-medium text-ash">
               코드값<span className="ml-0.5 text-rose-500">*</span>
-              <span className="ml-1 font-normal text-slatey">영문 대문자·숫자·_ (변경 불가)</span>
+              <span className="ml-1 font-normal text-slatey">
+                {allowsKoreanCode ? '한글·영문·숫자·_ (변경 불가)' : '영문 대문자·숫자·_ (변경 불가)'}
+              </span>
             </label>
             <input
               value={createForm.code}
-              onChange={(e) =>
-                setCreateForm((f) => ({
-                  ...f,
-                  code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''),
-                }))
-              }
-              placeholder="예: FARM"
+              onChange={(e) => {
+                const raw = e.target.value
+                const next = allowsKoreanCode
+                  ? raw.replace(/[^A-Za-z0-9_가-힣]/g, '')
+                  : raw.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+                setCreateForm((f) => ({ ...f, code: next }))
+              }}
+              placeholder={allowsKoreanCode ? '예: 재계약' : '예: FARM'}
               className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 font-mono text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
             />
           </div>

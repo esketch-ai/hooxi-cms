@@ -71,6 +71,8 @@ def create_history(
 ):
     """이력 등록 (공용 ActivityForm) — created_by는 불변 작성자(GAN A1)."""
     validate_active_code(db, "ACTIVITY_TYPE", payload.activity_type)
+    if payload.issue_status:
+        validate_active_code(db, "ISSUE_STATUS", payload.issue_status)
     if payload.client_id:
         common.get_or_404(db, Client, payload.client_id, "고객사")
     manager_id = payload.manager_id or user.user_id
@@ -111,6 +113,7 @@ def update_issue_status(
     history = common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
     if history.activity_type != "ISSUE":
         raise HTTPException(status_code=409, detail="이슈(ISSUE) 유형의 이력만 상태를 변경할 수 있습니다")
+    validate_active_code(db, "ISSUE_STATUS", payload.issue_status)
 
     old_status = history.issue_status or "-"
     if old_status != payload.issue_status:

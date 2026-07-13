@@ -10,14 +10,16 @@ import { SkeletonKpi } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { api } from '../../lib/api/client'
-import { unwrapList, useClientOptions, useUserOptions } from '../../lib/api/queries'
+import { unwrapList, useClientOptions, useCodes, useUserOptions } from '../../lib/api/queries'
+import { dotClassOf } from '../../lib/codePalette'
 import { dday, elapsedServer, fmtDate, parseServerUtc } from '../../lib/format'
 import type { ActivityHistory, IssueStatus, Paginated, Schedule } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useChangeIssueStatus, useIssues } from './api'
 import { IssueDrawer } from './IssueDrawer'
 
-const COLUMNS: KanbanColumn[] = [
+// 코드 미로딩 시 폴백 컬럼 (기존 고정값)
+const FALLBACK_COLUMNS: KanbanColumn[] = [
   { key: 'OPEN', title: '접수', dotClass: 'bg-rose-500' },
   { key: 'IN_PROGRESS', title: '처리중', dotClass: 'bg-amber-400' },
   { key: 'HOLD', title: '보류/지연', dotClass: 'bg-slate-400' },
@@ -32,7 +34,21 @@ export function IssuesPage() {
   const { data: issues = [], isLoading, isError, refetch } = useIssues()
   const { data: clients = [] } = useClientOptions()
   const { data: users = [] } = useUserOptions()
+  const { codes: issueStatusCodes } = useCodes('ISSUE_STATUS')
   const changeStatus = useChangeIssueStatus()
+
+  // 이슈 상태 코드(활성)에서 칸반 컬럼 생성 — 색상·순서·표시명이 마스터 반영.
+  // CLOSED는 접힘 + '(최근 7일)' 표기 유지. 미로딩 시 폴백.
+  const columns = useMemo<KanbanColumn[]>(() => {
+    const active = issueStatusCodes.filter((c) => c.active === 'Y')
+    if (active.length === 0) return FALLBACK_COLUMNS
+    return active.map((c) => ({
+      key: c.code,
+      title: c.code === 'CLOSED' ? `${c.label} (최근 7일)` : c.label,
+      dotClass: dotClassOf(c.color),
+      collapsible: c.code === 'CLOSED',
+    }))
+  }, [issueStatusCodes])
 
   const [scope, setScope] = useState<'team' | 'mine'>('team') // 요약 카드 토글
   const [pill, setPill] = useState<PillFilter>('ALL')
@@ -223,7 +239,7 @@ export function IssuesPage() {
         />
       ) : (
         <KanbanBoard
-          columns={COLUMNS}
+          columns={columns}
           items={visibleIssues}
           itemKey={(i) => i.history_id}
           columnOf={(i) => i.issue_status ?? 'OPEN'}

@@ -157,3 +157,54 @@ def test_invalid_color_rejected(client, admin_headers):
         headers=admin_headers,
     )
     assert resp.status_code == 422
+
+
+def test_phase3_4_categories_seeded_and_locked(client, admin_headers):
+    def rows(cat):
+        return {
+            c["code"]: c
+            for c in client.get(
+                f"{API}/codes", params={"category": cat, "include_inactive": True}, headers=admin_headers
+            ).json()
+        }
+
+    project = rows("PROJECT_STATUS")
+    assert project["기획"]["label"] == "기획" and project["기획"]["is_locked"] is True
+    assert project["등록완료"]["is_locked"] is False
+    assert project["발급완료"]["is_locked"] is True
+
+    settlement = rows("SETTLEMENT_STATUS")
+    assert settlement["BILLED"]["label"] == "청구"
+    assert all(settlement[c]["is_locked"] for c in ("STANDBY", "BILLED", "COMPLETED"))
+
+    issue = rows("ISSUE_STATUS")
+    assert issue["OPEN"]["is_locked"] is True and issue["CLOSED"]["is_locked"] is True
+    assert issue["IN_PROGRESS"]["is_locked"] is False
+
+    agency = rows("AGENCY")
+    assert agency["KECO"]["label"] == "한국환경공단"
+
+
+def test_korean_code_create_allowed(client, admin_headers):
+    resp = client.post(
+        f"{API}/codes",
+        json={"category": "PROJECT_STATUS", "code": "재계약검토", "label": "재계약 검토", "color": "teal"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["code"] == "재계약검토"
+
+
+def test_project_status_validation(client, admin_headers):
+    bad = client.post(
+        f"{API}/projects",
+        json={"project_name": "잘못된상태사업", "project_status": "없는상태"},
+        headers=admin_headers,
+    )
+    assert bad.status_code == 422, bad.text
+    ok = client.post(
+        f"{API}/projects",
+        json={"project_name": "정상사업", "project_status": "모니터링"},
+        headers=admin_headers,
+    )
+    assert ok.status_code == 201, ok.text

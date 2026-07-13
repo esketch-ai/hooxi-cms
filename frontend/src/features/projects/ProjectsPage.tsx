@@ -9,10 +9,10 @@ import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
-import { useUserOptions } from '../../lib/api/queries'
+import { useCodes, useUserOptions } from '../../lib/api/queries'
 import { dday, fmtDate } from '../../lib/format'
 import type { Project } from '../../types'
-import { isIssueImminent, MON_CYCLE_OPTIONS, PROJECT_STATUS_OPTIONS, useProjects } from './api'
+import { isIssueImminent, MON_CYCLE_OPTIONS, useProjects } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
 
 const PAGE_SIZE = 20
@@ -75,6 +75,7 @@ function periodLabel(start?: string | null, end?: string | null): string {
 export function ProjectsPage() {
   const navigate = useNavigate()
   const { data: users = [] } = useUserOptions()
+  const { options: projectStatusOptions } = useCodes('PROJECT_STATUS')
 
   const [projectStatus, setProjectStatus] = useState('')
   const [managerId, setManagerId] = useState('')
@@ -211,7 +212,7 @@ export function ProjectsPage() {
             setProjectStatus(v)
             setPage(1)
           }}
-          options={PROJECT_STATUS_OPTIONS}
+          options={projectStatusOptions}
         />
         <FilterSelect
           label="담당 PM"

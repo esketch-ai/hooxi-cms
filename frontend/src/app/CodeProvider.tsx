@@ -14,6 +14,9 @@ const MANAGED_CATEGORIES = [
   'ASSET_GROUP',
   'ASSET_TYPE',
   'ASSET_STATUS',
+  'PROJECT_STATUS',
+  'SETTLEMENT_STATUS',
+  'ISSUE_STATUS',
 ] as const
 
 export interface CodeInfo {
