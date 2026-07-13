@@ -50,6 +50,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
   const { showToast } = useToast()
   const { data: users = [] } = useUserOptions()
   const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
+  const { options: contractStatusOptions } = useCodes('CONTRACT_STATUS')
   const save = useSaveClient(client?.client_id)
 
   const [form, setForm] = useState<ClientPayload>(() => initForm(client))
@@ -275,9 +276,15 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 onChange={(e) => set('contract_status', e.target.value as ContractStatus)}
                 className={inputCls}
               >
-                <option value="ACTIVE">계약중 (ACTIVE)</option>
-                <option value="HOLD">보류 (HOLD)</option>
-                <option value="END">종료 (END)</option>
+                {form.contract_status &&
+                  !contractStatusOptions.some((o) => o.value === form.contract_status) && (
+                    <option value={form.contract_status}>{form.contract_status}</option>
+                  )}
+                {contractStatusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="계약 일자">

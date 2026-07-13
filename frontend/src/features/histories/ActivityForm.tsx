@@ -16,15 +16,6 @@ const labelCls = 'mb-1 block text-xs font-medium text-ash'
 /** 고객사 select에서 '신규 업체 직접 입력'을 나타내는 특수 값 */
 const NEW_CLIENT = '__new__'
 
-const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
-  { value: 'CALL', label: '전화' },
-  { value: 'MEETING', label: '미팅' },
-  { value: 'SITE_VISIT', label: '현장방문' },
-  { value: 'EMAIL', label: '이메일' },
-  { value: 'ISSUE', label: '이슈' },
-  { value: 'KAKAO', label: '카카오' },
-]
-
 const RETENTION_STAGES = [
   { value: 'AWARENESS', label: '인지' },
   { value: 'INTEREST', label: '관심' },
@@ -58,6 +49,7 @@ export function ActivityForm({
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
   const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
+  const { options: activityTypeOptions } = useCodes('ACTIVITY_TYPE')
   const queryClient = useQueryClient()
 
   const [clientId, setClientId] = useState(defaultClientId ?? '')
@@ -227,7 +219,7 @@ export function ActivityForm({
               onChange={(e) => setActivityType(e.target.value as ActivityType)}
               className={inputCls}
             >
-              {ACTIVITY_TYPES.map((t) => (
+              {activityTypeOptions.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>

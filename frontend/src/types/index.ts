@@ -54,7 +54,8 @@ export interface AuditFields {
 // 구분(client_type)은 공통 코드 마스터(tb_code, category=CLIENT_TYPE)로 관리 →
 // 특정 리터럴로 고정하지 않고 문자열. 표시명은 useCodes('CLIENT_TYPE')로 해석.
 export type ClientType = string
-export type ContractStatus = 'ACTIVE' | 'HOLD' | 'END'
+// 공통 코드 마스터(CONTRACT_STATUS)로 관리 → 문자열. 표시는 useCodes/StatusBadge로 해석.
+export type ContractStatus = string
 
 /** 공통 코드 마스터 (tb_code / GET /codes) */
 export interface Code {
@@ -62,9 +63,11 @@ export interface Code {
   category: string
   code: string
   label: string
+  color?: string | null // 시맨틱 팔레트명(emerald/amber/...)
   sort_order: number
   active: string // Y/N
   is_system: string // Y/N
+  is_locked?: boolean // 시스템 로직 참조 — 삭제·비활성 불가
   usage_count?: number | null
 }
 
@@ -145,7 +148,8 @@ export interface ReportSubscription {
 // ---------------------------------------------------------------------------
 // tb_activity_history — 활동 이력·이슈 (SCR-05·02)
 // ---------------------------------------------------------------------------
-export type ActivityType = 'CALL' | 'MEETING' | 'SITE_VISIT' | 'EMAIL' | 'ISSUE' | 'KAKAO'
+// 공통 코드 마스터(ACTIVITY_TYPE)로 관리 → 문자열. 신규 유형 추가 가능.
+export type ActivityType = string
 export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'HOLD' | 'CLOSED'
 export type IssuePriority = 'URGENT' | 'NORMAL'
 export type RetentionStage =

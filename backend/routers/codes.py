@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_role
-from models import Client, Code, User, get_db
+from models import ActivityHistory, Asset, Client, Code, User, get_db
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/codes", tags=["codes"])
@@ -26,13 +26,42 @@ router = APIRouter(prefix="/codes", tags=["codes"])
 # 관리 대상 카테고리 라벨 (화면 표기·확장 지점)
 CATEGORY_LABELS = {
     "CLIENT_TYPE": "고객사 구분",
+    "CONTRACT_STATUS": "고객사 계약 상태",
+    "ACTIVITY_TYPE": "영업활동 유형",
+    "ASSET_GROUP": "자산 대분류",
+    "ASSET_TYPE": "자산 소분류(연료)",
+    "ASSET_STATUS": "자산 운영 상태",
 }
 
 # 코드 사용처 매핑 — 삭제 가능 판단(참조 카운트)용.
 # category -> (참조 모델, 코드값을 담는 컬럼명)
 USAGE_REFS = {
     "CLIENT_TYPE": (Client, "client_type"),
+    "CONTRACT_STATUS": (Client, "contract_status"),
+    "ACTIVITY_TYPE": (ActivityHistory, "activity_type"),
+    "ASSET_GROUP": (Asset, "asset_group"),
+    "ASSET_TYPE": (Asset, "asset_type"),
+    "ASSET_STATUS": (Asset, "status"),
 }
+
+# 시스템 로직이 코드값 자체를 참조하는 코드 — 삭제·비활성 불가(라벨·색상·정렬만 수정).
+# 이 값들이 사라지면 KPI 집계·상태 분기·배치·암호화 저장 등이 조용히 깨진다.
+# (조사 근거: dashboard.py/reports.py/histories.py/batch.py/schedules.py/chat.py)
+LOGIC_LOCKED_CODES = {
+    "CONTRACT_STATUS": {"ACTIVE", "HOLD"},  # dashboard KPI·구독 리포트 대상
+    "ACTIVITY_TYPE": {"CALL", "MEETING", "SITE_VISIT", "EMAIL", "ISSUE", "KAKAO"},
+    # 자산 대분류/유형/상태는 현재 로직 분기 없음 → 잠금 없음(추가·비활성 자유)
+}
+
+# 색상 팔레트(시맨틱명) — 프론트 CODE_PALETTE와 일치. None/미지정 허용.
+PALETTE_COLORS = {
+    "emerald", "amber", "rose", "blue", "purple", "gray",
+    "sky", "teal", "indigo", "yellow",
+}
+
+
+def _is_locked(category: str, code: str) -> bool:
+    return code in LOGIC_LOCKED_CODES.get(category, set())
 
 
 def _usage_count(db: Session, category: str, code: str) -> int:
@@ -44,11 +73,20 @@ def _usage_count(db: Session, category: str, code: str) -> int:
     return db.query(model).filter(getattr(model, column) == code).count()
 
 
+def _validate_color(color: Optional[str]) -> None:
+    if color is not None and color != "" and color not in PALETTE_COLORS:
+        raise HTTPException(
+            status_code=422,
+            detail="지원하지 않는 색상입니다: '{0}'".format(color),
+        )
+
+
 def _code_out(db: Session, row: Code, with_usage: bool = False) -> schemas.CodeOut:
     out = schemas.CodeOut.model_validate(row, from_attributes=True)
+    updates = {"is_locked": _is_locked(row.category, row.code)}
     if with_usage:
-        out = out.model_copy(update={"usage_count": _usage_count(db, row.category, row.code)})
-    return out
+        updates["usage_count"] = _usage_count(db, row.category, row.code)
+    return out.model_copy(update=updates)
 
 
 @router.get("", response_model=List[schemas.CodeOut])
@@ -84,10 +122,12 @@ def create_code(
     )
     if exists is not None:
         raise HTTPException(status_code=409, detail="이미 존재하는 코드값입니다: {0}".format(code))
+    _validate_color(payload.color)
     row = Code(
         category=payload.category.strip(),
         code=code,
         label=payload.label.strip(),
+        color=payload.color or None,
         sort_order=payload.sort_order,
         active="Y",
         is_system="N",
@@ -110,19 +150,34 @@ def update_code(
     admin: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ):
-    """코드 수정 (ADMIN) — label·정렬·활성만. code값·category는 불변."""
+    """코드 수정 (ADMIN) — label·색상·정렬·활성만. code값·category는 불변."""
     row = db.get(Code, code_id)
     if row is None:
         raise HTTPException(status_code=404, detail="코드를 찾을 수 없습니다")
 
-    before = "{0} / active={1} / sort={2}".format(row.label, row.active, row.sort_order)
+    # 로직 참조 코드는 비활성 불가(라벨·색상·정렬은 허용) — KPI·상태전이 붕괴 방지
+    if payload.active == "N" and _is_locked(row.category, row.code):
+        raise HTTPException(
+            status_code=409,
+            detail="'{0}'은(는) 시스템 로직이 참조하는 코드라 비활성할 수 없습니다. "
+            "표시명·색상만 변경할 수 있습니다.".format(row.label),
+        )
+    _validate_color(payload.color)
+
+    before = "{0} / color={1} / active={2} / sort={3}".format(
+        row.label, row.color, row.active, row.sort_order
+    )
     if payload.label is not None:
         row.label = payload.label.strip()
+    if payload.color is not None:
+        row.color = payload.color or None
     if payload.sort_order is not None:
         row.sort_order = payload.sort_order
     if payload.active is not None:
         row.active = payload.active
-    after = "{0} / active={1} / sort={2}".format(row.label, row.active, row.sort_order)
+    after = "{0} / color={1} / active={2} / sort={3}".format(
+        row.label, row.color, row.active, row.sort_order
+    )
 
     AuditLogger.code_change(
         db, admin.user_id, "CODE_UPDATE", row.code_id, old_value=before, new_value=after
@@ -142,6 +197,11 @@ def delete_code(
     row = db.get(Code, code_id)
     if row is None:
         raise HTTPException(status_code=404, detail="코드를 찾을 수 없습니다")
+    if _is_locked(row.category, row.code):
+        raise HTTPException(
+            status_code=409,
+            detail="'{0}'은(는) 시스템 로직이 참조하는 코드라 삭제할 수 없습니다.".format(row.label),
+        )
     if row.is_system == "Y":
         raise HTTPException(
             status_code=409,
@@ -151,7 +211,7 @@ def delete_code(
     if used > 0:
         raise HTTPException(
             status_code=409,
-            detail="이 구분을 사용 중인 고객사가 {0}곳 있어 삭제할 수 없습니다. "
+            detail="이 코드를 사용 중인 데이터가 {0}건 있어 삭제할 수 없습니다. "
             "'비활성'으로 전환하면 신규 선택에서 숨겨지고 기존 데이터는 유지됩니다.".format(used),
         )
     AuditLogger.code_change(

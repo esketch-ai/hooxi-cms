@@ -178,6 +178,7 @@ def create_client(
 ):
     """고객사 등록 (SCR-03) — 월간 보고서 설정(subscription) 동시 등록 지원."""
     validate_active_code(db, "CLIENT_TYPE", payload.client_type)
+    validate_active_code(db, "CONTRACT_STATUS", payload.contract_status)
     if payload.manager_id:
         common.get_or_404(db, User, payload.manager_id, "담당 PM")
     client = Client(**{f: getattr(payload, f) for f in _CLIENT_FIELDS})
@@ -213,6 +214,8 @@ def update_client(
     data = payload.model_dump(exclude_unset=True)
     if "client_type" in data:
         validate_active_code(db, "CLIENT_TYPE", data["client_type"])
+    if "contract_status" in data:
+        validate_active_code(db, "CONTRACT_STATUS", data["contract_status"])
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
     for field in _CLIENT_FIELDS:

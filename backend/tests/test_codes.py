@@ -111,3 +111,49 @@ def test_client_type_validation_and_in_use_guard(client, admin_headers):
     assert "FARM" not in active_codes
     all_codes = {c["code"] for c in _codes(client, admin_headers, include_inactive=True).json()}
     assert "FARM" in all_codes
+
+
+def test_contract_status_seeded_with_color_and_lock(client, admin_headers):
+    rows = client.get(
+        f"{API}/codes", params={"category": "CONTRACT_STATUS", "include_inactive": True}, headers=admin_headers
+    ).json()
+    by_code = {c["code"]: c for c in rows}
+    assert by_code["ACTIVE"]["label"] == "계약중"
+    assert by_code["ACTIVE"]["color"] == "emerald"
+    # ACTIVE/HOLD는 로직 참조 잠금, END는 자유
+    assert by_code["ACTIVE"]["is_locked"] is True
+    assert by_code["HOLD"]["is_locked"] is True
+    assert by_code["END"]["is_locked"] is False
+
+
+def test_logic_locked_code_cannot_deactivate_or_delete(client, admin_headers):
+    active = next(
+        c
+        for c in client.get(
+            f"{API}/codes", params={"category": "CONTRACT_STATUS"}, headers=admin_headers
+        ).json()
+        if c["code"] == "ACTIVE"
+    )
+    # 비활성 금지
+    deact = client.put(f"{API}/codes/{active['code_id']}", json={"active": "N"}, headers=admin_headers)
+    assert deact.status_code == 409
+    # 삭제 금지
+    dele = client.delete(f"{API}/codes/{active['code_id']}", headers=admin_headers)
+    assert dele.status_code == 409
+    # 라벨·색상 변경은 허용
+    upd = client.put(
+        f"{API}/codes/{active['code_id']}",
+        json={"label": "계약 진행중", "color": "teal"},
+        headers=admin_headers,
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["color"] == "teal"
+
+
+def test_invalid_color_rejected(client, admin_headers):
+    resp = client.post(
+        f"{API}/codes",
+        json={"category": "ASSET_TYPE", "code": "LNG", "label": "LNG", "color": "chartreuse"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 422

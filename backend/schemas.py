@@ -164,7 +164,8 @@ class ClientCreate(BaseModel):
     main_contact_name: Optional[str] = None
     main_contact_phone: Optional[str] = None
     main_contact_email: Optional[str] = None
-    contract_status: str = Field(default="ACTIVE", pattern="^(ACTIVE|HOLD|END)$")
+    # contract_status는 공통 코드 마스터(CONTRACT_STATUS)로 관리 → 라우터에서 검증
+    contract_status: str = Field(default="ACTIVE", min_length=1, max_length=40)
     contract_date: Optional[datetime] = None
     keyman: Optional[str] = None
     manager_id: Optional[str] = None
@@ -186,7 +187,7 @@ class ClientUpdate(BaseModel):
     main_contact_name: Optional[str] = None
     main_contact_phone: Optional[str] = None
     main_contact_email: Optional[str] = None
-    contract_status: Optional[str] = Field(default=None, pattern="^(ACTIVE|HOLD|END)$")
+    contract_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     contract_date: Optional[datetime] = None
     keyman: Optional[str] = None
     manager_id: Optional[str] = None
@@ -271,13 +272,14 @@ class AssetCreate(BaseModel):
     """자산 등록 — auth_value(평문 인증정보)는 서버 AES-256-GCM 암호화 후 저장, 응답 미포함."""
 
     client_id: str
-    asset_group: str = Field(pattern="^(MOBILITY|FACILITY)$")
+    # asset_group·asset_type·status는 공통 코드 마스터(tb_code)로 관리 → 라우터에서 검증
+    asset_group: str = Field(min_length=1, max_length=40)
     asset_type: Optional[str] = None  # ICE/EV/SOLAR/HEATPUMP 등
     quantity: Optional[int] = Field(default=None, ge=0)
     main_spec: Optional[str] = None
     telemetry_yn: str = Field(default="N", pattern="^[YN]$")
     location_info: Optional[str] = None
-    status: str = Field(default="ACTIVE", pattern="^(ACTIVE|INACTIVE|ERROR)$")
+    status: str = Field(default="ACTIVE", min_length=1, max_length=40)
     agency_name: Optional[str] = None
     site_url: Optional[str] = None
     auth_type: str = Field(default="NONE", pattern="^(ID_PW|API_KEY|NONE)$")
@@ -290,13 +292,13 @@ class AssetUpdate(BaseModel):
     """자산 수정 — 전달된 필드만 반영. auth_value 전달 시 재암호화(빈 문자열은 삭제)."""
 
     client_id: Optional[str] = None
-    asset_group: Optional[str] = Field(default=None, pattern="^(MOBILITY|FACILITY)$")
+    asset_group: Optional[str] = Field(default=None, min_length=1, max_length=40)
     asset_type: Optional[str] = None
     quantity: Optional[int] = Field(default=None, ge=0)
     main_spec: Optional[str] = None
     telemetry_yn: Optional[str] = Field(default=None, pattern="^[YN]$")
     location_info: Optional[str] = None
-    status: Optional[str] = Field(default=None, pattern="^(ACTIVE|INACTIVE|ERROR)$")
+    status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     agency_name: Optional[str] = None
     site_url: Optional[str] = None
     auth_type: Optional[str] = Field(default=None, pattern="^(ID_PW|API_KEY|NONE)$")
@@ -497,7 +499,8 @@ class HistoryCreate(BaseModel):
     client_id: Optional[str] = None  # 미지정 고객 임시 이력 허용 (GAN E5)
     manager_id: Optional[str] = None  # 미지정 시 현재 사용자
     activity_date: datetime
-    activity_type: str = Field(pattern="^(CALL|MEETING|SITE_VISIT|EMAIL|ISSUE|KAKAO)$")
+    # activity_type은 공통 코드 마스터(ACTIVITY_TYPE)로 관리 → 라우터에서 검증
+    activity_type: str = Field(min_length=1, max_length=40)
     retention_stage: Optional[str] = None
     issue_status: Optional[str] = Field(default=None, pattern="^(OPEN|IN_PROGRESS|HOLD|CLOSED)$")
     priority: Optional[str] = Field(default=None, pattern="^(URGENT|NORMAL)$")
@@ -927,9 +930,11 @@ class CodeOut(BaseModel):
     category: str
     code: str
     label: str
+    color: Optional[str] = None  # 시맨틱 팔레트명(emerald/amber/rose/...)
     sort_order: int = 0
     active: str = "Y"
     is_system: str = "N"
+    is_locked: bool = False  # 시스템 로직이 참조하는 코드 — 삭제·비활성 불가(라벨/색상만 수정)
     usage_count: Optional[int] = None  # 이 코드를 사용 중인 레코드 수(삭제 가능 판단용)
 
 
@@ -937,12 +942,14 @@ class CodeCreate(BaseModel):
     category: str = Field(min_length=1, max_length=40)
     code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_]+$")
     label: str = Field(min_length=1, max_length=100)
+    color: Optional[str] = Field(default=None, max_length=20)
     sort_order: int = 0
 
 
 class CodeUpdate(BaseModel):
-    # code(코드값)·category는 불변 — label·정렬·활성만 수정 가능
+    # code(코드값)·category는 불변 — label·색상·정렬·활성만 수정 가능
     label: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    color: Optional[str] = Field(default=None, max_length=20)
     sort_order: Optional[int] = None
     active: Optional[str] = Field(default=None, pattern="^[YN]$")
 

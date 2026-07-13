@@ -1,4 +1,8 @@
 // 상태 배지 사전 (SCREEN_DESIGN_PLAN §3.3) — 도메인별 매핑 상수, 색+텍스트 병기(GAN D10)
+// 관리 도메인은 공통 코드 마스터(tb_code)에서 라벨·색상을 우선 조회하고, 미로딩·미관리
+// 도메인은 아래 정적 사전으로 폴백한다.
+import { useCodeLookup } from '../app/CodeProvider'
+import { badgeClassOf } from '../lib/codePalette'
 
 export type BadgeDomain =
   | 'contract' // 계약 상태
@@ -95,6 +99,15 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
   },
 }
 
+// 공통 코드 마스터로 관리되는 도메인 → tb_code 카테고리 매핑.
+// 여기 있으면 마스터(라벨·색상) 우선, 없으면 아래 정적 사전으로 폴백.
+const DOMAIN_TO_CATEGORY: Partial<Record<BadgeDomain, string>> = {
+  contract: 'CONTRACT_STATUS',
+  activity: 'ACTIVITY_TYPE',
+  assetStatus: 'ASSET_STATUS',
+  assetType: 'ASSET_TYPE',
+}
+
 interface StatusBadgeProps {
   domain: BadgeDomain
   value: string
@@ -102,10 +115,14 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ domain, value, className = '' }: StatusBadgeProps) {
-  const spec = BADGE_DICTIONARY[domain]?.[value] ?? {
-    label: value,
-    className: gray,
-  }
+  const lookup = useCodeLookup()
+  const category = DOMAIN_TO_CATEGORY[domain]
+  const master = category ? lookup(category, value) : undefined
+
+  const spec: BadgeSpec = master
+    ? { label: master.label, className: badgeClassOf(master.color) }
+    : BADGE_DICTIONARY[domain]?.[value] ?? { label: value, className: gray }
+
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${spec.className} ${className}`}

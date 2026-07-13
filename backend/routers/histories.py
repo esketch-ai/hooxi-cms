@@ -10,6 +10,7 @@ import schemas
 from auth import get_current_user, require_permission
 from models import ActivityHistory, Client, IssueComment, User, get_db
 from routers import common
+from routers.codes import validate_active_code
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/histories", tags=["histories"])
@@ -69,6 +70,7 @@ def create_history(
     db: Session = Depends(get_db),
 ):
     """이력 등록 (공용 ActivityForm) — created_by는 불변 작성자(GAN A1)."""
+    validate_active_code(db, "ACTIVITY_TYPE", payload.activity_type)
     if payload.client_id:
         common.get_or_404(db, Client, payload.client_id, "고객사")
     manager_id = payload.manager_id or user.user_id

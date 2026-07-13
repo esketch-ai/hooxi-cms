@@ -7,6 +7,7 @@ import { queryClient } from './app/queryClient'
 import { ThemeProvider } from './app/ThemeProvider'
 import { AuthProvider } from './app/AuthProvider'
 import { PrivacyProvider } from './app/PrivacyProvider'
+import { CodeProvider } from './app/CodeProvider'
 import { ToastProvider } from './components/Toast'
 import { router } from './app/router'
 
@@ -16,9 +17,11 @@ createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <AuthProvider>
           <PrivacyProvider>
-            <ToastProvider>
-              <RouterProvider router={router} />
-            </ToastProvider>
+            <CodeProvider>
+              <ToastProvider>
+                <RouterProvider router={router} />
+              </ToastProvider>
+            </CodeProvider>
           </PrivacyProvider>
         </AuthProvider>
       </ThemeProvider>

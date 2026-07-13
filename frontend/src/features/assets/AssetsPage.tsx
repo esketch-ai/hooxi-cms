@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
+import { useCodes } from '../../lib/api/queries'
 import type { Asset } from '../../types'
 import { useAssets } from './api'
 import { useRevealAuth } from './useRevealAuth'
@@ -113,6 +114,7 @@ function AuthCell({
 }
 
 export function AssetsPage() {
+  const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
   const [assetGroup, setAssetGroup] = useState('')
   const [telemetryYn, setTelemetryYn] = useState('')
   const [authType, setAuthType] = useState('')
@@ -246,10 +248,7 @@ export function AssetsPage() {
             setAssetGroup(v)
             setPage(1)
           }}
-          options={[
-            { value: 'MOBILITY', label: '모빌리티' },
-            { value: 'FACILITY', label: '설비' },
-          ]}
+          options={assetGroupOptions}
         />
         <FilterSelect
           label="관제 연동"

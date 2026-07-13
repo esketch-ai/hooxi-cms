@@ -16,6 +16,7 @@ import schemas
 from auth import get_current_user, require_permission, require_role
 from models import Asset, Client, ProjectClientMap, User, get_db, utcnow
 from routers import common
+from routers.codes import validate_active_code
 from services import crypto
 from services.audit_logger import AuditLogger
 
@@ -134,6 +135,9 @@ def create_asset(
 ):
     """자산 등록 (SCR-04) — auth_value는 AES-256-GCM 암호화 후 저장."""
     common.get_or_404(db, Client, payload.client_id, "고객사")
+    validate_active_code(db, "ASSET_GROUP", payload.asset_group)
+    validate_active_code(db, "ASSET_TYPE", payload.asset_type)
+    validate_active_code(db, "ASSET_STATUS", payload.status)
     asset = Asset(**{f: getattr(payload, f) for f in _ASSET_FIELDS})
     _store_auth_value(asset, payload.auth_type, payload.auth_value)
     db.add(asset)
@@ -165,6 +169,12 @@ def update_asset(
     data = payload.model_dump(exclude_unset=True)
     if data.get("client_id"):
         common.get_or_404(db, Client, data["client_id"], "고객사")
+    if "asset_group" in data:
+        validate_active_code(db, "ASSET_GROUP", data["asset_group"])
+    if "asset_type" in data:
+        validate_active_code(db, "ASSET_TYPE", data["asset_type"])
+    if "status" in data:
+        validate_active_code(db, "ASSET_STATUS", data["status"])
     for field in _ASSET_FIELDS:
         if field in data:
             setattr(asset, field, data[field])

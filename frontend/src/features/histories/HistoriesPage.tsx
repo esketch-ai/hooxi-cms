@@ -11,21 +11,12 @@ import { AuditLine } from '../../components/AuditLine'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
 import { api } from '../../lib/api/client'
-import { unwrapList, useUserOptions } from '../../lib/api/queries'
+import { unwrapList, useCodes, useUserOptions } from '../../lib/api/queries'
 import { fmtDateTime } from '../../lib/format'
 import type { ActivityHistory, Paginated } from '../../types'
 import { ActivityForm } from './ActivityForm'
 
 const PAGE_SIZE = 20
-
-const TYPE_OPTIONS = [
-  { value: 'CALL', label: '전화' },
-  { value: 'MEETING', label: '미팅' },
-  { value: 'SITE_VISIT', label: '현장방문' },
-  { value: 'EMAIL', label: '이메일' },
-  { value: 'ISSUE', label: '이슈' },
-  { value: 'KAKAO', label: '카카오' },
-]
 
 const RETENTION_OPTIONS = [
   { value: 'AWARENESS', label: '인지' },
@@ -40,6 +31,7 @@ const RETENTION_OPTIONS = [
 
 export function HistoriesPage() {
   const { data: users = [] } = useUserOptions()
+  const { options: activityTypeOptions } = useCodes('ACTIVITY_TYPE')
 
   const [search, setSearch] = useState('')
   const [activityType, setActivityType] = useState('')
@@ -117,7 +109,7 @@ export function HistoriesPage() {
           label="유형"
           value={activityType}
           onChange={resetPage(setActivityType)}
-          options={TYPE_OPTIONS}
+          options={activityTypeOptions}
         />
         <FilterSelect
           label="작성자"

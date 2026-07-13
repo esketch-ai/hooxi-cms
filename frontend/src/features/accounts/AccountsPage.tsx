@@ -20,6 +20,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
+import { useCodes } from '../../lib/api/queries'
 import type { AccountCheckResponse, Asset } from '../../types'
 import { useRevealAuth } from '../assets/useRevealAuth'
 import { AssetFormModal } from '../assets/AssetFormModal'
@@ -90,6 +91,7 @@ export function AccountsPage() {
   const isAdmin = user?.role === 'ADMIN'
   const { showToast } = useToast()
 
+  const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
   const [assetGroup, setAssetGroup] = useState('')
   const [authType, setAuthType] = useState('')
   const [search, setSearch] = useState('')
@@ -305,10 +307,7 @@ export function AccountsPage() {
             setAssetGroup(v)
             setPage(1)
           }}
-          options={[
-            { value: 'MOBILITY', label: '모빌리티' },
-            { value: 'FACILITY', label: '설비' },
-          ]}
+          options={assetGroupOptions}
         />
         <FilterSelect
           label="인증 방식"

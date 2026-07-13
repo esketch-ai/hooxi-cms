@@ -2,12 +2,13 @@
 // 첫 대상: 고객사 구분(CLIENT_TYPE). 향후 자산 유형 등도 카테고리로 확장.
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Prohibit, ArrowCounterClockwise, Trash } from '@phosphor-icons/react'
+import { Prohibit, ArrowCounterClockwise, Trash, LockSimple } from '@phosphor-icons/react'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
+import { CODE_PALETTE, PALETTE_ORDER, badgeClassOf } from '../../lib/codePalette'
 import type { Code } from '../../types'
 
 // 관리 대상 카테고리 (백엔드 CATEGORY_LABELS와 일치)
@@ -17,11 +18,66 @@ const CATEGORIES: { value: string; label: string; hint: string }[] = [
     label: '고객사 구분',
     hint: '고객사 마스터 등록 시 선택하는 구분(운수사·건물·농장 등)',
   },
+  {
+    value: 'CONTRACT_STATUS',
+    label: '고객사 계약 상태',
+    hint: '고객사 계약 진행 상태(계약중·보류·종료 등). 배지·지도 마커 색상에 반영됩니다.',
+  },
+  {
+    value: 'ACTIVITY_TYPE',
+    label: '영업활동 유형',
+    hint: '활동 이력 등록 시 선택하는 유형(전화·미팅·현장방문 등).',
+  },
+  {
+    value: 'ASSET_GROUP',
+    label: '자산 대분류',
+    hint: '자산·수집 계정의 대분류(모빌리티·설비 등).',
+  },
+  {
+    value: 'ASSET_TYPE',
+    label: '자산 소분류(연료)',
+    hint: '자산 소분류/연료 구분(내연기관·전기차·태양광·히트펌프 등).',
+  },
+  {
+    value: 'ASSET_STATUS',
+    label: '자산 운영 상태',
+    hint: '자산 운영 상태(운영중·비활성·오류 등).',
+  },
 ]
 
 function extractDetail(error: unknown, fallback: string): string {
   return (
     (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
+  )
+}
+
+// 색상 팔레트 선택 — 시맨틱 색상만 선택(임의 hex 금지, 다크/라이트 대응)
+function ColorPicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (color: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {PALETTE_ORDER.map((c) => {
+        const selected = value === c
+        return (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            title={CODE_PALETTE[c].label}
+            className={`h-7 w-7 rounded-full ${CODE_PALETTE[c].dot} ${
+              selected ? 'ring-2 ring-offset-2 ring-offset-graphite ring-white/70' : 'opacity-80 hover:opacity-100'
+            }`}
+            aria-label={CODE_PALETTE[c].label}
+            aria-pressed={selected}
+          />
+        )
+      })}
+    </div>
   )
 }
 
@@ -31,10 +87,13 @@ export function CodesTab() {
   const [category, setCategory] = useState(CATEGORIES[0].value)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({ code: '', label: '', sort_order: 0 })
+  const [createForm, setCreateForm] = useState({ code: '', label: '', color: '', sort_order: 0 })
   const [editTarget, setEditTarget] = useState<Code | null>(null)
-  const [editForm, setEditForm] = useState({ label: '', sort_order: 0 })
+  const [editForm, setEditForm] = useState({ label: '', color: '', sort_order: 0 })
   const [deleteTarget, setDeleteTarget] = useState<Code | null>(null)
+
+  // 색상 사용 카테고리(상태 배지가 있는 도메인) — CLIENT_TYPE은 색상 미사용
+  const usesColor = category !== 'CLIENT_TYPE'
 
   const activeCategory = CATEGORIES.find((c) => c.value === category) ?? CATEGORIES[0]
 
@@ -59,6 +118,7 @@ export function CodesTab() {
         category,
         code: form.code.trim().toUpperCase(),
         label: form.label.trim(),
+        color: form.color || null,
         sort_order: form.sort_order,
       })
       return data
@@ -101,10 +161,25 @@ export function CodesTab() {
       key: 'label',
       header: '표시명',
       render: (c) => (
-        <span className="font-semibold text-bone">
-          {c.label}
-          {c.is_system === 'Y' && (
-            <span className="ml-1.5 rounded bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-slatey">
+        <span className="inline-flex items-center gap-2 font-semibold text-bone">
+          {usesColor && (
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${badgeClassOf(c.color)}`}
+            >
+              {c.label}
+            </span>
+          )}
+          {!usesColor && c.label}
+          {c.is_locked && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-slatey"
+              title="시스템 로직이 참조하는 코드 — 표시명·색상만 변경 가능"
+            >
+              <LockSimple size={10} weight="fill" /> 잠금
+            </span>
+          )}
+          {!c.is_locked && c.is_system === 'Y' && (
+            <span className="rounded bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-slatey">
               내장
             </span>
           )}
@@ -153,21 +228,24 @@ export function CodesTab() {
             type="button"
             onClick={() => {
               setEditTarget(c)
-              setEditForm({ label: c.label, sort_order: c.sort_order })
+              setEditForm({ label: c.label, color: c.color ?? '', sort_order: c.sort_order })
             }}
             className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
           >
             편집
           </button>
-          <button
-            type="button"
-            onClick={() => toggleActive(c)}
-            className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-            title={c.active === 'Y' ? '비활성으로 전환' : '활성으로 전환'}
-          >
-            {c.active === 'Y' ? <Prohibit size={15} /> : <ArrowCounterClockwise size={15} />}
-          </button>
-          {c.is_system !== 'Y' && (
+          {/* 로직 참조 코드는 비활성·삭제 불가(라벨·색상만) */}
+          {!c.is_locked && (
+            <button
+              type="button"
+              onClick={() => toggleActive(c)}
+              className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+              title={c.active === 'Y' ? '비활성으로 전환' : '활성으로 전환'}
+            >
+              {c.active === 'Y' ? <Prohibit size={15} /> : <ArrowCounterClockwise size={15} />}
+            </button>
+          )}
+          {!c.is_locked && c.is_system !== 'Y' && (
             <button
               type="button"
               onClick={() => setDeleteTarget(c)}
@@ -199,7 +277,7 @@ export function CodesTab() {
         <button
           type="button"
           onClick={() => {
-            setCreateForm({ code: '', label: '', sort_order: (codes.length + 1) * 10 })
+            setCreateForm({ code: '', label: '', color: '', sort_order: (codes.length + 1) * 10 })
             setCreateOpen(true)
           }}
           className="ml-auto rounded-full bg-primary px-3.5 py-1.5 text-xs font-medium text-on-primary hover:opacity-90"
@@ -256,6 +334,15 @@ export function CodesTab() {
               className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
             />
           </div>
+          {usesColor && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ash">배지 색상</label>
+              <ColorPicker
+                value={createForm.color}
+                onChange={(color) => setCreateForm((f) => ({ ...f, color }))}
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-ash">정렬 순서</label>
             <input
@@ -306,6 +393,15 @@ export function CodesTab() {
                 className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
               />
             </div>
+            {usesColor && (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-ash">배지 색상</label>
+                <ColorPicker
+                  value={editForm.color}
+                  onChange={(color) => setEditForm((f) => ({ ...f, color }))}
+                />
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-ash">정렬 순서</label>
               <input
@@ -331,7 +427,11 @@ export function CodesTab() {
                     () =>
                       updateCode.mutateAsync({
                         codeId: editTarget.code_id,
-                        body: { label: editForm.label.trim(), sort_order: editForm.sort_order },
+                        body: {
+                          label: editForm.label.trim(),
+                          color: editForm.color || null,
+                          sort_order: editForm.sort_order,
+                        },
                       }),
                     '코드가 수정되었습니다.',
                     () => setEditTarget(null),

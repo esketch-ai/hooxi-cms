@@ -32,6 +32,7 @@ export function ClientsPage() {
   const navigate = useNavigate()
   const { data: users = [] } = useUserOptions()
   const { labelOf: clientTypeLabel, options: clientTypeOptions } = useCodes('CLIENT_TYPE')
+  const { options: contractStatusOptions } = useCodes('CONTRACT_STATUS')
 
   const [clientType, setClientType] = useState('')
   const [contractStatus, setContractStatus] = useState('')
@@ -192,11 +193,7 @@ export function ClientsPage() {
             setContractStatus(v)
             setPage(1)
           }}
-          options={[
-            { value: 'ACTIVE', label: '계약중' },
-            { value: 'HOLD', label: '보류' },
-            { value: 'END', label: '종료' },
-          ]}
+          options={contractStatusOptions}
         />
         <FilterSelect
           label="담당 PM"

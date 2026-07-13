@@ -90,15 +90,38 @@ def seed_codes():
     기존 고객사 데이터의 구분 표시가 유지되게 한다. 이미 있으면 건너뜀.
     """
     builtin = [
-        # (category, code, label, sort_order)
-        ("CLIENT_TYPE", "TRANSPORT", "운수사", 10),
-        ("CLIENT_TYPE", "FACILITY", "건물·농장", 20),
+        # (category, code, label, color, sort_order) — color는 시맨틱 팔레트명
+        ("CLIENT_TYPE", "TRANSPORT", "운수사", None, 10),
+        ("CLIENT_TYPE", "FACILITY", "건물·농장", None, 20),
+        # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
+        ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", 10),
+        ("CONTRACT_STATUS", "HOLD", "보류", "amber", 20),
+        ("CONTRACT_STATUS", "END", "종료", "gray", 30),
+        # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
+        ("ACTIVITY_TYPE", "CALL", "전화", "emerald", 10),
+        ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", 20),
+        ("ACTIVITY_TYPE", "SITE_VISIT", "현장방문", "purple", 30),
+        ("ACTIVITY_TYPE", "EMAIL", "이메일", "gray", 40),
+        ("ACTIVITY_TYPE", "ISSUE", "이슈", "rose", 50),
+        ("ACTIVITY_TYPE", "KAKAO", "카카오", "yellow", 60),
+        # 자산 대분류
+        ("ASSET_GROUP", "MOBILITY", "모빌리티", "blue", 10),
+        ("ASSET_GROUP", "FACILITY", "설비", "teal", 20),
+        # 자산 소분류(연료)
+        ("ASSET_TYPE", "ICE", "내연기관", "blue", 10),
+        ("ASSET_TYPE", "EV", "전기차", "gray", 20),
+        ("ASSET_TYPE", "SOLAR", "태양광", "yellow", 30),
+        ("ASSET_TYPE", "HEATPUMP", "히트펌프", "amber", 40),
+        # 자산 운영 상태
+        ("ASSET_STATUS", "ACTIVE", "운영중", "emerald", 10),
+        ("ASSET_STATUS", "INACTIVE", "비활성", "gray", 20),
+        ("ASSET_STATUS", "ERROR", "오류", "rose", 30),
     ]
     try:
         db = SessionLocal()
         try:
             added = 0
-            for category, code, label, sort_order in builtin:
+            for category, code, label, color, sort_order in builtin:
                 exists = (
                     db.query(Code)
                     .filter(Code.category == category, Code.code == code)
@@ -110,6 +133,7 @@ def seed_codes():
                             category=category,
                             code=code,
                             label=label,
+                            color=color,
                             sort_order=sort_order,
                             active="Y",
                             is_system="Y",

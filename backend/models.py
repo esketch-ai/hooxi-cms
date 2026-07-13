@@ -384,6 +384,7 @@ class Code(Base):
     category = Column(String(40), nullable=False, index=True)  # CLIENT_TYPE 등
     code = Column(String(40), nullable=False)  # TRANSPORT (불변)
     label = Column(String(100), nullable=False)  # 운수사 (수정 가능)
+    color = Column(String(20))  # 상태 배지·지도·칸반 색상(시맨틱 팔레트명, 예: emerald)
     sort_order = Column(Integer, default=0)
     active = Column(String(1), nullable=False, default="Y")  # Y/N
     is_system = Column(String(1), nullable=False, default="N")  # 내장 코드 보호

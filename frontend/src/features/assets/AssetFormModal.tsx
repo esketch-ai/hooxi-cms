@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
-import { useClientOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes } from '../../lib/api/queries'
 import type { Asset, AssetPayload } from '../../types'
 import { useSaveAsset } from './api'
 
@@ -69,6 +69,9 @@ interface AssetFormModalProps {
 export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
+  const { options: assetTypeOptions } = useCodes('ASSET_TYPE')
+  const { options: assetStatusOptions } = useCodes('ASSET_STATUS')
   const save = useSaveAsset(asset?.asset_id)
 
   const [form, setForm] = useState<FormState>(() => initForm(asset))
@@ -149,8 +152,15 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
               onChange={(e) => set('asset_group', e.target.value)}
               className={inputCls}
             >
-              <option value="MOBILITY">모빌리티 (MOBILITY)</option>
-              <option value="FACILITY">설비 (FACILITY)</option>
+              {form.asset_group &&
+                !assetGroupOptions.some((o) => o.value === form.asset_group) && (
+                  <option value={form.asset_group}>{form.asset_group}</option>
+                )}
+              {assetGroupOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="소분류 (연료)" required>
@@ -159,10 +169,15 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
               onChange={(e) => set('asset_type', e.target.value)}
               className={inputCls}
             >
-              <option value="ICE">내연기관 (ICE)</option>
-              <option value="EV">전기차 (EV)</option>
-              <option value="SOLAR">태양광 (SOLAR)</option>
-              <option value="HEATPUMP">히트펌프 (HEATPUMP)</option>
+              {form.asset_type &&
+                !assetTypeOptions.some((o) => o.value === form.asset_type) && (
+                  <option value={form.asset_type}>{form.asset_type}</option>
+                )}
+              {assetTypeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="수량" required>
@@ -207,9 +222,15 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
               onChange={(e) => set('status', e.target.value)}
               className={inputCls}
             >
-              <option value="ACTIVE">운영중 (ACTIVE)</option>
-              <option value="INACTIVE">비활성 (INACTIVE)</option>
-              <option value="ERROR">오류 (ERROR)</option>
+              {form.status &&
+                !assetStatusOptions.some((o) => o.value === form.status) && (
+                  <option value={form.status}>{form.status}</option>
+                )}
+              {assetStatusOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           </Field>
         </div>
