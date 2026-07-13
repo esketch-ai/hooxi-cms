@@ -23,13 +23,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 로고 — 중앙 정렬. 다크에서는 흰색화(brightness-0 invert)로 배지 없이 노출 */}
-      <div className="flex h-16 shrink-0 items-center justify-center border-b border-hairline px-4">
+      {/* 로고(HOOXI PARTNERS) + CMS 텍스트 — 중앙 정렬, 다크는 로고 흰색화 */}
+      <div className="flex h-16 shrink-0 items-center justify-center gap-2 border-b border-hairline px-4">
         <img
-          src="/Hooxi-CMS_logo_trans.png"
-          alt="Hooxi CMS"
-          className="h-9 w-auto dark:brightness-0 dark:invert"
+          src="/hooxipartners_logo_trans.png"
+          alt="Hooxi Partners"
+          className="h-7 w-auto dark:brightness-0 dark:invert"
         />
+        <span className="text-lg font-bold tracking-tight text-teal-600 dark:text-teal-400">
+          CMS
+        </span>
       </div>
 
       {/* 메뉴 트리 */}

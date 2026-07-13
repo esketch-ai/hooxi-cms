@@ -129,12 +129,15 @@ export function LoginPage() {
           <div className="hero-horizon mb-4 inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
             <Leaf size={30} weight="fill" className="text-white" />
           </div>
-          <div className="flex justify-center">
+          <div className="flex items-center justify-center gap-2.5">
             <img
-              src="/Hooxi-CMS_logo_trans.png"
-              alt="Hooxi CMS"
-              className="h-12 w-auto dark:brightness-0 dark:invert"
+              src="/hooxipartners_logo_trans.png"
+              alt="Hooxi Partners"
+              className="h-10 w-auto dark:brightness-0 dark:invert"
             />
+            <span className="text-2xl font-bold tracking-tight text-teal-600 dark:text-teal-400">
+              CMS
+            </span>
           </div>
           <p className="mt-2 text-sm text-ash">내부 관리 시스템</p>
         </div>
