@@ -253,19 +253,25 @@ export function AssetFormModal({ open, onClose, asset }: AssetFormModalProps) {
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="대상 기관">
-              {/* 콤보박스 — 마스터(AGENCY)에서 선택하거나 직접 입력 */}
+              {/* 드롭다운에서 선택(URL 자동채움) 또는 아래 칸에 직접 입력 */}
+              <select
+                value={agencyOptions.some((o) => o.label === form.agency_name) ? form.agency_name : ''}
+                onChange={(e) => handleAgencyChange(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">기관 선택…</option>
+                {agencyOptions.map((o) => (
+                  <option key={o.value} value={o.label}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
               <input
                 value={form.agency_name}
                 onChange={(e) => handleAgencyChange(e.target.value)}
-                className={inputCls}
-                placeholder="예: 한국환경공단, K-FMS"
-                list="agency-options"
+                className={`${inputCls} mt-2`}
+                placeholder="목록에 없으면 직접 입력"
               />
-              <datalist id="agency-options">
-                {agencyOptions.map((o) => (
-                  <option key={o.value} value={o.label} />
-                ))}
-              </datalist>
             </Field>
             <Field label="연동 목적">
               <input
