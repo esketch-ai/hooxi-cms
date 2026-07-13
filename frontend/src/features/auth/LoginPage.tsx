@@ -131,9 +131,9 @@ export function LoginPage() {
           </div>
           <div className="flex justify-center">
             <img
-              src="/Hooxi-CMS_logo.png"
+              src="/Hooxi-CMS_logo_trans.png"
               alt="Hooxi CMS"
-              className="h-9 w-auto rounded-md bg-white px-2 py-1"
+              className="h-10 w-auto rounded-md dark:bg-white dark:px-2 dark:py-1"
             />
           </div>
           <p className="mt-2 text-sm text-ash">내부 관리 시스템</p>

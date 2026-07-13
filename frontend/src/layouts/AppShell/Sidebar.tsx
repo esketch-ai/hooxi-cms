@@ -23,10 +23,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 로고 — 다크에서도 보이도록 밝은 배지 위에 원본 로고 */}
+      {/* 로고 — 라이트는 그대로, 다크는 검정 글자가 안 보이므로 흰 배지 위에 */}
       <div className="flex h-16 shrink-0 items-center border-b border-hairline px-5">
-        <span className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5">
-          <img src="/Hooxi-CMS_logo.png" alt="Hooxi CMS" className="h-6 w-auto" />
+        <span className="inline-flex items-center rounded-lg dark:bg-white dark:px-2.5 dark:py-1.5">
+          <img src="/Hooxi-CMS_logo_trans.png" alt="Hooxi CMS" className="h-7 w-auto" />
         </span>
       </div>
 
