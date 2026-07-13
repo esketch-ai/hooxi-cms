@@ -486,11 +486,40 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+def ensure_schema():
+    """create_all은 '없는 테이블'만 만들고 '기존 테이블의 신규 컬럼'은 추가하지 않는다.
+    Alembic 미도입 상태에서 배포된 테이블에 누락된 컬럼을 idempotent하게 보강한다.
+
+    (배포 tb_code에 color 컬럼 누락 → 조회 SELECT 500 사례 대응. PostgreSQL·SQLite 공통
+    ALTER TABLE ADD COLUMN 사용, inspector로 존재 여부 확인해 IF NOT EXISTS 방언차 회피.)
+    """
+    from sqlalchemy import inspect as _inspect, text as _text
+
+    # (table, column, DDL 타입) — 배포 이후 모델에 추가된 컬럼
+    required = [
+        ("tb_code", "color", "VARCHAR(20)"),
+    ]
+    try:
+        insp = _inspect(engine)
+        tables = set(insp.get_table_names())
+        for table, column, ddl in required:
+            if table not in tables:
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            if column not in cols:
+                with engine.begin() as conn:
+                    conn.execute(_text("ALTER TABLE {0} ADD COLUMN {1} {2}".format(table, column, ddl)))
+                print("✓ Added missing column {0}.{1}".format(table, column))
+    except Exception as exc:
+        print("⚠ ensure_schema skipped: {0}".format(exc))
+
+
 def init_db():
     """Create tables if the database is reachable. Called at app startup —
     must not raise, or Cloud Run will crash-loop when the DB is unset."""
     try:
         Base.metadata.create_all(bind=engine)
+        ensure_schema()  # 기존 테이블 누락 컬럼 보강 (create_all 한계 보완)
         print("✓ Database tables ready")
         return True
     except Exception as exc:
