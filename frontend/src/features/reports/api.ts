@@ -31,6 +31,8 @@ function useInvalidateReports() {
   const queryClient = useQueryClient()
   return (reportId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['reports'] })
+    // 대시보드 '오늘의 액션'의 보고서 소스(['dashboard','reports',…])도 함께 갱신
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     if (reportId) {
       queryClient.invalidateQueries({ queryKey: ['reports', 'detail', reportId] })
     }
