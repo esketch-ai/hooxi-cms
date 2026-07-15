@@ -54,6 +54,8 @@ def _upsert_subscription(db: Session, client: Client, sub_in: schemas.ReportSubs
     sub.channel = sub_in.channel
     sub.due_day = sub_in.due_day
     sub.active = sub_in.active
+    sub.mail_subject = sub_in.mail_subject  # null=전역 기본 템플릿 사용
+    sub.mail_body = sub_in.mail_body
     # 활성 구독 등록 시 발송 대상 플래그 자동 설정 — report_yn 기본 N이라
     # 구독만 등록하고 generate 대상에서 빠지는 실수 방지 (QA 관찰 4)
     if sub_in.active == "Y":

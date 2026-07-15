@@ -124,6 +124,9 @@ class ReportSubscriptionIn(BaseModel):
     channel: str = Field(default="EMAIL", pattern="^(EMAIL|KAKAO|BOTH)$")
     due_day: Optional[int] = Field(default=None, ge=1, le=31)
     active: str = Field(default="Y", pattern="^[YN]$")
+    # 고객사별 메일 템플릿 오버라이드 — null이면 전역 기본(tb_config → 코드 기본값)
+    mail_subject: Optional[str] = Field(default=None, max_length=200)
+    mail_body: Optional[str] = None
 
     @field_validator("active", mode="before")
     @classmethod
@@ -143,6 +146,8 @@ class ReportSubscriptionOut(BaseModel):
     channel: Optional[str] = None
     due_day: Optional[int] = None
     active: Optional[str] = None
+    mail_subject: Optional[str] = None
+    mail_body: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -655,12 +660,13 @@ class DocumentListResponse(BaseModel):
 # P1 — 월간 보고서 발송 (SCR-12)
 # ---------------------------------------------------------------------------
 class ReportSummary(BaseModel):
-    """발송 현황 요약 바 — 대상 n개사 | 미착수·작성중·검토·발송완료·확인·취소."""
+    """발송 현황 요약 바 — 대상 n개사 | 미착수·작성중·검토·발송승인·발송완료·확인·취소."""
 
     target: int = 0
     standby: int = 0
     writing: int = 0
     review: int = 0
+    approved: int = 0
     sent: int = 0
     confirmed: int = 0
     canceled: int = 0
@@ -707,7 +713,7 @@ class ReportGenerateResponse(BaseModel):
 
 
 class ReportStatusUpdate(BaseModel):
-    status: str = Field(pattern="^(STANDBY|WRITING|REVIEW|SENT|CONFIRMED|CANCELED)$")
+    status: str = Field(pattern="^(STANDBY|WRITING|REVIEW|APPROVED|SENT|CONFIRMED|CANCELED)$")
     confirm_basis: Optional[str] = None  # CONFIRMED — 회신메일/유선/열람 (GAN B11)
     canceled_reason: Optional[str] = None  # CANCELED 시 필수 (R3-3)
 
@@ -1072,3 +1078,23 @@ class AccountCheckResponse(BaseModel):
     created: int
     skipped: int
     unreachable: int
+
+
+# ---------------------------------------------------------------------------
+# 배치 — 보고서 자동 발송 (routers/batch.py, POST /batch/report-send)
+# ---------------------------------------------------------------------------
+class ReportSendBatchDetail(BaseModel):
+    report_id: str
+    client_name: Optional[str] = None
+    result: str  # SENT | FAIL
+    detail: Optional[str] = None  # 실패 사유 (SendPrecondition detail 등)
+
+
+class ReportSendBatchResponse(BaseModel):
+    period: str  # 발송 대상 기간 (기본: 전월)
+    generated_created: int  # 당월 대상 자동 생성 — 신규
+    generated_skipped: int  # 당월 대상 자동 생성 — 기존 유지
+    targets: int  # 발송 대상(APPROVED) 건수
+    sent: int
+    failed: int
+    details: List[ReportSendBatchDetail] = []

@@ -4,6 +4,7 @@ import {
   CaretLeft,
   CaretRight,
   ChatCircleDots,
+  CheckCircle,
   CircleNotch,
   DownloadSimple,
   EnvelopeSimple,
@@ -12,6 +13,7 @@ import {
   PaperPlaneRight,
   UploadSimple,
 } from '@phosphor-icons/react'
+import { useAuth } from '../../app/AuthProvider'
 import { PageHeader } from '../../components/PageHeader'
 import { DataTable, type Column } from '../../components/DataTable'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -27,21 +29,28 @@ import {
   useChangeReportStatus,
   useGenerateReports,
   useReports,
+  useRunReportSendBatch,
   useSendReport,
   useUploadReportFile,
 } from './api'
 import { ReportDrawer } from './ReportDrawer'
 
-const SUMMARY_ORDER: { key: 'standby' | 'writing' | 'review' | 'sent' | 'confirmed'; label: string }[] = [
+const SUMMARY_ORDER: {
+  key: 'standby' | 'writing' | 'review' | 'approved' | 'sent' | 'confirmed'
+  label: string
+}[] = [
   { key: 'standby', label: '미착수' },
   { key: 'writing', label: '작성중' },
   { key: 'review', label: '검토' },
+  { key: 'approved', label: '발송승인' },
   { key: 'sent', label: '발송완료' },
   { key: 'confirmed', label: '고객확인' },
 ]
 
 export function ReportsPage() {
   const { showToast } = useToast()
+  const { user: me } = useAuth()
+  const isAdmin = me?.role === 'ADMIN'
   const [period, setPeriod] = useState(() => fmtMonth(new Date()))
   const { data, isLoading, isError, refetch } = useReports(period)
   const reports = useMemo(() => data?.items ?? [], [data])
@@ -51,11 +60,13 @@ export function ReportsPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [sendTarget, setSendTarget] = useState<ReportDelivery | null>(null)
   const [generateOpen, setGenerateOpen] = useState(false)
+  const [batchOpen, setBatchOpen] = useState(false)
 
   const upload = useUploadReportFile()
   const send = useSendReport()
   const changeStatus = useChangeReportStatus()
   const generate = useGenerateReports()
+  const runBatch = useRunReportSendBatch()
 
   // 발송 현황 요약 — 서버 summary (schemas.ReportSummary)
   const summary = useMemo(() => {
@@ -64,7 +75,9 @@ export function ReportsPage() {
     const done = (s?.sent ?? 0) + (s?.confirmed ?? 0)
     return {
       total,
-      counts: s ?? { target: 0, standby: 0, writing: 0, review: 0, sent: 0, confirmed: 0, canceled: 0 },
+      counts:
+        s ??
+        { target: 0, standby: 0, writing: 0, review: 0, approved: 0, sent: 0, confirmed: 0, canceled: 0 },
       pct: total > 0 ? Math.round((done / total) * 100) : 0,
     }
   }, [data?.summary])
@@ -104,6 +117,34 @@ export function ReportsPage() {
       setGenerateOpen(false)
     } catch {
       showToast('대상 생성에 실패했습니다.', 'danger')
+    }
+  }
+
+  // 발송 승인 — APPROVED 전이. 파일 미확보 시 서버가 409(detail)로 거절 (배치 자동 발송 전제)
+  const handleApprove = async (report: ReportDelivery) => {
+    try {
+      await changeStatus.mutateAsync({ reportId: report.report_id, status: 'APPROVED' })
+      showToast('발송 승인되었습니다. 월초 배치에서 자동 발송됩니다.', 'success')
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '발송 승인에 실패했습니다.', 'danger')
+    }
+  }
+
+  // ADMIN 수동 배치 — 전월 APPROVED 일괄 발송 (+ 당월 대상 자동 생성, 멱등)
+  const handleRunBatch = async () => {
+    try {
+      const res = await runBatch.mutateAsync()
+      showToast(
+        `${res.period} 일괄 발송 완료 — 대상 ${res.targets}건 중 성공 ${res.sent}건, 실패 ${res.failed}건`,
+        res.failed > 0 ? 'danger' : 'success',
+      )
+      setBatchOpen(false)
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '일괄 발송 실행에 실패했습니다.', 'danger')
     }
   }
 
@@ -239,10 +280,26 @@ export function ReportsPage() {
       className: 'text-right',
       render: (r) => {
         const canUpload = !['SENT', 'CONFIRMED', 'CANCELED', 'MERGED'].includes(r.status)
+        const canApprove = ['WRITING', 'REVIEW'].includes(r.status)
         const canSend =
-          !!(r.doc_id || r.latest_doc) && ['WRITING', 'REVIEW', 'STANDBY'].includes(r.status)
+          !!(r.doc_id || r.latest_doc) &&
+          ['WRITING', 'REVIEW', 'STANDBY', 'APPROVED'].includes(r.status)
         return (
           <div className="flex justify-end gap-1">
+            {canApprove && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void handleApprove(r)
+                }}
+                className="hidden items-center gap-1 rounded-full border border-sky-400/25 bg-sky-500/15 px-2.5 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-500/25 sm:flex dark:text-sky-300"
+                title="발송 승인 — 월초 배치 자동 발송 대상으로 지정"
+              >
+                <CheckCircle size={13} weight="fill" />
+                발송 승인
+              </button>
+            )}
             {canUpload && (
               <button
                 type="button"
@@ -285,14 +342,27 @@ export function ReportsPage() {
         title="월간 보고서 발송 관리"
         subtitle="담당자 작성 파일 업로드 + 발송 추적 — 부서 전체 공동 관리"
         actions={
-          <button
-            type="button"
-            onClick={() => setGenerateOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
-          >
-            <ListChecks size={16} />
-            대상 생성
-          </button>
+          <>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setBatchOpen(true)}
+                className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+                title="월초 배치 수동 실행 — 전월 발송승인 건 일괄 발송"
+              >
+                <PaperPlaneTilt size={16} />
+                전월 승인분 일괄 발송
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setGenerateOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+            >
+              <ListChecks size={16} />
+              대상 생성
+            </button>
+          </>
         }
       />
 
@@ -448,6 +518,25 @@ export function ReportsPage() {
         loading={send.isPending}
         onConfirm={handleSend}
         onCancel={() => setSendTarget(null)}
+      />
+
+      {/* 월초 배치 수동 실행 확인 (ADMIN) */}
+      <ConfirmDialog
+        open={batchOpen}
+        title="전월 승인분 일괄 발송"
+        message={
+          <>
+            전월 <b>발송승인(APPROVED)</b> 상태의 보고서를 일괄 발송합니다(월초 배치와
+            동일 동작 — 당월 발송 대상 자동 생성 포함).
+            <br />
+            건별로 실제 이메일·알림톡이 발송되며 되돌릴 수 없습니다.
+          </>
+        }
+        confirmLabel="일괄 발송"
+        danger
+        loading={runBatch.isPending}
+        onConfirm={handleRunBatch}
+        onCancel={() => setBatchOpen(false)}
       />
 
       {/* 대상 생성 확인 */}

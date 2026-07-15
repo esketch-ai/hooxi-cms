@@ -89,6 +89,30 @@ export function useChangeReportStatus() {
   })
 }
 
+/** 월초 배치 수동 실행 응답 (schemas.ReportSendBatchResponse) */
+export interface ReportSendBatchResult {
+  period: string
+  generated_created: number
+  generated_skipped: number
+  targets: number
+  sent: number
+  failed: number
+}
+
+/** 월초 배치 수동 실행 — POST /batch/report-send (ADMIN 토큰, 전월 APPROVED 일괄 발송) */
+export function useRunReportSendBatch() {
+  const invalidate = useInvalidateReports()
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ReportSendBatchResult>('/batch/report-send', null, {
+        timeout: 120_000,
+      })
+      return data
+    },
+    onSuccess: () => invalidate(),
+  })
+}
+
 /** 당월 발송 대상 생성 — POST /reports/generate?period= (구독 활성 + report_yn=Y 기반, 멱등) */
 export function useGenerateReports() {
   const invalidate = useInvalidateReports()

@@ -8,26 +8,20 @@ P3 확장: 구독 채널 KAKAO/BOTH + APPROVED 카카오 연락처(전화번호 
 알림톡 실패해도 이메일 성공이면 SENT 유지(이메일 단독 폴백 — 기존 확정 정책).
 """
 
-import json
-import os
 from calendar import monthrange
-from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from datetime import date, datetime
+from typing import Optional, Tuple
 
-import jwt
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import schemas
-from auth import JWT_SECRET, get_current_user, require_permission
+from auth import get_current_user, require_permission
 from models import (
-    ActivityHistory,
     Client,
     Document,
-    KakaoContact,
     ReportDelivery,
-    ReportRecipient,
     ReportSendLog,
     ReportSubscription,
     Schedule,
@@ -36,8 +30,9 @@ from models import (
     utcnow,
 )
 from routers import common
-from services import email_service, integration_config, kakao_service, storage
+from services import storage
 from services.audit_logger import AuditLogger
+from services.report_sender import SendPrecondition, send_report_core
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -45,6 +40,7 @@ _SUMMARY_KEY_BY_STATUS = {
     "STANDBY": "standby",
     "WRITING": "writing",
     "REVIEW": "review",
+    "APPROVED": "approved",
     "SENT": "sent",
     "CONFIRMED": "confirmed",
     "CANCELED": "canceled",
@@ -62,102 +58,6 @@ def _due_date_for(period: str, due_day: Optional[int]) -> date:
     year, month = int(period[:4]), int(period[5:7])
     last_day = monthrange(year, month)[1]
     return date(year, month, min(due_day or last_day, last_day))
-
-
-VIEW_TOKEN_TTL_HOURS = 72  # 열람 링크 유효 시간 (확정: 서명 토큰 + 72시간 만료)
-
-
-def create_view_token(doc_id: str, report_id: str) -> str:
-    """열람 토큰 발급 — 자족(self-contained) JWT. GET /r/{token}에서 검증(DB 컬럼 불필요)."""
-    payload = {
-        "type": "view",
-        "doc_id": doc_id,
-        "report_id": report_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=VIEW_TOKEN_TTL_HOURS),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
-
-
-def _send_report_alimtalk(
-    db: Session, delivery: ReportDelivery, client: Client, doc: Document,
-    seq: int, month: int, user: User, reason: Optional[str],
-) -> None:
-    """이메일 성공 후 카카오 알림톡 시도 (구독 채널 KAKAO/BOTH).
-
-    - APPROVED + 전화번호 보유 연락처가 없거나 알림톡 미설정이면 조용히 건너뜀(이메일 단독)
-    - 성공: KAKAO send_log(동일 seq, SUCCESS) + sent_channel=BOTH
-    - 실패: KAKAO send_log(동일 seq, FAIL) — 이메일 성공이므로 SENT 유지(폴백)
-    """
-    template_code = integration_config.resolve("KAKAO_TEMPLATE_REPORT")
-    if not (kakao_service.is_configured_alimtalk() and template_code):
-        return
-
-    contact = (
-        db.query(KakaoContact)
-        .filter(
-            KakaoContact.client_id == delivery.client_id,
-            KakaoContact.status == "APPROVED",
-            KakaoContact.phone.isnot(None),
-            KakaoContact.phone != "",
-        )
-        .order_by(KakaoContact.approved_at.desc())
-        .first()
-    )
-    if contact is None:
-        return
-
-    view_url = "{0}/r/{1}".format(
-        kakao_service.app_base_url(), create_view_token(doc.doc_id, delivery.report_id)
-    )
-    kakao_snapshot = json.dumps(
-        {"kakao_to": contact.phone, "contact_name": contact.name}, ensure_ascii=False
-    )
-    try:
-        kakao_service.send_alimtalk(
-            to=contact.phone,
-            template_code=template_code,
-            variables={
-                "고객사명": client.company_name,
-                "월": str(month),
-                "보고서유형": delivery.report_type,
-            },
-            buttons=[
-                {
-                    "buttonType": "WL",
-                    "buttonName": "보고서 열람",
-                    "linkMo": view_url,
-                    "linkPc": view_url,
-                }
-            ],
-        )
-    except Exception:
-        # 알림톡 실패 — 이메일 성공이므로 SENT 유지(이메일 단독 폴백)
-        db.add(
-            ReportSendLog(
-                report_id=delivery.report_id, seq=seq, sent_doc_id=doc.doc_id,
-                recipients=kakao_snapshot, channel="KAKAO", result="FAIL",
-                sent_by=user.user_id, reason=reason,
-            )
-        )
-        return
-
-    db.add(
-        ReportSendLog(
-            report_id=delivery.report_id, seq=seq, sent_doc_id=doc.doc_id,
-            recipients=kakao_snapshot, channel="KAKAO", result="SUCCESS",
-            sent_by=user.user_id, reason=reason,
-        )
-    )
-    delivery.sent_channel = "BOTH"
-
-
-def _next_seq(db: Session, report_id: str) -> int:
-    current = (
-        db.query(func.max(ReportSendLog.seq))
-        .filter(ReportSendLog.report_id == report_id)
-        .scalar()
-    )
-    return (current or 0) + 1
 
 
 @router.get("", response_model=schemas.ReportListResponse)
@@ -225,18 +125,13 @@ def get_report(
     )
 
 
-@router.post("/generate", response_model=schemas.ReportGenerateResponse)
-def generate_reports(
-    period: Optional[str] = Query(None, description="YYYY-MM (기본: 당월)"),
-    user: User = Depends(require_permission("master.write")),
-    db: Session = Depends(get_db),
-):
-    """당월 발송 대상 자동 생성 — tb_report_subscription(active=Y) 기반, 멱등.
+def generate_for_period(db: Session, period: str, actor_id: str) -> Tuple[int, int]:
+    """발송 대상 자동 생성 코어 — generate_reports(수동)·batch report-send(자동) 공유.
 
-    대상: 구독 활성 + 고객사 report_yn=Y + 계약 상태 ACTIVE.
-    신규 생성 건은 마감일 REPORT_DUE 일정(SCR-11)도 함께 생성한다.
+    대상: 구독 활성 + 고객사 report_yn=Y + 계약 상태 ACTIVE. (client, period, type) 멱등.
+    신규 생성 건은 마감일 REPORT_DUE 일정(SCR-11)도 함께 생성한다. commit 포함.
+    반환: (created, skipped).
     """
-    period = _resolve_period(period)
     subs = (
         db.query(ReportSubscription, Client)
         .join(Client, Client.client_id == ReportSubscription.client_id)
@@ -264,7 +159,7 @@ def generate_reports(
             continue
 
         due = _due_date_for(period, sub.due_day)
-        manager_id = client.manager_id or user.user_id
+        manager_id = client.manager_id or actor_id
         delivery = ReportDelivery(
             client_id=sub.client_id,
             period=period,
@@ -292,13 +187,28 @@ def generate_reports(
         db.flush()  # PK(gen_uuid)는 flush 시점에 생성 — 감사 대상 ID 확보
         AuditLogger.log_action(
             db,
-            user.user_id,
+            actor_id,
             "REPORT_CREATE",
             target_type="REPORT_DELIVERY",
             target_id=delivery.report_id,
         )
 
     db.commit()
+    return created, skipped
+
+
+@router.post("/generate", response_model=schemas.ReportGenerateResponse)
+def generate_reports(
+    period: Optional[str] = Query(None, description="YYYY-MM (기본: 당월)"),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """당월 발송 대상 자동 생성 — tb_report_subscription(active=Y) 기반, 멱등.
+
+    본문은 generate_for_period 공유 코어(배치 report-send와 동일 로직) — 얇은 래퍼.
+    """
+    period = _resolve_period(period)
+    created, skipped = generate_for_period(db, period, user.user_id)
     return schemas.ReportGenerateResponse(
         period=period,
         created=created,
@@ -362,7 +272,7 @@ def send_report(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """보고서 이메일 발송 (CR-2: 대표 지메일).
+    """보고서 이메일 발송 (CR-2: 대표 지메일) — 본문은 services.report_sender 공유 코어.
 
     - Gmail 미설정 시 503 + 상태 변경 없음
     - 성공: SENT + tb_report_send_log(새 seq) + 활동 이력 EMAIL "[자동]" 적재
@@ -372,151 +282,15 @@ def send_report(
     if delivery.status == "CANCELED":
         raise HTTPException(status_code=409, detail="취소된 보고서는 발송할 수 없습니다")
 
-    if not email_service.is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "이메일 발송 기능이 아직 설정되지 않았습니다. "
-                "GMAIL_SENDER / GMAIL_APP_PASSWORD 환경변수를 설정한 뒤 다시 시도하세요 (CR-2). "
-                "보고서 상태는 변경되지 않았습니다."
-            ),
-        )
-
-    client = common.get_or_404(db, Client, delivery.client_id, "고객사")
-
-    # 발송 파일: 고정본(pinned) 우선, 없으면 최신본 (R2-B4)
-    doc_id = delivery.pinned_doc_id or delivery.doc_id
-    if not doc_id:
-        raise HTTPException(status_code=409, detail="발송할 보고서 파일이 없습니다. 먼저 파일을 업로드하세요")
-    doc = common.get_or_404(db, Document, doc_id, "보고서 파일")
-    content = storage.read_file(doc.file_url)
-    if content is None:
-        raise HTTPException(status_code=500, detail="보고서 파일을 저장소에서 읽을 수 없습니다")
-
-    # 수신자: tb_report_recipient(구독 지정분 + 공통분) → TO 0건이면 main_contact_email 폴백 (R2-B5)
-    sub = (
-        db.query(ReportSubscription)
-        .filter(
-            ReportSubscription.client_id == delivery.client_id,
-            ReportSubscription.report_type == delivery.report_type,
-        )
-        .first()
-    )
-    recipients = (
-        db.query(ReportRecipient).filter(ReportRecipient.client_id == delivery.client_id).all()
-    )
-    recipients = [
-        r for r in recipients if r.sub_id is None or (sub and r.sub_id == sub.sub_id)
-    ]
-    to = [r.email for r in recipients if (r.cc_yn or "N") != "Y"]
-    cc = [r.email for r in recipients if r.cc_yn == "Y"]
-    if not to and client.main_contact_email:
-        to = [client.main_contact_email]
-    if not to:
-        raise HTTPException(
-            status_code=409,
-            detail="TO 수신자가 없습니다. 수신자 등록 또는 고객사 주 담당자 이메일을 확인하세요 (R2-B5)",
-        )
-
-    year, month = int(delivery.period[:4]), int(delivery.period[5:7])
-    subject = "[Hooxi Partners] {0} {1}월 {2} 보고서".format(
-        client.company_name, month, delivery.report_type
-    )
-    body = (
-        "안녕하세요, {0} 담당자님.\n\n"
-        "{1}년 {2}월 {3} 보고서를 첨부와 같이 발송드립니다.\n"
-        "확인 부탁드리며, 문의 사항은 본 메일에 회신해 주세요.\n\n"
-        "감사합니다.\nHooxi Partners 드림"
-    ).format(client.company_name, year, month, delivery.report_type)
-
-    manager = db.get(User, delivery.manager_id) if delivery.manager_id else None
-    reply_to = (manager.email if manager else None) or user.email
-    filename = os.path.basename(doc.file_url) or "report"
-    seq = _next_seq(db, report_id)
-    recipients_snapshot = json.dumps({"to": to, "cc": cc}, ensure_ascii=False)
-    reason = payload.reason if payload else None
-
     try:
-        email_service.send_mail(
-            to=to,
-            subject=subject,
-            body=body,
-            cc=cc or None,
-            attachments=[(filename, content, None)],
-            reply_to=reply_to,
+        result = send_report_core(
+            db, delivery, user.user_id, reason=payload.reason if payload else None
         )
-    except email_service.EmailConfigError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    except Exception as exc:
-        # 실패: 직전 상태 유지 + FAIL 회차 기록 (R2-B3)
-        db.add(
-            ReportSendLog(
-                report_id=report_id,
-                seq=seq,
-                sent_doc_id=doc.doc_id,
-                recipients=recipients_snapshot,
-                channel="EMAIL",
-                result="FAIL",
-                sent_by=user.user_id,
-                reason=reason,
-            )
-        )
-        db.commit()
-        raise HTTPException(
-            status_code=502,
-            detail="이메일 발송에 실패했습니다. 잠시 후 재시도하세요 (상태는 변경되지 않았습니다): {0}".format(exc),
-        )
+    except SendPrecondition as exc:
+        # 코어의 타입 예외 → 동일 상태코드·detail의 HTTPException (동작 불변)
+        raise HTTPException(status_code=exc.code, detail=exc.detail)
 
-    now = utcnow()
-    db.add(
-        ReportSendLog(
-            report_id=report_id,
-            seq=seq,
-            sent_doc_id=doc.doc_id,
-            recipients=recipients_snapshot,
-            channel="EMAIL",
-            result="SUCCESS",
-            sent_by=user.user_id,
-            reason=reason,
-        )
-    )
-    delivery.status = "SENT"
-    delivery.sent_at = now
-    delivery.sent_channel = "EMAIL"
-
-    # 카카오 알림톡 시도 — 구독 채널 KAKAO/BOTH (동일 seq KAKAO 행, 성공 시 BOTH)
-    if sub and (sub.channel or "EMAIL") in ("KAKAO", "BOTH"):
-        _send_report_alimtalk(db, delivery, client, doc, seq, month, user, reason)
-
-    # 활동 이력 EMAIL 자동 적재 (§9-3)
-    db.add(
-        ActivityHistory(
-            client_id=delivery.client_id,
-            manager_id=user.user_id,
-            created_by=user.user_id,
-            activity_date=now,
-            activity_type="EMAIL",
-            title="{0} {1}월 {2} 보고서 이메일 발송".format(common.AUTO_PREFIX, month, delivery.report_type),
-            content="수신자: {0}".format(", ".join(to + cc)),
-        )
-    )
-    # 감사 로그는 커밋 전에 적재해야 함께 저장된다 (커밋 후 add는 유실)
-    AuditLogger.log_action(
-        db,
-        user.user_id,
-        "REPORT_SEND",
-        target_type="REPORT_DELIVERY",
-        target_id=report_id,
-    )
-    db.commit()
-
-    return schemas.ReportSendResponse(
-        message="보고서가 발송되었습니다",
-        report_id=report_id,
-        seq=seq,
-        recipients=to + cc,
-        sent_at=now,
-    )
+    return schemas.ReportSendResponse(**result)
 
 
 @router.put("/{report_id}/status", response_model=schemas.ReportRow)
@@ -531,6 +305,12 @@ def update_report_status(
 
     if payload.status == "CANCELED" and not (payload.canceled_reason or "").strip():
         raise HTTPException(status_code=422, detail="취소에는 사유(canceled_reason)가 필요합니다 (R3-3)")
+
+    # APPROVED(발송승인)는 발송할 파일이 확보된 상태여야 함 — 배치 자동 발송 전제
+    if payload.status == "APPROVED" and not (delivery.pinned_doc_id or delivery.doc_id):
+        raise HTTPException(
+            status_code=409, detail="발송할 보고서 파일이 없습니다. 먼저 파일을 업로드하세요"
+        )
 
     delivery.status = payload.status
     if payload.status == "CANCELED":

@@ -12,7 +12,7 @@
 
 import json
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -22,9 +22,11 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payload
-from models import ActivityHistory, Asset, Client, Config, User, get_db, utcnow
+from models import ActivityHistory, Asset, Client, Config, ReportDelivery, User, get_db, utcnow
 from routers import common
+from routers.reports import generate_for_period
 from services.audit_logger import AuditLogger
+from services.report_sender import SendPrecondition, send_report_core
 
 router = APIRouter(prefix="/batch", tags=["batch"])
 
@@ -228,4 +230,113 @@ def account_check(
         created=created,
         skipped=skipped,
         unreachable=unreachable,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 보고서 배치 자동 발송 — 당월 대상 생성(멱등) + 전월 APPROVED 발송
+# ---------------------------------------------------------------------------
+def _current_period_kst() -> str:
+    """서버 KST(UTC+9) 기준 당월 YYYY-MM.
+
+    common.current_period()는 UTC 기준이라 월초 자정~09시(KST) 실행 시 전월로
+    밀리는 문제가 있어, 배치는 KST 벽시계 기준으로 당월을 계산한다.
+    """
+    return (utcnow() + timedelta(hours=9)).strftime("%Y-%m")
+
+
+def _previous_period(period: str) -> str:
+    """'YYYY-MM' 1개월 감산 — 배치 기본 발송 대상(전월) 계산."""
+    year, month = int(period[:4]), int(period[5:7])
+    if month == 1:
+        return "{0}-12".format(year - 1)
+    return "{0}-{1:02d}".format(year, month - 1)
+
+
+@router.post("/report-send", response_model=schemas.ReportSendBatchResponse)
+def report_send(
+    secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    period: Optional[str] = Query(None, description="발송 대상 YYYY-MM (기본: 전월)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """월초 보고서 배치 — (a) 당월 발송 대상 자동 생성(멱등) + (b) 전월 APPROVED 자동 발송.
+
+    - 발송 코어는 수동 발송과 동일(services.report_sender.send_report_core).
+    - 건별 실패 격리: 한 건이 실패해도 나머지는 계속 발송(FAIL은 details에 사유 기록).
+    - 단 Gmail 미설정(503)은 모든 건이 실패할 것이므로 감지 즉시 전체 중단(상태 변경 없음).
+    """
+    actor = _optional_admin(credentials, db)
+    _authorize(secret, db, actor)
+
+    current = _current_period_kst()
+    period = common.validate_period(period) if period else _previous_period(current)
+    actor_id = (actor.user_id if actor else None) or _seed_admin_id(db)
+    if not actor_id:
+        raise HTTPException(status_code=503, detail="배치 실행자로 지정할 관리자 계정이 없습니다")
+
+    # (a) 당월 발송 대상 자동 생성 — reports.generate와 동일 코어 (멱등, commit 포함)
+    generated_created, generated_skipped = generate_for_period(db, current, actor_id)
+
+    # (b) 대상 기간 APPROVED(발송승인) 전건 자동 발송 — 건별 실패 격리
+    targets = (
+        db.query(ReportDelivery)
+        .filter(ReportDelivery.period == period, ReportDelivery.status == "APPROVED")
+        .order_by(ReportDelivery.created_at.asc())
+        .all()
+    )
+    sent = failed = 0
+    details = []
+    for delivery in targets:
+        report_id = delivery.report_id
+        target_client = db.get(Client, delivery.client_id) if delivery.client_id else None
+        client_name = target_client.company_name if target_client else None
+        try:
+            send_report_core(db, delivery, actor_id)  # 성공 시 코어가 commit
+        except SendPrecondition as exc:
+            db.rollback()  # 미커밋 잔여 상태 폐기 (502 FAIL 로그는 코어가 이미 커밋)
+            if exc.code == 503:
+                # Gmail 미설정 — 모든 건이 실패할 것이므로 전체 중단 (상태 변경 없음)
+                raise HTTPException(status_code=503, detail=exc.detail)
+            failed += 1
+            details.append(
+                schemas.ReportSendBatchDetail(
+                    report_id=report_id, client_name=client_name,
+                    result="FAIL", detail=exc.detail,
+                )
+            )
+            continue
+        except Exception as exc:  # 예기치 못한 오류도 건별 격리 — 배치 전체 중단 금지
+            db.rollback()
+            failed += 1
+            details.append(
+                schemas.ReportSendBatchDetail(
+                    report_id=report_id, client_name=client_name,
+                    result="FAIL", detail=str(exc),
+                )
+            )
+            continue
+        sent += 1
+        details.append(
+            schemas.ReportSendBatchDetail(
+                report_id=report_id, client_name=client_name, result="SENT"
+            )
+        )
+
+    # 배치 완료 감사 — 카운트 요약만 기록 (수신자 이메일 등 개인정보 미기록, R2-E6)
+    AuditLogger.log_action(
+        db, actor_id, "BATCH_REPORT_SEND", target_type="BATCH", target_id=period,
+        new_value="generated={0}, targets={1}, sent={2}, failed={3}".format(
+            generated_created, len(targets), sent, failed
+        ),
+    )
+    db.commit()
+    return schemas.ReportSendBatchResponse(
+        period=period,
+        generated_created=generated_created,
+        generated_skipped=generated_skipped,
+        targets=len(targets),
+        sent=sent,
+        failed=failed,
+        details=details,
     )

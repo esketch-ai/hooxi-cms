@@ -298,6 +298,8 @@ class ReportSubscription(Base):
     channel = Column(String(20), default="EMAIL")  # EMAIL/KAKAO/BOTH
     due_day = Column(Integer)  # 1~31, 짧은 달은 말일 보정
     active = Column(String(1), default="Y")
+    mail_subject = Column(String(200))  # 고객사별 메일 제목 템플릿 오버라이드 (null=전역 기본)
+    mail_body = Column(Text)  # 고객사별 메일 본문 템플릿 오버라이드 (null=전역 기본)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -504,6 +506,8 @@ def ensure_schema():
         ("tb_code", "color", "VARCHAR(20)"),
         ("tb_code", "extra", "VARCHAR(255)"),
         ("tb_document", "asset_id", "VARCHAR(50)"),
+        ("tb_report_subscription", "mail_subject", "VARCHAR(200)"),
+        ("tb_report_subscription", "mail_body", "TEXT"),
     ]
     try:
         insp = _inspect(engine)

@@ -127,6 +127,14 @@ def seed_codes():
         ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", None, 10),
         ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", None, 20),
         ("SETTLEMENT_STATUS", "COMPLETED", "입금완료", "emerald", None, 30),
+        # 보고서 상태 (발송 상태전이 머신 — 전 값 로직 참조, APPROVED는 배치 자동 발송 대상)
+        ("REPORT_STATUS", "STANDBY", "미착수", "gray", None, 10),
+        ("REPORT_STATUS", "WRITING", "작성중", "blue", None, 20),
+        ("REPORT_STATUS", "REVIEW", "내부검토", "purple", None, 30),
+        ("REPORT_STATUS", "APPROVED", "발송승인", "sky", None, 40),
+        ("REPORT_STATUS", "SENT", "발송완료", "emerald", None, 50),
+        ("REPORT_STATUS", "CONFIRMED", "고객확인", "emerald", None, 60),
+        ("REPORT_STATUS", "CANCELED", "취소", "gray", None, 70),
         # 이슈 상태 (이슈 칸반 — OPEN/CLOSED 로직 참조)
         ("ISSUE_STATUS", "OPEN", "접수", "rose", None, 10),
         ("ISSUE_STATUS", "IN_PROGRESS", "처리중", "amber", None, 20),

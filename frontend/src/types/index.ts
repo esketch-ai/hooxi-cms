@@ -110,6 +110,9 @@ export interface ReportSubscriptionIn {
   channel: 'EMAIL' | 'KAKAO' | 'BOTH'
   due_day?: number | null
   active?: string
+  /** 메일 제목/본문 커스텀 — null이면 전역 기본 템플릿(tb_config) 사용 */
+  mail_subject?: string | null
+  mail_body?: string | null
 }
 
 /** 고객사 등록/수정 폼 payload (schemas.ClientCreate/ClientUpdate) */
@@ -142,6 +145,9 @@ export interface ReportSubscription {
   channel: 'EMAIL' | 'KAKAO' | 'BOTH'
   due_day?: number | null
   active?: string
+  /** 메일 제목/본문 커스텀 — null이면 전역 기본 템플릿(tb_config) 사용 */
+  mail_subject?: string | null
+  mail_body?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -264,6 +270,7 @@ export type ReportStatus =
   | 'STANDBY'
   | 'WRITING'
   | 'REVIEW'
+  | 'APPROVED'
   | 'SENT'
   | 'CONFIRMED'
   | 'CANCELED'
@@ -601,6 +608,7 @@ export interface ReportSummary {
   standby: number
   writing: number
   review: number
+  approved: number
   sent: number
   confirmed: number
   canceled: number

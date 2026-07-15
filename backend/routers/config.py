@@ -20,6 +20,7 @@ from routers.batch import DEFAULT_CHECK_AGENCIES
 from routers.dashboard import _DEFAULT_FUNNEL_MAPPING
 from routers.kakao import DEFAULT_SENSITIVE_KEYWORDS
 from services.audit_logger import AuditLogger
+from services.report_sender import DEFAULT_REPORT_MAIL_BODY, DEFAULT_REPORT_MAIL_SUBJECT
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -37,6 +38,16 @@ KNOWN_DEFAULTS = {
         DEFAULT_CHECK_AGENCIES,
         "월초 계정 점검 좁히기 키워드 — 비우면 로그인 계정 보유 자산 전체 점검, "
         "키워드 지정 시 대상 기관명에 포함된 자산만",
+    ),
+    "report_mail_subject": (
+        DEFAULT_REPORT_MAIL_SUBJECT,
+        "보고서 발송 메일 제목 템플릿 — 변수: {고객사명} {기간} {연도} {월} {보고서유형} {담당자명} "
+        "(구독별 오버라이드가 우선)",
+    ),
+    "report_mail_body": (
+        DEFAULT_REPORT_MAIL_BODY,
+        "보고서 발송 메일 본문 템플릿 — 변수: {고객사명} {기간} {연도} {월} {보고서유형} {담당자명} "
+        "(구독별 오버라이드가 우선)",
     ),
 }
 
@@ -105,6 +116,13 @@ def _validate_config_value(key: str, raw_value: str):
             raise HTTPException(
                 status_code=422,
                 detail="account_check_agencies는 문자열 배열이어야 합니다 (비우면 전체 점검)",
+            )
+    elif key in ("report_mail_subject", "report_mail_body"):
+        # 메일 템플릿 — 비어 있지 않은 문자열 (JSON 문자열로 저장, 빈 템플릿은 발송 불능)
+        if not isinstance(parsed, str) or not parsed.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="{0}은(는) 비어 있지 않은 문자열이어야 합니다".format(key),
             )
     return parsed
 

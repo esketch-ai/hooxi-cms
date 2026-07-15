@@ -58,6 +58,9 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
   const [subType, setSubType] = useState('')
   const [subChannel, setSubChannel] = useState<'EMAIL' | 'KAKAO' | 'BOTH'>('EMAIL')
   const [subDueDay, setSubDueDay] = useState<number | null>(null)
+  // 메일 제목/본문 커스텀 (선택) — 비우면 전역 기본 템플릿(tb_config) 사용
+  const [subMailSubject, setSubMailSubject] = useState('')
+  const [subMailBody, setSubMailBody] = useState('')
   // 인라인 검증 에러 (L-1) — key: ClientPayload 키 또는 'subType'
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -68,6 +71,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
       setSubType(sub?.report_type ?? '')
       setSubChannel((sub?.channel as 'EMAIL' | 'KAKAO' | 'BOTH') ?? 'EMAIL')
       setSubDueDay(sub?.due_day ?? null)
+      setSubMailSubject(sub?.mail_subject ?? '')
+      setSubMailBody(sub?.mail_body ?? '')
       setErrors({})
     }
   }, [open, client])
@@ -129,6 +134,9 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 channel: subChannel,
                 due_day: subDueDay,
                 active: 'Y',
+                // 빈 문자열은 null(= 전역 기본 템플릿 사용)로 정규화
+                mail_subject: subMailSubject.trim() || null,
+                mail_body: subMailBody.trim() || null,
               }
             : undefined,
       })
@@ -366,6 +374,32 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 disabled={form.report_yn !== 'Y'}
               />
             </Field>
+          </div>
+          {/* 메일 제목/본문 커스텀 (선택) — 비우면 전역 기본 템플릿(시스템 설정) 사용 */}
+          <div className="mt-3 space-y-3">
+            <Field label="메일 제목 커스텀 (선택 — 비우면 기본 템플릿)">
+              <input
+                value={subMailSubject}
+                onChange={(e) => setSubMailSubject(e.target.value)}
+                className={inputCls}
+                placeholder="예: [흑시파트너스] {고객사명} {기간} {보고서유형} 송부드립니다"
+                disabled={form.report_yn !== 'Y'}
+              />
+            </Field>
+            <Field label="메일 본문 커스텀 (선택 — 비우면 기본 템플릿)">
+              <textarea
+                value={subMailBody}
+                onChange={(e) => setSubMailBody(e.target.value)}
+                rows={5}
+                className="w-full rounded-lg border border-hairline bg-graphite px-3 py-2 text-sm leading-relaxed text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none disabled:opacity-50"
+                placeholder={'예: {고객사명} 담당자님, 안녕하세요.\n{기간} {보고서유형}을 첨부와 같이 송부드립니다.'}
+                disabled={form.report_yn !== 'Y'}
+              />
+            </Field>
+            <p className="text-[11px] text-slatey">
+              치환 변수: {'{고객사명} {기간} {연도} {월} {보고서유형} {담당자명}'} — 배치·수동
+              발송 메일에 적용됩니다.
+            </p>
           </div>
         </div>
 

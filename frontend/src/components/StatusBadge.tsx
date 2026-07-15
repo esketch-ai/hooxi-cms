@@ -25,6 +25,7 @@ const yellow = 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-
 const red = 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25'
 const blue = 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25'
 const purple = 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-400/25'
+const sky = 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25'
 const gray = 'bg-elevate-strong text-ash border-hairline'
 const grayStrike = `${gray} line-through`
 
@@ -82,6 +83,7 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
     STANDBY: { label: '미착수', className: gray },
     WRITING: { label: '작성중', className: blue },
     REVIEW: { label: '내부검토', className: purple },
+    APPROVED: { label: '발송승인', className: sky },
     SENT: { label: '발송완료', className: green },
     CONFIRMED: { label: '고객확인 ✓', className: green },
     CANCELED: { label: '취소', className: grayStrike },

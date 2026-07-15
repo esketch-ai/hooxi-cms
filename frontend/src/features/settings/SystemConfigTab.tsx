@@ -49,9 +49,17 @@ const CONFIG_TITLES: Record<string, string> = {
   sensitive_keywords: '민감 키워드 (카카오 상담)',
   account_check_agencies: '계정 점검 기관 (월초 배치)',
   funnel_mapping: '리텐션 퍼널 매핑 (대시보드)',
+  report_mail_subject: '보고서 메일 제목 템플릿',
+  report_mail_body: '보고서 메일 본문 템플릿',
 }
 
-const CONFIG_ORDER = ['sensitive_keywords', 'account_check_agencies', 'funnel_mapping']
+const CONFIG_ORDER = [
+  'sensitive_keywords',
+  'account_check_agencies',
+  'funnel_mapping',
+  'report_mail_subject',
+  'report_mail_body',
+]
 
 // 문자열 배열형 키 — chips 추가/삭제 UI로 편집 (백엔드 검증: 비어 있지 않은 문자열 배열)
 const ARRAY_CHIP_KEYS = ['sensitive_keywords', 'account_check_agencies']
@@ -63,6 +71,15 @@ const CHIP_HINTS: Record<string, string> = {
   account_check_agencies:
     '월초 계정 점검 배치가 자산의 대상 기관명에 이 키워드가 포함되면 점검 이슈를 생성합니다.',
 }
+
+// 텍스트 템플릿형 키 — JSON 문자열로 저장하되 UI는 일반 텍스트로 편집 (보고서 배치 발송 메일)
+const TEXT_TEMPLATE_KEYS: Record<string, { multiline: boolean }> = {
+  report_mail_subject: { multiline: false },
+  report_mail_body: { multiline: true },
+}
+
+const TEMPLATE_VARS_HINT =
+  '치환 변수: {고객사명} {기간} {연도} {월} {보고서유형} {담당자명} — 고객사별 커스텀(구독 설정)이 있으면 그쪽이 우선합니다.'
 
 export function SystemConfigTab() {
   const { data: items, isLoading, isError, refetch } = useConfigList()
@@ -156,6 +173,17 @@ function ConfigCard({ item }: { item: ConfigItem }) {
       <KeywordChipsEditor
         value={draft}
         hint={CHIP_HINTS[item.key]}
+        onChange={(next, valid) => {
+          setDraft(next)
+          setDraftValid(valid)
+        }}
+      />
+    )
+  } else if (item.key in TEXT_TEMPLATE_KEYS) {
+    editor = (
+      <TextTemplateEditor
+        value={draft}
+        multiline={TEXT_TEMPLATE_KEYS[item.key].multiline}
         onChange={(next, valid) => {
           setDraft(next)
           setDraftValid(valid)
@@ -370,6 +398,62 @@ function KeywordChipsEditor({
         </button>
       </div>
       {hint && <p className="mt-1.5 text-[11px] text-slatey">{hint}</p>}
+    </div>
+  )
+}
+
+// ── report_mail_subject/body: 텍스트 템플릿 편집 ────────────────────
+// 서버는 JSON 문자열("...")로 저장/검증 — UI는 일반 텍스트로 편집하고 저장 시 직렬화.
+function parseTemplateText(value: string): string {
+  try {
+    const parsed = JSON.parse(value)
+    if (typeof parsed === 'string') return parsed
+  } catch {
+    /* JSON 문자열이 아니면 원문 그대로 */
+  }
+  return value
+}
+
+function TextTemplateEditor({
+  value,
+  multiline,
+  onChange,
+}: {
+  value: string
+  /** 본문(여러 줄) 여부 — 제목은 한 줄 input */
+  multiline: boolean
+  /** 서버 검증(비어 있지 않은 문자열)에 맞춰 공백만이면 invalid */
+  onChange: (serialized: string, valid: boolean) => void
+}) {
+  const text = useMemo(() => parseTemplateText(value), [value])
+  const commit = (next: string) => onChange(JSON.stringify(next), next.trim().length > 0)
+  const valid = text.trim().length > 0
+  const cls = `w-full rounded-lg border bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:outline-none ${
+    valid ? 'border-hairline focus:border-white/30' : 'border-rose-400/40 focus:border-rose-400/60'
+  }`
+
+  return (
+    <div>
+      {multiline ? (
+        <textarea
+          value={text}
+          onChange={(e) => commit(e.target.value)}
+          rows={8}
+          spellCheck={false}
+          className={`${cls} py-2 leading-relaxed`}
+        />
+      ) : (
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => commit(e.target.value)}
+          className={`${cls} h-9`}
+        />
+      )}
+      {!valid && (
+        <p className="mt-1 text-[11px] text-rose-500">템플릿은 비워 둘 수 없습니다.</p>
+      )}
+      <p className="mt-1.5 text-[11px] text-slatey">{TEMPLATE_VARS_HINT}</p>
     </div>
   )
 }
