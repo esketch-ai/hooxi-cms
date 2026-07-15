@@ -158,7 +158,12 @@ export function IssuesPage() {
         <SkeletonKpi count={4} />
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <KpiCard title="관리 고객사" value={summary.clients} icon={<Buildings size={18} />} />
+          {/* 대시보드의 "관리 고객사"(계약중)와 달리 등록 고객사 전체 수 — 라벨로 구분 */}
+          <KpiCard
+            title={scope === 'mine' ? '담당 고객사' : '전체 고객사'}
+            value={summary.clients}
+            icon={<Buildings size={18} />}
+          />
           <KpiCard
             title="오늘 마감 · 긴급"
             value={summary.urgentToday}
