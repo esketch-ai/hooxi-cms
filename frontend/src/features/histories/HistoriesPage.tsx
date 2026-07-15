@@ -191,7 +191,7 @@ export function HistoriesPage() {
               <span>유형</span>
               <span>요약</span>
               <span>작성자</span>
-              <span>Next Action</span>
+              <span>다음 액션</span>
               <span />
             </div>
             <ul>
@@ -267,7 +267,7 @@ export function HistoriesPage() {
                         )}
                         {h.next_action && (
                           <div>
-                            <p className="text-xs font-semibold text-slatey">Next Action</p>
+                            <p className="text-xs font-semibold text-slatey">다음 액션</p>
                             <p className="mt-0.5 text-sm text-bone">{h.next_action}</p>
                           </div>
                         )}
