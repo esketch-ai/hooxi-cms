@@ -18,7 +18,8 @@ export function PageHeader({
       className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${className}`}
     >
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-bone">
+        {/* DESIGN.md: 헤드라인 700+ 금지 — 500 restraint가 시그니처 */}
+        <h1 className="text-xl font-medium tracking-tight text-bone">
           {title}
         </h1>
         {subtitle && <p className="mt-0.5 text-sm text-ash">{subtitle}</p>}
