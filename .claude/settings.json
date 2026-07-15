@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd backend && python -m pytest:*)",
+      "Bash(cd backend && DATABASE_URL=\"sqlite://\" python -c:*)",
+      "Bash(cd frontend && NODE_OPTIONS= npm run build:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)"
+    ]
+  }
+}

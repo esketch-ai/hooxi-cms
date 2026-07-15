@@ -340,3 +340,7 @@ tsconfig.tsbuildinfo
 
 # 예외: 디자인 시스템 소스
 !DESIGN.md
+
+# 예외: 개발 도리(doctrine)·서브에이전트 정의 — 하네스가 저장소와 함께 이동해야 함
+!CLAUDE.md
+!.claude/agents/*.md
