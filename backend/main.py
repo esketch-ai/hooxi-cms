@@ -449,6 +449,16 @@ async def spa_fallback(full_path: str):
     if full_path.startswith("api/"):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
     if dist_path:
+        # dist 루트의 실제 정적 파일(로고 png·favicon.svg 등)은 index.html 폴백에
+        # 삼켜지면 <img>가 HTML을 받아 깨진다 — 실파일이면 그대로 서빙.
+        # normpath+접두 검사로 경로 탈출(../) 차단.
+        dist_abs = os.path.abspath(dist_path)
+        candidate = os.path.normpath(os.path.join(dist_abs, full_path))
+        if candidate.startswith(dist_abs + os.sep) and os.path.isfile(candidate):
+            # html(특히 /index.html 직접 요청)은 no-cache 유지 — 옛 번들 캐시로
+            # 배포 후 흰 화면이 뜨던 c11593f 수정 의도 보존
+            headers = _INDEX_HEADERS if candidate.endswith(".html") else None
+            return FileResponse(candidate, headers=headers)
         index_path = os.path.join(dist_path, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path, headers=_INDEX_HEADERS)
