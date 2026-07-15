@@ -135,3 +135,8 @@ export function fmtRate(value?: number | string | null): string {
 export function telHref(phone?: string | null): string {
   return `tel:${(phone ?? '').replace(/[^0-9+]/g, '')}`
 }
+
+/** KST 기준 오늘 날짜 'YYYY-MM-DD' — 기기 타임존과 무관하게 Asia/Seoul 고정 */
+export function todayKst(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
+}

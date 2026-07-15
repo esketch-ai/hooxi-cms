@@ -39,6 +39,7 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   CODE_UPDATE: { label: '코드 수정', cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-400/25' },
   CODE_DELETE: { label: '코드 삭제', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   DOCUMENT_DOWNLOAD: { label: '문서 다운로드', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
+  DOCUMENT_UPLOAD: { label: '문서 업로드', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
   BACKUP_CREATE: { label: '수동 백업', cls: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-400/25' },
   BACKUP_RESTORE: { label: 'DB 복구', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   // 업무 이력 감사 (이슈·사업·보고서)

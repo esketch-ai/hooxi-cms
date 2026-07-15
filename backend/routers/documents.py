@@ -16,7 +16,7 @@ from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-_DOC_TYPES = ("CONTRACT", "REPORT", "FORM", "PHOTO", "ETC")
+_DOC_TYPES = ("CONTRACT", "REPORT", "FORM", "PHOTO", "SIGN", "ETC")
 
 # 문서 유형 → 저장 폴더 (Dropbox: /Hooxi-CMS/{업체명}/{유형폴더}/)
 TYPE_DIR = {
@@ -24,8 +24,12 @@ TYPE_DIR = {
     "REPORT": "보고서",
     "FORM": "양식",
     "PHOTO": "현장사진",
+    "SIGN": "서명",
     "ETC": "기타",
 }
+
+# 업로드 파일 크기 상한 — 태블릿 현장 사진·서명 기준 25MB
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 def storage_folder(company_name: Optional[str], doc_type: str) -> str:
@@ -37,7 +41,8 @@ def storage_folder(company_name: Optional[str], doc_type: str) -> str:
 @router.get("", response_model=schemas.DocumentListResponse)
 def list_documents(
     client_id: Optional[str] = Query(None, description="고객사"),
-    doc_type: Optional[str] = Query(None, description="CONTRACT/REPORT/FORM/PHOTO/ETC"),
+    doc_type: Optional[str] = Query(None, description="CONTRACT/REPORT/FORM/PHOTO/SIGN/ETC"),
+    history_id: Optional[str] = Query(None, description="활동 이력"),
     date_from: Optional[date] = Query(None, description="업로드 기간 시작"),
     date_to: Optional[date] = Query(None, description="업로드 기간 끝"),
     search: Optional[str] = Query(None, description="문서명 검색"),
@@ -52,6 +57,8 @@ def list_documents(
         query = query.filter(Document.client_id == client_id)
     if doc_type:
         query = query.filter(Document.doc_type == doc_type)
+    if history_id:
+        query = query.filter(Document.history_id == history_id)
     if date_from:
         query = query.filter(Document.created_at >= common.kst_day_start_utc(date_from))
     if date_to:
@@ -81,7 +88,7 @@ async def upload_document(
 ):
     """문서 업로드 (multipart) — client_id 없으면 공용 양식(R2-C6)."""
     if doc_type not in _DOC_TYPES:
-        raise HTTPException(status_code=422, detail="doc_type은 CONTRACT/REPORT/FORM/PHOTO/ETC 중 하나여야 합니다")
+        raise HTTPException(status_code=422, detail="doc_type은 CONTRACT/REPORT/FORM/PHOTO/SIGN/ETC 중 하나여야 합니다")
     client = None
     if client_id:
         client = common.get_or_404(db, Client, client_id, "고객사")
@@ -91,6 +98,8 @@ async def upload_document(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="파일 크기가 25MB를 초과합니다")
     file_url = storage.save_file(
         content,
         file.filename or "document",
@@ -107,6 +116,10 @@ async def upload_document(
         uploaded_by=user.user_id,
     )
     db.add(doc)
+    db.flush()  # gen_uuid PK 확보 후 감사 로그 target_id로 사용
+    AuditLogger.document_upload(
+        db, user.user_id, doc.doc_id, "{0}: {1}".format(doc_type, doc.title)
+    )
     db.commit()
     db.refresh(doc)
     return common.build_document_outs(db, [doc])[0]

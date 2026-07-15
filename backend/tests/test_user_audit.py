@@ -93,6 +93,22 @@ def test_document_download_audited(client, admin_headers, tmp_path):
     assert logs and logs[0].target_id == doc_id
 
 
+def test_document_upload_audited(client, admin_headers):
+    upload = client.post(
+        "/api/v1/documents",
+        data={"title": "감사테스트 업로드", "doc_type": "ETC"},
+        files={"file": ("audit-up.txt", b"audit-up", "text/plain")},
+        headers=admin_headers,
+    )
+    assert upload.status_code == 201, upload.text
+    doc_id = upload.json()["doc_id"]
+
+    logs = _audits("DOCUMENT_UPLOAD")
+    assert logs and logs[0].target_id == doc_id
+    assert logs[0].target_type == "DOCUMENT"
+    assert logs[0].new_value == "ETC: 감사테스트 업로드"  # 유형·문서명 수준만 (R2-E6)
+
+
 def test_report_view_action_not_regressed(client):
     """Qwen 회귀 방지: /r/{token} 열람은 REPORT_VIEW/REPORT로 기록되어야 한다.
 

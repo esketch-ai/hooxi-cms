@@ -4,7 +4,7 @@
 감사 로그 탭 라벨과의 정합을 위해 절대 임의 변경하지 않는다:
 
   REVEAL_AUTH/ASSET · SETTLEMENT_CHANGE/PROJECT_CLIENT_MAP · REPORT_VIEW/REPORT
-  CONFIG_CHANGE/CONFIG · KAKAO_APPROVAL/KAKAO_CONTACT · DOCUMENT_DOWNLOAD/DOCUMENT
+  CONFIG_CHANGE/CONFIG · KAKAO_APPROVAL/KAKAO_CONTACT · DOCUMENT_DOWNLOAD·DOCUMENT_UPLOAD/DOCUMENT
   USER_APPROVE·USER_ROLE_CHANGE·USER_DEACTIVATE·USER_PIN_RESET/USER
 
 커밋은 호출부 책임(기존 패턴 유지) — 본 모듈은 db.add까지만 수행한다.
@@ -100,6 +100,18 @@ class AuditLogger:
     def document_download(db: Session, actor_id: str, doc_id: str) -> AuditLog:
         return AuditLogger.log_action(
             db, actor_id, "DOCUMENT_DOWNLOAD", target_type="DOCUMENT", target_id=doc_id
+        )
+
+    @staticmethod
+    def document_upload(db: Session, actor_id: str, doc_id: str, summary: str) -> AuditLog:
+        """문서 업로드 — 유형·문서명 수준만 기록, 파일 내용·저장 경로 원문 금지 (R2-E6)."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "DOCUMENT_UPLOAD",
+            target_type="DOCUMENT",
+            target_id=doc_id,
+            new_value=summary,
         )
 
     # ── 내부 사용자 관리 (SCR-14 계정 관리) ─────────────────────────

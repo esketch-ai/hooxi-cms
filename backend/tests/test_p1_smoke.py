@@ -567,6 +567,49 @@ def test_download_document(client, staff_headers):
     )
 
 
+def test_upload_document_sign_and_history_filter(client, staff_headers):
+    """태블릿 현장 서명 — SIGN 유형은 서명 폴더로 저장, history_id로 조회."""
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        data={
+            "doc_type": "SIGN",
+            "title": "현장 확인 서명",
+            "client_id": S["client_id"],
+            "history_id": S["call_history_id"],
+        },
+        files={"file": ("sign.png", io.BytesIO(b"SIGN-BYTES"), "image/png")},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["doc_type"] == "SIGN"
+    assert "/서명/" in body["file_url"]  # 업체별 서명 폴더 규칙
+    sign_doc_id = body["doc_id"]
+
+    # history_id 필터 — 해당 활동 이력에 연결된 문서만
+    resp = client.get(
+        API + "/documents",
+        params={"history_id": S["call_history_id"]},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["doc_id"] == sign_doc_id
+
+
+def test_upload_document_over_size_limit(client, staff_headers):
+    """25MB 초과 업로드는 413."""
+    big = b"x" * (25 * 1024 * 1024 + 1)
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        data={"doc_type": "ETC"},
+        files={"file": ("big.bin", io.BytesIO(big), "application/octet-stream")},
+    )
+    assert resp.status_code == 413
+
+
 # ---------------------------------------------------------------------------
 # 대시보드 (SCR-01)
 # ---------------------------------------------------------------------------

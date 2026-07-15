@@ -26,6 +26,7 @@ const DOC_TYPE_OPTIONS: { value: DocType; label: string }[] = [
   { value: 'REPORT', label: '보고서' },
   { value: 'FORM', label: '표준 양식' },
   { value: 'PHOTO', label: '현장 사진' },
+  { value: 'SIGN', label: '서명' },
   { value: 'ETC', label: '기타' },
 ]
 
@@ -352,7 +353,7 @@ function DocumentUploadModal({
   return (
     <Modal open={open} onClose={onClose} title="문서 업로드" size="md">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <FileUploader file={file} onChange={setFile} />
+        <FileUploader file={file} onChange={setFile} enableCamera />
         <div>
           <label className="mb-1 block text-xs font-medium text-ash">문서명</label>
           <input

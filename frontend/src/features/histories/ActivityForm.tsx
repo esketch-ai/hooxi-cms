@@ -1,13 +1,14 @@
 // 공용 활동 이력 등록 폼 (SCR-05) — 고객사 상세·이슈 보드·대시보드에서 재사용
 import { useEffect, useState, type FormEvent } from 'react'
-import { CircleNotch } from '@phosphor-icons/react'
+import { CircleNotch, FileImage, X } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { FileUploader } from '../../components/FileUploader'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { toDatetimeLocal } from '../../lib/format'
-import type { ActivityPayload, ActivityType, IssueStatus } from '../../types'
+import type { ActivityHistory, ActivityPayload, ActivityType, IssueStatus } from '../../types'
 
 const inputCls =
   'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
@@ -66,6 +67,8 @@ export function ActivityForm({
   const [content, setContent] = useState('')
   const [mainNeeds, setMainNeeds] = useState('')
   const [nextAction, setNextAction] = useState('')
+  // 현장 사진 첨부 — 이력 저장 후 history_id로 순차 업로드 (태블릿 촬영 지원)
+  const [photos, setPhotos] = useState<File[]>([])
 
   useEffect(() => {
     if (open) {
@@ -82,12 +85,13 @@ export function ActivityForm({
       setContent('')
       setMainNeeds('')
       setNextAction('')
+      setPhotos([])
     }
   }, [open, defaultClientId, defaultType])
 
   const create = useMutation({
     mutationFn: async (payload: ActivityPayload) => {
-      const { data } = await api.post('/histories', payload)
+      const { data } = await api.post<ActivityHistory>('/histories', payload)
       return data
     },
     onSuccess: () => {
@@ -125,7 +129,7 @@ export function ActivityForm({
         resolvedClientId = created.client_id
         queryClient.invalidateQueries({ queryKey: ['clients'] })
       }
-      await create.mutateAsync({
+      const created = await create.mutateAsync({
         client_id: resolvedClientId,
         activity_date: activityDate,
         activity_type: activityType,
@@ -138,7 +142,35 @@ export function ActivityForm({
         content: content.trim(),
         main_needs: mainNeeds || null,
       })
-      showToast('활동 이력이 등록되었습니다.', 'success')
+      // 이력 저장 완료 후 history_id로 현장 사진 순차 업로드 (실패해도 이력은 유지)
+      let photoFailed = 0
+      for (const photo of photos) {
+        const form = new FormData()
+        form.append('file', photo)
+        form.append('title', photo.name)
+        form.append('doc_type', 'PHOTO')
+        form.append('client_id', resolvedClientId)
+        form.append('history_id', created.history_id)
+        try {
+          await api.post('/documents', form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60_000,
+          })
+        } catch {
+          photoFailed += 1
+        }
+      }
+      if (photos.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ['documents'] })
+      }
+      if (photoFailed > 0) {
+        showToast(
+          `활동 이력은 등록되었으나 사진 ${photoFailed}건 업로드에 실패했습니다.`,
+          'danger',
+        )
+      } else {
+        showToast('활동 이력이 등록되었습니다.', 'success')
+      }
       onCreated?.()
       onClose()
     } catch {
@@ -322,6 +354,42 @@ export function ActivityForm({
               placeholder="다음 조치 사항"
             />
           </div>
+        </div>
+
+        {/* 현장 사진 첨부 — 태블릿(pointer: coarse)에서 카메라 촬영 지원 */}
+        <div>
+          <label className={labelCls}>현장 사진 첨부</label>
+          <FileUploader
+            file={null}
+            onChange={(f) => f && setPhotos((prev) => [...prev, f])}
+            accept="image/*"
+            enableCamera
+            compressImages
+          />
+          {photos.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {photos.map((p, i) => (
+                <li
+                  key={`${p.name}-${i}`}
+                  className="flex items-center gap-2.5 rounded-lg border border-hairline bg-elevate px-3 py-2"
+                >
+                  <FileImage size={18} className="shrink-0 text-smoke" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-bone">{p.name}</p>
+                    <p className="text-xs text-slatey">{(p.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                    className="rounded-md p-1 text-smoke hover:bg-elevate-strong hover:text-bone"
+                    aria-label="사진 제거"
+                  >
+                    <X size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-hairline pt-3">

@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './client'
-import type { ChatBadge, Client, Code, Paginated, User } from '../../types'
+import type { ChatBadge, Client, Code, Document, Paginated, User } from '../../types'
 
 /**
  * 공통 코드 마스터 조회 (tb_code). 드롭다운 옵션 + 코드값→표시명 매핑을 함께 제공.
@@ -63,6 +63,20 @@ export function useClientOptions() {
       return unwrapList(data).items
     },
     staleTime: 60_000,
+  })
+}
+
+/** 활동 이력 첨부 문서 목록 — GET /documents?history_id= (SCR-05 확장 행 등) */
+export function useHistoryDocuments(historyId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['documents', 'history', historyId],
+    queryFn: async () => {
+      const { data } = await api.get<Document[] | Paginated<Document>>('/documents', {
+        params: { history_id: historyId, page_size: 100 },
+      })
+      return unwrapList(data).items
+    },
+    enabled: !!historyId,
   })
 }
 

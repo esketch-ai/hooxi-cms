@@ -13,6 +13,7 @@ from services import dropbox_storage, storage
 def test_storage_folder_rule():
     assert storage_folder("한빛운수", "PHOTO") == "한빛운수/현장사진"
     assert storage_folder("한빛운수", "CONTRACT") == "한빛운수/계약서"
+    assert storage_folder("한빛운수", "SIGN") == "한빛운수/서명"  # 태블릿 현장 서명
     assert storage_folder(None, "FORM") == "_공용/양식"
     assert storage_folder("A/B상사", "ETC") == "A/B상사/기타"  # sanitize는 storage에서
 

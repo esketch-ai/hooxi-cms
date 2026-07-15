@@ -1,7 +1,7 @@
 // SCR-04 자산 및 연동 현황 — 외부기관 연동 계정의 안전한 공동 관리
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowSquareOut, CircleNotch, HardDrives, PencilSimple, Plus } from '@phosphor-icons/react'
+import { ArrowSquareOut, Camera, CircleNotch, HardDrives, PencilSimple, Plus } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -9,10 +9,12 @@ import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
 import { useCodes } from '../../lib/api/queries'
+import { usePointerCoarse } from '../../lib/usePointerCoarse'
 import type { Asset } from '../../types'
 import { useAssets } from './api'
 import { useRevealAuth } from './useRevealAuth'
 import { AssetFormModal } from './AssetFormModal'
+import { SpecPhotoModal } from './SpecPhotoModal'
 
 const PAGE_SIZE = 20
 
@@ -122,6 +124,9 @@ export function AssetsPage() {
   const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Asset | null>(null)
+  // 제원표 촬영 — 태블릿(pointer: coarse) 현장 기능, 대상 자산 선택 시 모달 오픈
+  const isCoarse = usePointerCoarse()
+  const [specPhotoAsset, setSpecPhotoAsset] = useState<Asset | null>(null)
 
   const filters = useMemo(
     () => ({
@@ -203,18 +208,35 @@ export function AssetsPage() {
       header: '수정',
       className: 'text-right',
       render: (a) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            openEdit(a)
-          }}
-          className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-          title="수정"
-          aria-label="자산 수정"
-        >
-          <PencilSimple size={16} />
-        </button>
+        <div className="flex items-center justify-end gap-1">
+          {/* 제원표 촬영 — 태블릿에서만, 고객사 연결 자산 한정 */}
+          {isCoarse && a.client_id && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setSpecPhotoAsset(a)
+              }}
+              className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+              title="제원표 촬영"
+              aria-label="제원표 촬영"
+            >
+              <Camera size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              openEdit(a)
+            }}
+            className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+            title="수정"
+            aria-label="자산 수정"
+          >
+            <PencilSimple size={16} />
+          </button>
+        </div>
       ),
     },
   ]
@@ -329,6 +351,20 @@ export function AssetsPage() {
                 </div>
                 <AssetSpecCell asset={a} />
                 <div className="border-t border-hairline pt-2">{authCell(a)}</div>
+                {/* 제원표 촬영 — 태블릿에서만, 고객사 연결 자산 한정 */}
+                {isCoarse && a.client_id && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSpecPhotoAsset(a)
+                    }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-full border border-hairline bg-elevate px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate-strong"
+                  >
+                    <Camera size={16} />
+                    제원표 촬영
+                  </button>
+                )}
               </div>
             )}
           />
@@ -339,6 +375,7 @@ export function AssetsPage() {
       )}
 
       <AssetFormModal open={formOpen} onClose={() => setFormOpen(false)} asset={editing} />
+      <SpecPhotoModal asset={specPhotoAsset} onClose={() => setSpecPhotoAsset(null)} />
     </div>
   )
 }

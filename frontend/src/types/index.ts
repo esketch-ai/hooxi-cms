@@ -319,7 +319,7 @@ export interface ReportSendLog {
 // ---------------------------------------------------------------------------
 // tb_document — 문서 아카이브 (SCR-13)
 // ---------------------------------------------------------------------------
-export type DocType = 'CONTRACT' | 'REPORT' | 'FORM' | 'PHOTO' | 'ETC'
+export type DocType = 'CONTRACT' | 'REPORT' | 'FORM' | 'PHOTO' | 'SIGN' | 'ETC'
 
 export interface Document {
   doc_id: string
