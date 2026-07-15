@@ -332,6 +332,9 @@ class Document(Base):
     history_id = Column(
         String(50), ForeignKey("tb_activity_history.history_id"), nullable=True
     )  # 활동 이력·이슈 첨부 (R2-C6)
+    asset_id = Column(
+        String(50), ForeignKey("tb_asset.asset_id"), nullable=True
+    )  # 자산별 사진(제원표 등) 역조회
     uploaded_by = Column(String(50), ForeignKey("tb_user.user_id"))
     created_at = Column(DateTime, default=utcnow)
 
@@ -500,6 +503,7 @@ def ensure_schema():
     required = [
         ("tb_code", "color", "VARCHAR(20)"),
         ("tb_code", "extra", "VARCHAR(255)"),
+        ("tb_document", "asset_id", "VARCHAR(50)"),
     ]
     try:
         insp = _inspect(engine)

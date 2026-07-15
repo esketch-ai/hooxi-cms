@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission, require_role
-from models import Asset, Client, ProjectClientMap, User, get_db, utcnow
+from models import Asset, Client, Document, ProjectClientMap, User, get_db, utcnow
 from routers import common
 from routers.codes import validate_active_code
 from services import crypto
@@ -201,6 +201,8 @@ def delete_asset(
             status_code=409,
             detail="감축 사업 매핑에 연결된 자산은 삭제할 수 없습니다 — 매핑을 먼저 해제하세요",
         )
+    # 연결된 제원표 사진은 자산 참조만 해제 — 사진 자체는 고객사 문서함에 보존
+    db.query(Document).filter(Document.asset_id == asset_id).update({"asset_id": None})
     db.delete(asset)
     db.commit()
     return schemas.MessageResponse(message="자산이 삭제되었습니다")

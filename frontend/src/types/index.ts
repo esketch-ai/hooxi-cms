@@ -330,6 +330,7 @@ export interface Document {
   version: number
   report_id?: string | null
   history_id?: string | null
+  asset_id?: string | null
   uploaded_by?: string | null
   created_at: string
   uploaded_by_name?: string | null

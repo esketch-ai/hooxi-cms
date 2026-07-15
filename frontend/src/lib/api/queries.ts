@@ -113,3 +113,17 @@ export function useUserOptions() {
     staleTime: 300_000,
   })
 }
+
+/** 자산별 사진 목록 — GET /documents?asset_id= (SCR-04 사진 보기 모달 등) */
+export function useAssetDocuments(assetId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['documents', 'asset', assetId],
+    queryFn: async () => {
+      const { data } = await api.get<Document[] | Paginated<Document>>('/documents', {
+        params: { asset_id: assetId, page_size: 100 },
+      })
+      return unwrapList(data).items
+    },
+    enabled: !!assetId,
+  })
+}

@@ -598,6 +598,109 @@ def test_upload_document_sign_and_history_filter(client, staff_headers):
     assert body["items"][0]["doc_id"] == sign_doc_id
 
 
+def test_upload_document_asset_link_and_filter(client, staff_headers):
+    """자산별 사진(제원표 등) — asset_id 연결 저장, asset_id로 역조회."""
+    import models
+
+    db = models.SessionLocal()
+    try:
+        db.add(
+            models.Asset(
+                asset_id="a-doc-test",
+                client_id=S["client_id"],
+                asset_group="MOBILITY",
+                asset_type="EV",
+                main_spec="현대 일렉시티",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        data={
+            "doc_type": "PHOTO",
+            "title": "제원표_현대 일렉시티_20260715",
+            "client_id": S["client_id"],
+            "asset_id": "a-doc-test",
+        },
+        files={"file": ("spec.jpg", io.BytesIO(b"SPEC-BYTES"), "image/jpeg")},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["asset_id"] == "a-doc-test"
+    asset_doc_id = body["doc_id"]
+
+    # asset_id 필터 — 해당 자산에 연결된 문서만
+    resp = client.get(
+        API + "/documents",
+        params={"asset_id": "a-doc-test"},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["doc_id"] == asset_doc_id
+
+
+def test_upload_document_asset_404(client, staff_headers):
+    """존재하지 않는 asset_id 업로드는 404."""
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        data={"doc_type": "PHOTO", "asset_id": "no-such-asset"},
+        files={"file": ("x.jpg", io.BytesIO(b"x"), "image/jpeg")},
+    )
+    assert resp.status_code == 404
+
+
+def test_delete_asset_detaches_photos(client, admin_headers, staff_headers):
+    """자산 삭제 시 연결 사진은 보존되고 asset_id 참조만 해제된다(FK 위반·고아 참조 방지)."""
+    import models
+
+    db = models.SessionLocal()
+    try:
+        db.add(
+            models.Asset(
+                asset_id="a-del-test",
+                client_id=S["client_id"],
+                asset_group="MOBILITY",
+                asset_type="EV",
+                main_spec="삭제 테스트 차량",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        data={
+            "doc_type": "PHOTO",
+            "title": "제원표_삭제 테스트 차량_20260715",
+            "client_id": S["client_id"],
+            "asset_id": "a-del-test",
+        },
+        files={"file": ("spec.jpg", io.BytesIO(b"SPEC"), "image/jpeg")},
+    )
+    assert resp.status_code == 201, resp.text
+    doc_id = resp.json()["doc_id"]
+
+    resp = client.delete(API + "/assets/a-del-test", headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+
+    # 사진은 문서함에 남고 자산 참조만 해제
+    db = models.SessionLocal()
+    try:
+        doc = db.query(models.Document).filter(models.Document.doc_id == doc_id).one()
+        assert doc.asset_id is None
+    finally:
+        db.close()
+
+
 def test_upload_document_over_size_limit(client, staff_headers):
     """25MB 초과 업로드는 413."""
     big = b"x" * (25 * 1024 * 1024 + 1)

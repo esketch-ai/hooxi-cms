@@ -140,3 +140,15 @@ export function telHref(phone?: string | null): string {
 export function todayKst(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
 }
+
+/** KST 기준 현재 시각 'HHmm' — 파일 제목 규약용 (todayKst와 동일하게 Asia/Seoul 고정) */
+export function nowKstTime(): string {
+  return new Date()
+    .toLocaleTimeString('en-GB', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    .replace(':', '')
+}

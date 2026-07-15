@@ -1,5 +1,5 @@
 // SCR-04 제원표 촬영 첨부 — 태블릿 현장에서 자산 제원표를 촬영해 고객사 문서함(PHOTO)에 업로드
-// 제목 규약: 제원표_{자산명}_{YYYY-MM-DD} (KST 기준 오늘)
+// 제목 규약: 제원표_{자산명}_{YYYY-MM-DD_HHmm} (KST 기준 — 같은 날 다중 촬영 구분)
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CircleNotch } from '@phosphor-icons/react'
@@ -7,12 +7,17 @@ import { Modal } from '../../components/Modal'
 import { FileUploader } from '../../components/FileUploader'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { todayKst } from '../../lib/format'
+import { nowKstTime, todayKst } from '../../lib/format'
 import type { Asset } from '../../types'
 
 /** 자산 표시명 — AssetSpecCell과 동일 폴백 (main_spec 없으면 대분류 기본명) */
 export function assetDisplayName(asset: Asset): string {
   return asset.main_spec ?? (asset.asset_group === 'MOBILITY' ? '차량' : '설비')
+}
+
+/** 제목 규약 — 업로드 시점 KST로 생성 (미리보기·실제 업로드 공용) */
+function specPhotoTitle(asset: Asset): string {
+  return `제원표_${assetDisplayName(asset)}_${todayKst()}_${nowKstTime()}`
 }
 
 export function SpecPhotoModal({
@@ -32,9 +37,10 @@ export function SpecPhotoModal({
       if (!asset || !file) return
       const form = new FormData()
       form.append('file', file)
-      form.append('title', `제원표_${assetDisplayName(asset)}_${todayKst()}`)
+      form.append('title', specPhotoTitle(asset))
       form.append('doc_type', 'PHOTO')
       form.append('client_id', asset.client_id)
+      form.append('asset_id', asset.asset_id)
       const { data } = await api.post('/documents', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 60_000,
@@ -73,9 +79,7 @@ export function SpecPhotoModal({
         {asset && (
           <p className="text-xs text-slatey">
             {asset.client_name ?? '고객사'} 문서함(현장 사진)에{' '}
-            <span className="font-mono text-ash">
-              제원표_{assetDisplayName(asset)}_{todayKst()}
-            </span>
+            <span className="font-mono text-ash">{specPhotoTitle(asset)}</span>
             으로 저장됩니다.
           </p>
         )}

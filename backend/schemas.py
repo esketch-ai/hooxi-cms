@@ -640,6 +640,7 @@ class DocumentOut(BaseModel):
     version: Optional[int] = None
     report_id: Optional[str] = None
     history_id: Optional[str] = None
+    asset_id: Optional[str] = None
     uploaded_by: Optional[str] = None
     uploaded_by_name: Optional[str] = None
     created_at: Optional[datetime] = None

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import ActivityHistory, Client, Document, User, get_db
+from models import ActivityHistory, Asset, Client, Document, User, get_db
 from routers import common
 from services import storage
 from services.audit_logger import AuditLogger
@@ -43,6 +43,7 @@ def list_documents(
     client_id: Optional[str] = Query(None, description="고객사"),
     doc_type: Optional[str] = Query(None, description="CONTRACT/REPORT/FORM/PHOTO/SIGN/ETC"),
     history_id: Optional[str] = Query(None, description="활동 이력"),
+    asset_id: Optional[str] = Query(None, description="자산"),
     date_from: Optional[date] = Query(None, description="업로드 기간 시작"),
     date_to: Optional[date] = Query(None, description="업로드 기간 끝"),
     search: Optional[str] = Query(None, description="문서명 검색"),
@@ -59,6 +60,8 @@ def list_documents(
         query = query.filter(Document.doc_type == doc_type)
     if history_id:
         query = query.filter(Document.history_id == history_id)
+    if asset_id:
+        query = query.filter(Document.asset_id == asset_id)
     if date_from:
         query = query.filter(Document.created_at >= common.kst_day_start_utc(date_from))
     if date_to:
@@ -83,6 +86,7 @@ async def upload_document(
     title: Optional[str] = Form(None),
     client_id: Optional[str] = Form(None),
     history_id: Optional[str] = Form(None),
+    asset_id: Optional[str] = Form(None),
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
@@ -94,6 +98,8 @@ async def upload_document(
         client = common.get_or_404(db, Client, client_id, "고객사")
     if history_id:
         common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
+    if asset_id:
+        common.get_or_404(db, Asset, asset_id, "자산")
 
     content = await file.read()
     if not content:
@@ -113,6 +119,7 @@ async def upload_document(
         file_url=file_url,
         version=1,
         history_id=history_id,
+        asset_id=asset_id,
         uploaded_by=user.user_id,
     )
     db.add(doc)
