@@ -49,7 +49,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     to={item.path}
                     onClick={onNavigate}
                     className={({ isActive }) =>
-                      `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                      `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors pointer-coarse:py-3 ${
                         isActive
                           ? 'bg-elevate-strong font-semibold text-bone'
                           : 'text-ash hover:bg-elevate hover:text-bone'
@@ -91,7 +91,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <button
             type="button"
             onClick={logout}
-            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone pointer-coarse:p-3"
             title="로그아웃"
             aria-label="로그아웃"
           >
