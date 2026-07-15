@@ -77,7 +77,9 @@ function AuthCell({
         <span className="font-mono text-xs text-ash">{asset.login_id}</span>
       )}
       {!asset.has_credentials ? (
-        <span className="text-xs text-slatey">미설정</span>
+        <span className="text-xs text-slatey">
+          {asset.auth_type === 'API_KEY' ? '키 미설정' : '비밀번호 미설정'}
+        </span>
       ) : revealed != null ? (
         <button
           type="button"
