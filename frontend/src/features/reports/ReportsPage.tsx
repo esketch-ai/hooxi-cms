@@ -186,6 +186,7 @@ export function ReportsPage() {
     {
       key: 'manager',
       header: '담당자',
+      className: '!px-2',
       render: (r) => <span className="text-ash">{r.manager_name ?? '—'}</span>,
     },
     {
@@ -219,6 +220,7 @@ export function ReportsPage() {
     {
       key: 'file',
       header: '파일',
+      className: '!px-2',
       render: (r) =>
         r.latest_doc ? (
           <button
@@ -241,6 +243,7 @@ export function ReportsPage() {
     {
       key: 'channel',
       header: '채널',
+      className: '!px-2',
       render: (r) => (
         <span className="flex items-center gap-1 text-slatey">
           {(r.sent_channel === 'EMAIL' || r.sent_channel === 'BOTH') && (
@@ -256,6 +259,7 @@ export function ReportsPage() {
     {
       key: 'confirmed',
       header: '고객 확인',
+      className: '!px-2',
       render: (r) =>
         r.status === 'CONFIRMED' ? (
           <span className="text-xs font-semibold text-emerald-400">✓ {fmtServerDate(r.confirmed_at)}</span>
@@ -278,6 +282,7 @@ export function ReportsPage() {
       key: 'actions',
       header: '관리',
       className: 'text-right',
+      stickyRight: true,
       render: (r) => {
         const canUpload = !['SENT', 'CONFIRMED', 'CANCELED', 'MERGED'].includes(r.status)
         const canApprove = ['WRITING', 'REVIEW'].includes(r.status)

@@ -8,6 +8,8 @@ export interface Column<T> {
   header: ReactNode
   /** th/td 공통 클래스 (정렬·너비) */
   className?: string
+  /** 가로 스크롤 시에도 우측 고정 — 핵심 액션 열이 잘리지 않도록 (옵트인) */
+  stickyRight?: boolean
   /** 모바일 카드 전환 시 숨김이 아닌, 테이블 셀 렌더러 */
   render: (row: T) => ReactNode
 }
@@ -72,7 +74,9 @@ export function DataTable<T>({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3 text-xs font-semibold tracking-wide text-ash ${col.className ?? ''}`}
+                  className={`px-4 py-3 text-xs font-semibold tracking-wide text-ash ${
+                    col.stickyRight ? 'sticky right-0 z-[1] border-l border-hairline bg-elevate' : ''
+                  } ${col.className ?? ''}`}
                 >
                   {col.header}
                 </th>
@@ -84,12 +88,19 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`border-b border-hairline last:border-b-0 ${
+                className={`group border-b border-hairline last:border-b-0 ${
                   onRowClick ? 'cursor-pointer hover:bg-elevate' : ''
                 } ${rowClassName?.(row) ?? ''}`}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={`px-4 py-3 align-middle ${col.className ?? ''}`}>
+                  <td
+                    key={col.key}
+                    className={`px-4 py-3 align-middle ${
+                      col.stickyRight
+                        ? 'sticky right-0 z-[1] border-l border-hairline bg-graphite group-hover:bg-elevate'
+                        : ''
+                    } ${col.className ?? ''}`}
+                  >
                     {col.render(row)}
                   </td>
                 ))}
