@@ -14,10 +14,11 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import { FileUploader } from '../../components/FileUploader'
+import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { unwrapList, useClientOptions } from '../../lib/api/queries'
-import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtServerDateTime } from '../../lib/format'
 import type { DocType, Document, Paginated } from '../../types'
 
@@ -51,6 +52,8 @@ export function DocumentsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
+  // 문서명 클릭 → 미리보기(이미지/PDF만) — 다운로드 아이콘은 별도 유지
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
 
   const params = useMemo(() => {
     const p: Record<string, string | number> = { page_size: 200 }
@@ -82,7 +85,21 @@ export function DocumentsPage() {
       header: '문서명',
       render: (d) => (
         <div className="min-w-0">
-          <p className="truncate font-medium text-bone">{d.title}</p>
+          {previewKind(d) ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPreviewDoc(d)
+              }}
+              className="block max-w-full truncate text-left font-medium text-bone hover:underline"
+              title="미리보기"
+            >
+              {d.title}
+            </button>
+          ) : (
+            <p className="truncate font-medium text-bone">{d.title}</p>
+          )}
           {!folder && (
             <p className="text-xs text-slatey">
               {d.client_name ?? (d.client_id ? '고객사' : '공용')}
@@ -237,7 +254,18 @@ export function DocumentsPage() {
               renderCard={(d) => (
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-bone">{d.title}</p>
+                    {previewKind(d) ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDoc(d)}
+                        className="block max-w-full truncate text-left text-sm font-medium text-bone hover:underline"
+                        title="미리보기"
+                      >
+                        {d.title}
+                      </button>
+                    ) : (
+                      <p className="truncate text-sm font-medium text-bone">{d.title}</p>
+                    )}
                     <p className="text-xs text-slatey">
                       {docTypeLabel(d.doc_type)} · v{d.version} · {fmtServerDateTime(d.created_at)}
                     </p>
@@ -262,6 +290,7 @@ export function DocumentsPage() {
         onClose={() => setUploadOpen(false)}
         defaultClientId={folder && folder !== 'COMMON' ? folder : ''}
       />
+      <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </div>
   )
 }

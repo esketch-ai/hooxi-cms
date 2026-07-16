@@ -18,10 +18,11 @@ import { EmptyState } from '../../components/EmptyState'
 import { Skeleton, SkeletonTableRows } from '../../components/Skeleton'
 import { AuditLine } from '../../components/AuditLine'
 import { useToast } from '../../components/Toast'
-import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
+import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { useCodes } from '../../lib/api/queries'
 import { fmtDate, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
-import type { Client } from '../../types'
+import type { Client, Document } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useClientThreads } from '../chat/api'
 import { ThreadModePill, ThreadWaitingBadge } from '../chat/ThreadBadges'
@@ -316,6 +317,8 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
   const { data: reports = [], isLoading: reportsLoading } = useClientReports(clientId)
   const { data: documents = [], isLoading: docsLoading } = useClientDocuments(clientId)
   const { showToast } = useToast()
+  // 문서명 클릭 → 미리보기(이미지/PDF만) — 다운로드 아이콘은 별도 유지
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
 
   // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
   const handleDownload = async (docId: string, title?: string) => {
@@ -361,7 +364,18 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
             {documents.map((d) => (
               <li key={d.doc_id} className="flex items-center gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-bone">{d.title}</p>
+                  {previewKind(d) ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc(d)}
+                      className="block max-w-full truncate text-left text-sm font-medium text-bone hover:underline"
+                      title="미리보기"
+                    >
+                      {d.title}
+                    </button>
+                  ) : (
+                    <p className="truncate text-sm font-medium text-bone">{d.title}</p>
+                  )}
                   <p className="text-xs text-slatey">
                     {d.doc_type} · v{d.version} · {fmtServerDateTime(d.created_at)}
                   </p>
@@ -379,6 +393,7 @@ function ReportsDocsTab({ clientId }: { clientId: string }) {
           </ul>
         )}
       </section>
+      <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </div>
   )
 }

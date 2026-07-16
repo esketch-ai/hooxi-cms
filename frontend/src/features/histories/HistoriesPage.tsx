@@ -18,14 +18,15 @@ import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
 import { Modal } from '../../components/Modal'
 import { SignaturePad } from '../../components/SignaturePad'
+import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { unwrapList, useCodes, useHistoryDocuments, useUserOptions } from '../../lib/api/queries'
 import { usePointerCoarse } from '../../lib/usePointerCoarse'
 import { useDebounced } from '../../lib/useDebounced'
-import { downloadDocument, downloadErrorMessage } from '../../lib/download'
+import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtDayLabel, fmtTime, todayKst } from '../../lib/format'
-import type { ActivityHistory, Paginated } from '../../types'
+import type { ActivityHistory, Document, Paginated } from '../../types'
 import { ActivityForm } from './ActivityForm'
 
 const PAGE_SIZE = 20
@@ -418,6 +419,8 @@ function SignatureModal({
 function HistoryAttachments({ historyId }: { historyId: string }) {
   const { showToast } = useToast()
   const { data: docs = [] } = useHistoryDocuments(historyId)
+  // 제목 클릭 → 미리보기(이미지/PDF만) — 다운로드는 우측 아이콘 버튼으로 분리
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
 
   if (docs.length === 0) return null
 
@@ -435,22 +438,36 @@ function HistoryAttachments({ historyId }: { historyId: string }) {
       <ul className="mt-1 space-y-1">
         {docs.map((d) => (
           <li key={d.doc_id} className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => void handleDownload(d.doc_id, d.title)}
-              className="flex min-w-0 items-center gap-1.5 text-sm text-bone underline-offset-2 hover:underline"
-            >
-              <DownloadSimple size={14} className="shrink-0 text-smoke" />
-              <span className="truncate">{d.title}</span>
-            </button>
+            {previewKind(d) ? (
+              <button
+                type="button"
+                onClick={() => setPreviewDoc(d)}
+                className="min-w-0 truncate text-sm text-bone underline-offset-2 hover:underline"
+                title="미리보기"
+              >
+                {d.title}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate text-sm text-bone">{d.title}</span>
+            )}
             {d.doc_type === 'SIGN' && (
               <span className="inline-flex shrink-0 rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
                 서명
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => void handleDownload(d.doc_id, d.title)}
+              className="shrink-0 rounded p-0.5 text-smoke hover:bg-elevate hover:text-bone"
+              title="다운로드"
+              aria-label={`${d.title} 다운로드`}
+            >
+              <DownloadSimple size={14} />
+            </button>
           </li>
         ))}
       </ul>
+      <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
     </div>
   )
 }

@@ -7,11 +7,11 @@ interface ModalProps {
   title?: string
   children: ReactNode
   footer?: ReactNode
-  /** sm=384 / md=512 / lg=672 */
-  size?: 'sm' | 'md' | 'lg'
+  /** sm=384 / md=512 / lg=672 / xl=1024 */
+  size?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
-const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }
+const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' }
 
 export function Modal({
   open,
