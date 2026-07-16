@@ -1,5 +1,5 @@
-// SCR-05 영업 활동 이력 — 아코디언 테이블 + 공용 ActivityForm
-import { useMemo, useState } from 'react'
+// SCR-05 영업 활동 이력 — 날짜 그룹 아코디언 테이블 + 공용 ActivityForm
+import { Fragment, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -22,8 +22,9 @@ import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { unwrapList, useCodes, useHistoryDocuments, useUserOptions } from '../../lib/api/queries'
 import { usePointerCoarse } from '../../lib/usePointerCoarse'
+import { useDebounced } from '../../lib/useDebounced'
 import { downloadDocument, downloadErrorMessage } from '../../lib/download'
-import { fmtDateTime, todayKst } from '../../lib/format'
+import { fmtDayLabel, fmtTime, todayKst } from '../../lib/format'
 import type { ActivityHistory, Paginated } from '../../types'
 import { ActivityForm } from './ActivityForm'
 
@@ -46,6 +47,7 @@ export function HistoriesPage() {
   const isCoarse = usePointerCoarse()
 
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
   const [activityType, setActivityType] = useState('')
   const [createdBy, setCreatedBy] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -58,13 +60,14 @@ export function HistoriesPage() {
 
   const params = useMemo(() => {
     const p: Record<string, string | number> = { page, page_size: PAGE_SIZE }
+    if (debouncedSearch.trim()) p.search = debouncedSearch.trim()
     if (activityType) p.activity_type = activityType
     if (createdBy) p.created_by = createdBy
     if (dateFrom) p.date_from = dateFrom
     if (dateTo) p.date_to = dateTo
     if (retention) p.retention_stage = retention
     return p
-  }, [activityType, createdBy, dateFrom, dateTo, retention, page])
+  }, [debouncedSearch, activityType, createdBy, dateFrom, dateTo, retention, page])
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['histories', params],
@@ -77,17 +80,21 @@ export function HistoriesPage() {
     },
   })
 
-  // 고객사 검색 — 서버 파라미터 없음 → 현재 페이지 내 클라이언트 필터
-  const rows = useMemo(() => {
-    const items = data?.items ?? []
-    if (!search.trim()) return items
-    const keyword = search.trim().toLowerCase()
-    return items.filter((h) =>
-      (h.client_name ?? '').toLowerCase().includes(keyword) ||
-      (h.title ?? '').toLowerCase().includes(keyword),
-    )
-  }, [data?.items, search])
-  const total = search.trim() ? rows.length : (data?.total ?? 0)
+  const rows = data?.items ?? []
+  const total = data?.total ?? 0
+
+  // 날짜 그룹 — activity_date(사용자 입력 벽시계)의 YYYY-MM-DD 기준.
+  // 백엔드가 activity_date desc 정렬이므로 순회 중 날짜가 바뀔 때마다 새 그룹.
+  const groups = useMemo(() => {
+    const out: { date: string; items: ActivityHistory[] }[] = []
+    for (const h of rows) {
+      const date = (h.activity_date ?? '').slice(0, 10)
+      const last = out[out.length - 1]
+      if (last && last.date === date) last.items.push(h)
+      else out.push({ date, items: [h] })
+    }
+    return out
+  }, [rows])
 
   const resetPage = <T,>(setter: (v: T) => void) => (v: T) => {
     setter(v)
@@ -115,7 +122,7 @@ export function HistoriesPage() {
         <FilterSearch
           value={search}
           onChange={resetPage(setSearch)}
-          placeholder="고객사 검색"
+          placeholder="고객사·제목 검색"
           className="min-w-[160px]"
         />
         <FilterSelect
@@ -184,50 +191,79 @@ export function HistoriesPage() {
         <>
           {/* 아코디언 테이블 */}
           <div className="overflow-hidden rounded-3xl border border-hairline bg-graphite">
-            {/* 헤더 (데스크톱) */}
-            <div className="hidden grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] gap-3 border-b border-hairline bg-elevate px-4 py-3 text-xs font-semibold tracking-wide text-ash lg:grid">
-              <span>일시</span>
-              <span>고객사</span>
+            {/* 헤더 (데스크톱) — 시간 · 유형 · 활동(고객사+제목) · 작성자 · 캐럿 */}
+            <div className="hidden grid-cols-[48px_88px_1fr_110px_32px] gap-3 border-b border-hairline bg-elevate px-4 py-3 text-xs font-semibold tracking-wide text-ash lg:grid">
+              <span>시간</span>
               <span>유형</span>
-              <span>요약</span>
+              <span>활동</span>
               <span>작성자</span>
-              <span>다음 액션</span>
               <span />
             </div>
             <ul>
-              {rows.map((h) => {
+              {groups.map((g, gi) => (
+                <Fragment key={`${g.date}-${gi}`}>
+                  {/* 날짜 그룹 헤더 — 모바일·데스크톱 공용 */}
+                  <li className="flex items-center gap-2 border-b border-hairline bg-elevate/60 px-4 py-1.5">
+                    <span className="text-xs font-semibold text-ash">{fmtDayLabel(g.date)}</span>
+                    <span className="ml-auto rounded-full bg-elevate-strong px-1.5 py-0.5 text-[10px] font-bold text-ash">
+                      {g.items.length}건
+                    </span>
+                  </li>
+                  {g.items.map((h) => {
                 const isOpen = expanded === h.history_id
                 const isAuto = !!h.is_auto
+                const isIssue = h.activity_type === 'ISSUE'
                 return (
                   <li key={h.history_id} className="border-b border-hairline last:border-b-0">
                     <button
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : h.history_id)}
-                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 text-left hover:bg-elevate lg:grid-cols-[150px_1fr_90px_2fr_110px_1fr_32px] lg:gap-3"
+                      className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-4 py-1.5 text-left hover:bg-elevate lg:grid-cols-[48px_88px_1fr_110px_32px] lg:gap-3"
                       aria-expanded={isOpen}
                     >
-                      {/* 모바일: 2줄 요약 / 데스크톱: 그리드 셀 */}
+                      {/* 모바일: 2줄(시간·칩·고객사 / 제목) / 데스크톱: 그리드 셀 */}
                       <span className="min-w-0 lg:contents">
-                        <span className="block text-xs text-slatey lg:text-sm lg:text-ash">
-                          {fmtDateTime(h.activity_date)}
+                        <span className="flex items-center gap-1.5 lg:contents">
+                          <span className="shrink-0 text-xs text-slatey lg:text-sm lg:text-ash">
+                            {fmtTime(h.activity_date)}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1.5">
+                            <StatusBadge domain="activity" value={h.activity_type} />
+                            {isAuto && (
+                              <span className="inline-flex rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
+                                자동
+                              </span>
+                            )}
+                          </span>
+                          <span className="min-w-0 truncate text-sm font-semibold text-bone lg:hidden">
+                            {h.client_name ?? (h.client_id ? '고객사' : '미지정 고객')}
+                          </span>
                         </span>
-                        <span className="block truncate text-sm font-semibold text-bone">
-                          {h.client_name ?? (h.client_id ? '고객사' : '미지정 고객')}
-                        </span>
-                        <span className="mt-0.5 flex items-center gap-1.5 lg:mt-0">
-                          <StatusBadge domain="activity" value={h.activity_type} />
-                          {isAuto && (
-                            <span className="inline-flex rounded bg-elevate-strong px-1 py-0.5 text-[10px] font-medium text-ash">
-                              자동
+                        {/* 활동 한 줄 — ActionCenter 스캔 문법: 칩 · 고객사 · 제목 · 배지 */}
+                        <span className="mt-0.5 flex min-w-0 items-center gap-1.5 lg:mt-0">
+                          {isIssue && h.priority === 'URGENT' && (
+                            <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+                              긴급
+                            </span>
+                          )}
+                          <span className="min-w-0 truncate text-sm">
+                            <span className="hidden font-semibold text-bone lg:inline">
+                              {h.client_name ?? (h.client_id ? '고객사' : '미지정 고객')}
+                              <span className="font-normal text-slatey"> · </span>
+                            </span>
+                            <span className="text-ash">{h.title}</span>
+                          </span>
+                          {isIssue && h.issue_status && (
+                            <StatusBadge domain="issue" value={h.issue_status} className="shrink-0" />
+                          )}
+                          {h.next_action && (
+                            <span className="hidden max-w-[200px] shrink-0 truncate rounded bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-slatey lg:inline-block">
+                              다음: {h.next_action}
                             </span>
                           )}
                         </span>
-                        <span className="block truncate text-sm text-ash">{h.title}</span>
                         <span className="hidden truncate text-sm text-ash lg:block">
                           {h.created_by_name ?? h.manager_name ?? '—'}
-                        </span>
-                        <span className="hidden truncate text-xs text-slatey lg:block">
-                          {h.next_action ?? '—'}
                         </span>
                       </span>
                       <CaretDown
@@ -294,6 +330,8 @@ export function HistoriesPage() {
                   </li>
                 )
               })}
+                </Fragment>
+              ))}
             </ul>
           </div>
           <Pagination total={total} page={page} pageSize={PAGE_SIZE} onChange={setPage} />

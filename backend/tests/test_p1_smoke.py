@@ -212,6 +212,53 @@ def test_list_histories_filters(client, staff_headers):
     assert all(i["activity_date"].startswith("2026-07-05") for i in resp.json()["items"])
 
 
+def test_list_histories_search(client, staff_headers):
+    """서버 검색 — 고객사명·제목 부분일치(outerjoin), total 정확성, 페이지 밖 항목 히트."""
+    # 고객 미지정 이력 — outerjoin이라 검색어 없을 때 누락되면 안 되고, 제목으로도 히트해야 함
+    resp = client.post(
+        API + "/histories",
+        headers=staff_headers,
+        json={
+            "activity_date": "2026-07-03T14:00:00",
+            "activity_type": "MEETING",
+            "title": "미지정검색 내부 회의",
+        },
+    )
+    assert resp.status_code == 201
+
+    # 고객사명 부분일치 — 해당 고객사의 이력만 히트
+    resp = client.get(API + "/histories", params={"search": "테스트운"}, headers=staff_headers)
+    body = resp.json()
+    assert body["total"] == 2  # CALL + ISSUE (미지정 이력 제외)
+    assert all(i["client_id"] == S["client_id"] for i in body["items"])
+
+    # 제목 부분일치 — client_id 없는 이력도 히트 (outerjoin)
+    resp = client.get(API + "/histories", params={"search": "미지정검색"}, headers=staff_headers)
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["client_id"] is None
+
+    # 검색어 없으면 미지정 고객 이력도 누락 없이 포함
+    resp = client.get(API + "/histories", headers=staff_headers)
+    assert any(i["client_id"] is None for i in resp.json()["items"])
+
+    # 미스 — 0건, total 0
+    resp = client.get(API + "/histories", params={"search": "없는검색어zz"}, headers=staff_headers)
+    body = resp.json()
+    assert body["total"] == 0
+    assert body["items"] == []
+
+    # 1페이지에 없는 항목이 검색으로 히트 — page_size=1이면 최신순 1페이지는 ISSUE(07-05)뿐
+    resp = client.get(API + "/histories", params={"page_size": 1}, headers=staff_headers)
+    assert all("안부" not in (i["title"] or "") for i in resp.json()["items"])
+    resp = client.get(
+        API + "/histories", params={"page_size": 1, "search": "안부"}, headers=staff_headers
+    )
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["title"] == "정기 안부 콜"
+
+
 def test_issue_status_change_kanban(client, staff_headers):
     resp = client.put(
         API + "/histories/{0}/status".format(S["issue_history_id"]),

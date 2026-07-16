@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import schemas
@@ -27,13 +28,23 @@ def list_histories(
     priority: Optional[str] = Query(None, description="URGENT/NORMAL"),
     date_from: Optional[date] = Query(None, description="기간 시작"),
     date_to: Optional[date] = Query(None, description="기간 끝"),
+    search: Optional[str] = Query(None, description="고객사명·제목 검색"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """활동 이력 목록 (SCR-05) — 고객사·유형·작성자·기간·리텐션 필터."""
+    """활동 이력 목록 (SCR-05) — 고객사·유형·작성자·기간·리텐션 필터 + 검색."""
     query = db.query(ActivityHistory)
+    if search and search.strip():
+        # 고객사명·제목 부분일치 — client_id가 없는 이력도 제목으로 히트되도록 outerjoin
+        keyword = "%{0}%".format(search.strip())
+        query = query.outerjoin(Client, ActivityHistory.client_id == Client.client_id).filter(
+            or_(
+                Client.company_name.ilike(keyword),
+                ActivityHistory.title.ilike(keyword),
+            )
+        )
     if client_id:
         query = query.filter(ActivityHistory.client_id == client_id)
     if activity_type:

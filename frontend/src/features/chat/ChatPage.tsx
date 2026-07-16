@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChatCircleDots } from '@phosphor-icons/react'
+import { useDebounced } from '../../lib/useDebounced'
 import { useToast } from '../../components/Toast'
 import { useChatThreads, usePendingContacts } from './api'
 import { ChatRoom } from './ChatRoom'
@@ -10,16 +11,6 @@ import { PendingContacts } from './PendingContacts'
 import { ThreadList, type ThreadFilter } from './ThreadList'
 
 type ListTab = 'threads' | 'pending'
-
-/** 300ms 디바운스 값 */
-function useDebounced<T>(value: T, delay = 300): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(t)
-  }, [value, delay])
-  return debounced
-}
 
 export function ChatPage() {
   const [searchParams] = useSearchParams()

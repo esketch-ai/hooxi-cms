@@ -136,6 +136,21 @@ export function telHref(phone?: string | null): string {
   return `tel:${(phone ?? '').replace(/[^0-9+]/g, '')}`
 }
 
+/** 활동일 그룹 헤더 라벨 — 오늘 '오늘 · 7월 15일 (수)', 어제 '어제 · …', 그 외 '7월 15일 (수)'
+ *  사용자 입력 벽시계 날짜('YYYY-MM-DD…') 전용 — 서버 UTC 파싱 금지, 오늘 판정은 todayKst 기준 */
+export function fmtDayLabel(dateStr: string): string {
+  const day = dateStr.slice(0, 10)
+  const d = new Date(`${day}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return dateStr
+  const weekday = '일월화수목금토'[d.getDay()]
+  const base = `${d.getMonth() + 1}월 ${d.getDate()}일 (${weekday})`
+  const today = new Date(`${todayKst()}T00:00:00`)
+  const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000)
+  if (diff === 0) return `오늘 · ${base}`
+  if (diff === 1) return `어제 · ${base}`
+  return base
+}
+
 /** KST 기준 오늘 날짜 'YYYY-MM-DD' — 기기 타임존과 무관하게 Asia/Seoul 고정 */
 export function todayKst(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
