@@ -1,6 +1,7 @@
 """Pydantic 스키마 — P0(auth·users·health) + P1(고객사·이력·일정·보고서·문서·대시보드)
-+ P2(자산·감축 사업·정산) + P3(카카오 채널·채팅 상담)."""
++ P2(자산·감축 사업·정산) + P3(카카오 채널·채팅 상담) + 세그먼트 발송."""
 
+import json
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -1098,3 +1099,174 @@ class ReportSendBatchResponse(BaseModel):
     sent: int
     failed: int
     details: List[ReportSendBatchDetail] = []
+
+
+# ---------------------------------------------------------------------------
+# 세그먼트 보고서 발송 (SCR-12 확장 — tb_segment / routers/segments.py)
+# ---------------------------------------------------------------------------
+class SegmentCriteria(BaseModel):
+    """세그먼트 조건 — 축 간 AND, 축 내 IN(OR). 미지원 키는 422(extra=forbid).
+
+    코드 축(client_type 등) 값의 유효성은 라우터에서 공통 코드 마스터로 검증.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    region: Optional[List[str]] = None
+    client_type: Optional[List[str]] = None
+    contract_status: Optional[List[str]] = None
+    project_id: Optional[List[str]] = None
+    asset_group: Optional[List[str]] = None
+    settlement_status: Optional[List[str]] = None
+
+
+def _parse_criteria_json(v):
+    """DB Text(JSON 문자열) → dict — from_attributes 직렬화용. 파싱 실패 시 빈 조건."""
+    if isinstance(v, str):
+        try:
+            parsed = json.loads(v) if v.strip() else {}
+            return parsed if isinstance(parsed, dict) else {}
+        except ValueError:
+            return {}
+    return v if v is not None else {}
+
+
+class SegmentIn(BaseModel):
+    """세그먼트 생성 — criteria는 라우터에서 검증 후 JSON 문자열로 저장."""
+
+    name: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=200)
+    criteria: SegmentCriteria = Field(default_factory=SegmentCriteria)
+    manager_id: Optional[str] = None
+    # 세그먼트 기본 메일 템플릿 — null이면 발송 시 직접 입력/전역 기본
+    mail_subject: Optional[str] = Field(default=None, max_length=200)
+    mail_body: Optional[str] = None
+
+
+class SegmentUpdate(BaseModel):
+    """세그먼트 수정 — 전달된 필드만 반영. active=N은 soft 삭제와 동일."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=200)
+    criteria: Optional[SegmentCriteria] = None
+    manager_id: Optional[str] = None
+    mail_subject: Optional[str] = Field(default=None, max_length=200)
+    mail_body: Optional[str] = None
+    active: Optional[str] = Field(default=None, pattern="^[YN]$")
+
+
+class SegmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    segment_id: str
+    name: str
+    description: Optional[str] = None
+    criteria: SegmentCriteria = Field(default_factory=SegmentCriteria)
+    active: Optional[str] = None
+    manager_id: Optional[str] = None
+    manager_name: Optional[str] = None
+    mail_subject: Optional[str] = None
+    mail_body: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @field_validator("criteria", mode="before")
+    @classmethod
+    def _coerce_criteria(cls, v):
+        return _parse_criteria_json(v)
+
+
+class SegmentPreviewRequest(BaseModel):
+    criteria: SegmentCriteria = Field(default_factory=SegmentCriteria)
+
+
+class SegmentPreviewItem(BaseModel):
+    client_id: str
+    company_name: str
+    client_type: Optional[str] = None
+    region: Optional[str] = None
+    # 수신 가능 — 공통 수신자(sub_id IS NULL) 존재 or 주 담당자 이메일 보유
+    can_receive: bool = False
+
+
+class SegmentPreviewResponse(BaseModel):
+    total: int
+    items: List[SegmentPreviewItem]
+
+
+class SegmentFacetsOut(BaseModel):
+    """조건 축 선택지 — region만 서버 제공(나머지 축은 /codes·/projects 재사용)."""
+
+    regions: List[str]
+
+
+class SegmentSendOut(BaseModel):
+    """발송 실행 이력 행 (B5 발송·이력 조회용) — 스냅샷은 원문 그대로 노출."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    send_id: str
+    segment_id: Optional[str] = None
+    criteria_snapshot: Optional[str] = None  # 발송 시점 조건 JSON
+    doc_ids: Optional[str] = None  # JSON 배열 문자열
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    target_count: int = 0
+    sent_count: int = 0
+    failed_count: int = 0
+    sent_by: Optional[str] = None
+    sent_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class SegmentSendRequest(BaseModel):
+    """세그먼트 발송 요청 (B5) — doc_ids 1개 이상 필수(존재 검증은 라우터 404).
+
+    subject/body 미지정 시 세그먼트 오버라이드 → tb_config report_mail_* → 코드 기본값.
+    criteria는 즉석 발송(POST /segments/send)에서만 필수 — 저장 세그먼트 발송은 저장분 사용.
+    """
+
+    doc_ids: List[str] = Field(min_length=1)
+    subject: Optional[str] = Field(default=None, max_length=200)
+    body: Optional[str] = None
+    criteria: Optional[SegmentCriteria] = None
+
+
+class SegmentSendDetail(BaseModel):
+    """발송 실행 결과 고객사별 상세 — SUCCESS/FAIL(사유)."""
+
+    client_id: str
+    client_name: Optional[str] = None
+    result: str  # SUCCESS/FAIL
+    reason: Optional[str] = None
+
+
+class SegmentSendResponse(BaseModel):
+    """발송 실행 응답 — 카운트 요약 + 고객사별 결과."""
+
+    send_id: str
+    target_count: int
+    sent_count: int
+    failed_count: int
+    details: List[SegmentSendDetail] = []
+
+
+class SegmentSendLogOut(BaseModel):
+    """발송 이력 상세의 고객사별 로그 행 (tb_segment_send_log)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    log_id: str
+    client_id: str
+    client_name: Optional[str] = None
+    recipients: Optional[str] = None  # 수신자 스냅샷 JSON
+    channel: Optional[str] = None
+    result: Optional[str] = None
+    reason: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class SegmentSendDetailOut(SegmentSendOut):
+    """발송 이력 상세 — 실행 행 + 고객사별 로그 목록."""
+
+    logs: List[SegmentSendLogOut] = []

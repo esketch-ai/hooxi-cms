@@ -619,3 +619,115 @@ export interface ReportListResponse {
   summary: ReportSummary
   items: ReportDelivery[]
 }
+
+// ---------------------------------------------------------------------------
+// tb_segment — 세그먼트 보고서 발송 (SCR-12 확장, backend/routers/segments.py)
+// ---------------------------------------------------------------------------
+/** 세그먼트 조건 — 축 간 AND, 축 내 IN(OR). 빈 축은 전체 */
+export interface SegmentCriteria {
+  region?: string[]
+  client_type?: string[]
+  contract_status?: string[]
+  project_id?: string[]
+  asset_group?: string[]
+  settlement_status?: string[]
+}
+
+export interface Segment {
+  segment_id: string
+  name: string
+  description?: string | null
+  criteria: SegmentCriteria
+  active?: string | null
+  manager_id?: string | null
+  manager_name?: string | null
+  mail_subject?: string | null
+  mail_body?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+/** 세그먼트 생성/수정 (schemas.SegmentIn) */
+export interface SegmentPayload {
+  name: string
+  description?: string | null
+  criteria: SegmentCriteria
+  mail_subject?: string | null
+  mail_body?: string | null
+}
+
+export interface SegmentPreviewItem {
+  client_id: string
+  company_name: string
+  client_type?: string | null
+  region?: string | null
+  /** 수신 가능 — 공통 수신자 또는 주 담당자 이메일 보유 */
+  can_receive: boolean
+}
+
+export interface SegmentPreviewResponse {
+  total: number
+  items: SegmentPreviewItem[]
+}
+
+/** 조건 축 선택지 — region만 서버 제공(나머지는 /codes·/projects 재사용) */
+export interface SegmentFacets {
+  regions: string[]
+}
+
+/** 발송 요청 (schemas.SegmentSendRequest) — criteria는 즉석 발송에서만 */
+export interface SegmentSendPayload {
+  doc_ids: string[]
+  subject?: string
+  body?: string
+  criteria?: SegmentCriteria
+}
+
+export interface SegmentSendDetail {
+  client_id: string
+  client_name?: string | null
+  result: 'SUCCESS' | 'FAIL'
+  reason?: string | null
+}
+
+/** 발송 실행 응답 — 카운트 요약 + 고객사별 결과 */
+export interface SegmentSendResponse {
+  send_id: string
+  target_count: number
+  sent_count: number
+  failed_count: number
+  details: SegmentSendDetail[]
+}
+
+/** 발송 실행 이력 행 (tb_segment_send) */
+export interface SegmentSend {
+  send_id: string
+  segment_id?: string | null
+  criteria_snapshot?: string | null // 발송 시점 조건 JSON
+  doc_ids?: string | null // JSON 배열 문자열
+  subject?: string | null
+  body?: string | null
+  target_count: number
+  sent_count: number
+  failed_count: number
+  sent_by?: string | null
+  sent_by_name?: string | null
+  created_at?: string | null
+}
+
+/** 발송 이력 상세의 고객사별 로그 행 (tb_segment_send_log) */
+export interface SegmentSendLog {
+  log_id: string
+  client_id: string
+  client_name?: string | null
+  recipients?: string | null // 수신자 스냅샷 JSON
+  channel?: string | null
+  result?: string | null
+  reason?: string | null
+  created_at?: string | null
+}
+
+/** 발송 이력 상세 — 실행 행 + 고객사별 로그 목록 */
+export interface SegmentSendDetailOut extends SegmentSend {
+  logs: SegmentSendLog[]
+}

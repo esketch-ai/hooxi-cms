@@ -1,5 +1,6 @@
 // SCR-12 월간 보고서 발송 관리 — "이번 달, 어느 고객사에 어디까지 됐는가" 한 화면
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   CaretLeft,
   CaretRight,
@@ -8,6 +9,7 @@ import {
   CircleNotch,
   DownloadSimple,
   EnvelopeSimple,
+  Funnel,
   ListChecks,
   PaperPlaneTilt,
   PaperPlaneRight,
@@ -348,6 +350,14 @@ export function ReportsPage() {
         subtitle="담당자 작성 파일 업로드 + 발송 추적 — 부서 전체 공동 관리"
         actions={
           <>
+            <Link
+              to="/reports/segments"
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+              title="조건으로 고객사를 묶어 자료를 일괄 발송"
+            >
+              <Funnel size={16} />
+              세그먼트 발송
+            </Link>
             {isAdmin && (
               <button
                 type="button"

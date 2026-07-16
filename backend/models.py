@@ -492,6 +492,64 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+# ---------------------------------------------------------------------------
+# 세그먼트 보고서 발송 (SCR-12 확장) — 조건 기반 고객사 묶음 + 1회성 발송 이력
+# ---------------------------------------------------------------------------
+class Segment(Base):
+    """저장된 세그먼트 — criteria는 JSON 문자열(축 간 AND, 축 내 IN/OR).
+
+    삭제는 soft(active=N) — tb_segment_send.segment_id 발송 이력 참조 보존.
+    """
+
+    __tablename__ = "tb_segment"
+
+    segment_id = Column(String(50), primary_key=True, default=gen_uuid)
+    name = Column(String(100), nullable=False)
+    description = Column(String(200))
+    criteria = Column(Text)  # JSON: {region:[..], client_type:[..], ...}
+    active = Column(String(1), default="Y")  # N=soft 삭제(신규 선택지에서 숨김)
+    manager_id = Column(String(50), ForeignKey("tb_user.user_id"))
+    mail_subject = Column(String(200))  # 세그먼트 기본 메일 제목 템플릿 (null=전역 기본)
+    mail_body = Column(Text)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class SegmentSend(Base):
+    """세그먼트 발송 실행 이력 — 실행 시점 조건·문서·본문 스냅샷 (append-only)."""
+
+    __tablename__ = "tb_segment_send"
+
+    send_id = Column(String(50), primary_key=True, default=gen_uuid)
+    segment_id = Column(
+        String(50), ForeignKey("tb_segment.segment_id"), nullable=True
+    )  # null=저장 없이 즉석 발송
+    criteria_snapshot = Column(Text)  # 발송 시점 조건 JSON 동결
+    doc_ids = Column(Text)  # JSON 배열 — 첨부 문서 doc_id 목록
+    subject = Column(String(200))  # 발송 제목 스냅샷
+    body = Column(Text)  # 발송 본문 스냅샷
+    target_count = Column(Integer, default=0)
+    sent_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    sent_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
+class SegmentSendLog(Base):
+    """세그먼트 발송 고객사별 결과 — append-only (수신자 스냅샷 포함)."""
+
+    __tablename__ = "tb_segment_send_log"
+
+    log_id = Column(String(50), primary_key=True, default=gen_uuid)
+    send_id = Column(String(50), ForeignKey("tb_segment_send.send_id"), nullable=False)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    recipients = Column(Text)  # 수신자 스냅샷 JSON
+    channel = Column(String(10), default="EMAIL")
+    result = Column(String(10))  # SUCCESS/FAIL
+    reason = Column(String(300))  # 실패 사유
+    created_at = Column(DateTime, default=utcnow)
+
+
 def ensure_schema():
     """create_all은 '없는 테이블'만 만들고 '기존 테이블의 신규 컬럼'은 추가하지 않는다.
     Alembic 미도입 상태에서 배포된 테이블에 누락된 컬럼을 idempotent하게 보강한다.

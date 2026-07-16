@@ -10,6 +10,7 @@ import { ClientsPage } from '../features/clients/ClientsPage'
 import { ClientDetailPage } from '../features/clients/ClientDetailPage'
 import { HistoriesPage } from '../features/histories/HistoriesPage'
 import { ReportsPage } from '../features/reports/ReportsPage'
+import { SegmentsPage } from '../features/segments/SegmentsPage'
 import { DocumentsPage } from '../features/documents/DocumentsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { AssetsPage } from '../features/assets/AssetsPage'
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
       { path: '/clients/:clientId', element: <ClientDetailPage /> }, // SCR-03D
       { path: '/histories', element: <HistoriesPage /> }, // SCR-05
       { path: '/reports', element: <ReportsPage /> }, // SCR-12
+      { path: '/reports/segments', element: <SegmentsPage /> }, // SCR-12 확장 — 세그먼트 발송
       { path: '/documents', element: <DocumentsPage /> }, // SCR-13
       { path: '/settings', element: <SettingsPage /> }, // SCR-14 (계정 관리 탭)
       // ── P2 구현 화면 ──────────────────────────────────────────────

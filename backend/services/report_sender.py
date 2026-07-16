@@ -78,6 +78,18 @@ def _config_template(db: Session, key: str, default: str) -> str:
     return default
 
 
+def render_template(template: str, variables: dict) -> str:
+    """{변수} 정규식 치환 — 미지원 {...}는 원문 유지 (str.format이면 KeyError로 발송이 막히므로 금지).
+
+    render_mail(보고서)과 세그먼트 발송(routers/segments.py B5)이 공유한다.
+    """
+    return re.sub(
+        r"\{([^{}]+)\}",
+        lambda m: variables.get(m.group(1), m.group(0)),
+        template,
+    )
+
+
 def render_mail(
     db: Session,
     delivery: ReportDelivery,
@@ -112,14 +124,31 @@ def render_mail(
         db, "report_mail_body", DEFAULT_REPORT_MAIL_BODY
     )
 
-    def _render(template: str) -> str:
-        return re.sub(
-            r"\{([^{}]+)\}",
-            lambda m: variables.get(m.group(1), m.group(0)),
-            template,
-        )
+    return render_template(subject_tpl, variables), render_template(body_tpl, variables)
 
-    return _render(subject_tpl), _render(body_tpl)
+
+def resolve_recipients(
+    db: Session, client: Client, sub: Optional[ReportSubscription] = None
+) -> Tuple[list, list]:
+    """수신자 해석 (R2-B5) — (to, cc) 튜플 반환.
+
+    tb_report_recipient에서 공통분(sub_id IS NULL) + 구독 지정분(sub 전달 시)을 조합해
+    cc_yn으로 TO/CC를 분리하고, TO 0건이면 client.main_contact_email로 폴백한다.
+    sub=None(구독 미지정)이면 공통 수신자만 대상 — 세그먼트 발송 등에서 재사용.
+    TO 0건 여부의 최종 판단(409)은 호출부 책임.
+    """
+    recipients = (
+        db.query(ReportRecipient).filter(ReportRecipient.client_id == client.client_id).all()
+    )
+    recipients = [
+        r for r in recipients if r.sub_id is None or (sub and r.sub_id == sub.sub_id)
+    ]
+    to = [r.email for r in recipients if (r.cc_yn or "N") != "Y"]
+    cc = [r.email for r in recipients if r.cc_yn == "Y"]
+    main_email = (client.main_contact_email or "").strip()  # 공백만 있는 주소 차단
+    if not to and main_email:
+        to = [main_email]
+    return to, cc
 
 
 def create_view_token(doc_id: str, report_id: str) -> str:
@@ -261,16 +290,7 @@ def send_report_core(
         )
         .first()
     )
-    recipients = (
-        db.query(ReportRecipient).filter(ReportRecipient.client_id == delivery.client_id).all()
-    )
-    recipients = [
-        r for r in recipients if r.sub_id is None or (sub and r.sub_id == sub.sub_id)
-    ]
-    to = [r.email for r in recipients if (r.cc_yn or "N") != "Y"]
-    cc = [r.email for r in recipients if r.cc_yn == "Y"]
-    if not to and client.main_contact_email:
-        to = [client.main_contact_email]
+    to, cc = resolve_recipients(db, client, sub)
     if not to:
         raise SendPrecondition(
             409,

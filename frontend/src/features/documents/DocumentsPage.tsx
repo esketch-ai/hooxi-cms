@@ -22,7 +22,7 @@ import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/d
 import { fmtServerDateTime } from '../../lib/format'
 import type { DocType, Document, Paginated } from '../../types'
 
-const DOC_TYPE_OPTIONS: { value: DocType; label: string }[] = [
+export const DOC_TYPE_OPTIONS: { value: DocType; label: string }[] = [
   { value: 'CONTRACT', label: '계약서' },
   { value: 'REPORT', label: '보고서' },
   { value: 'FORM', label: '표준 양식' },
@@ -31,7 +31,8 @@ const DOC_TYPE_OPTIONS: { value: DocType; label: string }[] = [
   { value: 'ETC', label: '기타' },
 ]
 
-const docTypeLabel = (t: string) => DOC_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t
+export const docTypeLabel = (t: string) =>
+  DOC_TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t
 
 export function DocumentsPage() {
   const { data: clients = [] } = useClientOptions()

@@ -49,6 +49,7 @@ from routers import kakao as kakao_router
 from routers import projects as projects_router
 from routers import reports as reports_router
 from routers import schedules as schedules_router
+from routers import segments as segments_router
 from routers import settlements as settlements_router
 from routers import users as users_router
 from services import storage
@@ -243,6 +244,7 @@ app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
 app.include_router(assets_router.router, prefix=API_V1_PREFIX)
 app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
+app.include_router(segments_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(chat_router.router, prefix=API_V1_PREFIX)
 app.include_router(config_router.router, prefix=API_V1_PREFIX)
