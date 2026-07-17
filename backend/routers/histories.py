@@ -24,7 +24,8 @@ def list_histories(
     created_by: Optional[str] = Query(None, description="작성자"),
     manager_id: Optional[str] = Query(None, description="담당자"),
     retention_stage: Optional[str] = Query(None, description="리텐션 단계"),
-    issue_status: Optional[str] = Query(None, description="OPEN/IN_PROGRESS/HOLD/CLOSED"),
+    issue_status: Optional[str] = Query(None, description="OPEN/IN_PROGRESS/HOLD/CLOSED — 콤마 구분 다중 값 허용"),
+    closed_since: Optional[date] = Query(None, description="이 날짜(포함) 이후 갱신분만 — issue_status=CLOSED와 조합해 최근 완료분 조회"),
     priority: Optional[str] = Query(None, description="URGENT/NORMAL"),
     date_from: Optional[date] = Query(None, description="기간 시작"),
     date_to: Optional[date] = Query(None, description="기간 끝"),
@@ -56,7 +57,19 @@ def list_histories(
     if retention_stage:
         query = query.filter(ActivityHistory.retention_stage == retention_stage)
     if issue_status:
-        query = query.filter(ActivityHistory.issue_status == issue_status)
+        # 콤마 구분 다중 값 지원 (이슈 보드 미종결 일괄 조회) — 단일 값 하위 호환
+        statuses = [s.strip() for s in issue_status.split(",") if s.strip()]
+        if not statuses:
+            raise HTTPException(status_code=422, detail="issue_status 값이 비어 있습니다")
+        if len(statuses) > 1:
+            query = query.filter(ActivityHistory.issue_status.in_(statuses))
+        elif statuses:
+            query = query.filter(ActivityHistory.issue_status == statuses[0])
+    if closed_since:
+        # 완료(CLOSED) 이슈는 상태 변경 시 updated_at 갱신 — 최근 완료분만 예산 소비
+        query = query.filter(
+            ActivityHistory.updated_at >= datetime.combine(closed_since, datetime.min.time())
+        )
     if priority:
         query = query.filter(ActivityHistory.priority == priority)
     if date_from:

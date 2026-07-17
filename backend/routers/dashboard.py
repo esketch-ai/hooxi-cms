@@ -7,10 +7,11 @@
 """
 
 import json
+from datetime import timedelta
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import case, func
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 import schemas
@@ -19,12 +20,14 @@ from models import (
     ActivityHistory,
     Client,
     Config,
+    Project,
     ProjectClientMap,
     ReportDelivery,
     User,
     get_db,
 )
 from routers import common
+from routers.settlements import _period_of  # 정산 기준월 정의 재사용 (SCR-07과 동일)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -58,12 +61,15 @@ def dashboard_stats(
     """통합 현황판 데이터 일괄 조회."""
     period = common.current_period()
     month_start, month_end = common.period_bounds(period)
+    # created_at은 naive UTC 저장 — KST 라벨 월 경계를 UTC로 환산해 비교(월초 9시간 편차 방지)
+    utc_month_start = month_start - timedelta(hours=9)
+    utc_month_end = month_end - timedelta(hours=9)
 
     # --- KPI ---
     total_clients = db.query(Client).filter(Client.contract_status == "ACTIVE").count()
     client_delta = (
         db.query(Client)
-        .filter(Client.created_at >= month_start, Client.created_at <= month_end)
+        .filter(Client.created_at >= utc_month_start, Client.created_at <= utc_month_end)
         .count()
     )
     report_target = (
@@ -90,13 +96,27 @@ def dashboard_stats(
     )
     contract_hold_clients = db.query(Client).filter(Client.contract_status == "HOLD").count()
 
-    # 당월 예상 청구액 🔒 — 미완료(대기·청구) 정산 매핑의 예상 금액 합, 산출 불가 시 None(미정)
-    billing_sum = (
-        db.query(func.sum(ProjectClientMap.expected_amount))
+    # 당월 예상 청구액 🔒 — 미완료(대기·청구) 정산 매핑 중 **당월분만** 합산.
+    # 기준월 정의는 정산 화면(SCR-07)과 동일: _period_of(billed_at 우선, 미청구는 예상 발급월)
+    # → 정산 화면의 당월 필터 합계와 항상 일치. 당월 산출분 없으면 None(미정).
+    billing_maps = (
+        db.query(ProjectClientMap)
         .filter(ProjectClientMap.settlement_status.in_(["STANDBY", "BILLED"]))
-        .scalar()
+        .all()
     )
-    expected_billing_amount = float(billing_sum) if billing_sum is not None else None
+    billing_projects = {
+        p.project_id: p
+        for p in db.query(Project)
+        .filter(Project.project_id.in_({m.project_id for m in billing_maps}))
+        .all()
+    } if billing_maps else {}
+    monthly_amounts = [
+        float(m.expected_amount)
+        for m in billing_maps
+        if m.expected_amount is not None
+        and _period_of(m, billing_projects.get(m.project_id)) == period
+    ]
+    expected_billing_amount = sum(monthly_amounts) if monthly_amounts else None
 
     # --- 리텐션 퍼널: 고객사별 최신 retention_stage → 4단계 집계 ---
     mapping = _funnel_mapping(db)

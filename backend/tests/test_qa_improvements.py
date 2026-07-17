@@ -34,7 +34,11 @@ def test_subscription_bool_active_and_report_yn(client, admin_headers):
 
 
 def test_canceled_reason_cleared_on_recover(client, admin_headers):
-    """CANCELED → 다른 상태 복귀 시 취소 사유 잔존 제거."""
+    """CANCELED → 복원(STANDBY) 시 취소 사유 잔존 제거.
+
+    상태 전이 사전 서버 강제(감사 수정 ①)로 CANCELED 복원은 STANDBY만 허용 —
+    기존 CANCELED→WRITING 점프 경로를 STANDBY 복원으로 수정.
+    """
     period = "2030-01"
     client.post(
         "/api/v1/reports/generate?period={0}".format(period), headers=admin_headers
@@ -54,7 +58,7 @@ def test_canceled_reason_cleared_on_recover(client, admin_headers):
 
     resp = client.put(
         "/api/v1/reports/{0}/status".format(rid),
-        json={"status": "WRITING"},
+        json={"status": "STANDBY"},
         headers=admin_headers,
     )
     assert resp.status_code == 200

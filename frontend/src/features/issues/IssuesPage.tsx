@@ -31,7 +31,7 @@ type PillFilter = 'ALL' | 'MINE' | 'URGENT'
 export function IssuesPage() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { data: issues = [], isLoading, isError, refetch } = useIssues()
+  const { data: issues = [], isLoading, isError, refetch, activeTotal, activeShown } = useIssues()
   const { data: clients = [] } = useClientOptions()
   const { data: users = [] } = useUserOptions()
   const { codes: issueStatusCodes } = useCodes('ISSUE_STATUS')
@@ -225,6 +225,12 @@ export function IssuesPage() {
             </option>
           ))}
         </select>
+        {/* 미종결 200건 초과 시 침묵 절단 금지 — 절단 사실을 명시적으로 경고 */}
+        {activeTotal > activeShown && (
+          <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            미종결 전체 {activeTotal}건 중 {activeShown}건 표시
+          </span>
+        )}
       </div>
 
       {/* 칸반 */}

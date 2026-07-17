@@ -490,6 +490,24 @@ class SettlementListResponse(BaseModel):
     total: int
 
 
+class ClientProjectRow(BaseModel):
+    """고객사 상세 '참여 사업·정산' 탭 행 (SCR-03D) — 매핑+사업 조인.
+
+    보수율·예상 정산액 🔒은 프론트 SensitiveData 마스킹 대상(값은 그대로 응답).
+    """
+
+    map_id: str
+    project_id: str
+    project_name: Optional[str] = None
+    project_status: Optional[str] = None  # 진행 상태 배지 (기획/등록완료/모니터링/검증/발급완료)
+    allocation_ratio: Optional[float] = None  # 지분율(%)
+    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
+    expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
+    settlement_status: str
+    billed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
 class SettlementStatusUpdate(BaseModel):
     """정산 상태 전이 — STANDBY→BILLED→COMPLETED, 역행 금지(409). MANAGER 이상(§10.1)."""
 

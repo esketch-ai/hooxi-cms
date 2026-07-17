@@ -13,7 +13,6 @@
 
 import json
 import os
-from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -35,7 +34,6 @@ from models import (
     SegmentSendLog,
     User,
     get_db,
-    utcnow,
 )
 from routers import common
 from routers.codes import validate_active_code
@@ -397,9 +395,8 @@ def _execute_send(
     db.add(send)
     db.commit()  # 실행 이력 선확정 — 이후 루프는 건별 commit(중간 실패 시에도 이력 보존)
 
-    # 치환 변수 공통분 — 연·월은 발송 시점 KST (batch._current_period_kst 관용구)
-    now = utcnow()
-    now_kst = now + timedelta(hours=9)
+    # 치환 변수 공통분 — 연·월은 발송 시점 KST 벽시계 (common.now_kst 규약)
+    now_kst = common.now_kst()
     manager_ids = {c.manager_id for c in targets if c.manager_id}
     managers = (
         {u.user_id: u for u in db.query(User).filter(User.user_id.in_(manager_ids)).all()}
@@ -483,7 +480,7 @@ def _execute_send(
                 client_id=target.client_id,
                 manager_id=user.user_id,
                 created_by=user.user_id,
-                activity_date=now,
+                activity_date=now_kst,  # 저장값=KST 벽시계 규약 (created_at 계열은 UTC 유지)
                 activity_type="EMAIL",
                 title="{0} 세그먼트 메일 발송: {1}".format(common.AUTO_PREFIX, subject)[:200],
                 content="수신자: {0}".format(", ".join(to + cc)),

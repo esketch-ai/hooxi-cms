@@ -120,10 +120,10 @@ def test_contract_status_seeded_with_color_and_lock(client, admin_headers):
     by_code = {c["code"]: c for c in rows}
     assert by_code["ACTIVE"]["label"] == "계약중"
     assert by_code["ACTIVE"]["color"] == "emerald"
-    # ACTIVE/HOLD는 로직 참조 잠금, END는 자유
+    # ACTIVE/HOLD/END 전부 로직 참조 잠금 (END: 계약 종료 전이가 validate_active_code를 통과해야 함)
     assert by_code["ACTIVE"]["is_locked"] is True
     assert by_code["HOLD"]["is_locked"] is True
-    assert by_code["END"]["is_locked"] is False
+    assert by_code["END"]["is_locked"] is True
 
 
 def test_logic_locked_code_cannot_deactivate_or_delete(client, admin_headers):
@@ -148,6 +148,30 @@ def test_logic_locked_code_cannot_deactivate_or_delete(client, admin_headers):
     )
     assert upd.status_code == 200, upd.text
     assert upd.json()["color"] == "teal"
+
+
+def test_issue_status_and_contract_end_locked(client, admin_headers):
+    """감사 지적 5 — ISSUE_STATUS 4종·CONTRACT_STATUS END 비활성/삭제 409."""
+    def find(category, code):
+        return next(
+            c
+            for c in client.get(
+                f"{API}/codes", params={"category": category, "include_inactive": True}, headers=admin_headers
+            ).json()
+            if c["code"] == code
+        )
+
+    for category, code in [
+        ("ISSUE_STATUS", "IN_PROGRESS"),
+        ("ISSUE_STATUS", "HOLD"),
+        ("CONTRACT_STATUS", "END"),
+    ]:
+        row = find(category, code)
+        assert row["is_locked"] is True, f"{category}/{code}"
+        deact = client.put(f"{API}/codes/{row['code_id']}", json={"active": "N"}, headers=admin_headers)
+        assert deact.status_code == 409, f"{category}/{code} 비활성이 차단되어야 함"
+        dele = client.delete(f"{API}/codes/{row['code_id']}", headers=admin_headers)
+        assert dele.status_code == 409, f"{category}/{code} 삭제가 차단되어야 함"
 
 
 def test_invalid_color_rejected(client, admin_headers):
@@ -178,8 +202,8 @@ def test_phase3_4_categories_seeded_and_locked(client, admin_headers):
     assert all(settlement[c]["is_locked"] for c in ("STANDBY", "BILLED", "COMPLETED"))
 
     issue = rows("ISSUE_STATUS")
-    assert issue["OPEN"]["is_locked"] is True and issue["CLOSED"]["is_locked"] is True
-    assert issue["IN_PROGRESS"]["is_locked"] is False
+    # 칸반 컬럼·집계가 4종 전부 참조 → 전부 잠금
+    assert all(issue[c]["is_locked"] for c in ("OPEN", "IN_PROGRESS", "HOLD", "CLOSED"))
 
     agency = rows("AGENCY")
     assert agency["KECO"]["label"] == "한국환경공단"

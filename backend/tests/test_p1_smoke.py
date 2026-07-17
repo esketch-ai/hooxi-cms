@@ -134,7 +134,7 @@ def test_update_client_and_subscription_upsert(client, staff_headers):
 
 
 def test_client_subresources(client, staff_headers):
-    for sub in ("histories", "reports", "documents", "assets"):
+    for sub in ("histories", "reports", "documents", "assets", "projects"):
         resp = client.get(
             "{0}/clients/{1}/{2}".format(API, S["client_id"], sub), headers=staff_headers
         )
@@ -808,3 +808,67 @@ def test_dashboard_funnel_config_override(client, staff_headers):
     body = resp.json()
     assert [f["stage"] for f in body["funnel"]] == ["전체"]
     assert body["funnel"][0]["count"] >= 1
+
+
+def test_dashboard_expected_billing_current_month_only(client, staff_headers):
+    """당월 예상 청구액 — 정산 기준월(_period_of) 당월분만 합산 (감사 지적 4).
+
+    - STANDBY(예상 발급월=당월) + BILLED(billed_at=당월) → 합산
+    - 타월 STANDBY / 당월 COMPLETED → 제외
+    """
+    import datetime as _dt
+
+    import models
+
+    period = client.get(API + "/dashboard/stats", headers=staff_headers).json()["period"]
+    year, month = int(period[:4]), int(period[5:7])
+    in_month = _dt.datetime(year, month, 15)
+    prev = _dt.datetime(year - 1, 12, 15) if month == 1 else _dt.datetime(year, month - 1, 15)
+
+    db = models.SessionLocal()
+    try:
+        c = models.Client(client_type="TRANSPORT", company_name="정산당월테스트사")
+        p_now = models.Project(project_name="당월발급사업", project_status="모니터링",
+                               expected_issue_date=in_month.date())
+        p_prev = models.Project(project_name="타월발급사업", project_status="모니터링",
+                                expected_issue_date=prev.date())
+        db.add_all([c, p_now, p_prev])
+        db.flush()
+        maps = [
+            # 당월 포함분: STANDBY(예상 발급월) 1000 + BILLED(billed_at) 200
+            models.ProjectClientMap(project_id=p_now.project_id, client_id=c.client_id,
+                                    settlement_status="STANDBY", expected_amount=1000),
+            models.ProjectClientMap(project_id=p_prev.project_id, client_id=c.client_id,
+                                    settlement_status="BILLED", billed_at=in_month,
+                                    expected_amount=200),
+            # 제외분: 타월 STANDBY / 당월 COMPLETED
+            models.ProjectClientMap(project_id=p_prev.project_id, client_id=c.client_id,
+                                    settlement_status="STANDBY", expected_amount=99999),
+            models.ProjectClientMap(project_id=p_now.project_id, client_id=c.client_id,
+                                    settlement_status="COMPLETED", billed_at=in_month,
+                                    completed_at=in_month, expected_amount=77777),
+        ]
+        db.add_all(maps)
+        db.commit()
+        map_ids = [m.map_id for m in maps]
+        seeded = (c.client_id, p_now.project_id, p_prev.project_id)
+    finally:
+        db.close()
+
+    try:
+        kpi = client.get(API + "/dashboard/stats", headers=staff_headers).json()["kpi"]
+        assert kpi["expected_billing_amount"] == 1200.0
+    finally:
+        # 후속 테스트(정산 등) 오염 방지 — 시딩분 정리
+        db = models.SessionLocal()
+        try:
+            db.query(models.ProjectClientMap).filter(
+                models.ProjectClientMap.map_id.in_(map_ids)
+            ).delete(synchronize_session=False)
+            db.query(models.Project).filter(
+                models.Project.project_id.in_(seeded[1:])
+            ).delete(synchronize_session=False)
+            db.query(models.Client).filter(models.Client.client_id == seeded[0]).delete()
+            db.commit()
+        finally:
+            db.close()

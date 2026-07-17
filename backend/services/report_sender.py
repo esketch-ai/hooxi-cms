@@ -360,13 +360,13 @@ def send_report_core(
     if sub and (sub.channel or "EMAIL") in ("KAKAO", "BOTH"):
         _send_report_alimtalk(db, delivery, client, doc, seq, month, actor_id, reason)
 
-    # 활동 이력 EMAIL 자동 적재 (§9-3)
+    # 활동 이력 EMAIL 자동 적재 (§9-3) — activity_date는 KST 벽시계 규약 (sent_at은 UTC 유지)
     db.add(
         ActivityHistory(
             client_id=delivery.client_id,
             manager_id=actor_id,
             created_by=actor_id,
-            activity_date=now,
+            activity_date=common.now_kst(),
             activity_type="EMAIL",
             title="{0} {1}월 {2} 보고서 이메일 발송".format(common.AUTO_PREFIX, month, delivery.report_type),
             content="수신자: {0}".format(", ".join(to + cc)),

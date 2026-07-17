@@ -18,6 +18,7 @@ from models import (
     Asset,
     Client,
     Document,
+    Project,
     ProjectClientMap,
     ReportDelivery,
     ReportSubscription,
@@ -282,6 +283,46 @@ def client_documents(
         .all()
     )
     return common.build_document_outs(db, rows)
+
+
+@router.get("/{client_id}/projects", response_model=List[schemas.ClientProjectRow])
+def client_projects(
+    client_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """참여 사업·정산 탭 — 매핑+사업 조인. 보수율·예상 정산액 🔒은 프론트 마스킹."""
+    common.get_or_404(db, Client, client_id, "고객사")
+    rows = (
+        db.query(ProjectClientMap)
+        .filter(ProjectClientMap.client_id == client_id)
+        .order_by(ProjectClientMap.created_at.asc())
+        .all()
+    )
+    projects = {
+        p.project_id: p
+        for p in db.query(Project)
+        .filter(Project.project_id.in_({m.project_id for m in rows}))
+        .all()
+    } if rows else {}
+    items = []
+    for m in rows:
+        p = projects.get(m.project_id)
+        items.append(
+            schemas.ClientProjectRow(
+                map_id=m.map_id,
+                project_id=m.project_id,
+                project_name=p.project_name if p else None,
+                project_status=p.project_status if p else None,
+                allocation_ratio=float(m.allocation_ratio) if m.allocation_ratio is not None else None,
+                success_fee_rate=float(m.success_fee_rate) if m.success_fee_rate is not None else None,
+                expected_amount=float(m.expected_amount) if m.expected_amount is not None else None,
+                settlement_status=m.settlement_status or "STANDBY",
+                billed_at=m.billed_at,
+                completed_at=m.completed_at,
+            )
+        )
+    return items
 
 
 @router.get("/{client_id}/assets", response_model=List[schemas.AssetOut])

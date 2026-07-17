@@ -485,11 +485,13 @@ export interface ProjectClientMap {
   payment_type?: string | null
   created_at?: string
   updated_at?: string
-  // 조인 보강 (schemas.ProjectMapOut / SettlementRow)
+  // 조인 보강 (schemas.ProjectMapOut / SettlementRow / ClientProjectRow)
   client_name?: string | null
   /** 연결 자산 요약 (분류·제원) */
   asset_summary?: string | null
   project_name?: string | null
+  /** 사업 진행 상태 (고객사 상세 '참여 사업·정산' 탭 — schemas.ClientProjectRow) */
+  project_status?: string | null
   unit_price?: number | null
   expected_credits?: number | null
 }

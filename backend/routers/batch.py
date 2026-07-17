@@ -12,7 +12,7 @@
 
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date
 from typing import Optional
 
 import httpx
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payload
-from models import ActivityHistory, Asset, Client, Config, ReportDelivery, User, get_db, utcnow
+from models import ActivityHistory, Asset, Client, Config, ReportDelivery, User, get_db
 from routers import common
 from routers.reports import generate_for_period
 from services.audit_logger import AuditLogger
@@ -150,7 +150,7 @@ def account_check(
     created = 0
     skipped = 0
     unreachable = 0
-    now = utcnow()
+    now = common.now_kst()  # activity_date는 '저장값=KST 벽시계' 규약 (created_at은 UTC 유지)
     due = date(int(period[:4]), int(period[5:7]), 5)  # 당월 5일까지 처리
 
     for asset in targets:
@@ -236,21 +236,10 @@ def account_check(
 # ---------------------------------------------------------------------------
 # 보고서 배치 자동 발송 — 당월 대상 생성(멱등) + 전월 APPROVED 발송
 # ---------------------------------------------------------------------------
-def _current_period_kst() -> str:
-    """서버 KST(UTC+9) 기준 당월 YYYY-MM.
-
-    common.current_period()는 UTC 기준이라 월초 자정~09시(KST) 실행 시 전월로
-    밀리는 문제가 있어, 배치는 KST 벽시계 기준으로 당월을 계산한다.
-    """
-    return (utcnow() + timedelta(hours=9)).strftime("%Y-%m")
-
-
-def _previous_period(period: str) -> str:
-    """'YYYY-MM' 1개월 감산 — 배치 기본 발송 대상(전월) 계산."""
-    year, month = int(period[:4]), int(period[5:7])
-    if month == 1:
-        return "{0}-12".format(year - 1)
-    return "{0}-{1:02d}".format(year, month - 1)
+# 당월(KST)·전월 계산은 common으로 통일 — current_period()가 KST 기준이 되면서
+# 배치 전용 _current_period_kst 중복 제거 (기존 이름은 테스트 하위호환 별칭).
+_current_period_kst = common.current_period
+_previous_period = common.previous_period
 
 
 @router.post("/report-send", response_model=schemas.ReportSendBatchResponse)
@@ -269,8 +258,8 @@ def report_send(
     actor = _optional_admin(credentials, db)
     _authorize(secret, db, actor)
 
-    current = _current_period_kst()
-    period = common.validate_period(period) if period else _previous_period(current)
+    current = common.current_period()  # KST 벽시계 기준 당월
+    period = common.validate_period(period) if period else common.previous_period(current)
     actor_id = (actor.user_id if actor else None) or _seed_admin_id(db)
     if not actor_id:
         raise HTTPException(status_code=503, detail="배치 실행자로 지정할 관리자 계정이 없습니다")

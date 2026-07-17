@@ -46,6 +46,20 @@ _SUMMARY_KEY_BY_STATUS = {
     "CANCELED": "canceled",
 }
 
+# 상태 전이 사전 — 서버 강제 (settlements._TRANSITIONS 준용).
+# 감사 지적: 값 검증만 있고 전이 규칙이 없어 CANCELED→APPROVED 1콜이 허용되어
+# 월초 배치가 취소 보고서를 자동 발송하는 오발송 경로가 열려 있었음.
+# SENT는 발송 경로(send_report_core) 전용 — 이 사전에 대상으로 없어 직접 설정 불가.
+_STATUS_TRANSITIONS = {
+    "STANDBY": {"WRITING", "CANCELED"},
+    "WRITING": {"REVIEW", "APPROVED", "CANCELED"},
+    "REVIEW": {"WRITING", "APPROVED", "CANCELED"},
+    "APPROVED": {"REVIEW", "WRITING", "CANCELED"},  # 승인 철회 허용
+    "SENT": {"CONFIRMED"},
+    "CONFIRMED": set(),  # 최종 상태 — 역행 금지
+    "CANCELED": {"STANDBY"},  # 복원만 — 이후 정상 흐름 재진행
+}
+
 
 def _resolve_period(period: Optional[str]) -> str:
     if period is None:
@@ -300,11 +314,22 @@ def update_report_status(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """상태 변경 — CONFIRMED(수기 고객 확인)·CANCELED(사유 필수, R3-3) 포함."""
+    """상태 변경 — CONFIRMED(수기 고객 확인)·CANCELED(사유 필수, R3-3) 포함.
+
+    전이 사전(_STATUS_TRANSITIONS)으로 서버 강제 — 위반 시 409.
+    SENT는 발송 경로(send/batch → send_report_core) 전용으로 직접 설정 불가.
+    """
     delivery = common.get_or_404(db, ReportDelivery, report_id, "보고서")
 
     if payload.status == "CANCELED" and not (payload.canceled_reason or "").strip():
         raise HTTPException(status_code=422, detail="취소에는 사유(canceled_reason)가 필요합니다 (R3-3)")
+
+    current = delivery.status or "STANDBY"
+    if payload.status not in _STATUS_TRANSITIONS.get(current, set()):
+        raise HTTPException(
+            status_code=409,
+            detail="'{0}' 상태에서 '{1}'(으)로 변경할 수 없습니다".format(current, payload.status),
+        )
 
     # APPROVED(발송승인)는 발송할 파일이 확보된 상태여야 함 — 배치 자동 발송 전제
     if payload.status == "APPROVED" and not (delivery.pinned_doc_id or delivery.doc_id):

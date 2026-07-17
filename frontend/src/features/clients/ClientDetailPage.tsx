@@ -1,6 +1,6 @@
 // SCR-03D 고객사 상세 360° 뷰 — 상담 전화 응대를 이 화면 하나로 완결
-import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Buildings,
@@ -21,7 +21,7 @@ import { useToast } from '../../components/Toast'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { useCodes } from '../../lib/api/queries'
-import { fmtDate, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
+import { fmtDate, fmtMoney, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
 import type { Client, Document } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useClientThreads } from '../chat/api'
@@ -31,6 +31,7 @@ import {
   useClientAssets,
   useClientDocuments,
   useClientHistories,
+  useClientProjects,
   useClientReports,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
@@ -199,13 +200,7 @@ export function ClientDetailPage() {
       )}
       {tab === 'reports' && <ReportsDocsTab clientId={client.client_id} />}
       {tab === 'assets' && <AssetsTab clientId={client.client_id} />}
-      {tab === 'projects' && (
-        <EmptyState
-          icon={<TreeStructure size={36} />}
-          title="참여 사업·정산은 P2에서 제공됩니다"
-          description="감축 사업 관리(SCR-06)·정산 현황(SCR-07) 구축 시 이 탭에서 사업·지분율·예상 정산액을 확인할 수 있습니다."
-        />
-      )}
+      {tab === 'projects' && <ProjectsTab clientId={client.client_id} />}
       {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
       <ClientFormModal open={editOpen} onClose={() => setEditOpen(false)} client={client} />
@@ -287,6 +282,16 @@ function OverviewTab({ client }: { client: Client }) {
 // ── 활동 이력 탭 ────────────────────────────────────────────────────
 function HistoriesTab({ clientId, onAdd }: { clientId: string; onAdd: () => void }) {
   const { data: histories = [], isLoading } = useClientHistories(clientId)
+  // 현장 첨부(사진·서명) — 고객사 문서 1회 조회 후 history_id별 매핑 (N+1 금지)
+  const { data: documents = [] } = useClientDocuments(clientId)
+  const documentsByHistory = useMemo(() => {
+    const map: Record<string, Document[]> = {}
+    documents.forEach((d) => {
+      if (!d.history_id) return
+      ;(map[d.history_id] ??= []).push(d)
+    })
+    return map
+  }, [documents])
 
   return (
     <section className="rounded-3xl border border-hairline bg-graphite p-5">
@@ -306,7 +311,7 @@ function HistoriesTab({ clientId, onAdd }: { clientId: string; onAdd: () => void
       ) : histories.length === 0 ? (
         <EmptyState title="활동 이력이 없습니다" description="첫 컨택 기록을 등록해 보세요." />
       ) : (
-        <Timeline items={histories} showClient={false} />
+        <Timeline items={histories} showClient={false} documentsByHistory={documentsByHistory} />
       )}
     </section>
   )
@@ -442,6 +447,98 @@ function ChatTab({ clientId }: { clientId: string }) {
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  )
+}
+
+// ── 참여 사업·정산 탭 (SCR-06/07 축약형) ────────────────────────────
+function ProjectsTab({ clientId }: { clientId: string }) {
+  const { data: rows = [], isLoading } = useClientProjects(clientId)
+  const navigate = useNavigate()
+
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-bone">참여 감축 사업·정산</h2>
+        <Link
+          to="/settlements"
+          className="text-xs font-medium text-ash underline-offset-2 hover:underline"
+        >
+          정산 현황 전체 보기 →
+        </Link>
+      </div>
+      {isLoading ? (
+        <SkeletonTableRows rows={3} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={<TreeStructure size={36} />}
+          title="참여 중인 감축 사업이 없습니다"
+          description="감축 사업 상세(SCR-06)에서 참여 고객사로 매핑하면 여기에 표시됩니다."
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max text-left text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs font-semibold text-ash">
+                <th className="px-3 py-2">사업명</th>
+                <th className="px-3 py-2">진행 상태</th>
+                <th className="px-3 py-2">지분율</th>
+                <th className="px-3 py-2">보수율</th>
+                <th className="px-3 py-2">예상 정산액</th>
+                <th className="px-3 py-2">정산 상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((m) => (
+                <tr
+                  key={m.map_id}
+                  onClick={() => navigate(`/projects/${m.project_id}`)}
+                  className="cursor-pointer border-b border-hairline last:border-b-0 hover:bg-elevate"
+                >
+                  <td className="px-3 py-2.5">
+                    <Link
+                      to={`/projects/${m.project_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium text-bone hover:underline"
+                    >
+                      {m.project_name ?? '—'}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {m.project_status ? (
+                      <StatusBadge domain="project" value={m.project_status} />
+                    ) : (
+                      <span className="text-slatey">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 font-semibold text-bone">
+                    {m.allocation_ratio != null ? `${Number(m.allocation_ratio)} %` : '—'}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {m.success_fee_rate != null ? (
+                      <SensitiveData type="rate" value={`${Number(m.success_fee_rate)} %`} />
+                    ) : (
+                      <span className="text-slatey">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {m.expected_amount != null ? (
+                      <SensitiveData type="money" value={fmtMoney(Number(m.expected_amount))} />
+                    ) : (
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        미정
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   )

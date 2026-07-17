@@ -388,6 +388,22 @@ def test_project_detail_with_mappings(client, staff_headers):
     assert item["client_count"] == 2
 
 
+def test_client_projects_subresource(client, staff_headers):
+    """고객사 상세 '참여 사업·정산' 탭 (SCR-03D) — 매핑+사업 조인 필드."""
+    resp = client.get(API + "/clients/" + S["P2운수"] + "/projects", headers=staff_headers)
+    assert resp.status_code == 200
+    rows = resp.json()
+    row = next(r for r in rows if r["map_id"] == S["map_id"])
+    assert row["project_name"] == "P2 전기버스 전환 사업"
+    assert row["project_status"] == "모니터링"
+    assert row["allocation_ratio"] == 40
+    assert row["success_fee_rate"] == 10  # 🔒 프론트 마스킹 대상 — 값은 그대로
+    assert row["expected_amount"] == 800000  # 1000 × 40% × 20,000 × 10%
+    assert row["settlement_status"] == "STANDBY"
+    # 매핑 없는 고객사는 빈 목록, 없는 고객사는 404
+    assert client.get(API + "/clients/no-such-id/projects", headers=staff_headers).status_code == 404
+
+
 def test_update_project_recalculates_amounts(client, staff_headers):
     """사업 수정 — 예상 발행량 변경 시에도 매핑 금액 재계산."""
     resp = client.put(

@@ -68,13 +68,15 @@ USAGE_REFS = {
 # 이 값들이 사라지면 KPI 집계·상태 분기·배치·암호화 저장 등이 조용히 깨진다.
 # (조사 근거: dashboard.py/reports.py/histories.py/batch.py/schedules.py/chat.py)
 LOGIC_LOCKED_CODES = {
-    "CONTRACT_STATUS": {"ACTIVE", "HOLD"},  # dashboard KPI·구독 리포트 대상
+    # ACTIVE/HOLD: dashboard KPI·구독 리포트 대상, END: 계약 종료 전이(validate_active_code 통과 필요)
+    "CONTRACT_STATUS": {"ACTIVE", "HOLD", "END"},
     "ACTIVITY_TYPE": {"CALL", "MEETING", "SITE_VISIT", "EMAIL", "ISSUE", "KAKAO"},
     "SETTLEMENT_STATUS": {"STANDBY", "BILLED", "COMPLETED"},  # 상태전이 머신 고정
     # 보고서 상태전이 머신 고정 — reports.py 상태 검증·요약 집계·배치 자동 발송(APPROVED) 참조
     "REPORT_STATUS": {"STANDBY", "WRITING", "REVIEW", "APPROVED", "SENT", "CONFIRMED", "CANCELED"},
     "PROJECT_STATUS": {"기획", "발급완료"},  # 프론트 게이트(정산·발급 조건) 참조
-    "ISSUE_STATUS": {"OPEN", "CLOSED"},  # dashboard 미처리/긴급 집계·배치 참조
+    # dashboard 미처리/긴급 집계·배치 + 프론트 이슈 칸반 컬럼(4종 하드코딩) 참조
+    "ISSUE_STATUS": {"OPEN", "IN_PROGRESS", "HOLD", "CLOSED"},
     # 자산 대분류/유형/상태·AGENCY는 현재 로직 분기 없음 → 잠금 없음(추가·비활성 자유)
 }
 

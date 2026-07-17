@@ -9,6 +9,7 @@ import type {
   ClientPayload,
   Document,
   Paginated,
+  ProjectClientMap,
   ReportDelivery,
 } from '../../types'
 
@@ -98,6 +99,19 @@ export function useClientDocuments(clientId: string | undefined) {
     queryFn: async () => {
       const { data } = await api.get<Document[] | Paginated<Document>>(
         `/clients/${clientId}/documents`,
+      )
+      return unwrapList(data).items
+    },
+    enabled: !!clientId,
+  })
+}
+
+export function useClientProjects(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'projects'],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectClientMap[] | Paginated<ProjectClientMap>>(
+        `/clients/${clientId}/projects`,
       )
       return unwrapList(data).items
     },

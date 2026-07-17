@@ -33,8 +33,31 @@ def kst_day_end_utc(d: date) -> datetime:
     return datetime.combine(d, time.max) - _KST_OFFSET
 
 
+def now_kst() -> datetime:
+    """KST 벽시계 현재 시각 (naive) — utcnow()+9h.
+
+    저장 규약: activity_date·due_date 등 사용자가 벽시계로 입력하는 필드는
+    저장값 자체가 KST 벽시계이므로, 자동 적재도 반드시 이 함수를 쓴다.
+    created_at 등 서버 생성 시각(naive UTC 저장)은 utcnow()를 그대로 쓴다.
+    """
+    return utcnow() + _KST_OFFSET
+
+
 def current_period() -> str:
-    return utcnow().strftime("%Y-%m")
+    """KST 벽시계 기준 당월 'YYYY-MM'.
+
+    UTC 기준으로 계산하면 월초 00~09시(KST)에 전월로 밀린다 — 대시보드·보고서
+    generate 기본값·배치가 모두 이 함수를 공유해 '당월' 기준을 KST로 통일한다.
+    """
+    return now_kst().strftime("%Y-%m")
+
+
+def previous_period(period: str) -> str:
+    """'YYYY-MM' 1개월 감산 — 배치 기본 발송 대상(전월) 계산."""
+    year, month = int(period[:4]), int(period[5:7])
+    if month == 1:
+        return "{0}-12".format(year - 1)
+    return "{0}-{1:02d}".format(year, month - 1)
 
 
 def validate_period(period: str) -> str:

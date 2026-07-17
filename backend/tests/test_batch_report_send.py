@@ -58,7 +58,7 @@ def _prepare(client, headers, client_id, period, to_status):
         files={"file": ("report.pdf", io.BytesIO(b"PDF-BATCH"), "application/pdf")},
     )
     assert resp.status_code == 201, resp.text
-    path = {"WRITING": [], "APPROVED": ["REVIEW", "APPROVED"], "SENT": ["SENT"]}[to_status]
+    path = {"WRITING": [], "APPROVED": ["REVIEW", "APPROVED"], "SENT": []}[to_status]
     for status in path:
         resp = client.put(
             API + "/reports/{0}/status".format(report_id),
@@ -66,6 +66,13 @@ def _prepare(client, headers, client_id, period, to_status):
             json={"status": status},
         )
         assert resp.status_code == 200, resp.text
+    if to_status == "SENT":
+        # 상태 전이 사전 서버 강제(감사 수정 ①)로 SENT 직접 설정 API가 차단됨 —
+        # 기발송 시드는 발송 코어(send_report_core)와 동일하게 DB로 직접 적재
+        db = models.SessionLocal()
+        db.get(models.ReportDelivery, report_id).status = "SENT"
+        db.commit()
+        db.close()
     return report_id
 
 
