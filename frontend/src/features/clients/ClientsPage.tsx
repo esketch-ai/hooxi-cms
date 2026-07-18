@@ -1,7 +1,8 @@
 // SCR-03 고객사 마스터 목록 — 기본 필터 '전체 고객사' (공동 관리)
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Buildings, PencilSimple, Phone, Plus } from '@phosphor-icons/react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Buildings, FileXls, PencilSimple, Phone, Plus } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -14,6 +15,7 @@ import { fmtDate, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { useClients } from './api'
 import { ClientFormModal } from './ClientFormModal'
+import { ExcelImportModal } from '../imports/ExcelImportModal'
 
 const PAGE_SIZE = 20
 
@@ -30,6 +32,7 @@ export function ClientAvatar({ name, className = '' }: { name?: string | null; c
 
 export function ClientsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: users = [] } = useUserOptions()
   const { labelOf: clientTypeLabel, options: clientTypeOptions } = useCodes('CLIENT_TYPE')
   const { options: contractStatusOptions } = useCodes('CONTRACT_STATUS')
@@ -41,6 +44,7 @@ export function ClientsPage() {
   const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -161,18 +165,28 @@ export function ClientsPage() {
         title="고객사 마스터"
         subtitle="전체 고객사 목록 — 부서 공동 관리"
         actions={
-          /* 신규 등록 — 모바일 숨김 (§7.1) */
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(null)
-              setFormOpen(true)
-            }}
-            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
-          >
-            <Plus size={16} weight="bold" />
-            신규 고객사 등록
-          </button>
+          /* 신규·일괄 등록 — 데스크톱 전용 (§7.1 태블릿은 다운로드만) */
+          <>
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+            >
+              <FileXls size={16} />
+              엑셀 일괄 등록
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null)
+                setFormOpen(true)
+              }}
+              className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
+            >
+              <Plus size={16} weight="bold" />
+              신규 고객사 등록
+            </button>
+          </>
         }
       />
 
@@ -283,6 +297,12 @@ export function ClientsPage() {
       )}
 
       <ClientFormModal open={formOpen} onClose={() => setFormOpen(false)} client={editing} />
+      <ExcelImportModal
+        entity="clients"
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
+      />
     </div>
   )
 }

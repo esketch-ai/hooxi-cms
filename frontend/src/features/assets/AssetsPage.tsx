@@ -1,7 +1,8 @@
 // SCR-04 자산 및 연동 현황 — 외부기관 연동 계정의 안전한 공동 관리
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowSquareOut, Camera, CircleNotch, HardDrives, Images, PencilSimple, Plus } from '@phosphor-icons/react'
+import { ArrowSquareOut, Camera, CircleNotch, FileXls, HardDrives, Images, PencilSimple, Plus } from '@phosphor-icons/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -16,6 +17,7 @@ import { useRevealAuth } from './useRevealAuth'
 import { AssetFormModal } from './AssetFormModal'
 import { SpecPhotoModal } from './SpecPhotoModal'
 import { AssetPhotosModal } from './AssetPhotosModal'
+import { ExcelImportModal } from '../imports/ExcelImportModal'
 
 const PAGE_SIZE = 20
 
@@ -119,6 +121,7 @@ function AuthCell({
 }
 
 export function AssetsPage() {
+  const queryClient = useQueryClient()
   const { options: assetGroupOptions } = useCodes('ASSET_GROUP')
   const [assetGroup, setAssetGroup] = useState('')
   const [telemetryYn, setTelemetryYn] = useState('')
@@ -127,6 +130,7 @@ export function AssetsPage() {
   const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Asset | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   // 제원표 촬영 — 태블릿(pointer: coarse) 현장 기능, 대상 자산 선택 시 모달 오픈
   const isCoarse = usePointerCoarse()
   const [specPhotoAsset, setSpecPhotoAsset] = useState<Asset | null>(null)
@@ -265,18 +269,28 @@ export function AssetsPage() {
         title="자산 및 연동 현황"
         subtitle="고객사 자산·관제 연동·외부기관 접속 계정 공동 관리"
         actions={
-          /* 신규 등록 — 모바일 숨김 (§7.1) */
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(null)
-              setFormOpen(true)
-            }}
-            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
-          >
-            <Plus size={16} weight="bold" />
-            신규 자산 등록
-          </button>
+          /* 신규·일괄 등록 — 데스크톱 전용 (§7.1 태블릿은 다운로드만) */
+          <>
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+            >
+              <FileXls size={16} />
+              엑셀 일괄 등록
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null)
+                setFormOpen(true)
+              }}
+              className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
+            >
+              <Plus size={16} weight="bold" />
+              신규 자산 등록
+            </button>
+          </>
         }
       />
 
@@ -409,6 +423,12 @@ export function AssetsPage() {
       <AssetFormModal open={formOpen} onClose={() => setFormOpen(false)} asset={editing} />
       <SpecPhotoModal asset={specPhotoAsset} onClose={() => setSpecPhotoAsset(null)} />
       <AssetPhotosModal asset={photosAsset} onClose={() => setPhotosAsset(null)} />
+      <ExcelImportModal
+        entity="assets"
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => queryClient.invalidateQueries({ queryKey: ['assets'] })}
+      />
     </div>
   )
 }

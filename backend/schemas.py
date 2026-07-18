@@ -4,7 +4,7 @@
 import json
 import re
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -1464,3 +1464,58 @@ class ReportPinUpdate(BaseModel):
     """발송 고정본 지정/해제 요청 — doc_id가 None이면 고정 해제(최신본 발송 복귀)."""
 
     doc_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# 엑셀 일괄 등록 (SCR-03/04 imports) — 규격 원천은 services/import_spec.py
+# ---------------------------------------------------------------------------
+class ImportColumnOut(BaseModel):
+    """컬럼 안내 — 프론트 업로드 가이드·양식 설명용 (import_spec에서 파생)."""
+
+    field: str
+    label: str
+    required: bool = False
+    code_category: Optional[str] = None  # tb_code 카테고리 (라벨/코드 양방향 수용)
+    resolver: Optional[str] = None       # user_by_name/client_by_name — 이름으로 입력
+    yn: bool = False                     # Y/N 컬럼
+    allowed_values: Optional[List[str]] = None  # 고정값 컬럼(인증 방식 등) 허용 표기
+    example: Optional[str] = None
+
+
+class ImportSpecOut(BaseModel):
+    entity: str
+    label: str
+    max_rows: int
+    filename: str
+    columns: List[ImportColumnOut]
+
+
+class ImportRowResult(BaseModel):
+    """행 단위 검증 결과 — row는 엑셀 실제 행 번호(헤더=1, 데이터 2부터)."""
+
+    row: int
+    status: str  # OK/ERROR
+    data: Dict[str, Optional[str]] = {}  # 라벨 → 정규화된 저장 예정 값(표시용)
+    errors: List[str] = []
+    warnings: List[str] = []
+
+
+class ImportPreviewOut(BaseModel):
+    """미리보기(DB 무변경) — commit 전 전 행 검증 결과."""
+
+    entity: str
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    unknown_columns: List[str] = []  # 스펙에 없는 헤더(무시됨) — 경고
+    warnings: List[str] = []  # 파일 수준 안내 (예: 예시 행 스킵)
+    rows: List[ImportRowResult] = []
+
+
+class ImportCommitOut(BaseModel):
+    """반영 결과 — 유효 행만 생성(부분 반영), 오류 행은 건너뜀."""
+
+    entity: str
+    created: int
+    skipped: int
+    errors: List[ImportRowResult] = []

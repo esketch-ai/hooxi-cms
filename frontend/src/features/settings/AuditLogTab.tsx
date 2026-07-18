@@ -50,6 +50,7 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   PROJECT_DELETE: { label: '사업 삭제', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   REPORT_CREATE: { label: '보고서 대상 생성', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
   REPORT_SEND: { label: '보고서 발송', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25' },
+  EXCEL_IMPORT: { label: '엑셀 일괄 등록', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
 }
 
 const FALLBACK_SPEC = { label: '', cls: 'bg-elevate-strong text-ash border-hairline' }

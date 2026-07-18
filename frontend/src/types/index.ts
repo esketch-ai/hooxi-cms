@@ -745,3 +745,56 @@ export interface SegmentSendLog {
 export interface SegmentSendDetailOut extends SegmentSend {
   logs: SegmentSendLog[]
 }
+
+// ── 엑셀 일괄 등록 (SCR-03/04 imports) — backend schemas.Import* 대응 ──
+
+export type ImportEntity = 'clients' | 'assets'
+
+/** 컬럼 안내 (schemas.ImportColumnOut) — 업로드 가이드·양식 설명용 */
+export interface ImportColumn {
+  field: string
+  label: string
+  required: boolean
+  code_category?: string | null // tb_code 카테고리 (라벨/코드 양방향 수용)
+  resolver?: string | null // user_by_name/client_by_name — 이름으로 입력
+  yn: boolean // Y/N 컬럼
+  allowed_values?: string[] | null // 고정값 컬럼 허용 표기
+  example?: string | null
+}
+
+export interface ImportSpec {
+  entity: string
+  label: string
+  max_rows: number
+  filename: string
+  columns: ImportColumn[]
+}
+
+/** 행 단위 검증 결과 — row는 엑셀 실제 행 번호(헤더=1, 데이터 2부터) */
+export interface ImportRowResult {
+  row: number
+  status: 'OK' | 'ERROR'
+  data: Record<string, string | null> // 라벨 → 정규화된 저장 예정 값(표시용)
+  errors: string[]
+  warnings: string[]
+}
+
+/** 미리보기(DB 무변경) — commit 전 전 행 검증 결과 */
+export interface ImportPreview {
+  entity: string
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  unknown_columns: string[]
+  /** 파일 수준 안내 — 예시 행 스킵 등 */
+  warnings?: string[] // 스펙에 없는 헤더(무시됨) — 경고
+  rows: ImportRowResult[]
+}
+
+/** 반영 결과 — 유효 행만 생성(부분 반영), 오류 행은 건너뜀 */
+export interface ImportCommitResult {
+  entity: string
+  created: number
+  skipped: number
+  errors: ImportRowResult[]
+}

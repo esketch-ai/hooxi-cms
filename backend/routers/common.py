@@ -89,6 +89,38 @@ def get_or_404(db: Session, model, pk: Optional[str], label: str):
     return obj
 
 
+def normalize_biz_no(value: Optional[str]) -> str:
+    """사업자번호 정규화 — 숫자만 추출 (하이픈·공백 등 표기 차이 무시 비교용, P1-C).
+
+    clients.py에서 승격 — 단건 등록과 엑셀 일괄 등록(services/excel_import.py)이 공유.
+    """
+    return re.sub(r"\D", "", value or "")
+
+
+def check_biz_reg_no_duplicate(
+    db: Session, biz_reg_no: Optional[str], exclude_client_id: Optional[str] = None
+):
+    """사업자번호 중복 검사 (P1-C) — 정규화(숫자만) 기준 비교, 컬럼 원문은 유지.
+
+    빈 값/None은 검사 제외. update 시 자기 자신은 exclude_client_id로 제외.
+    기존 데이터가 하이픈 유무 등 표기가 달라도 잡히도록 DB LIKE가 아닌
+    파이썬 정규화 비교(내부 CMS 규모라 전건 스캔 허용).
+    clients.py에서 승격 — 단건 등록과 엑셀 일괄 등록이 같은 규칙을 공유.
+    """
+    normalized = normalize_biz_no(biz_reg_no)
+    if not normalized:
+        return
+    query = db.query(Client).filter(Client.biz_reg_no.isnot(None))
+    if exclude_client_id:
+        query = query.filter(Client.client_id != exclude_client_id)
+    for other in query.all():
+        if normalize_biz_no(other.biz_reg_no) == normalized:
+            raise HTTPException(
+                status_code=409,
+                detail="이미 등록된 사업자번호입니다 (기존: {0})".format(other.company_name),
+            )
+
+
 # 예상 정산액 상한 — 컬럼 Numeric(15,2)(정수부 13자리)의 저장 가능 한계 (#6 P2)
 EXPECTED_AMOUNT_LIMIT = 1e13
 
