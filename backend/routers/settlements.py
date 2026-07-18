@@ -105,6 +105,27 @@ def list_settlements(
     return schemas.SettlementListResponse(items=items, total=total)
 
 
+@router.get("/{map_id}/snapshots", response_model=schemas.SettlementSnapshotListResponse)
+def list_settlement_snapshots(
+    map_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """정산 회차 스냅샷 조회 (R3-1) — 청구/입금 시점 동결 금액의 정본, seq 오름차순."""
+    common.get_or_404(db, ProjectClientMap, map_id, "정산 대상")
+    rows = (
+        db.query(SettlementSnapshot)
+        .filter(SettlementSnapshot.map_id == map_id)
+        .order_by(SettlementSnapshot.seq.asc())
+        .all()
+    )
+    items = [
+        schemas.SettlementSnapshotOut.model_validate(s, from_attributes=True)
+        for s in rows
+    ]
+    return schemas.SettlementSnapshotListResponse(items=items, total=len(items))
+
+
 @router.put("/{map_id}/status", response_model=schemas.SettlementRow)
 def update_settlement_status(
     map_id: str,
@@ -116,8 +137,8 @@ def update_settlement_status(
 
     - MANAGER 이상만 가능(§10.1) — STAFF 403
     - 전이 시각·처리자 기록(billed_at/by·completed_at/by)
-    - 금액은 서버 재계산 값으로 적재, tb_settlement_snapshot에 회차 동결(R3-1)
-    - tb_audit_log에 SETTLEMENT_CHANGE 기록
+    - BILLED: 서버 계산 금액으로 확정 / COMPLETED: 직전 BILLED 스냅샷 금액 승계(재계산 금지)
+    - tb_settlement_snapshot에 회차 동결(R3-1), tb_audit_log에 SETTLEMENT_CHANGE 기록
     """
     mapping = common.get_or_404(db, ProjectClientMap, map_id, "정산 대상")
     project = common.get_or_404(db, Project, mapping.project_id, "감축 사업")
@@ -131,25 +152,58 @@ def update_settlement_status(
                    "(현재 {0} → 요청 {1})".format(current, target),
         )
 
-    # 금액은 항상 서버 계산 값 사용 (§10.3)
-    mapping.expected_amount = common.compute_expected_amount(
-        project.expected_credits, mapping.allocation_ratio,
-        project.unit_price, mapping.success_fee_rate,
-    )
-
     now = utcnow()
-    mapping.settlement_status = target
+    # 전이 시 함께 쓰는 필드를 UPDATE dict에 모아 원자 반영 (부수 필드 phantom 방지)
+    values = {"settlement_status": target, "updated_at": now}
     if target == "BILLED":
-        mapping.billed_at = now
-        mapping.billed_by = user.user_id
-    else:  # COMPLETED
-        mapping.completed_at = now
-        mapping.completed_by = user.user_id
+        # 청구 시점 금액은 서버 계산 값으로 확정 (§10.3) — 이후 동결(스냅샷 정본)
+        values["expected_amount"] = common.validate_expected_amount(
+            common.compute_expected_amount(
+                project.expected_credits, mapping.allocation_ratio,
+                project.unit_price, mapping.success_fee_rate,
+            )
+        )
+        values["billed_at"] = now
+        values["billed_by"] = user.user_id
+    else:  # COMPLETED — 재계산 금지: 직전 BILLED 스냅샷 금액 승계(청구·입금 회차 일치)
+        billed_snap = (
+            db.query(SettlementSnapshot)
+            .filter(
+                SettlementSnapshot.map_id == map_id,
+                SettlementSnapshot.action == "BILLED",
+            )
+            .order_by(SettlementSnapshot.seq.desc())
+            .first()
+        )
+        # BILLED 스냅샷이 없으면 현재 expected_amount 유지 (방어)
+        values["expected_amount"] = (
+            billed_snap.amount if billed_snap is not None else mapping.expected_amount
+        )
+        values["completed_at"] = now
+        values["completed_by"] = user.user_id
         if payload.paid_amount is not None:
-            mapping.paid_amount = payload.paid_amount
-        mapping.payment_type = payload.payment_type or mapping.payment_type or "FULL"
+            values["paid_amount"] = payload.paid_amount
+        values["payment_type"] = payload.payment_type or mapping.payment_type or "FULL"
 
-    # 회차 스냅샷 동결 (R3-1, append-only)
+    # 조건부 UPDATE (낙관적 동시성, P0-B 준용) — 스냅샷 기준 커밋은 동시 전이 시
+    # lost update + 실제 없던 전이가 스냅샷·감사에 기록되는 문제가 있어, 읽은 상태가
+    # 그대로일 때만 갱신하고 rowcount 0이면 409로 반려한다.
+    updated = (
+        db.query(ProjectClientMap)
+        .filter(
+            ProjectClientMap.map_id == map_id,
+            ProjectClientMap.settlement_status == mapping.settlement_status,
+        )
+        .update(values, synchronize_session=False)
+    )
+    if updated == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="다른 사용자가 방금 정산 상태를 변경했습니다. 새로고침 후 다시 시도하세요",
+        )
+
+    # 회차 스냅샷 동결 (R3-1, append-only) — 실제 전이(rowcount 1)일 때만 적재
     next_seq = (
         db.query(func.coalesce(func.max(SettlementSnapshot.seq), 0))
         .filter(SettlementSnapshot.map_id == map_id)
@@ -161,19 +215,19 @@ def update_settlement_status(
             map_id=map_id,
             seq=next_seq,
             issued_credits=project.issued_credits,
-            amount=mapping.expected_amount,
+            amount=values["expected_amount"],
             unit_price=project.unit_price,
             allocation_ratio=mapping.allocation_ratio,
             success_fee_rate=mapping.success_fee_rate,
-            paid_amount=mapping.paid_amount,
+            paid_amount=values.get("paid_amount", mapping.paid_amount),
             action=target,
             reason=payload.reason,
             created_by=user.user_id,
         )
     )
-    # 감사 로그 (R2) — 금액·값 원문 기록 금지, 상태만
+    # 감사 로그 (R2) — 금액·값 원문 기록 금지, 상태만. 실제 전이일 때만 적재
     AuditLogger.settlement_change(db, user.user_id, map_id, current, target)
     db.commit()
-    db.refresh(mapping)
+    db.refresh(mapping)  # 조건부 UPDATE(synchronize_session=False) 반영분으로 응답 직렬화
     cnames = common.client_name_map(db, [mapping.client_id])
     return _settlement_row(mapping, project, cnames.get(mapping.client_id))

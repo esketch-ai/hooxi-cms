@@ -2,7 +2,8 @@
 
 - 목록: FilterBar(진행 상태·담당 PM·모니터링 주기) + 참여 고객사 수 + 예상 발급일(D-day용)
 - 상세: 개요 + 참여 고객사 매핑(배분율·보수율 🔒·예상 정산액 🔒·정산 상태)
-- 단가 수기 입력(§10.3, price_source=MANUAL) — 변경 시 전체 매핑 expected_amount 재계산
+- 단가 수기 입력(§10.3, price_source=MANUAL) — 변경 시 매핑 expected_amount 재계산
+  (청구 후 BILLED/COMPLETED 매핑은 금액 동결 — 스냅샷 정본, 재계산·수정·해제 불가)
 - 배분율 합계 100% 초과 시 422 (서버 검증)
 """
 
@@ -31,16 +32,25 @@ _PROJECT_FIELDS = [
 
 
 def _recalc_expected_amounts(db: Session, project: Project):
-    """§10.3 — 사업 전체 매핑의 expected_amount를 서버 계산 값으로 재적재."""
+    """§10.3 — 사업 전체 매핑의 expected_amount를 서버 계산 값으로 재적재.
+
+    청구 후(BILLED/COMPLETED) 매핑은 금액 동결 — 스냅샷(R3-1)이 정본이므로 건너뛴다.
+    단가·발행량·매핑 변경 등 모든 재계산 경로에 공통 적용.
+    """
     maps = (
         db.query(ProjectClientMap)
         .filter(ProjectClientMap.project_id == project.project_id)
         .all()
     )
     for m in maps:
-        m.expected_amount = common.compute_expected_amount(
-            project.expected_credits, m.allocation_ratio,
-            project.unit_price, m.success_fee_rate,
+        if (m.settlement_status or "STANDBY") != "STANDBY":
+            continue  # 청구 후 금액 동결 — 스냅샷 정본
+        # 상한 초과 시 422 — 초과를 유발한 단가·발행량 입력 자체를 차단 (#6 P2)
+        m.expected_amount = common.validate_expected_amount(
+            common.compute_expected_amount(
+                project.expected_credits, m.allocation_ratio,
+                project.unit_price, m.success_fee_rate,
+            )
         )
 
 
@@ -123,9 +133,10 @@ def list_projects(
     if mon_cycle:
         query = query.filter(Project.mon_cycle == mon_cycle)
     if search:
-        keyword = "%{0}%".format(search.strip())
+        keyword = "%{0}%".format(common.escape_like(search.strip()))
         query = query.filter(
-            Project.project_name.ilike(keyword) | Project.reg_code.ilike(keyword)
+            Project.project_name.ilike(keyword, escape="\\")
+            | Project.reg_code.ilike(keyword, escape="\\")
         )
 
     total = query.count()
@@ -219,11 +230,31 @@ def update_project(
         common.get_or_404(db, Client, data["client_id"], "고객사")
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
+    old_price = project.unit_price  # 단가 감사(old→new)용 — setattr 전에 스냅샷
     for field in _PROJECT_FIELDS:
         if field in data:
             setattr(project, field, data[field])
     if "unit_price" in data or "expected_credits" in data:
         _recalc_expected_amounts(db, project)
+
+    # 일반 수정 경유 단가 변경도 전용 엔드포인트(update_unit_price)와 동일하게
+    # price_source=MANUAL 설정 + PROJECT_UNIT_PRICE 감사(old→new) 적재 (§10.3, R2)
+    new_price = data.get("unit_price")
+    price_changed = "unit_price" in data and (
+        (old_price is None) != (new_price is None)
+        or (old_price is not None and float(old_price) != float(new_price))
+    )
+    if price_changed:
+        project.price_source = "MANUAL"
+        AuditLogger.log_action(
+            db,
+            user.user_id,
+            "PROJECT_UNIT_PRICE",
+            target_type="PROJECT",
+            target_id=project.project_id,
+            old_value="{0:g}".format(float(old_price)) if old_price is not None else None,
+            new_value="{0:g}".format(float(new_price)) if new_price is not None else None,
+        )
 
     # 감사 로그는 커밋 전에 적재해야 함께 저장된다 (커밋 후 add는 유실)
     AuditLogger.log_action(
@@ -284,9 +315,24 @@ def update_unit_price(
     null 전달 시 단가 미정 — 매핑 금액도 null(프론트 '미정').
     """
     project = common.get_or_404(db, Project, project_id, "감축 사업")
+    old_price = project.unit_price
     project.unit_price = payload.unit_price
     project.price_source = "MANUAL"
     _recalc_expected_amounts(db, project)
+    # 감사 로그 — 단가는 비밀값 아님(R2-E6 검토), 변경 추적 취지상 old→new 기록
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_UNIT_PRICE",
+        target_type="PROJECT",
+        target_id=project.project_id,
+        old_value="{0:g}".format(float(old_price)) if old_price is not None else None,
+        new_value=(
+            "{0:g}".format(float(payload.unit_price))
+            if payload.unit_price is not None
+            else None
+        ),
+    )
     db.commit()
     db.refresh(project)
     return _project_detail(db, project)
@@ -323,11 +369,17 @@ def upsert_project_client(
         )
         .first()
     )
+    # 청구 후(BILLED/COMPLETED) 매핑은 배분율·보수율·자산 변경 불가 — 금액 동결 정합성
+    if existing is not None and existing.settlement_status in ("BILLED", "COMPLETED"):
+        raise HTTPException(
+            status_code=409, detail="정산이 진행된 매핑은 수정할 수 없습니다"
+        )
     _validate_allocation_total(
         db, project_id, payload.allocation_ratio,
         exclude_map_id=existing.map_id if existing else None,
     )
 
+    old_ratio = existing.allocation_ratio if existing is not None else None
     if existing is None:
         existing = ProjectClientMap(
             project_id=project_id, client_id=payload.client_id,
@@ -337,9 +389,22 @@ def upsert_project_client(
     existing.asset_id = payload.asset_id
     existing.allocation_ratio = payload.allocation_ratio
     existing.success_fee_rate = payload.success_fee_rate
-    existing.expected_amount = common.compute_expected_amount(
-        project.expected_credits, payload.allocation_ratio,
-        project.unit_price, payload.success_fee_rate,
+    existing.expected_amount = common.validate_expected_amount(
+        common.compute_expected_amount(
+            project.expected_credits, payload.allocation_ratio,
+            project.unit_price, payload.success_fee_rate,
+        )
+    )
+    db.flush()  # 신규 매핑 PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
+    # 감사 로그 — 배분율 요약만 기록(금액 원문 금지, R2-E6)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_MAP_UPSERT",
+        target_type="PROJECT_CLIENT_MAP",
+        target_id=existing.map_id,
+        old_value="배분율 {0:g}%".format(float(old_ratio)) if old_ratio is not None else None,
+        new_value="배분율 {0:g}%".format(float(payload.allocation_ratio)),
     )
     db.commit()
     db.refresh(existing)
@@ -361,6 +426,19 @@ def delete_project_client(
         raise HTTPException(
             status_code=409, detail="정산이 진행된 매핑은 해제할 수 없습니다"
         )
+    # 감사 로그 — 배분율 요약만 기록(금액 원문 금지, R2-E6)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_MAP_RELEASE",
+        target_type="PROJECT_CLIENT_MAP",
+        target_id=mapping.map_id,
+        old_value=(
+            "배분율 {0:g}%".format(float(mapping.allocation_ratio))
+            if mapping.allocation_ratio is not None
+            else None
+        ),
+    )
     db.delete(mapping)
     db.commit()
     return schemas.MessageResponse(message="참여 고객사 매핑이 해제되었습니다")

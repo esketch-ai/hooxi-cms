@@ -2,6 +2,8 @@
 
 import io
 
+from sqlalchemy import func as sa_func
+
 import models
 from routers.documents import storage_folder
 from services import dropbox_storage, storage
@@ -127,11 +129,20 @@ def test_view_page_uses_external_link_for_dropbox(client, admin_headers, monkeyp
         db.add(delivery)
         db.commit()
         db.refresh(delivery)
+    # (report_id, version) 유니크 인덱스(P0-B) — 기존 문서가 있는 보고서라도
+    # 충돌하지 않도록 다음 버전을 계산해 시드
+    next_version = (
+        db.query(sa_func.max(models.Document.version))
+        .filter(models.Document.report_id == delivery.report_id)
+        .scalar()
+        or 0
+    ) + 1
     doc = models.Document(
         client_id=delivery.client_id,
         doc_type="REPORT",
         title="드롭박스 열람 테스트",
         file_url="dropbox:/Hooxi-CMS/한빛운수/보고서/2026-07/x.pdf",
+        version=next_version,
         report_id=delivery.report_id,
         uploaded_by="u-admin",
     )

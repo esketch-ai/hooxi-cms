@@ -2,10 +2,38 @@
 + P2(자산·감축 사업·정산) + P3(카카오 채널·채팅 상담) + 세그먼트 발송."""
 
 import json
+import re
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# 간단 이메일 형식 검증 — email-validator 의존성 없이 정규식만 (P1-C).
+# RFC 완전 준수가 목적이 아니라 오타(@ 누락·공백 등) 조기 차단이 목적.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def reject_tz_aware(value: Optional[datetime]) -> Optional[datetime]:
+    """벽시계(KST naive) 규약 검증 (#6 P3) — tz-aware 입력(Z·+09:00 등)은 ValueError(→422).
+
+    저장 컬럼이 TIMESTAMP WITHOUT TIME ZONE이라 tzinfo가 조용히 잘려 9시간 어긋난
+    시각이 저장되는 사고를 입력 시점에 차단한다. activity_date·일정 start/end 등
+    사용자가 벽시계로 입력하는 필드 전용(created_at 계열 서버 시각과 무관)."""
+    if value is not None and value.tzinfo is not None:
+        raise ValueError("시간대 없는 KST 시각으로 입력하세요")
+    return value
+
+
+def validate_email_format(value: Optional[str]) -> Optional[str]:
+    """이메일 형식 검증 — None/빈 문자열은 미입력(None)으로 통과, 형식 오류는 ValueError(→422)."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    if not _EMAIL_RE.match(stripped):
+        raise ValueError("이메일 형식이 올바르지 않습니다: {0}".format(value))
+    return stripped
 
 
 # ---------------------------------------------------------------------------
@@ -161,46 +189,72 @@ class ClientCreate(BaseModel):
     # 유효성은 라우터에서 활성 코드 존재 여부로 검증(정규식 하드코딩 제거).
     client_type: str = Field(min_length=1, max_length=40)
     company_name: str = Field(min_length=1, max_length=100)
-    biz_reg_no: Optional[str] = None
-    region: Optional[str] = None
-    address: Optional[str] = None
-    ceo_name: Optional[str] = None
-    ceo_contact_phone: Optional[str] = None
-    ceo_contact_email: Optional[str] = None
-    main_contact_name: Optional[str] = None
-    main_contact_phone: Optional[str] = None
-    main_contact_email: Optional[str] = None
+    # max_length는 models.py String(N) 길이와 일치 — 초과 시 DB 오류(500) 대신 422 (#6 P1)
+    biz_reg_no: Optional[str] = Field(default=None, max_length=20)
+    region: Optional[str] = Field(default=None, max_length=20)
+    address: Optional[str] = Field(default=None, max_length=200)
+    ceo_name: Optional[str] = Field(default=None, max_length=50)
+    ceo_contact_phone: Optional[str] = Field(default=None, max_length=20)
+    ceo_contact_email: Optional[str] = Field(default=None, max_length=100)
+    main_contact_name: Optional[str] = Field(default=None, max_length=50)
+    main_contact_phone: Optional[str] = Field(default=None, max_length=20)
+    main_contact_email: Optional[str] = Field(default=None, max_length=100)
     # contract_status는 공통 코드 마스터(CONTRACT_STATUS)로 관리 → 라우터에서 검증
     contract_status: str = Field(default="ACTIVE", min_length=1, max_length=40)
     contract_date: Optional[datetime] = None
-    keyman: Optional[str] = None
-    manager_id: Optional[str] = None
+    keyman: Optional[str] = Field(default=None, max_length=50)
+    manager_id: Optional[str] = Field(default=None, max_length=50)
     report_yn: str = Field(default="N", pattern="^[YN]$")
     lat: Optional[float] = None
     lng: Optional[float] = None
     subscription: Optional[ReportSubscriptionIn] = None  # 월간 보고서 설정
 
+    @field_validator("ceo_contact_email", "main_contact_email")
+    @classmethod
+    def _check_email(cls, v):
+        """이메일 형식 검증 (P1-C) — 오타 주소로 보고서 발송이 실패하는 사고 방지."""
+        return validate_email_format(v)
+
+    @field_validator("contract_date")
+    @classmethod
+    def _check_naive(cls, v):
+        """벽시계 KST naive만 허용 (#6 P3)."""
+        return reject_tz_aware(v)
+
 
 class ClientUpdate(BaseModel):
     client_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
     company_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    biz_reg_no: Optional[str] = None
-    region: Optional[str] = None
-    address: Optional[str] = None
-    ceo_name: Optional[str] = None
-    ceo_contact_phone: Optional[str] = None
-    ceo_contact_email: Optional[str] = None
-    main_contact_name: Optional[str] = None
-    main_contact_phone: Optional[str] = None
-    main_contact_email: Optional[str] = None
+    # max_length는 ClientCreate와 동일 — models.py String(N) 정합 (#6 P1)
+    biz_reg_no: Optional[str] = Field(default=None, max_length=20)
+    region: Optional[str] = Field(default=None, max_length=20)
+    address: Optional[str] = Field(default=None, max_length=200)
+    ceo_name: Optional[str] = Field(default=None, max_length=50)
+    ceo_contact_phone: Optional[str] = Field(default=None, max_length=20)
+    ceo_contact_email: Optional[str] = Field(default=None, max_length=100)
+    main_contact_name: Optional[str] = Field(default=None, max_length=50)
+    main_contact_phone: Optional[str] = Field(default=None, max_length=20)
+    main_contact_email: Optional[str] = Field(default=None, max_length=100)
     contract_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     contract_date: Optional[datetime] = None
-    keyman: Optional[str] = None
-    manager_id: Optional[str] = None
+    keyman: Optional[str] = Field(default=None, max_length=50)
+    manager_id: Optional[str] = Field(default=None, max_length=50)
     report_yn: Optional[str] = Field(default=None, pattern="^[YN]$")
     lat: Optional[float] = None
     lng: Optional[float] = None
     subscription: Optional[ReportSubscriptionIn] = None
+
+    @field_validator("ceo_contact_email", "main_contact_email")
+    @classmethod
+    def _check_email(cls, v):
+        """이메일 형식 검증 (P1-C) — ClientCreate와 동일 규칙."""
+        return validate_email_format(v)
+
+    @field_validator("contract_date")
+    @classmethod
+    def _check_naive(cls, v):
+        """벽시계 KST naive만 허용 (#6 P3)."""
+        return reject_tz_aware(v)
 
 
 class ClientOut(BaseModel):
@@ -247,6 +301,40 @@ class ClientDetailOut(ClientOut):
     subscriptions: List[ReportSubscriptionOut] = []
 
 
+# ---------------------------------------------------------------------------
+# P1-C — 보고서 수신자 (tb_report_recipient)
+# ---------------------------------------------------------------------------
+class RecipientCreate(BaseModel):
+    """수신자 등록 — sub_id null이면 전 보고서 유형 공통 (R2-B8)."""
+
+    email: str = Field(max_length=100)
+    name: Optional[str] = Field(default=None, max_length=50)
+    cc_yn: str = Field(default="N", pattern="^[YN]$")
+    sub_id: Optional[str] = None  # null=전 유형 공통
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v):
+        """이메일 형식 검증 (P1-C) — 수신자는 필수값이라 빈 값도 형식 오류로 처리."""
+        checked = validate_email_format(v)
+        if not checked:
+            raise ValueError("이메일 형식이 올바르지 않습니다: {0}".format(v))
+        return checked
+
+
+class RecipientOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recipient_id: str
+    client_id: str
+    name: Optional[str] = None
+    email: str
+    cc_yn: Optional[str] = None
+    sub_id: Optional[str] = None  # null=전 유형 공통 (R2-B8)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
 class AssetOut(BaseModel):
     """자산 축약형(SCR-03D 탭) — 인증정보(login_password/api_token)는 절대 미노출(reveal은 P2)."""
 
@@ -277,40 +365,43 @@ class AssetOut(BaseModel):
 class AssetCreate(BaseModel):
     """자산 등록 — auth_value(평문 인증정보)는 서버 AES-256-GCM 암호화 후 저장, 응답 미포함."""
 
-    client_id: str
+    client_id: str = Field(max_length=50)
     # asset_group·asset_type·status는 공통 코드 마스터(tb_code)로 관리 → 라우터에서 검증
     asset_group: str = Field(min_length=1, max_length=40)
-    asset_type: Optional[str] = None  # ICE/EV/SOLAR/HEATPUMP 등
+    asset_type: Optional[str] = Field(default=None, max_length=50)  # ICE/EV/SOLAR/HEATPUMP 등
     quantity: Optional[int] = Field(default=None, ge=0)
-    main_spec: Optional[str] = None
+    # max_length는 models.py String(N) 길이와 일치 — 초과 시 DB 오류(500) 대신 422 (#6 P1)
+    main_spec: Optional[str] = Field(default=None, max_length=100)
     telemetry_yn: str = Field(default="N", pattern="^[YN]$")
-    location_info: Optional[str] = None
+    location_info: Optional[str] = Field(default=None, max_length=200)
     status: str = Field(default="ACTIVE", min_length=1, max_length=40)
-    agency_name: Optional[str] = None
-    site_url: Optional[str] = None
+    agency_name: Optional[str] = Field(default=None, max_length=100)
+    site_url: Optional[str] = Field(default=None, max_length=255)
     auth_type: str = Field(default="NONE", pattern="^(ID_PW|API_KEY|NONE)$")
-    login_id: Optional[str] = None
+    login_id: Optional[str] = Field(default=None, max_length=100)
+    # 평문 상한은 라우터에서 암호문 길이로 최종 검증(암호화 팽창 — String(255)/(500))
     auth_value: Optional[str] = None  # ID_PW=비밀번호 / API_KEY=토큰 — 평문 저장 절대 금지
-    usage_purpose: Optional[str] = None
+    usage_purpose: Optional[str] = Field(default=None, max_length=100)
 
 
 class AssetUpdate(BaseModel):
     """자산 수정 — 전달된 필드만 반영. auth_value 전달 시 재암호화(빈 문자열은 삭제)."""
 
-    client_id: Optional[str] = None
+    client_id: Optional[str] = Field(default=None, max_length=50)
     asset_group: Optional[str] = Field(default=None, min_length=1, max_length=40)
-    asset_type: Optional[str] = None
+    asset_type: Optional[str] = Field(default=None, max_length=50)
     quantity: Optional[int] = Field(default=None, ge=0)
-    main_spec: Optional[str] = None
+    # max_length는 AssetCreate와 동일 — models.py String(N) 정합 (#6 P1)
+    main_spec: Optional[str] = Field(default=None, max_length=100)
     telemetry_yn: Optional[str] = Field(default=None, pattern="^[YN]$")
-    location_info: Optional[str] = None
+    location_info: Optional[str] = Field(default=None, max_length=200)
     status: Optional[str] = Field(default=None, min_length=1, max_length=40)
-    agency_name: Optional[str] = None
-    site_url: Optional[str] = None
+    agency_name: Optional[str] = Field(default=None, max_length=100)
+    site_url: Optional[str] = Field(default=None, max_length=255)
     auth_type: Optional[str] = Field(default=None, pattern="^(ID_PW|API_KEY|NONE)$")
-    login_id: Optional[str] = None
+    login_id: Optional[str] = Field(default=None, max_length=100)
     auth_value: Optional[str] = None
-    usage_purpose: Optional[str] = None
+    usage_purpose: Optional[str] = Field(default=None, max_length=100)
 
 
 class AssetListItem(AssetOut):
@@ -340,45 +431,51 @@ class AssetRevealOut(BaseModel):
 _PROJECT_STATUS_PATTERN = "^(기획|등록완료|모니터링|검증|발급완료)$"
 
 
+# 발행량 상한 — 컬럼 Numeric(10,2)(정수부 8자리) 초과 시 DB 오류(500) 대신 422 (#6 P2)
+_CREDITS_MAX = 99_999_999.99
+# 단가 상한 — 상식적 상한(#6 P2). Numeric(15,2) 최대(<1e13)보다 보수적으로 잡는다
+_UNIT_PRICE_MAX = 1e12
+
+
 class ProjectCreate(BaseModel):
-    client_id: Optional[str] = None  # 묶음 사업 시 대표사
+    client_id: Optional[str] = Field(default=None, max_length=50)  # 묶음 사업 시 대표사
     project_name: str = Field(min_length=1, max_length=200)
-    reg_code: Optional[str] = None  # 예: R-2024-KR-03-000528
+    reg_code: Optional[str] = Field(default=None, max_length=50)  # 예: R-2024-KR-03-000528
     # project_status는 공통 코드 마스터(PROJECT_STATUS)로 관리 → 라우터에서 검증
     project_status: str = Field(default="기획", min_length=1, max_length=40)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
-    credit_period_type: Optional[str] = None
+    credit_period_type: Optional[str] = Field(default=None, max_length=20)
     mon_start_date: Optional[date] = None
     mon_end_date: Optional[date] = None
-    mon_cycle: Optional[str] = None
+    mon_cycle: Optional[str] = Field(default=None, max_length=50)
     expected_issue_date: Optional[date] = None
-    expected_credits: Optional[float] = Field(default=None, ge=0)
-    unit_price: Optional[float] = Field(default=None, ge=0)  # §10.3 수기 단가
-    issued_credits: Optional[float] = Field(default=None, ge=0)
+    expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
+    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # §10.3 수기 단가
+    issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
-    manager_id: Optional[str] = None
+    manager_id: Optional[str] = Field(default=None, max_length=50)
 
 
 class ProjectUpdate(BaseModel):
-    client_id: Optional[str] = None
+    client_id: Optional[str] = Field(default=None, max_length=50)
     project_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    reg_code: Optional[str] = None
+    reg_code: Optional[str] = Field(default=None, max_length=50)
     project_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
-    credit_period_type: Optional[str] = None
+    credit_period_type: Optional[str] = Field(default=None, max_length=20)
     mon_start_date: Optional[date] = None
     mon_end_date: Optional[date] = None
-    mon_cycle: Optional[str] = None
+    mon_cycle: Optional[str] = Field(default=None, max_length=50)
     expected_issue_date: Optional[date] = None
-    expected_credits: Optional[float] = Field(default=None, ge=0)
-    unit_price: Optional[float] = Field(default=None, ge=0)
-    issued_credits: Optional[float] = Field(default=None, ge=0)
+    expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
+    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
-    manager_id: Optional[str] = None
+    manager_id: Optional[str] = Field(default=None, max_length=50)
 
 
 class ProjectOut(BaseModel):
@@ -422,14 +519,14 @@ class ProjectListResponse(BaseModel):
 class UnitPriceUpdate(BaseModel):
     """배출권 단가 수기 입력 (§10.3) — null 전달 시 '미정'으로 초기화."""
 
-    unit_price: Optional[float] = Field(default=None, ge=0)
+    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
 
 
 class ProjectMapIn(BaseModel):
     """참여 고객사 매핑 등록/수정 — expected_amount는 서버 계산(§10.3)."""
 
-    client_id: str
-    asset_id: Optional[str] = None  # 연결 자산
+    client_id: str = Field(max_length=50)
+    asset_id: Optional[str] = Field(default=None, max_length=50)  # 연결 자산
     allocation_ratio: float = Field(ge=0, le=100)  # 배분율(%)
     success_fee_rate: float = Field(ge=0, le=100)  # 성공 보수율(%) 🔒
 
@@ -508,33 +605,62 @@ class ClientProjectRow(BaseModel):
     completed_at: Optional[datetime] = None
 
 
+class SettlementSnapshotOut(BaseModel):
+    """정산 회차 스냅샷 (R3-1, append-only) — 청구/입금 시점 동결 금액의 정본."""
+
+    snapshot_id: str
+    seq: int
+    action: str  # BILLED/REBILLED/REVERTED/COMPLETED
+    issued_credits: Optional[float] = None
+    amount: Optional[float] = None  # 회차 확정 금액 🔒
+    unit_price: Optional[float] = None  # 🔒
+    allocation_ratio: Optional[float] = None  # 지분율(%)
+    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
+    paid_amount: Optional[float] = None
+    reason: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class SettlementSnapshotListResponse(BaseModel):
+    items: List[SettlementSnapshotOut]
+    total: int
+
+
 class SettlementStatusUpdate(BaseModel):
     """정산 상태 전이 — STANDBY→BILLED→COMPLETED, 역행 금지(409). MANAGER 이상(§10.1)."""
 
     settlement_status: str = Field(pattern="^(STANDBY|BILLED|COMPLETED)$")
-    paid_amount: Optional[float] = Field(default=None, ge=0)  # COMPLETED — 실입금액
+    # 실입금액 상한 — Numeric(15,2) 초과 방지 (#6 P2와 동일 취지)
+    paid_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # COMPLETED
     payment_type: Optional[str] = Field(default=None, pattern="^(FULL|PARTIAL)$")
-    reason: Optional[str] = None  # 스냅샷 사유
+    reason: Optional[str] = Field(default=None, max_length=200)  # 스냅샷 사유
 
 
 # ---------------------------------------------------------------------------
 # P1 — 활동 이력·이슈 (SCR-05 / 02)
 # ---------------------------------------------------------------------------
 class HistoryCreate(BaseModel):
-    client_id: Optional[str] = None  # 미지정 고객 임시 이력 허용 (GAN E5)
-    manager_id: Optional[str] = None  # 미지정 시 현재 사용자
+    client_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 고객 임시 이력 허용 (GAN E5)
+    manager_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 시 현재 사용자
     activity_date: datetime
     # activity_type은 공통 코드 마스터(ACTIVITY_TYPE)로 관리 → 라우터에서 검증
     activity_type: str = Field(min_length=1, max_length=40)
-    retention_stage: Optional[str] = None
+    retention_stage: Optional[str] = Field(default=None, max_length=20)
     # issue_status는 공통 코드 마스터(ISSUE_STATUS)로 관리 → 라우터에서 검증
     issue_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
     priority: Optional[str] = Field(default=None, pattern="^(URGENT|NORMAL)$")
     due_date: Optional[date] = None
-    next_action: Optional[str] = None
+    next_action: Optional[str] = Field(default=None, max_length=200)
     title: str = Field(min_length=1, max_length=200)
     content: Optional[str] = None
-    main_needs: Optional[str] = None
+    main_needs: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("activity_date")
+    @classmethod
+    def _check_naive(cls, v):
+        """벽시계 KST naive만 허용 (#6 P3) — Z·+09:00 접미사 422."""
+        return reject_tz_aware(v)
 
 
 class HistoryOut(BaseModel):
@@ -597,33 +723,59 @@ class CommentOut(BaseModel):
 # P1 — 일정 (SCR-11)
 # ---------------------------------------------------------------------------
 class ScheduleCreate(BaseModel):
-    client_id: Optional[str] = None  # null = 내부 일정
-    manager_id: Optional[str] = None  # 미지정 시 현재 사용자
+    client_id: Optional[str] = Field(default=None, max_length=50)  # null = 내부 일정
+    manager_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 시 현재 사용자
     schedule_type: str = Field(pattern="^(MEETING|CALL|SITE_VISIT|REPORT_DUE|INTERNAL)$")
     title: str = Field(min_length=1, max_length=200)
     start_at: datetime
     end_at: Optional[datetime] = None
-    location: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=200)
     memo: Optional[str] = None
-    recur_rule: Optional[str] = None
+    recur_rule: Optional[str] = Field(default=None, max_length=50)
     recur_until: Optional[date] = None
+
+    @field_validator("start_at", "end_at")
+    @classmethod
+    def _check_naive(cls, v):
+        """벽시계 KST naive만 허용 (#6 P3) — Z·+09:00 접미사 422."""
+        return reject_tz_aware(v)
+
+    @model_validator(mode="after")
+    def _check_time_order(self):
+        """일정 시간 역전 차단 (#3) — end_at이 start_at보다 빠르면 422."""
+        if self.end_at is not None and self.end_at < self.start_at:
+            raise ValueError("종료 시각이 시작 시각보다 빠릅니다")
+        return self
 
 
 class ScheduleUpdate(BaseModel):
     """일자 드래그 변경·완료 처리 — DONE 전환 시 활동 이력 자동 적재."""
 
-    client_id: Optional[str] = None
-    manager_id: Optional[str] = None
+    client_id: Optional[str] = Field(default=None, max_length=50)
+    manager_id: Optional[str] = Field(default=None, max_length=50)
     schedule_type: Optional[str] = Field(
         default=None, pattern="^(MEETING|CALL|SITE_VISIT|REPORT_DUE|INTERNAL)$"
     )
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
-    location: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=200)
     memo: Optional[str] = None
     status: Optional[str] = Field(default=None, pattern="^(PLANNED|DONE|CANCELED)$")
     result_note: Optional[str] = None  # 완료 시 조치 결과 — 자동 이력 content로 기록
+
+    @field_validator("start_at", "end_at")
+    @classmethod
+    def _check_naive(cls, v):
+        """벽시계 KST naive만 허용 (#6 P3) — Z·+09:00 접미사 422."""
+        return reject_tz_aware(v)
+
+    @model_validator(mode="after")
+    def _check_time_order(self):
+        """일정 시간 역전 차단 (#3) — 둘 다 전달된 경우만(부분 수정은 라우터에서 최종 검증)."""
+        if self.start_at is not None and self.end_at is not None and self.end_at < self.start_at:
+            raise ValueError("종료 시각이 시작 시각보다 빠릅니다")
+        return self
 
 
 class ScheduleOut(BaseModel):
@@ -733,12 +885,12 @@ class ReportGenerateResponse(BaseModel):
 
 class ReportStatusUpdate(BaseModel):
     status: str = Field(pattern="^(STANDBY|WRITING|REVIEW|APPROVED|SENT|CONFIRMED|CANCELED)$")
-    confirm_basis: Optional[str] = None  # CONFIRMED — 회신메일/유선/열람 (GAN B11)
-    canceled_reason: Optional[str] = None  # CANCELED 시 필수 (R3-3)
+    confirm_basis: Optional[str] = Field(default=None, max_length=20)  # CONFIRMED — 회신메일/유선/열람 (GAN B11)
+    canceled_reason: Optional[str] = Field(default=None, max_length=200)  # CANCELED 시 필수 (R3-3)
 
 
 class ReportSendRequest(BaseModel):
-    reason: Optional[str] = None  # 정정 재발송 사유
+    reason: Optional[str] = Field(default=None, max_length=200)  # 정정 재발송 사유
 
 
 class ReportSendResponse(BaseModel):
@@ -807,11 +959,11 @@ class KakaoContactUpdate(BaseModel):
     """연락처 승인 게이트 (CR-3) — APPROVED는 client_id 매핑 필수. MANAGER 이상."""
 
     status: str = Field(pattern="^(PENDING|APPROVED|REJECTED|BLOCKED)$")
-    client_id: Optional[str] = None
-    name: Optional[str] = None
-    phone: Optional[str] = None
+    client_id: Optional[str] = Field(default=None, max_length=50)
+    name: Optional[str] = Field(default=None, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=20)
     contact_role: Optional[str] = Field(default=None, pattern="^(REPRESENTATIVE|CONTACT)$")
-    memo: Optional[str] = None
+    memo: Optional[str] = Field(default=None, max_length=200)
 
 
 class KakaoNotifyRequest(BaseModel):
@@ -1288,3 +1440,27 @@ class SegmentSendDetailOut(SegmentSendOut):
     """발송 이력 상세 — 실행 행 + 고객사별 로그 목록."""
 
     logs: List[SegmentSendLogOut] = []
+
+
+# ---------------------------------------------------------------------------
+# P1-D — 활동 이력 제한적 수정 (기록 불변 원칙의 예외 2필드)
+# ---------------------------------------------------------------------------
+class HistoryClientLink(BaseModel):
+    """미상 고객 이력의 사후 고객사 연결 — client_id가 null인 이력만 허용."""
+
+    client_id: str = Field(min_length=1, max_length=50)
+
+
+class HistoryManagerUpdate(BaseModel):
+    """이슈 담당자 인계 — ISSUE 유형 전용, ASSIGN 코멘트·감사로 흔적."""
+
+    manager_id: str = Field(min_length=1, max_length=50)
+
+
+# ---------------------------------------------------------------------------
+# P1-F — 보고서 발송 고정본 지정 (SCR-12, R2-B4)
+# ---------------------------------------------------------------------------
+class ReportPinUpdate(BaseModel):
+    """발송 고정본 지정/해제 요청 — doc_id가 None이면 고정 해제(최신본 발송 복귀)."""
+
+    doc_id: Optional[str] = None

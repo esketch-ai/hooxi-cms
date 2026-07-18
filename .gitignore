@@ -344,3 +344,6 @@ tsconfig.tsbuildinfo
 # 예외: 개발 도리(doctrine)·서브에이전트 정의 — 하네스가 저장소와 함께 이동해야 함
 !CLAUDE.md
 !.claude/agents/*.md
+
+# 런타임 업로드 산출물 (로컬 폴백 저장소)
+backend/uploads/

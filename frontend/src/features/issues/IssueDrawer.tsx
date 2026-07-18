@@ -8,10 +8,15 @@ import { AuditLine } from '../../components/AuditLine'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { dday, elapsedServer, fmtServerDateTime, telHref } from '../../lib/format'
-import { useCodes } from '../../lib/api/queries'
+import { useCodes, useUserOptions } from '../../lib/api/queries'
 import type { ActivityHistory, IssueStatus } from '../../types'
 import { useClient } from '../clients/api'
-import { useAddIssueComment, useChangeIssueStatus, useIssueComments } from './api'
+import {
+  useAddIssueComment,
+  useChangeIssueManager,
+  useChangeIssueStatus,
+  useIssueComments,
+} from './api'
 
 interface IssueDrawerProps {
   issue: ActivityHistory | null
@@ -25,7 +30,9 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
     issue?.history_id,
   )
   const changeStatus = useChangeIssueStatus()
+  const changeManager = useChangeIssueManager()
   const addComment = useAddIssueComment(issue?.history_id)
+  const { data: users = [] } = useUserOptions()
   // 고객사 전화번호는 이슈 상세에 포함되지 않으므로 client_id로 고객사 상세를 조회한다.
   const { data: client } = useClient(issue?.client_id ?? undefined)
   const [newComment, setNewComment] = useState('')
@@ -42,6 +49,19 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
       showToast('이슈 상태가 변경되었습니다.', 'success')
     } catch {
       showToast('상태 변경에 실패했습니다.', 'danger')
+    }
+  }
+
+  // 담당자 인계 (P1-D) — 409(동시 인계)·422(비활성 사용자) 서버 detail 그대로 노출
+  const handleManagerChange = async (managerId: string) => {
+    if (!managerId || managerId === issue.manager_id) return
+    try {
+      await changeManager.mutateAsync({ historyId: issue.history_id, managerId })
+      showToast('담당자가 변경되었습니다.', 'success')
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '담당자 변경에 실패했습니다.', 'danger')
     }
   }
 
@@ -132,6 +152,33 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 담당자 인계 — 변경 시 ASSIGN 코멘트 자동 적재 (P1-D) */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold text-slatey">담당자</p>
+          {users.length === 0 ? (
+            /* 사용자 목록 권한 없음(403 폴백) — 현재 담당자만 표시 */
+            <p className="text-sm text-bone">{issue.manager_name ?? '—'}</p>
+          ) : (
+            <select
+              value={issue.manager_id}
+              onChange={(e) => void handleManagerChange(e.target.value)}
+              disabled={changeManager.isPending}
+              className="h-9 w-full rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none disabled:opacity-60"
+              aria-label="담당자 변경"
+            >
+              {/* 현 담당자가 비활성 등으로 목록에 없어도 현재 값은 표시 */}
+              {!users.some((u) => u.user_id === issue.manager_id) && (
+                <option value={issue.manager_id}>{issue.manager_name ?? issue.manager_id}</option>
+              )}
+              {users.map((u) => (
+                <option key={u.user_id} value={u.user_id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* 내용 */}

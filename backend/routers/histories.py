@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import ActivityHistory, Client, IssueComment, User, get_db
+from models import ActivityHistory, Client, IssueComment, User, get_db, utcnow
 from routers import common
 from routers.codes import validate_active_code
 from services.audit_logger import AuditLogger
@@ -39,11 +39,11 @@ def list_histories(
     query = db.query(ActivityHistory)
     if search and search.strip():
         # 고객사명·제목 부분일치 — client_id가 없는 이력도 제목으로 히트되도록 outerjoin
-        keyword = "%{0}%".format(search.strip())
+        keyword = "%{0}%".format(common.escape_like(search.strip()))
         query = query.outerjoin(Client, ActivityHistory.client_id == Client.client_id).filter(
             or_(
-                Client.company_name.ilike(keyword),
-                ActivityHistory.title.ilike(keyword),
+                Client.company_name.ilike(keyword, escape="\\"),
+                ActivityHistory.title.ilike(keyword, escape="\\"),
             )
         )
     if client_id:
@@ -141,7 +141,27 @@ def update_issue_status(
 
     old_status = history.issue_status or "-"
     if old_status != payload.issue_status:
-        history.issue_status = payload.issue_status
+        # 조건부 UPDATE (낙관적 동시성, P0-B) — 스냅샷 기준 커밋은 동시 드래그 시
+        # lost update + 실제 없던 전이가 코멘트에 기록되는 문제가 있어, 읽은 상태가
+        # 그대로일 때만 갱신하고 rowcount 0이면 409로 반려한다.
+        updated = (
+            db.query(ActivityHistory)
+            .filter(
+                ActivityHistory.history_id == history_id,
+                ActivityHistory.issue_status == history.issue_status,
+            )
+            .update(
+                {"issue_status": payload.issue_status, "updated_at": utcnow()},
+                synchronize_session=False,
+            )
+        )
+        if updated == 0:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="다른 사용자가 방금 상태를 변경했습니다. 새로고침 후 다시 시도하세요",
+            )
+        # 코멘트·감사 로그는 실제 전이(rowcount 1)일 때만 적재
         content = "상태 변경: {0} → {1}".format(old_status, payload.issue_status)
         if payload.comment:
             content += " — {0}".format(payload.comment)
@@ -164,6 +184,122 @@ def update_issue_status(
         )
         db.commit()
         db.refresh(history)
+    return common.build_history_outs(db, [history])[0]
+
+
+@router.patch("/{history_id}/client", response_model=schemas.HistoryOut)
+def link_history_client(
+    history_id: str,
+    payload: schemas.HistoryClientLink,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """미상 고객 이력의 사후 고객사 연결 (P1-D) — 기록 불변 원칙의 제한적 예외.
+
+    client_id가 비어 있는 이력만 연결 허용. 이미 연결된 이력의 고객사 '변경'은
+    기록 위조 여지가 있어 불허(409). 내용·제목·일시·유형은 계속 불변.
+    """
+    history = common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
+    if history.client_id:
+        raise HTTPException(status_code=409, detail="이미 고객사가 연결된 이력입니다")
+    client = common.get_or_404(db, Client, payload.client_id, "고객사")
+
+    # 조건부 UPDATE (낙관적 동시성, P0-B 준용) — 스냅샷(미연결) 그대로일 때만 연결.
+    # 동시 연결 시 늦은 쪽은 rowcount 0 → 409 (다른 고객사로 덮어쓰기 방지)
+    updated = (
+        db.query(ActivityHistory)
+        .filter(
+            ActivityHistory.history_id == history_id,
+            ActivityHistory.client_id.is_(None),
+        )
+        .update(
+            {"client_id": payload.client_id, "updated_at": utcnow()},
+            synchronize_session=False,
+        )
+    )
+    if updated == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="다른 사용자가 방금 고객사를 연결했습니다. 새로고침 후 다시 시도하세요",
+        )
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "HISTORY_CLIENT_LINK",
+        target_type="HISTORY",
+        target_id=history.history_id,
+        old_value="미지정",
+        new_value=client.company_name,
+    )
+    db.commit()
+    db.refresh(history)
+    return common.build_history_outs(db, [history])[0]
+
+
+@router.patch("/{history_id}/manager", response_model=schemas.HistoryOut)
+def update_issue_manager(
+    history_id: str,
+    payload: schemas.HistoryManagerUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """이슈 담당자 인계 (P1-D) — ISSUE 유형만, ASSIGN 코멘트+감사 로그로 흔적."""
+    history = common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
+    if history.activity_type != "ISSUE":
+        raise HTTPException(status_code=409, detail="이슈(ISSUE) 유형의 이력만 담당자를 변경할 수 있습니다")
+    new_manager = common.get_or_404(db, User, payload.manager_id, "담당자")
+    if new_manager.status != "ACTIVE":
+        raise HTTPException(
+            status_code=422,
+            detail="활성(ACTIVE) 상태의 사용자만 담당자로 지정할 수 있습니다",
+        )
+
+    old_manager_id = history.manager_id
+    if old_manager_id != payload.manager_id:
+        # 조건부 UPDATE (낙관적 동시성, P0-B 준용) — 읽은 담당자가 그대로일 때만
+        # 인계하고 rowcount 0이면 409 (동시 인계 lost update + phantom 코멘트 방지)
+        updated = (
+            db.query(ActivityHistory)
+            .filter(
+                ActivityHistory.history_id == history_id,
+                ActivityHistory.manager_id == old_manager_id,
+            )
+            .update(
+                {"manager_id": payload.manager_id, "updated_at": utcnow()},
+                synchronize_session=False,
+            )
+        )
+        if updated == 0:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="다른 사용자가 방금 담당자를 변경했습니다. 새로고침 후 다시 시도하세요",
+            )
+        # 코멘트·감사 로그는 실제 인계(rowcount 1)일 때만 적재
+        old_manager = db.get(User, old_manager_id) if old_manager_id else None
+        old_name = old_manager.name if old_manager else (old_manager_id or "-")
+        new_name = new_manager.name or new_manager.user_id
+        db.add(
+            IssueComment(
+                history_id=history.history_id,
+                manager_id=user.user_id,
+                comment_type="ASSIGN",
+                content="담당자 변경: {0} → {1}".format(old_name, new_name),
+            )
+        )
+        AuditLogger.log_action(
+            db,
+            user.user_id,
+            "ISSUE_ASSIGN",
+            target_type="HISTORY",
+            target_id=history.history_id,
+            old_value=old_name,
+            new_value=new_name,
+        )
+        db.commit()
+        db.refresh(history)
+    # 자기 자신(현 담당자)으로의 변경은 무변경 200 — 코멘트·감사 미적재
     return common.build_history_outs(db, [history])[0]
 
 

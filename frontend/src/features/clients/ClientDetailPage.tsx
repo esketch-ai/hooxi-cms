@@ -1,5 +1,5 @@
 // SCR-03D 고객사 상세 360° 뷰 — 상담 전화 응대를 이 화면 하나로 완결
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -9,6 +9,7 @@ import {
   PencilSimple,
   Phone,
   Plus,
+  Trash,
   TreeStructure,
 } from '@phosphor-icons/react'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -27,12 +28,15 @@ import { ActivityForm } from '../histories/ActivityForm'
 import { useClientThreads } from '../chat/api'
 import { ThreadModePill, ThreadWaitingBadge } from '../chat/ThreadBadges'
 import {
+  useAddRecipient,
   useClient,
   useClientAssets,
   useClientDocuments,
   useClientHistories,
   useClientProjects,
+  useClientRecipients,
   useClientReports,
+  useRemoveRecipient,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
@@ -275,7 +279,144 @@ function OverviewTab({ client }: { client: Client }) {
         </dl>
         <AuditLine createdAt={client.created_at} updatedAt={client.updated_at} className="mt-3" />
       </section>
+
+      <RecipientsSection client={client} />
     </div>
+  )
+}
+
+// ── 보고서 수신자 (tb_report_recipient, R2-B8) ──────────────────────
+// 발송 해석 규칙(resolve_recipients): 수신자 미등록 시 주 담당자 이메일 폴백.
+function RecipientsSection({ client }: { client: Client }) {
+  const { showToast } = useToast()
+  const { data: recipients = [], isLoading } = useClientRecipients(client.client_id)
+  const addRecipient = useAddRecipient(client.client_id)
+  const removeRecipient = useRemoveRecipient(client.client_id)
+
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [ccYn, setCcYn] = useState(false)
+
+  // sub_id → 보고서 유형 라벨 (구독 지정분 표기)
+  const subTypeOf = (subId?: string | null) =>
+    (client.subscriptions ?? []).find((s) => s.sub_id === subId)?.report_type
+
+  const handleAdd = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) return
+    try {
+      await addRecipient.mutateAsync({
+        email: email.trim(),
+        ...(name.trim() ? { name: name.trim() } : {}),
+        cc_yn: ccYn ? 'Y' : 'N',
+      })
+      setEmail('')
+      setName('')
+      setCcYn(false)
+      showToast('수신자가 추가되었습니다.', 'success')
+    } catch (err) {
+      // 409(중복)·422(형식) — 서버 detail을 그대로 노출
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '수신자 추가에 실패했습니다.', 'danger')
+    }
+  }
+
+  const handleRemove = async (recipientId: string, label: string) => {
+    try {
+      await removeRecipient.mutateAsync(recipientId)
+      showToast(`${label} 수신자가 삭제되었습니다.`, 'success')
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '수신자 삭제에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5 lg:col-span-2">
+      <h2 className="mb-1 text-sm font-semibold text-bone">보고서 수신자</h2>
+      <p className="mb-3 text-xs text-slatey">
+        월간 보고서 이메일 수신 목록 — 수신자가 없으면 주 담당자 이메일(
+        {client.main_contact_email ?? '미등록'})로 발송됩니다.
+      </p>
+
+      {isLoading ? (
+        <SkeletonTableRows rows={2} />
+      ) : recipients.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-hairline py-4 text-center text-xs text-slatey">
+          등록된 수신자가 없습니다 — 발송 시 주 담당자 이메일로 발송됩니다
+        </p>
+      ) : (
+        <ul className="divide-y divide-hairline rounded-2xl border border-hairline">
+          {recipients.map((r) => (
+            <li key={r.recipient_id} className="flex items-center gap-2.5 px-3 py-2">
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                  r.cc_yn === 'Y'
+                    ? 'bg-elevate-strong text-ash'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
+                {r.cc_yn === 'Y' ? 'CC' : 'TO'}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-bone">
+                {r.name ? `${r.name} ` : ''}
+                <span className={r.name ? 'text-ash' : undefined}>{r.email}</span>
+              </span>
+              <span className="shrink-0 rounded bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-ash">
+                {r.sub_id ? `${subTypeOf(r.sub_id) ?? '구독'} 지정` : '공통'}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleRemove(r.recipient_id, r.name ?? r.email)}
+                disabled={removeRecipient.isPending}
+                className="shrink-0 rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-rose-400 disabled:opacity-50"
+                title="삭제"
+                aria-label={`${r.email} 삭제`}
+              >
+                <Trash size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* 추가 폼 — 이메일 필수, 이름 선택, CC 토글 */}
+      <form onSubmit={handleAdd} className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="이메일 (필수)"
+          required
+          className="h-9 min-w-[180px] flex-1 rounded-lg border border-hairline bg-elevate px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+        />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="이름 (선택)"
+          className="h-9 w-32 rounded-lg border border-hairline bg-elevate px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+        />
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-ash">
+          <input
+            type="checkbox"
+            checked={ccYn}
+            onChange={(e) => setCcYn(e.target.checked)}
+            className="h-4 w-4 accent-emerald-500"
+          />
+          참조(CC)로 받기
+        </label>
+        <button
+          type="submit"
+          disabled={addRecipient.isPending || !email.trim()}
+          className="flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+        >
+          <Plus size={13} weight="bold" />
+          수신자 추가
+        </button>
+      </form>
+    </section>
   )
 }
 

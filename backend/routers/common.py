@@ -73,11 +73,24 @@ def period_bounds(period: str) -> Tuple[datetime, datetime]:
     return datetime(year, month, 1), datetime(year, month, last_day, 23, 59, 59)
 
 
+def escape_like(value: str) -> str:
+    """LIKE/ILIKE 검색어 이스케이프 — %·_·\\가 와일드카드로 해석되지 않게 리터럴로 고정.
+
+    사용처는 반드시 ilike(..., escape="\\\\")를 함께 지정한다(방언 공통).
+    예: Client.company_name.ilike("%{0}%".format(escape_like(s)), escape="\\\\")
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def get_or_404(db: Session, model, pk: Optional[str], label: str):
     obj = db.get(model, pk) if pk else None
     if obj is None:
         raise HTTPException(status_code=404, detail="{0}을(를) 찾을 수 없습니다".format(label))
     return obj
+
+
+# 예상 정산액 상한 — 컬럼 Numeric(15,2)(정수부 13자리)의 저장 가능 한계 (#6 P2)
+EXPECTED_AMOUNT_LIMIT = 1e13
 
 
 def compute_expected_amount(expected_credits, allocation_ratio, unit_price, success_fee_rate):
@@ -95,6 +108,19 @@ def compute_expected_amount(expected_credits, allocation_ratio, unit_price, succ
         * (float(success_fee_rate) / 100.0),
         2,
     )
+
+
+def validate_expected_amount(amount):
+    """산식 결과가 Numeric(15,2)에 못 들어가면 422 (#6 P2) — DB 오류(500) 사전 차단.
+
+    단가·발행량 변경, 매핑 등록 등 expected_amount를 적재하는 모든 입력 경로에서
+    저장 직전에 호출한다(입력 시점 차단 우선)."""
+    if amount is not None and abs(amount) >= EXPECTED_AMOUNT_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail="예상 정산액이 허용 범위를 초과합니다 — 단가·발행량 단위를 확인하세요",
+        )
+    return amount
 
 
 def user_name_map(db: Session, user_ids: Iterable[Optional[str]]) -> Dict[str, str]:

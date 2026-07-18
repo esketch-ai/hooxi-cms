@@ -272,8 +272,13 @@ def update_segment(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """세그먼트 수정 — 전달된 필드만 반영, criteria 전달 시 재검증."""
+    """세그먼트 수정 — 전달된 필드만 반영, criteria 전달 시 재검증.
+
+    soft 삭제(active=N) 세그먼트는 404 — 발송(send_segment)과 동일 톤. 삭제분의
+    active=Y 부활은 전용 의도가 아니므로 수정 경로에서는 허용하지 않는다."""
     row = common.get_or_404(db, Segment, segment_id, "세그먼트")
+    if row.active != "Y":
+        raise HTTPException(status_code=404, detail="세그먼트을(를) 찾을 수 없습니다 (삭제됨)")
     before = "{0} — {1}".format(row.name, _criteria_summary(_row_criteria(row)))
 
     if payload.criteria is not None:

@@ -67,7 +67,11 @@ def list_documents(
     if date_to:
         query = query.filter(Document.created_at <= common.kst_day_end_utc(date_to))
     if search:
-        query = query.filter(Document.title.ilike("%{0}%".format(search.strip())))
+        query = query.filter(
+            Document.title.ilike(
+                "%{0}%".format(common.escape_like(search.strip())), escape="\\"
+            )
+        )
 
     total = query.count()
     rows = (
@@ -99,7 +103,12 @@ async def upload_document(
     if history_id:
         common.get_or_404(db, ActivityHistory, history_id, "활동 이력")
     if asset_id:
-        common.get_or_404(db, Asset, asset_id, "자산")
+        asset = common.get_or_404(db, Asset, asset_id, "자산")
+        # 자산-고객사 소유 검증 (P1-C) — 다른 고객사 자산에 문서가 연결되는 정합성 붕괴 방지
+        if client_id and asset.client_id != client_id:
+            raise HTTPException(
+                status_code=422, detail="연결 자산이 해당 고객사의 자산이 아닙니다"
+            )
 
     content = await file.read()
     if not content:

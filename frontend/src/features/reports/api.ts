@@ -68,6 +68,18 @@ export function useSendReport() {
   })
 }
 
+/** 발송 고정본 지정/해제 — PUT /reports/{id}/pin (R2-B4, doc_id=null이면 해제) */
+export function usePinReportDocument() {
+  const invalidate = useInvalidateReports()
+  return useMutation({
+    mutationFn: async ({ reportId, docId }: { reportId: string; docId: string | null }) => {
+      const { data } = await api.put(`/reports/${reportId}/pin`, { doc_id: docId })
+      return data
+    },
+    onSuccess: (_data, v) => invalidate(v.reportId),
+  })
+}
+
 /** 상태 변경 — PUT /reports/{id}/status */
 export function useChangeReportStatus() {
   const invalidate = useInvalidateReports()

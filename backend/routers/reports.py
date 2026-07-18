@@ -14,6 +14,7 @@ from typing import Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import schemas
@@ -59,6 +60,15 @@ _STATUS_TRANSITIONS = {
     "CONFIRMED": set(),  # 최종 상태 — 역행 금지
     "CANCELED": {"STANDBY"},  # 복원만 — 이후 정상 흐름 재진행
 }
+
+
+def _next_document_version(db: Session, report_id: str) -> int:
+    """보고서 파일 다음 버전(max+1) — 동시 업로드 경합은 유니크 인덱스
+    uq_document_report_version + IntegrityError 재계산 1회 재시도로 방어 (P0-B)."""
+    max_version = (
+        db.query(func.max(Document.version)).filter(Document.report_id == report_id).scalar()
+    )
+    return (max_version or 0) + 1
 
 
 def _resolve_period(period: Optional[str]) -> str:
@@ -256,24 +266,36 @@ async def upload_report_file(
         folder="{0}/보고서/{1}".format(company, delivery.period),
     )
 
-    max_version = (
-        db.query(func.max(Document.version)).filter(Document.report_id == report_id).scalar()
-    )
-    doc = Document(
-        client_id=delivery.client_id,
-        doc_type="REPORT",
-        title=title or (file.filename or "보고서 파일"),
-        file_url=file_url,
-        version=(max_version or 0) + 1,
-        report_id=report_id,
-        uploaded_by=user.user_id,
-    )
+    def _make_doc() -> Document:
+        return Document(
+            client_id=delivery.client_id,
+            doc_type="REPORT",
+            title=title or (file.filename or "보고서 파일"),
+            file_url=file_url,
+            version=_next_document_version(db, report_id),
+            report_id=report_id,
+            uploaded_by=user.user_id,
+        )
+
+    doc = _make_doc()
     db.add(doc)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # (report_id, version) 유니크 충돌 — 동시 업로드가 같은 max+1을 계산한 경합.
+        # 버전 재계산 1회 재시도로 500 방지 (P0-B).
+        db.rollback()
+        doc = _make_doc()
+        db.add(doc)
+        db.flush()
 
     delivery.doc_id = doc.doc_id  # 최신 표시용
     if delivery.status == "STANDBY":
         delivery.status = "WRITING"
+    # 업로드 감사 — documents.py 업로드와 동일 관용구 (flush로 doc_id 확보 후·commit 전, R2-E6)
+    AuditLogger.document_upload(
+        db, user.user_id, doc.doc_id, "REPORT: {0} (v{1})".format(doc.title, doc.version)
+    )
     db.commit()
     db.refresh(doc)
     return common.build_document_outs(db, [doc])[0]
@@ -307,6 +329,53 @@ def send_report(
     return schemas.ReportSendResponse(**result)
 
 
+@router.put("/{report_id}/pin", response_model=schemas.ReportRow)
+def pin_report_document(
+    report_id: str,
+    payload: schemas.ReportPinUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """발송 고정본 지정/해제 (R2-B4) — 발송 파일 선정은 고정본 우선, 없으면 최신본.
+
+    doc_id=None이면 고정 해제(최신본 발송 복귀). 발송 파일 선정은 발송 전에만 의미가
+    있으므로 SENT/CONFIRMED/CANCELED 상태에서는 409. 타 보고서 문서 지정은 422.
+    """
+    delivery = common.get_or_404(db, ReportDelivery, report_id, "보고서")
+    if delivery.status in ("SENT", "CONFIRMED", "CANCELED"):
+        raise HTTPException(
+            status_code=409,
+            detail="'{0}' 상태에서는 고정본을 변경할 수 없습니다 (발송 전 단계에서만 가능)".format(
+                delivery.status
+            ),
+        )
+
+    if payload.doc_id is None:
+        delivery.pinned_doc_id = None
+        pin_summary = "고정 해제"
+    else:
+        doc = db.get(Document, payload.doc_id)
+        if doc is None or doc.report_id != report_id:
+            raise HTTPException(
+                status_code=422, detail="이 보고서에 업로드된 문서만 고정본으로 지정할 수 있습니다"
+            )
+        delivery.pinned_doc_id = doc.doc_id
+        pin_summary = "v{0} 고정".format(doc.version)
+
+    delivery.updated_at = utcnow()
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "REPORT_PIN",
+        target_type="REPORT_DELIVERY",
+        target_id=report_id,
+        new_value=pin_summary,
+    )
+    db.commit()
+    db.refresh(delivery)
+    return common.build_report_rows(db, [delivery])[0]
+
+
 @router.put("/{report_id}/status", response_model=schemas.ReportRow)
 def update_report_status(
     report_id: str,
@@ -337,18 +406,36 @@ def update_report_status(
             status_code=409, detail="발송할 보고서 파일이 없습니다. 먼저 파일을 업로드하세요"
         )
 
-    delivery.status = payload.status
+    # 조건부 UPDATE (낙관적 동시성, P0-B) — 승인 vs 취소 동시 요청 시 둘 다 200으로
+    # 끝나 취소가 사라지는(오발송 경로 재개방·canceled_reason phantom) 문제 방지.
+    # 부수 필드(canceled_reason·confirmed_at 등)도 같은 UPDATE dict로 원자 반영한다.
+    values = {"status": payload.status, "updated_at": utcnow()}
     if payload.status == "CANCELED":
-        delivery.canceled_reason = payload.canceled_reason
+        values["canceled_reason"] = payload.canceled_reason
     else:
         # 취소 외 상태로 복귀 시 사유 잔존 방지 (QA 관찰 3)
-        delivery.canceled_reason = None
+        values["canceled_reason"] = None
     if payload.status == "CONFIRMED":
-        delivery.confirmed_at = utcnow()
-        delivery.confirm_basis = payload.confirm_basis or "수기"
+        values["confirmed_at"] = utcnow()
+        values["confirm_basis"] = payload.confirm_basis or "수기"
     elif payload.status == "REVIEW":
-        delivery.reviewed_by = user.user_id
-        delivery.reviewed_at = utcnow()
+        values["reviewed_by"] = user.user_id
+        values["reviewed_at"] = utcnow()
+
+    updated = (
+        db.query(ReportDelivery)
+        .filter(
+            ReportDelivery.report_id == report_id,
+            ReportDelivery.status == delivery.status,
+        )
+        .update(values, synchronize_session=False)
+    )
+    if updated == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="다른 사용자가 방금 상태를 변경했습니다. 새로고침 후 다시 시도하세요",
+        )
 
     db.commit()
     db.refresh(delivery)

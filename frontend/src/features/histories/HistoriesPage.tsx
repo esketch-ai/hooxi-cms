@@ -21,7 +21,13 @@ import { SignaturePad } from '../../components/SignaturePad'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { unwrapList, useCodes, useHistoryDocuments, useUserOptions } from '../../lib/api/queries'
+import {
+  unwrapList,
+  useClientOptions,
+  useCodes,
+  useHistoryDocuments,
+  useUserOptions,
+} from '../../lib/api/queries'
 import { usePointerCoarse } from '../../lib/usePointerCoarse'
 import { useDebounced } from '../../lib/useDebounced'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
@@ -281,13 +287,15 @@ export function HistoriesPage() {
                           {h.activity_type === 'ISSUE' && h.issue_status && (
                             <StatusBadge domain="issue" value={h.issue_status} />
                           )}
-                          {h.client_id && (
+                          {h.client_id ? (
                             <Link
                               to={`/clients/${h.client_id}`}
                               className="text-xs font-medium text-ash underline-offset-2 hover:underline"
                             >
                               고객사 상세 →
                             </Link>
+                          ) : (
+                            <LinkClientControl historyId={h.history_id} />
                           )}
                         </div>
                         <div>
@@ -342,6 +350,67 @@ export function HistoriesPage() {
       <ActivityForm open={formOpen} onClose={() => setFormOpen(false)} />
       <SignatureModal history={signTarget} onClose={() => setSignTarget(null)} />
     </div>
+  )
+}
+
+/** 미상 고객 이력의 사후 고객사 연결 (P1-D) — 미연결 건만 허용, 이미 연결된 건 변경은 서버 409 */
+function LinkClientControl({ historyId }: { historyId: string }) {
+  const { showToast } = useToast()
+  const queryClient = useQueryClient()
+  const { data: clients = [] } = useClientOptions()
+  const [clientId, setClientId] = useState('')
+
+  const link = useMutation({
+    mutationFn: async (targetClientId: string) => {
+      const { data } = await api.patch(`/histories/${historyId}/client`, {
+        client_id: targetClientId,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['histories'] })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+  })
+
+  const handleLink = async () => {
+    if (!clientId) return
+    try {
+      await link.mutateAsync(clientId)
+      showToast('고객사가 연결되었습니다.', 'success')
+    } catch (err) {
+      // 409(이미 연결·동시 연결) — 서버 detail 그대로 노출
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '고객사 연결에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <select
+        value={clientId}
+        onChange={(e) => setClientId(e.target.value)}
+        className="h-8 rounded-lg border border-hairline bg-graphite px-2 text-xs text-bone focus:border-white/30 focus:outline-none"
+        aria-label="연결할 고객사 선택"
+      >
+        <option value="">고객사 선택…</option>
+        {clients.map((c) => (
+          <option key={c.client_id} value={c.client_id}>
+            {c.company_name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => void handleLink()}
+        disabled={!clientId || link.isPending}
+        className="rounded-full border border-hairline px-2.5 py-1 text-xs font-medium text-bone hover:bg-elevate-strong disabled:opacity-50"
+      >
+        고객사 연결
+      </button>
+    </span>
   )
 }
 

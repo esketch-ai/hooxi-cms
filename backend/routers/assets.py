@@ -46,6 +46,13 @@ def _store_auth_value(asset: Asset, auth_type: Optional[str], auth_value: Option
             status_code=422, detail="인증 방식이 NONE인 자산에는 인증정보를 저장할 수 없습니다"
         )
     encrypted = crypto.encrypt(auth_value)
+    # 암호문 길이 = 컬럼 상한 검증 — 암호화 팽창(base64·nonce·tag) 탓에 평문
+    # max_length로는 정확히 못 막는다. 초과 시 DB 오류(500) 대신 422 (#6 P1)
+    column_limit = 255 if auth_type == "ID_PW" else 500
+    if len(encrypted) > column_limit:
+        raise HTTPException(
+            status_code=422, detail="인증정보가 너무 깁니다 — 저장 가능한 길이를 초과했습니다"
+        )
     if auth_type == "ID_PW":
         asset.login_password = encrypted
         asset.api_token = None
@@ -92,16 +99,18 @@ def list_assets(
     if client_id:
         query = query.filter(Asset.client_id == client_id)
     if search:
-        keyword = "%{0}%".format(search.strip())
+        keyword = "%{0}%".format(common.escape_like(search.strip()))
         matched_clients = [
             cid for (cid,) in
-            db.query(Client.client_id).filter(Client.company_name.ilike(keyword)).all()
+            db.query(Client.client_id)
+            .filter(Client.company_name.ilike(keyword, escape="\\"))
+            .all()
         ]
         conditions = [
-            Asset.asset_type.ilike(keyword),
-            Asset.main_spec.ilike(keyword),
-            Asset.agency_name.ilike(keyword),
-            Asset.location_info.ilike(keyword),
+            Asset.asset_type.ilike(keyword, escape="\\"),
+            Asset.main_spec.ilike(keyword, escape="\\"),
+            Asset.agency_name.ilike(keyword, escape="\\"),
+            Asset.location_info.ilike(keyword, escape="\\"),
         ]
         if matched_clients:
             conditions.append(Asset.client_id.in_(matched_clients))

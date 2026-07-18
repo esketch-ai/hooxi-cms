@@ -152,6 +152,18 @@ export interface ReportSubscription {
   updated_at?: string
 }
 
+// tb_report_recipient — 보고서 수신자 (schemas.RecipientOut, R2-B8)
+export interface ReportRecipient {
+  recipient_id: string
+  client_id: string
+  name?: string | null
+  email: string
+  cc_yn?: string | null // Y=CC / N=TO
+  sub_id?: string | null // null=전 보고서 유형 공통
+  created_at?: string
+  updated_at?: string
+}
+
 // ---------------------------------------------------------------------------
 // tb_activity_history — 활동 이력·이슈 (SCR-05·02)
 // ---------------------------------------------------------------------------

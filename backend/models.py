@@ -321,6 +321,11 @@ class ReportRecipient(Base):
 
 class Document(Base):
     __tablename__ = "tb_document"
+    __table_args__ = (
+        # 보고서 버전 max+1 동시 계산 경합 시 중복 방지 (P0-B) — report_id NULL(비보고서
+        # 문서 다수)은 SQLite/PG 모두 유니크 충돌 대상이 아니므로 안전.
+        UniqueConstraint("report_id", "version", name="uq_document_report_version"),
+    )
 
     doc_id = Column(String(50), primary_key=True, default=gen_uuid)
     client_id = Column(
@@ -428,6 +433,11 @@ class SettlementSnapshot(Base):
     """정산 증빙 회차 — R3-1. 불변(append-only), map에는 최신 상태만."""
 
     __tablename__ = "tb_settlement_snapshot"
+    __table_args__ = (
+        # 회차 seq max+1 동시 계산 경합 시 중복 방지 (P0-B 준용) — 같은 map의
+        # 동일 회차 이중 동결 차단
+        UniqueConstraint("map_id", "seq", name="uq_settlement_snapshot_map_seq"),
+    )
 
     snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
     map_id = Column(String(50), ForeignKey("tb_project_client_map.map_id"), nullable=False)
@@ -580,6 +590,42 @@ def ensure_schema():
                 print("✓ Added missing column {0}.{1}".format(table, column))
     except Exception as exc:
         print("⚠ ensure_schema skipped: {0}".format(exc))
+
+    # 배포된 테이블에 유니크 인덱스 보강 (P0-B) — create_all은 기존 테이블에 제약을
+    # 추가하지 않음. 신규 DB는 __table_args__의 UniqueConstraint로 생성되므로 동일
+    # 컬럼 유니크가 이미 있으면 건너뛴다 (SQLite/PostgreSQL 공통 표준 구문).
+    # (index_name, table, 컬럼 목록) — NULL 다수 컬럼이어도 유니크 충돌 없음
+    unique_indexes = [
+        # 보고서 버전 max+1 동시 계산 경합 방지 (P0-B)
+        ("uq_document_report_version", "tb_document", ["report_id", "version"]),
+        # 정산 회차 seq max+1 동시 계산 경합 방지 (P0-B 준용, R3-1)
+        ("uq_settlement_snapshot_map_seq", "tb_settlement_snapshot", ["map_id", "seq"]),
+    ]
+    try:
+        insp = _inspect(engine)
+        tables = set(insp.get_table_names())
+        for index_name, table, columns in unique_indexes:
+            if table not in tables:
+                continue
+            target_cols = set(columns)
+            has_unique = any(
+                set(uc.get("column_names") or []) == target_cols
+                for uc in insp.get_unique_constraints(table)
+            ) or any(
+                ix.get("unique") and set(ix.get("column_names") or []) == target_cols
+                for ix in insp.get_indexes(table)
+            )
+            if not has_unique:
+                with engine.begin() as conn:
+                    conn.execute(
+                        _text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS {0} "
+                            "ON {1} ({2})".format(index_name, table, ", ".join(columns))
+                        )
+                    )
+                print("✓ Added unique index {0}".format(index_name))
+    except Exception as exc:
+        print("⚠ ensure_schema unique index skipped: {0}".format(exc))
 
 
 def init_db():

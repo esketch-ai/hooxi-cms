@@ -90,6 +90,31 @@ export function useChangeIssueStatus() {
   })
 }
 
+/** 이슈 담당자 인계 (P1-D) — PATCH /histories/{id}/manager, ASSIGN 코멘트 자동 적재 */
+export function useChangeIssueManager() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      historyId,
+      managerId,
+    }: {
+      historyId: string
+      managerId: string
+    }) => {
+      const { data } = await api.patch(`/histories/${historyId}/manager`, {
+        manager_id: managerId,
+      })
+      return data
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['histories'] })
+      queryClient.invalidateQueries({ queryKey: ['issues', variables.historyId, 'comments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
 /** 코멘트 스레드 (tb_issue_comment) — 상태 변경 이력 포함 */
 export function useIssueComments(historyId: string | undefined) {
   return useQuery({

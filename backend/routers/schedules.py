@@ -8,7 +8,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -129,6 +129,11 @@ def update_schedule(
     for field in _SCHEDULE_FIELDS:
         if field in data:
             setattr(schedule, field, data[field])
+
+    # 시간 역전 최종 검증 (#3) — 부분 수정(start_at만 뒤로 등)도 저장 전 차단
+    if schedule.start_at is not None and schedule.end_at is not None:
+        if schedule.end_at < schedule.start_at:
+            raise HTTPException(status_code=422, detail="종료 시각이 시작 시각보다 빠릅니다")
 
     new_status = data.get("status")
     became_done = new_status == "DONE" and schedule.status != "DONE"

@@ -126,11 +126,16 @@ def list_threads(
     if client_id:
         query = query.filter(ChatThread.client_id == client_id)
     if search:
-        term = "%{0}%".format(search.strip())
+        term = "%{0}%".format(common.escape_like(search.strip()))
         query = (
             query.outerjoin(Client, Client.client_id == ChatThread.client_id)
             .outerjoin(KakaoContact, KakaoContact.contact_id == ChatThread.kakao_contact_id)
-            .filter(or_(Client.company_name.ilike(term), KakaoContact.name.ilike(term)))
+            .filter(
+                or_(
+                    Client.company_name.ilike(term, escape="\\"),
+                    KakaoContact.name.ilike(term, escape="\\"),
+                )
+            )
         )
 
     rows = query.order_by(

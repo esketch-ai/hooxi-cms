@@ -5,9 +5,10 @@
 - 민감 필드(success_fee_rate)는 응답에 포함하되 프론트가 마스킹 (reveal 감사 로그는 P2)
 """
 
+import re
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -21,12 +22,14 @@ from models import (
     Project,
     ProjectClientMap,
     ReportDelivery,
+    ReportRecipient,
     ReportSubscription,
     User,
     get_db,
 )
 from routers import common
 from routers.codes import validate_active_code
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -37,6 +40,34 @@ _CLIENT_FIELDS = [
     "contract_status", "contract_date", "keyman", "manager_id",
     "report_yn", "lat", "lng",
 ]
+
+
+def _normalize_biz_no(value: Optional[str]) -> str:
+    """사업자번호 정규화 — 숫자만 추출 (하이픈·공백 등 표기 차이 무시 비교용, P1-C)."""
+    return re.sub(r"\D", "", value or "")
+
+
+def _check_biz_reg_no_duplicate(
+    db: Session, biz_reg_no: Optional[str], exclude_client_id: Optional[str] = None
+):
+    """사업자번호 중복 검사 (P1-C) — 정규화(숫자만) 기준 비교, 컬럼 원문은 유지.
+
+    빈 값/None은 검사 제외. update 시 자기 자신은 exclude_client_id로 제외.
+    기존 데이터가 하이픈 유무 등 표기가 달라도 잡히도록 DB LIKE가 아닌
+    파이썬 정규화 비교(내부 CMS 규모라 전건 스캔 허용).
+    """
+    normalized = _normalize_biz_no(biz_reg_no)
+    if not normalized:
+        return
+    query = db.query(Client).filter(Client.biz_reg_no.isnot(None))
+    if exclude_client_id:
+        query = query.filter(Client.client_id != exclude_client_id)
+    for other in query.all():
+        if _normalize_biz_no(other.biz_reg_no) == normalized:
+            raise HTTPException(
+                status_code=409,
+                detail="이미 등록된 사업자번호입니다 (기존: {0})".format(other.company_name),
+            )
 
 
 def _upsert_subscription(db: Session, client: Client, sub_in: schemas.ReportSubscriptionIn):
@@ -103,12 +134,12 @@ def list_clients(
     if manager_id:
         query = query.filter(Client.manager_id == manager_id)
     if search:
-        keyword = "%{0}%".format(search.strip())
+        keyword = "%{0}%".format(common.escape_like(search.strip()))
         query = query.filter(
             or_(
-                Client.company_name.ilike(keyword),
-                Client.main_contact_name.ilike(keyword),
-                Client.biz_reg_no.like(keyword),
+                Client.company_name.ilike(keyword, escape="\\"),
+                Client.main_contact_name.ilike(keyword, escape="\\"),
+                Client.biz_reg_no.like(keyword, escape="\\"),
             )
         )
 
@@ -182,6 +213,7 @@ def create_client(
     """고객사 등록 (SCR-03) — 월간 보고서 설정(subscription) 동시 등록 지원."""
     validate_active_code(db, "CLIENT_TYPE", payload.client_type)
     validate_active_code(db, "CONTRACT_STATUS", payload.contract_status)
+    _check_biz_reg_no_duplicate(db, payload.biz_reg_no)
     if payload.manager_id:
         common.get_or_404(db, User, payload.manager_id, "담당 PM")
     client = Client(**{f: getattr(payload, f) for f in _CLIENT_FIELDS})
@@ -219,6 +251,8 @@ def update_client(
         validate_active_code(db, "CLIENT_TYPE", data["client_type"])
     if "contract_status" in data:
         validate_active_code(db, "CONTRACT_STATUS", data["contract_status"])
+    if "biz_reg_no" in data:
+        _check_biz_reg_no_duplicate(db, data["biz_reg_no"], exclude_client_id=client_id)
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
     for field in _CLIENT_FIELDS:
@@ -345,3 +379,105 @@ def client_assets(
         )
         for a in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# 보고서 수신자 (tb_report_recipient) — P1-C 기능 공백 보강
+# ---------------------------------------------------------------------------
+@router.get("/{client_id}/recipients", response_model=List[schemas.RecipientOut])
+def client_recipients(
+    client_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """수신자 목록 — 공통분(sub_id null) + 구독 지정분 전체. 해석 규칙은 resolve_recipients(R2-B5)."""
+    common.get_or_404(db, Client, client_id, "고객사")
+    rows = (
+        db.query(ReportRecipient)
+        .filter(ReportRecipient.client_id == client_id)
+        .order_by(ReportRecipient.created_at.asc())
+        .all()
+    )
+    return [schemas.RecipientOut.model_validate(r, from_attributes=True) for r in rows]
+
+
+@router.post("/{client_id}/recipients", response_model=schemas.RecipientOut, status_code=201)
+def add_recipient(
+    client_id: str,
+    payload: schemas.RecipientCreate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """수신자 등록 — sub_id null=전 유형 공통(R2-B8), 같은 (고객사, 이메일, sub_id) 중복 409."""
+    common.get_or_404(db, Client, client_id, "고객사")
+    if payload.sub_id:
+        sub = common.get_or_404(db, ReportSubscription, payload.sub_id, "보고서 구독")
+        if sub.client_id != client_id:
+            raise HTTPException(status_code=422, detail="해당 고객사의 보고서 구독이 아닙니다")
+    duplicate = (
+        db.query(ReportRecipient)
+        .filter(
+            ReportRecipient.client_id == client_id,
+            func.lower(ReportRecipient.email) == payload.email.lower(),
+            (
+                ReportRecipient.sub_id == payload.sub_id
+                if payload.sub_id
+                else ReportRecipient.sub_id.is_(None)
+            ),
+        )
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="이미 등록된 수신자입니다")
+    recipient = ReportRecipient(
+        client_id=client_id,
+        email=payload.email,
+        name=payload.name,
+        cc_yn=payload.cc_yn,
+        sub_id=payload.sub_id,
+    )
+    db.add(recipient)
+    db.flush()  # gen_uuid PK 확보 후 감사 로그 target_id로 사용
+    # 감사 로그 — 이메일은 비밀값 아님(R2-E6 검토), 발송 추적 취지상 기록
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "RECIPIENT_ADD",
+        target_type="CLIENT",
+        target_id=client_id,
+        new_value="{0} ({1}{2})".format(
+            recipient.email,
+            "CC" if recipient.cc_yn == "Y" else "TO",
+            ", 구독 지정" if recipient.sub_id else ", 공통",
+        ),
+    )
+    db.commit()
+    db.refresh(recipient)
+    return schemas.RecipientOut.model_validate(recipient, from_attributes=True)
+
+
+@router.delete("/{client_id}/recipients/{recipient_id}", response_model=schemas.MessageResponse)
+def remove_recipient(
+    client_id: str,
+    recipient_id: str,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """수신자 삭제 — 다른 고객사 수신자는 404 (경로-소유 일치 가드)."""
+    common.get_or_404(db, Client, client_id, "고객사")
+    recipient = db.get(ReportRecipient, recipient_id)
+    if recipient is None or recipient.client_id != client_id:
+        raise HTTPException(status_code=404, detail="수신자를 찾을 수 없습니다")
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "RECIPIENT_REMOVE",
+        target_type="CLIENT",
+        target_id=client_id,
+        old_value="{0} ({1})".format(
+            recipient.email, "CC" if recipient.cc_yn == "Y" else "TO"
+        ),
+    )
+    db.delete(recipient)
+    db.commit()
+    return schemas.MessageResponse(message="수신자가 삭제되었습니다")

@@ -11,6 +11,7 @@ import type {
   Paginated,
   ProjectClientMap,
   ReportDelivery,
+  ReportRecipient,
 } from '../../types'
 
 export interface ClientFilters {
@@ -116,6 +117,54 @@ export function useClientProjects(clientId: string | undefined) {
       return unwrapList(data).items
     },
     enabled: !!clientId,
+  })
+}
+
+// ── 보고서 수신자 (tb_report_recipient, R2-B8) ──────────────────────
+export function useClientRecipients(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'recipients'],
+    queryFn: async () => {
+      const { data } = await api.get<ReportRecipient[]>(`/clients/${clientId}/recipients`)
+      return data
+    },
+    enabled: !!clientId,
+  })
+}
+
+export interface RecipientPayload {
+  email: string
+  name?: string
+  cc_yn?: string // Y=CC / N=TO
+  sub_id?: string // 미지정=전 유형 공통
+}
+
+export function useAddRecipient(clientId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: RecipientPayload) => {
+      const { data } = await api.post<ReportRecipient>(
+        `/clients/${clientId}/recipients`,
+        payload,
+      )
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', clientId, 'recipients'] })
+    },
+  })
+}
+
+export function useRemoveRecipient(clientId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (recipientId: string) => {
+      const { data } = await api.delete(`/clients/${clientId}/recipients/${recipientId}`)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', clientId, 'recipients'] })
+    },
   })
 }
 

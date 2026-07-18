@@ -42,7 +42,7 @@ from services.audit_logger import AuditLogger
 class SendPrecondition(Exception):
     """발송 전제조건 미충족/발송 실패 — HTTP 계층에서 동일 상태코드·detail로 변환.
 
-    code: HTTP 상태코드(404 대상 없음, 409 파일/수신자 없음, 500 저장소 읽기 실패,
+    code: HTTP 상태코드(404 대상 없음, 409 파일/수신자 없음·저장소 읽기 실패,
     502 발송 실패, 503 Gmail 미설정).
     """
 
@@ -279,7 +279,8 @@ def send_report_core(
         raise SendPrecondition(404, "보고서 파일을(를) 찾을 수 없습니다")
     content = storage.read_file(doc.file_url)
     if content is None:
-        raise SendPrecondition(500, "보고서 파일을 저장소에서 읽을 수 없습니다")
+        # 사전조건 실패(파일 소실)이지 서버 오류가 아님 — 500이면 프론트가 '서버 오류'로 오인 (P1-F)
+        raise SendPrecondition(409, "보고서 파일을 저장소에서 읽을 수 없습니다")
 
     # 수신자: tb_report_recipient(구독 지정분 + 공통분) → TO 0건이면 main_contact_email 폴백 (R2-B5)
     sub = (
