@@ -18,6 +18,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const groups = NAV_GROUPS.filter(
     (group) => !group.roles || (user && group.roles.includes(user.role)),
   )
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.roles || (user && item.roles.includes(user.role)),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
 
   const initial = user?.name?.charAt(0) ?? '?'
 

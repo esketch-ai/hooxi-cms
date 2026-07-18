@@ -13,6 +13,7 @@ import { ReportsPage } from '../features/reports/ReportsPage'
 import { SegmentsPage } from '../features/segments/SegmentsPage'
 import { DocumentsPage } from '../features/documents/DocumentsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
+import { GuidePage } from '../features/guide/GuidePage'
 import { AssetsPage } from '../features/assets/AssetsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
       { path: '/reports/segments', element: <SegmentsPage /> }, // SCR-12 확장 — 세그먼트 발송
       { path: '/documents', element: <DocumentsPage /> }, // SCR-13
       { path: '/settings', element: <SettingsPage /> }, // SCR-14 (계정 관리 탭)
+      { path: '/guide', element: <GuidePage /> }, // 사용자 가이드 (전 역할)
       // ── P2 구현 화면 ──────────────────────────────────────────────
       { path: '/assets', element: <AssetsPage /> }, // SCR-04
       { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리

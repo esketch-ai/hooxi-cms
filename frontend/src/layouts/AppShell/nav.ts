@@ -1,6 +1,7 @@
 // LNB 메뉴 트리 — SCREEN_DESIGN_PLAN §2.1 확정안 그대로
 import type { Icon } from '@phosphor-icons/react'
 import {
+  BookOpenText,
   Buildings,
   CalendarDots,
   ChatCircleDots,
@@ -23,6 +24,8 @@ export interface NavItem {
   icon: Icon
   /** 지정 시 해당 카운트 뱃지 폴링 표시 (chat: GET /chat/badge waiting) */
   badgeKey?: 'chat'
+  /** 지정 시 해당 role만 노출 (그룹 roles보다 세분화된 항목 단위 제한) */
+  roles?: UserRole[]
 }
 
 export interface NavGroup {
@@ -75,7 +78,9 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'SYSTEM',
-    roles: ['ADMIN', 'MANAGER'],
-    items: [{ label: '환경 설정', path: '/settings', icon: Gear }],
+    items: [
+      { label: '환경 설정', path: '/settings', icon: Gear, roles: ['ADMIN', 'MANAGER'] },
+      { label: '사용자 가이드', path: '/guide', icon: BookOpenText },
+    ],
   },
 ]
