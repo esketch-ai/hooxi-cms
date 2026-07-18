@@ -22,6 +22,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { StatusBadge } from '../../components/StatusBadge'
 import { FilterSearch } from '../../components/FilterBar'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
@@ -157,6 +158,8 @@ export function SegmentsPage() {
   const previewItems = preview.data?.items ?? []
   const receivable = previewItems.filter((i) => i.can_receive).length
   const targetTotal = preview.data?.total ?? 0
+  // 종료(END) 계약 고객사 수 — 발송 확인 시 오발송 경고용
+  const endedCount = previewItems.filter((i) => i.contract_status === 'END').length
 
   // ── 발송 구성 — 첨부 문서(문서함 픽커) + 제목/본문 + 확인 다이얼로그 ──
   const { showToast } = useToast()
@@ -403,6 +406,10 @@ export function SegmentsPage() {
                         .join(' · ') || '—'}
                     </p>
                   </div>
+                  {/* 계약 상태 배지 — ACTIVE가 아니면 표시 (종료·보류 오발송 예방) */}
+                  {item.contract_status && item.contract_status !== 'ACTIVE' && (
+                    <StatusBadge domain="contract" value={item.contract_status} />
+                  )}
                   {!item.can_receive && (
                     <span
                       className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
@@ -633,6 +640,15 @@ export function SegmentsPage() {
                 <span className="text-amber-400">
                   수신자 없음 {previewItems.length - receivable}개사는 실패로
                   기록됩니다.
+                </span>
+              </>
+            )}
+            {endedCount > 0 && (
+              <>
+                <br />
+                <span className="text-rose-400">
+                  종료 계약 고객사 {endedCount}곳이 포함되어 있습니다 — 발송 대상이
+                  맞는지 확인하세요.
                 </span>
               </>
             )}

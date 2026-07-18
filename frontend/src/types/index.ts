@@ -508,6 +508,25 @@ export interface ProjectClientMap {
   expected_credits?: number | null
 }
 
+/** 정산 회차 스냅샷 (schemas.SettlementSnapshotOut, R3-1 append-only) — 청구/입금 시점 동결 금액의 정본 */
+export interface SettlementSnapshot {
+  snapshot_id: string
+  seq: number
+  /** 회차 액션 — BILLED/REBILLED/REVERTED/COMPLETED */
+  action: string
+  issued_credits?: number | null
+  /** 회차 확정 금액 🔒 — 청구 시점 동결, 이후 단가 변경에 영향받지 않음 */
+  amount?: number | null
+  unit_price?: number | null // 🔒
+  allocation_ratio?: number | null // 지분율(%)
+  success_fee_rate?: number | null // 보수율(%) 🔒
+  paid_amount?: number | null
+  reason?: string | null
+  created_by?: string | null
+  created_by_name?: string | null
+  created_at?: string | null
+}
+
 /** 매핑 등록/수정 payload (schemas.ProjectMapIn) — 동일 고객사는 upsert */
 export interface MappingPayload {
   client_id: string
@@ -675,6 +694,8 @@ export interface SegmentPreviewItem {
   company_name: string
   client_type?: string | null
   region?: string | null
+  /** 계약 상태 — 종료(END)·보류(HOLD) 고객사 오발송 예방 배지용 */
+  contract_status?: string | null
   /** 수신 가능 — 공통 수신자 또는 주 담당자 이메일 보유 */
   can_receive: boolean
 }

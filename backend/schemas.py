@@ -619,6 +619,7 @@ class SettlementSnapshotOut(BaseModel):
     paid_amount: Optional[float] = None
     reason: Optional[str] = None
     created_by: Optional[str] = None
+    created_by_name: Optional[str] = None  # 처리자 표시명 (user_name_map 보강)
     created_at: Optional[datetime] = None
 
 
@@ -1355,6 +1356,8 @@ class SegmentPreviewItem(BaseModel):
     company_name: str
     client_type: Optional[str] = None
     region: Optional[str] = None
+    # 계약 상태 — 종료(END)·보류(HOLD) 고객사 오발송 예방 배지용
+    contract_status: Optional[str] = None
     # 수신 가능 — 공통 수신자(sub_id IS NULL) 존재 or 주 담당자 이메일 보유
     can_receive: bool = False
 

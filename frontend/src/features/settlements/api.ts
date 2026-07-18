@@ -2,7 +2,7 @@
 // (쿼리 파라미터: settlement_status / project_id / period, 본문: settlement_status)
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
-import type { ProjectClientMap, SettlementStatus } from '../../types'
+import type { ProjectClientMap, SettlementSnapshot, SettlementStatus } from '../../types'
 
 export interface SettlementFilters {
   settlement_status?: string
@@ -35,6 +35,20 @@ export function useSettlements(filters: SettlementFilters) {
         total: data.total ?? data.items?.length ?? 0,
       }
     },
+  })
+}
+
+/** 정산 회차 스냅샷 이력 — 청구/입금 시점 동결 금액의 정본 (R3-1, seq 오름차순) */
+export function useSettlementSnapshots(mapId: string | null) {
+  return useQuery({
+    queryKey: ['settlements', 'snapshots', mapId],
+    queryFn: async () => {
+      const { data } = await api.get<{ items?: SettlementSnapshot[]; total?: number }>(
+        `/settlements/${mapId}/snapshots`,
+      )
+      return data.items ?? []
+    },
+    enabled: !!mapId,
   })
 }
 

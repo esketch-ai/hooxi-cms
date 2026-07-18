@@ -272,7 +272,17 @@ export function ProjectDetailPage() {
     {
       key: 'settlement',
       header: '정산 상태',
-      render: (m) => <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />,
+      render: (m) => (
+        /* 배지 클릭 → 정산 관리(SCR-07)로 직행 — 막다른 상태값 방지 */
+        <Link
+          to="/settlements"
+          title="정산 관리에서 이 사업의 정산 현황 보기"
+          className="inline-flex items-center gap-1 text-ash underline-offset-2 hover:underline"
+        >
+          <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />
+          <span className="text-xs font-medium">→</span>
+        </Link>
+      ),
     },
     {
       key: 'actions',
@@ -447,7 +457,16 @@ export function ProjectDetailPage() {
       {/* 참여 고객사 매핑 */}
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-base font-bold text-bone">참여 고객사 매핑</h2>
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-base font-bold text-bone">참여 고객사 매핑</h2>
+            {/* ClientDetailPage ProjectsTab 관용구 재사용 — 정산 관리(SCR-07) 직행 */}
+            <Link
+              to="/settlements"
+              className="text-xs font-medium text-ash underline-offset-2 hover:underline"
+            >
+              정산 현황 전체 보기 →
+            </Link>
+          </div>
           {/* 매핑 편집 — 모바일 숨김 (§7.1) */}
           <button
             type="button"

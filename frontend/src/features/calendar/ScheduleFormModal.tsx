@@ -183,7 +183,7 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
             onChange={(e) => setMonthly(e.target.checked)}
             className="h-4 w-4 rounded border-hairline-strong"
           />
-          매월 반복 (MONTHLY)
+          매월 반복
         </label>
 
         <div className="flex justify-end gap-2 border-t border-hairline pt-3">

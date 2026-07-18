@@ -308,7 +308,12 @@ export function MapPage() {
         subtitle={
           isLoading
             ? '고객사 분포·계약 상태 관제 (SCR-09)'
-            : `표시 ${withCoords.length}곳 / 필터 일치 ${filtered.length}곳 / 전체 ${clients.length}곳`
+            : `표시 ${withCoords.length}곳 / 필터 일치 ${filtered.length}곳 / 전체 ${clients.length}곳${
+                // 표시 < 일치 시 차이 사유 명시 — 좌표(지오코딩) 미등록 고객사 안내
+                noCoords.length > 0
+                  ? ` — 좌표 없는 ${noCoords.length}곳은 지도에 표시되지 않습니다 (고객사 주소를 입력하면 자동 표시)`
+                  : ''
+              }`
         }
       />
 
@@ -431,12 +436,28 @@ export function MapPage() {
               <ul className="space-y-3">
                 {regionAgg.map(([region, agg]) => (
                   <li key={region}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="truncate text-ash">{region}</span>
-                      <span className="ml-2 shrink-0 font-bold text-bone">
-                        {agg.total}곳
-                      </span>
-                    </div>
+                    {region === '지역 미지정' ? (
+                      /* 막다른 정보 방지 — 미지정 항목은 고객사 마스터로 이동해 주소 보완 유도 */
+                      <Link
+                        to="/clients"
+                        title="고객사 마스터에서 주소(지역)를 입력하면 지도·집계에 반영됩니다"
+                        className="flex items-center justify-between rounded-md text-sm hover:bg-elevate"
+                      >
+                        <span className="truncate text-ash underline decoration-dotted underline-offset-2">
+                          {region}
+                        </span>
+                        <span className="ml-2 shrink-0 font-bold text-bone">
+                          {agg.total}곳
+                        </span>
+                      </Link>
+                    ) : (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="truncate text-ash">{region}</span>
+                        <span className="ml-2 shrink-0 font-bold text-bone">
+                          {agg.total}곳
+                        </span>
+                      </div>
+                    )}
                     {/* 상태 분포 미니 바 */}
                     <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-elevate">
                       {STATUS_ORDER.filter((s) => agg[s] > 0).map((s) => (

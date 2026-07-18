@@ -231,7 +231,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               className={inputCls}
             />
           </Field>
-          <Field label="keyman (주요 결정권자)">
+          <Field label="키맨 (주요 결정권자)">
             <input
               value={form.keyman ?? ''}
               onChange={(e) => set('keyman', e.target.value)}

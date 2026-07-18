@@ -244,7 +244,7 @@ function OverviewTab({ client }: { client: Client }) {
             )}
           </InfoRow>
           <InfoRow label="대표 이메일">{client.ceo_contact_email ?? '—'}</InfoRow>
-          <InfoRow label="keyman">{client.keyman ?? '—'}</InfoRow>
+          <InfoRow label="키맨 (주요 결정권자)">{client.keyman ?? '—'}</InfoRow>
         </dl>
       </section>
 

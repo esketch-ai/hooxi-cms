@@ -198,6 +198,7 @@ def preview_segment(
             company_name=c.company_name,
             client_type=c.client_type,
             region=c.region,
+            contract_status=c.contract_status,
             can_receive=receivable.get(c.client_id, False),
         )
         for c in rows

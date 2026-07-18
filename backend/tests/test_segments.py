@@ -217,6 +217,11 @@ def test_preview_can_receive(client, staff_headers, seg_data):
     assert receivable[seg_data["c1"]] is True    # main_contact_email 보유
     assert receivable[seg_data["c2"]] is False   # 이메일·수신자 모두 없음
     assert receivable[seg_data["c3"]] is True    # 공통 수신자(sub_id IS NULL) 존재
+    # 계약 상태 노출 — 종료(END) 고객사 오발송 예방 배지용
+    contract = {i["client_id"]: i["contract_status"] for i in body["items"]}
+    assert contract[seg_data["c1"]] == "ACTIVE"
+    assert contract[seg_data["c2"]] == "HOLD"
+    assert contract[seg_data["c3"]] == "END"
 
 
 def test_preview_can_receive_cc_only_false(client, staff_headers, seg_data):

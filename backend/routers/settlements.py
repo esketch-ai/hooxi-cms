@@ -119,8 +119,11 @@ def list_settlement_snapshots(
         .order_by(SettlementSnapshot.seq.asc())
         .all()
     )
+    unames = common.user_name_map(db, [s.created_by for s in rows])
     items = [
-        schemas.SettlementSnapshotOut.model_validate(s, from_attributes=True)
+        schemas.SettlementSnapshotOut.model_validate(s, from_attributes=True).model_copy(
+            update={"created_by_name": unames.get(s.created_by)}
+        )
         for s in rows
     ]
     return schemas.SettlementSnapshotListResponse(items=items, total=len(items))
