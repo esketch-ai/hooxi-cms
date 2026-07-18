@@ -347,3 +347,9 @@ tsconfig.tsbuildinfo
 
 # 런타임 업로드 산출물 (로컬 폴백 저장소)
 backend/uploads/
+
+# 예외: 실무자 가이드 문서
+!Docs/
+!Docs/USER_GUIDE.html
+Docs/*
+!Docs/USER_GUIDE.html
