@@ -827,12 +827,14 @@ def test_dashboard_expected_billing_current_month_only(client, staff_headers):
 
     db = models.SessionLocal()
     try:
+        # uq_project_client_map_slot — (사업, 고객사) 조합은 매핑 1건씩만 (F2)
         c = models.Client(client_type="TRANSPORT", company_name="정산당월테스트사")
+        c2 = models.Client(client_type="TRANSPORT", company_name="정산당월테스트사2")
         p_now = models.Project(project_name="당월발급사업", project_status="모니터링",
                                expected_issue_date=in_month.date())
         p_prev = models.Project(project_name="타월발급사업", project_status="모니터링",
                                 expected_issue_date=prev.date())
-        db.add_all([c, p_now, p_prev])
+        db.add_all([c, c2, p_now, p_prev])
         db.flush()
         maps = [
             # 당월 포함분: STANDBY(예상 발급월) 1000 + BILLED(billed_at) 200
@@ -841,10 +843,10 @@ def test_dashboard_expected_billing_current_month_only(client, staff_headers):
             models.ProjectClientMap(project_id=p_prev.project_id, client_id=c.client_id,
                                     settlement_status="BILLED", billed_at=in_month,
                                     expected_amount=200),
-            # 제외분: 타월 STANDBY / 당월 COMPLETED
-            models.ProjectClientMap(project_id=p_prev.project_id, client_id=c.client_id,
+            # 제외분: 타월 STANDBY / 당월 COMPLETED — 다른 고객사로 슬롯 분리
+            models.ProjectClientMap(project_id=p_prev.project_id, client_id=c2.client_id,
                                     settlement_status="STANDBY", expected_amount=99999),
-            models.ProjectClientMap(project_id=p_now.project_id, client_id=c.client_id,
+            models.ProjectClientMap(project_id=p_now.project_id, client_id=c2.client_id,
                                     settlement_status="COMPLETED", billed_at=in_month,
                                     completed_at=in_month, expected_amount=77777),
         ]

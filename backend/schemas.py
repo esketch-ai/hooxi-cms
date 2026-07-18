@@ -187,7 +187,7 @@ class ReportSubscriptionOut(BaseModel):
 class ClientCreate(BaseModel):
     # 구분(client_type)은 공통 코드 마스터(tb_code, category=CLIENT_TYPE)로 관리.
     # 유효성은 라우터에서 활성 코드 존재 여부로 검증(정규식 하드코딩 제거).
-    client_type: str = Field(min_length=1, max_length=40)
+    client_type: str = Field(min_length=1, max_length=20)
     company_name: str = Field(min_length=1, max_length=100)
     # max_length는 models.py String(N) 길이와 일치 — 초과 시 DB 오류(500) 대신 422 (#6 P1)
     biz_reg_no: Optional[str] = Field(default=None, max_length=20)
@@ -200,7 +200,7 @@ class ClientCreate(BaseModel):
     main_contact_phone: Optional[str] = Field(default=None, max_length=20)
     main_contact_email: Optional[str] = Field(default=None, max_length=100)
     # contract_status는 공통 코드 마스터(CONTRACT_STATUS)로 관리 → 라우터에서 검증
-    contract_status: str = Field(default="ACTIVE", min_length=1, max_length=40)
+    contract_status: str = Field(default="ACTIVE", min_length=1, max_length=20)
     contract_date: Optional[datetime] = None
     keyman: Optional[str] = Field(default=None, max_length=50)
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -223,7 +223,7 @@ class ClientCreate(BaseModel):
 
 
 class ClientUpdate(BaseModel):
-    client_type: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    client_type: Optional[str] = Field(default=None, min_length=1, max_length=20)
     company_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     # max_length는 ClientCreate와 동일 — models.py String(N) 정합 (#6 P1)
     biz_reg_no: Optional[str] = Field(default=None, max_length=20)
@@ -235,7 +235,7 @@ class ClientUpdate(BaseModel):
     main_contact_name: Optional[str] = Field(default=None, max_length=50)
     main_contact_phone: Optional[str] = Field(default=None, max_length=20)
     main_contact_email: Optional[str] = Field(default=None, max_length=100)
-    contract_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    contract_status: Optional[str] = Field(default=None, min_length=1, max_length=20)
     contract_date: Optional[datetime] = None
     keyman: Optional[str] = Field(default=None, max_length=50)
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -367,14 +367,14 @@ class AssetCreate(BaseModel):
 
     client_id: str = Field(max_length=50)
     # asset_group·asset_type·status는 공통 코드 마스터(tb_code)로 관리 → 라우터에서 검증
-    asset_group: str = Field(min_length=1, max_length=40)
+    asset_group: str = Field(min_length=1, max_length=20)
     asset_type: Optional[str] = Field(default=None, max_length=50)  # ICE/EV/SOLAR/HEATPUMP 등
     quantity: Optional[int] = Field(default=None, ge=0)
     # max_length는 models.py String(N) 길이와 일치 — 초과 시 DB 오류(500) 대신 422 (#6 P1)
     main_spec: Optional[str] = Field(default=None, max_length=100)
     telemetry_yn: str = Field(default="N", pattern="^[YN]$")
     location_info: Optional[str] = Field(default=None, max_length=200)
-    status: str = Field(default="ACTIVE", min_length=1, max_length=40)
+    status: str = Field(default="ACTIVE", min_length=1, max_length=20)
     agency_name: Optional[str] = Field(default=None, max_length=100)
     site_url: Optional[str] = Field(default=None, max_length=255)
     auth_type: str = Field(default="NONE", pattern="^(ID_PW|API_KEY|NONE)$")
@@ -388,14 +388,14 @@ class AssetUpdate(BaseModel):
     """자산 수정 — 전달된 필드만 반영. auth_value 전달 시 재암호화(빈 문자열은 삭제)."""
 
     client_id: Optional[str] = Field(default=None, max_length=50)
-    asset_group: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    asset_group: Optional[str] = Field(default=None, min_length=1, max_length=20)
     asset_type: Optional[str] = Field(default=None, max_length=50)
     quantity: Optional[int] = Field(default=None, ge=0)
     # max_length는 AssetCreate와 동일 — models.py String(N) 정합 (#6 P1)
     main_spec: Optional[str] = Field(default=None, max_length=100)
     telemetry_yn: Optional[str] = Field(default=None, pattern="^[YN]$")
     location_info: Optional[str] = Field(default=None, max_length=200)
-    status: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    status: Optional[str] = Field(default=None, min_length=1, max_length=20)
     agency_name: Optional[str] = Field(default=None, max_length=100)
     site_url: Optional[str] = Field(default=None, max_length=255)
     auth_type: Optional[str] = Field(default=None, pattern="^(ID_PW|API_KEY|NONE)$")
@@ -442,7 +442,7 @@ class ProjectCreate(BaseModel):
     project_name: str = Field(min_length=1, max_length=200)
     reg_code: Optional[str] = Field(default=None, max_length=50)  # 예: R-2024-KR-03-000528
     # project_status는 공통 코드 마스터(PROJECT_STATUS)로 관리 → 라우터에서 검증
-    project_status: str = Field(default="기획", min_length=1, max_length=40)
+    project_status: str = Field(default="기획", min_length=1, max_length=20)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
@@ -462,7 +462,7 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[str] = Field(default=None, max_length=50)
     project_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     reg_code: Optional[str] = Field(default=None, max_length=50)
-    project_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    project_status: Optional[str] = Field(default=None, min_length=1, max_length=20)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
@@ -645,10 +645,10 @@ class HistoryCreate(BaseModel):
     manager_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 시 현재 사용자
     activity_date: datetime
     # activity_type은 공통 코드 마스터(ACTIVITY_TYPE)로 관리 → 라우터에서 검증
-    activity_type: str = Field(min_length=1, max_length=40)
+    activity_type: str = Field(min_length=1, max_length=20)
     retention_stage: Optional[str] = Field(default=None, max_length=20)
     # issue_status는 공통 코드 마스터(ISSUE_STATUS)로 관리 → 라우터에서 검증
-    issue_status: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    issue_status: Optional[str] = Field(default=None, min_length=1, max_length=20)
     priority: Optional[str] = Field(default=None, pattern="^(URGENT|NORMAL)$")
     due_date: Optional[date] = None
     next_action: Optional[str] = Field(default=None, max_length=200)
@@ -698,7 +698,7 @@ class HistoryListResponse(BaseModel):
 class IssueStatusUpdate(BaseModel):
     """SCR-02 칸반 드래그 — 이슈 상태 변경."""
 
-    issue_status: str = Field(min_length=1, max_length=40)
+    issue_status: str = Field(min_length=1, max_length=20)
     comment: Optional[str] = None  # 상태 변경 사유(선택)
 
 
@@ -1122,7 +1122,7 @@ class CodeOut(BaseModel):
 class CodeCreate(BaseModel):
     category: str = Field(min_length=1, max_length=40)
     # 영문/숫자/_ 권장이나 한글 코드 허용(감축사업 진행상태·대상 기관은 한글 저장값 유지)
-    code: str = Field(min_length=1, max_length=40, pattern="^[A-Za-z0-9_가-힣]+$")
+    code: str = Field(min_length=1, max_length=20, pattern="^[A-Za-z0-9_가-힣]+$")  # 소비 컬럼 String(20) 정합 (DB 정밀검사 F1)
     label: str = Field(min_length=1, max_length=100)
     color: Optional[str] = Field(default=None, max_length=20)
     extra: Optional[str] = Field(default=None, max_length=255)

@@ -188,6 +188,10 @@ class ProjectClientMap(Base):
     map_id = Column(String(50), primary_key=True, default=gen_uuid)
     project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
     client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    # 같은 (사업, 고객사) 매핑 중복 방지 — 동시 등록 경합 백스톱 (앱 검사 + DB 제약)
+    __table_args__ = (
+        UniqueConstraint("project_id", "client_id", name="uq_project_client_map_slot"),
+    )
     asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"), nullable=True)
     allocation_ratio = Column(Numeric(5, 2))  # 배출권 배분 비율(%)
     success_fee_rate = Column(Numeric(5, 2))  # 성공 보수율(%)
@@ -600,6 +604,8 @@ def ensure_schema():
         ("uq_document_report_version", "tb_document", ["report_id", "version"]),
         # 정산 회차 seq max+1 동시 계산 경합 방지 (P0-B 준용, R3-1)
         ("uq_settlement_snapshot_map_seq", "tb_settlement_snapshot", ["map_id", "seq"]),
+        # 같은 (사업, 고객사) 매핑 중복 방지 — 이중 청구 예방 (DB 정밀검사 F2)
+        ("uq_project_client_map_slot", "tb_project_client_map", ["project_id", "client_id"]),
     ]
     try:
         insp = _inspect(engine)
@@ -626,6 +632,42 @@ def ensure_schema():
                 print("✓ Added unique index {0}".format(index_name))
     except Exception as exc:
         print("⚠ ensure_schema unique index skipped: {0}".format(exc))
+
+    # 조회 성능 인덱스 보강 (DB 정밀검사 F5) — 성장 대비 1~4순위.
+    # CREATE INDEX IF NOT EXISTS는 SQLite/PostgreSQL 공통이라 신규·기존 DB 동일 적용.
+    plain_indexes = [
+        # 1) 활동 이력 — 최대 성장 테이블: 날짜 정렬·고객 타임라인·담당·이슈 보드 필터
+        ("ix_history_activity_date", "tb_activity_history", ["activity_date"]),
+        ("ix_history_client", "tb_activity_history", ["client_id"]),
+        ("ix_history_manager", "tb_activity_history", ["manager_id"]),
+        ("ix_history_type_status", "tb_activity_history", ["activity_type", "issue_status"]),
+        # 2) 채팅 메시지 — 스레드별 로드 + 5초 폴링
+        ("ix_chat_message_thread_created", "tb_chat_message", ["thread_id", "created_at"]),
+        # 3) 감사 로그 — append-only 무한 성장, 최신순·행위자 필터
+        ("ix_audit_created", "tb_audit_log", ["created_at"]),
+        ("ix_audit_actor", "tb_audit_log", ["actor_id"]),
+        # 4) 보고서 — 월별 목록·배치의 period+status 스캔
+        ("ix_report_period_status", "tb_report_delivery", ["period", "status"]),
+    ]
+    try:
+        insp = _inspect(engine)
+        tables = set(insp.get_table_names())
+        for index_name, table, columns in plain_indexes:
+            if table not in tables:
+                continue
+            existing = {ix.get("name") for ix in insp.get_indexes(table)}
+            if index_name not in existing:
+                with engine.begin() as conn:
+                    conn.execute(
+                        _text(
+                            "CREATE INDEX IF NOT EXISTS {0} ON {1} ({2})".format(
+                                index_name, table, ", ".join(columns)
+                            )
+                        )
+                    )
+                print("✓ Added index {0}".format(index_name))
+    except Exception as exc:
+        print("⚠ ensure_schema plain index skipped: {0}".format(exc))
 
 
 def init_db():

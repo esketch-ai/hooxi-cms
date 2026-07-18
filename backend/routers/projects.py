@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import schemas
@@ -395,7 +396,15 @@ def upsert_project_client(
             project.unit_price, payload.success_fee_rate,
         )
     )
-    db.flush()  # 신규 매핑 PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
+    try:
+        db.flush()  # 신규 매핑 PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
+    except IntegrityError:
+        # 동시 등록 경합 — uq_project_client_map_slot 위반 (앱 검사의 DB 백스톱)
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="이미 등록된 매핑입니다 — 목록을 새로고침한 뒤 기존 매핑을 수정하세요",
+        )
     # 감사 로그 — 배분율 요약만 기록(금액 원문 금지, R2-E6)
     AuditLogger.log_action(
         db,
