@@ -133,14 +133,19 @@ export function AccountsPage() {
   const runAccountCheck = async () => {
     try {
       const res = await accountCheck.mutateAsync()
-      setConfirmOpen(false)
       setLastResult(res)
       showToast(
         `계정 점검 완료 — 대상 ${res.targets} · 생성 ${res.created} · 사이트장애 ${res.unreachable}`,
         res.unreachable > 0 ? 'info' : 'success',
       )
     } catch {
-      showToast('점검 실행에 실패했습니다. 권한 또는 네트워크를 확인해 주세요.', 'danger')
+      showToast(
+        '점검 요청이 완료되지 못했습니다. 이미 서버에서 실행 중일 수 있으니 잠시 후 이슈 보드를 확인해 주세요. (멱등 — 다시 실행해도 중복 생성되지 않습니다)',
+        'danger',
+      )
+    } finally {
+      // 성공/실패 모두 다이얼로그를 닫는다 — 실패 시 열린 채 남으면 재실행 유도로 오인됨
+      setConfirmOpen(false)
     }
   }
 
@@ -407,6 +412,9 @@ export function AccountsPage() {
         message={
           <>
             전체 계정의 월별 점검 이슈를 생성합니다. 이미 이번 달 이슈가 있는 계정은 건너뜁니다.
+            <br />
+            각 계정의 사이트 접속 상태를 확인하므로 대상 수에 따라 <b>수십 초</b> 걸릴 수
+            있습니다. 완료되면 결과 요약이 표시됩니다.
             <br />
             계속하시겠습니까?
           </>

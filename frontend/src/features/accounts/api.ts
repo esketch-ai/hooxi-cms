@@ -1,6 +1,6 @@
 // 수집 계정 관리 API 훅 — GET /assets?credentials_only=true (로그인 계정 보유 자산만)
 // + POST /batch/account-check (ADMIN 수동 전체 점검). reveal은 assets/useRevealAuth 재사용.
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
 import type { AccountCheckResponse, Asset, Paginated } from '../../types'
@@ -35,12 +35,22 @@ export function useCredentialAssets(filters: AccountFilters) {
   })
 }
 
-/** 전체 계정 월별 점검 실행 (ADMIN) — 대상 자산별 점검 이슈 생성(멱등) */
+/** 전체 계정 월별 점검 실행 (ADMIN) — 대상 자산별 점검 이슈 생성(멱등)
+ *  사이트 도달성 확인(병렬)으로 수십 초 걸릴 수 있어 기본 15초 대신 전용 타임아웃 사용 */
 export function useAccountCheck() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<AccountCheckResponse>('/batch/account-check')
+      const { data } = await api.post<AccountCheckResponse>('/batch/account-check', null, {
+        timeout: 120_000,
+      })
       return data
+    },
+    onSuccess: () => {
+      // 점검 이슈가 생성됨 — 이슈 보드·활동 이력·현황판이 바로 반영되도록 무효화
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['histories'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }

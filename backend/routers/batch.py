@@ -12,6 +12,7 @@
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Optional
 
@@ -35,6 +36,7 @@ router = APIRouter(prefix="/batch", tags=["batch"])
 # 기본은 전체. 특정 기관만 점검하려면 config account_check_agencies에 키워드 지정.
 DEFAULT_CHECK_AGENCIES = []
 _SITE_TIMEOUT = 5.0
+_SITE_CHECK_WORKERS = 8  # 사이트 도달성 확인 동시 실행 수 — 직렬(대상×5초)이면 프론트 타임아웃 초과
 _UA = "Mozilla/5.0 (compatible; HooxiCMS-AccountCheck/1.0)"
 
 
@@ -153,6 +155,8 @@ def account_check(
     now = common.now_kst()  # activity_date는 '저장값=KST 벽시계' 규약 (created_at은 UTC 유지)
     due = date(int(period[:4]), int(period[5:7]), 5)  # 당월 5일까지 처리
 
+    # 1) 멱등 필터 — 이번 달 이슈가 이미 있는 자산은 사이트 확인 없이 건너뜀
+    pending = []
     for asset in targets:
         marker = _marker(asset.asset_id, period)
         exists = (
@@ -165,13 +169,26 @@ def account_check(
         )
         if exists:
             skipped += 1
-            continue
+        else:
+            pending.append(asset)
 
+    # 2) 사이트 도달성 병렬 확인 (URL 단위 dedup) — 직렬이면 대상×최대 5초라
+    #    수동 실행(화면)의 HTTP 타임아웃을 넘겨 "실패처럼 보이는 성공"이 된다
+    distinct_urls = list({a.site_url for a in pending if a.site_url})
+    reachability = {}
+    if distinct_urls:
+        with ThreadPoolExecutor(max_workers=_SITE_CHECK_WORKERS) as pool:
+            for url, ok in zip(distinct_urls, pool.map(_site_reachable, distinct_urls)):
+                reachability[url] = ok
+
+    # 3) 점검 이슈 생성
+    for asset in pending:
         client = db.get(Client, asset.client_id) if asset.client_id else None
         company = client.company_name if client else "미지정 고객사"
         manager_id = (client.manager_id if client else None) or actor_id
+        marker = _marker(asset.asset_id, period)
 
-        reachable = _site_reachable(asset.site_url)
+        reachable = reachability.get(asset.site_url) if asset.site_url else None
         if reachable is False:
             unreachable += 1
             status_line = "⚠ 사이트 접속 불가 — 기관 시스템 점검/차단 가능성. 우선 확인 필요."
