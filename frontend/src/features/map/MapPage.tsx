@@ -1,6 +1,7 @@
 // SCR-09 전국 관제 지도 /map — P3 (SCREEN_DESIGN_PLAN §5)
 // 지도 전용 레이아웃 · 좌측 필터(계약 상태 3종 + 마지막 컨택 기준) · 지역별 집계 · 인포윈도
-// Google Maps 키(VITE_GOOGLE_MAPS_KEY) 미설정/로드 실패 시에도 필터·집계 패널은 정상 동작
+// 지도 공급자 2종: 구글(VITE_GOOGLE_MAPS_KEY) / 네이버(VITE_NAVER_MAPS_CLIENT_ID) — 우상단 토글 전환
+// 키 미설정/로드 실패 시에도 필터·집계 패널은 정상 동작
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -22,7 +23,30 @@ import {
   type GMarker,
   type GoogleMapsApi,
 } from '../../lib/googleMaps'
+import {
+  NAVER_MAPS_AUTH_FAILURE_EVENT,
+  getNaverMapsKey,
+  loadNaverMaps,
+} from '../../lib/naverMaps'
 import type { Client, ContractStatus, Paginated } from '../../types'
+
+// ── 지도 공급자 (구글/네이버) — 선택은 localStorage 에 기억 ────────────
+type MapProvider = 'google' | 'naver'
+
+const MAP_PROVIDER_STORAGE_KEY = 'hooxi_map_provider'
+
+const PROVIDERS: { id: MapProvider; label: string }[] = [
+  { id: 'google', label: '구글' },
+  { id: 'naver', label: '네이버' },
+]
+
+function readStoredProvider(): MapProvider {
+  return localStorage.getItem(MAP_PROVIDER_STORAGE_KEY) === 'naver' ? 'naver' : 'google'
+}
+
+function keyOf(provider: MapProvider): string | undefined {
+  return provider === 'google' ? getMapsKey() : getNaverMapsKey()
+}
 
 // 계약상태 마커 색/라벨은 공통 코드 마스터(CONTRACT_STATUS)에서 파생(컴포넌트 내부).
 // 범례·집계는 3개 상태(ACTIVE/HOLD/END) 구조 유지 — 상태 추가 시 지도 확장은 별도 작업.
@@ -135,9 +159,10 @@ export function MapPage() {
     return counts
   }, [clients])
 
-  // ── Google Maps 로드·마커 ────────────────────────────────────────────
+  // ── 지도 로드·마커 (공급자 전환 가능) ────────────────────────────────
+  const [provider, setProvider] = useState<MapProvider>(readStoredProvider)
   const [mapStatus, setMapStatus] = useState<MapStatus>(() =>
-    getMapsKey() ? 'loading' : 'no-key',
+    keyOf(readStoredProvider()) ? 'loading' : 'no-key',
   )
   const [retryToken, setRetryToken] = useState(0)
   const mapElRef = useRef<HTMLDivElement>(null)
@@ -146,15 +171,28 @@ export function MapPage() {
   const infoRef = useRef<GInfoWindow | null>(null)
   const markersRef = useRef<GMarker[]>([])
 
+  const switchProvider = (next: MapProvider) => {
+    if (next === provider) return
+    localStorage.setItem(MAP_PROVIDER_STORAGE_KEY, next)
+    // 이전 공급자의 지도·마커 참조 정리 (지도 DOM 은 key={provider} 로 재생성)
+    apiRef.current = null
+    gmapRef.current = null
+    infoRef.current = null
+    markersRef.current = []
+    // 전환 직후 이전 'ready' 잔상(빈 지도 위 범례) 방지 — 상태를 즉시 갱신
+    setMapStatus(keyOf(next) ? 'loading' : 'no-key')
+    setProvider(next)
+  }
+
   useEffect(() => {
-    if (!getMapsKey()) {
+    if (!keyOf(provider)) {
       setMapStatus('no-key')
       return
     }
     let canceled = false
     setMapStatus('loading')
 
-    loadGoogleMaps()
+    ;(provider === 'google' ? loadGoogleMaps() : loadNaverMaps())
       .then((maps) => {
         if (canceled || !mapElRef.current) return
         apiRef.current = maps
@@ -174,16 +212,19 @@ export function MapPage() {
         setMapStatus(error instanceof MapsKeyMissingError ? 'no-key' : 'error')
       })
 
-    // 로드 완료 후 비동기 인증 실패(잘못된 키 등)
+    // 로드 완료 후 비동기 인증 실패 — 활성 공급자의 이벤트만 구독
+    // (이전 공급자의 지연 실패가 현재 정상 지도를 'error' 로 오염시키지 않도록)
+    const authEvent =
+      provider === 'google' ? MAPS_AUTH_FAILURE_EVENT : NAVER_MAPS_AUTH_FAILURE_EVENT
     const onAuthFail = () => {
       if (!canceled) setMapStatus('error')
     }
-    window.addEventListener(MAPS_AUTH_FAILURE_EVENT, onAuthFail)
+    window.addEventListener(authEvent, onAuthFail)
     return () => {
       canceled = true
-      window.removeEventListener(MAPS_AUTH_FAILURE_EVENT, onAuthFail)
+      window.removeEventListener(authEvent, onAuthFail)
     }
-  }, [retryToken])
+  }, [retryToken, provider])
 
   // 인포윈도 콘텐츠 — innerHTML 대신 DOM 생성(고객사명 이스케이프 + SPA 네비게이션)
   const buildInfoContent = (client: Client): HTMLElement => {
@@ -320,7 +361,31 @@ export function MapPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* ── 지도 영역 ──────────────────────────────────────────────── */}
         <section className="relative order-1 min-h-[380px] flex-1 overflow-hidden rounded-3xl border border-hairline bg-graphite lg:order-2 lg:min-h-0">
-          <div ref={mapElRef} className="h-full w-full" />
+          {/* key={provider} — 공급자 전환 시 지도 DOM 을 새로 만들어 이전 지도 잔재 제거 */}
+          <div key={provider} ref={mapElRef} className="h-full w-full" />
+
+          {/* 지도 공급자 토글 — 키 미설정/오류 상태에서도 전환 가능해야 하므로 오버레이 위(z-20) */}
+          <div className="absolute top-4 right-4 z-20 flex overflow-hidden rounded-full border border-hairline bg-graphite/95 text-xs font-medium shadow">
+            {PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => switchProvider(p.id)}
+                title={
+                  keyOf(p.id)
+                    ? `${p.label} 지도로 보기`
+                    : `${p.label} 지도 — Client ID/키 설정 후 사용 가능`
+                }
+                className={`px-3 py-1.5 transition-colors ${
+                  provider === p.id
+                    ? 'bg-primary font-semibold text-on-primary'
+                    : 'text-ash hover:bg-elevate hover:text-bone'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
 
           {mapStatus !== 'ready' && (
             <div className="absolute inset-0 flex items-center justify-center bg-graphite/95 p-4">
@@ -333,8 +398,16 @@ export function MapPage() {
               {mapStatus === 'no-key' && (
                 <EmptyState
                   icon={<MapTrifold size={36} />}
-                  title="VITE_GOOGLE_MAPS_KEY 설정 후 지도가 표시됩니다"
-                  description="Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다. (§10.4)"
+                  title={
+                    provider === 'google'
+                      ? 'VITE_GOOGLE_MAPS_KEY 설정 후 지도가 표시됩니다'
+                      : '네이버 지도 — Client ID 설정 후 표시됩니다'
+                  }
+                  description={
+                    provider === 'google'
+                      ? 'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다. (§10.4)'
+                      : 'NCP 콘솔에서 Maps Application 을 등록하고 Client ID 를 환경변수(VITE_NAVER_MAPS_CLIENT_ID)로 설정하세요. 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.'
+                  }
                   className="w-full max-w-md"
                 />
               )}
@@ -342,7 +415,11 @@ export function MapPage() {
                 <EmptyState
                   icon={<WarningCircle size={36} />}
                   title="지도를 불러오지 못했습니다"
-                  description="네트워크 또는 API 키 인증 문제일 수 있습니다. 키의 리퍼러 제한 설정을 확인하세요."
+                  description={
+                    provider === 'google'
+                      ? '네트워크 또는 API 키 인증 문제일 수 있습니다. 키의 리퍼러 제한 설정을 확인하세요.'
+                      : '네트워크 또는 Client ID 인증 문제일 수 있습니다. NCP 콘솔의 서비스 도메인(URL) 등록을 확인하세요.'
+                  }
                   className="w-full max-w-md"
                   action={
                     <button
