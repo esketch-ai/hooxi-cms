@@ -349,10 +349,11 @@ export function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* 두 위젯은 xl에서 나란히 — 같은 고정 높이로 카드 크기를 맞추고, 넘치는 쪽은 내부 스크롤 */}
+      <div className="grid gap-4 xl:grid-cols-2 xl:[&>section]:h-[420px]">
         {/* 이달 보고서 진행 — GET /reports summary 재사용, 상태 클릭 시 해당 필터로 직행 */}
-        <section className="rounded-3xl border border-hairline bg-graphite p-5">
-          <div className="mb-4 flex items-center justify-between">
+        <section className="flex flex-col rounded-3xl border border-hairline bg-graphite p-5">
+          <div className="mb-4 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold text-bone">이달 보고서 진행 ({period})</h2>
             <Link to="/reports" className="text-xs font-medium text-slatey hover:text-bone">
               보고서 관리 →
@@ -364,7 +365,7 @@ export function DashboardPage() {
             <EmptyState
               title="이번 달 발송 대상이 없습니다"
               description="보고서 관리에서 [대상 생성]을 누르면 수신 설정 고객사의 당월 대상이 만들어집니다."
-              className="border-0 py-10"
+              className="my-auto border-0 py-10"
               action={
                 <Link
                   to="/reports"
@@ -375,9 +376,9 @@ export function DashboardPage() {
               }
             />
           ) : (
-            <div className="space-y-3">
+            <div className="flex min-h-0 flex-1 flex-col">
               {/* 전체 진행률 — 발송완료+고객확인 / 대상(취소 제외) */}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevate">
                   <div
                     className="h-full rounded-full bg-emerald-500 transition-all"
@@ -388,8 +389,8 @@ export function DashboardPage() {
                   발송 {reportProgress.done}/{reportProgress.total} · {reportProgress.pct}%
                 </span>
               </div>
-              {/* 상태별 분포 — 클릭 시 해당 상태 필터로 직행 */}
-              <div className="space-y-1">
+              {/* 상태별 분포 — 클릭 시 해당 상태 필터로 직행. 남은 높이에 균등 배분 */}
+              <div className="flex flex-1 flex-col justify-evenly pt-2">
                 {REPORT_PROGRESS_ROWS.map(({ key, status, label, color }) => {
                   const count = reportProgress.summary[key]
                   return (
@@ -397,12 +398,12 @@ export function DashboardPage() {
                       key={key}
                       to={`/reports?status=${status}`}
                       title={`${label} ${count}건 — 클릭하면 해당 목록으로 이동`}
-                      className="group flex items-center gap-2.5 rounded-lg px-1.5 py-1 hover:bg-elevate"
+                      className="group flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-elevate"
                     >
                       <span className="w-16 shrink-0 text-xs font-medium text-ash group-hover:text-bone">
                         {label}
                       </span>
-                      <span className="h-3.5 flex-1 overflow-hidden rounded bg-elevate">
+                      <span className="h-4 flex-1 overflow-hidden rounded bg-elevate">
                         <span
                           className={`block h-full rounded transition-all ${color}`}
                           style={{
@@ -429,9 +430,9 @@ export function DashboardPage() {
           )}
         </section>
 
-        {/* 최근 활동 타임라인 (전사, 작성자 표기) */}
-        <section className="rounded-3xl border border-hairline bg-graphite p-5">
-          <div className="mb-4 flex items-center justify-between">
+        {/* 최근 활동 타임라인 (전사, 작성자 표기) — 카드 높이 고정, 목록만 내부 스크롤 */}
+        <section className="flex flex-col rounded-3xl border border-hairline bg-graphite p-5">
+          <div className="mb-4 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold text-bone">최근 활동</h2>
             <Link
               to="/histories"
@@ -446,10 +447,12 @@ export function DashboardPage() {
             <EmptyState
               title="최근 활동이 없습니다"
               description="첫 활동 이력을 등록해 보세요."
-              className="border-0 py-10"
+              className="my-auto border-0 py-10"
             />
           ) : (
-            <Timeline items={recent} />
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <Timeline items={recent} />
+            </div>
           )}
         </section>
       </div>
