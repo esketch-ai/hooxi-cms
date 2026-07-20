@@ -1,4 +1,4 @@
-// SCR-01 통합 현황판 — 오늘의 액션 + KPI 5카드 + 리텐션 퍼널 + 최근 활동
+// SCR-01 통합 현황판 — 오늘의 액션 + KPI 5카드 + 이달 보고서 진행 + 최근 활동
 // 데이터: GET /dashboard/stats (routers/dashboard.py — 일괄 조회)
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -33,7 +33,20 @@ import { useAuth } from '../../app/AuthProvider'
 import { ActivityForm } from '../histories/ActivityForm'
 import { ActionCenter, type ActionItem } from './ActionCenter'
 
-const FUNNEL_COLORS = ['bg-slate-400', 'bg-blue-400', 'bg-blue-600', 'bg-emerald-500']
+// 이달 보고서 진행 — 상태별 행. 색은 StatusBadge report 도메인과 같은 계열(회색→파랑→보라→하늘→초록)
+const REPORT_PROGRESS_ROWS: {
+  key: 'standby' | 'writing' | 'review' | 'approved' | 'sent' | 'confirmed'
+  status: string
+  label: string
+  color: string
+}[] = [
+  { key: 'standby', status: 'STANDBY', label: '미착수', color: 'bg-slate-400' },
+  { key: 'writing', status: 'WRITING', label: '작성중', color: 'bg-blue-400' },
+  { key: 'review', status: 'REVIEW', label: '내부검토', color: 'bg-purple-400' },
+  { key: 'approved', status: 'APPROVED', label: '발송승인', color: 'bg-sky-400' },
+  { key: 'sent', status: 'SENT', label: '발송완료', color: 'bg-emerald-500' },
+  { key: 'confirmed', status: 'CONFIRMED', label: '고객확인', color: 'bg-emerald-600' },
+]
 
 export function DashboardPage() {
   const [formOpen, setFormOpen] = useState(false)
@@ -51,21 +64,25 @@ export function DashboardPage() {
     },
   })
 
-  // 당월 보고서 — 액션 센터용. ReportsPage(['reports', period])와 키 분리,
-  // 조회 실패 시 빈 배열 폴백 (현황판을 막지 않는다)
+  // 당월 보고서 — 액션 센터 + 이달 보고서 진행 위젯 공용. ReportsPage(['reports', period])와 키 분리,
+  // 조회 실패 시 null 폴백 (현황판을 막지 않는다)
   const period = fmtMonth(new Date())
-  const { data: monthReports = [], isLoading: reportsLoading } = useQuery({
+  const { data: reportsData, isLoading: reportsLoading } = useQuery({
     queryKey: ['dashboard', 'reports', period],
-    queryFn: async (): Promise<ReportDelivery[]> => {
+    queryFn: async (): Promise<ReportListResponse | null> => {
       try {
         const { data } = await api.get<ReportListResponse>('/reports', { params: { period } })
-        return data.items
+        return data
       } catch {
-        return []
+        return null
       }
     },
     retry: false,
   })
+  const monthReports = useMemo<ReportDelivery[]>(
+    () => reportsData?.items ?? [],
+    [reportsData],
+  )
 
   // 오늘의 일정 — IssuesPage와 동일한 키·fetcher (캐시 공유)
   const todayStr = fmtDate(new Date())
@@ -81,9 +98,16 @@ export function DashboardPage() {
   })
 
   const kpi = data?.kpi
-  const funnel = data?.funnel ?? []
-  const funnelMax = Math.max(1, ...funnel.map((f) => f.count))
   const recent = (data?.recent_activities ?? []).slice(0, 8)
+
+  // 이달 보고서 진행 요약 — 취소 제외 대상 대비 발송완료+고객확인 비율
+  const reportProgress = useMemo(() => {
+    const s = reportsData?.summary
+    if (!s) return null
+    const total = s.target - s.canceled
+    const done = s.sent + s.confirmed
+    return { summary: s, total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
+  }, [reportsData])
 
   // ── 오늘의 액션 조합 — 정렬: 지연 → 긴급 → D-day 오름차순 → 일정 시간순 ──
   const actionItems = useMemo<ActionItem[]>(() => {
@@ -326,38 +350,81 @@ export function DashboardPage() {
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        {/* 리텐션 퍼널 (자체 바 차트 — §10.2 4단계 매핑) */}
+        {/* 이달 보고서 진행 — GET /reports summary 재사용, 상태 클릭 시 해당 필터로 직행 */}
         <section className="rounded-3xl border border-hairline bg-graphite p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-bone">영업 파이프라인 퍼널</h2>
-            <Link to="/clients" className="text-xs font-medium text-slatey hover:text-bone">
-              고객사 마스터 →
+            <h2 className="text-sm font-semibold text-bone">이달 보고서 진행 ({period})</h2>
+            <Link to="/reports" className="text-xs font-medium text-slatey hover:text-bone">
+              보고서 관리 →
             </Link>
           </div>
-          {isLoading ? (
+          {reportsLoading ? (
             <SkeletonTableRows rows={4} />
-          ) : funnel.length === 0 ? (
+          ) : !reportProgress || reportProgress.summary.target === 0 ? (
             <EmptyState
-              title="퍼널 데이터가 없습니다"
-              description="리텐션 단계가 기록되면 집계가 표시됩니다."
+              title="이번 달 발송 대상이 없습니다"
+              description="보고서 관리에서 [대상 생성]을 누르면 수신 설정 고객사의 당월 대상이 만들어집니다."
               className="border-0 py-10"
+              action={
+                <Link
+                  to="/reports"
+                  className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+                >
+                  보고서 관리로 이동
+                </Link>
+              }
             />
           ) : (
             <div className="space-y-3">
-              {funnel.map((step, i) => (
-                <div key={step.stage}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-ash">{step.stage}</span>
-                    <span className="font-bold text-bone">{step.count}</span>
-                  </div>
-                  <div className="h-5 overflow-hidden rounded bg-elevate">
-                    <div
-                      className={`h-full rounded transition-all ${FUNNEL_COLORS[i % FUNNEL_COLORS.length]}`}
-                      style={{ width: `${Math.round((step.count / funnelMax) * 100)}%` }}
-                    />
-                  </div>
+              {/* 전체 진행률 — 발송완료+고객확인 / 대상(취소 제외) */}
+              <div className="flex items-center gap-2">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevate">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${reportProgress.pct}%` }}
+                  />
                 </div>
-              ))}
+                <span className="text-xs font-semibold text-ash">
+                  발송 {reportProgress.done}/{reportProgress.total} · {reportProgress.pct}%
+                </span>
+              </div>
+              {/* 상태별 분포 — 클릭 시 해당 상태 필터로 직행 */}
+              <div className="space-y-1">
+                {REPORT_PROGRESS_ROWS.map(({ key, status, label, color }) => {
+                  const count = reportProgress.summary[key]
+                  return (
+                    <Link
+                      key={key}
+                      to={`/reports?status=${status}`}
+                      title={`${label} ${count}건 — 클릭하면 해당 목록으로 이동`}
+                      className="group flex items-center gap-2.5 rounded-lg px-1.5 py-1 hover:bg-elevate"
+                    >
+                      <span className="w-16 shrink-0 text-xs font-medium text-ash group-hover:text-bone">
+                        {label}
+                      </span>
+                      <span className="h-3.5 flex-1 overflow-hidden rounded bg-elevate">
+                        <span
+                          className={`block h-full rounded transition-all ${color}`}
+                          style={{
+                            width: `${Math.round((count / Math.max(1, reportProgress.total)) * 100)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-bone">
+                        {count}
+                      </span>
+                    </Link>
+                  )
+                })}
+                {reportProgress.summary.canceled > 0 && (
+                  <Link
+                    to="/reports?status=CANCELED"
+                    className="block px-1.5 pt-1 text-[11px] text-slatey hover:text-ash"
+                  >
+                    취소 {reportProgress.summary.canceled}건 →
+                  </Link>
+                )}
+              </div>
             </div>
           )}
         </section>

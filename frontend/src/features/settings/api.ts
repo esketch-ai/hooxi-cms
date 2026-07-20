@@ -97,7 +97,7 @@ export function useSaveConfig() {
     onSuccess: (_data, { key }) => {
       queryClient.invalidateQueries({ queryKey: ['config'] })
       queryClient.invalidateQueries({ queryKey: ['config-history', key] })
-      // 설정이 대시보드 퍼널·상담 키워드에 영향 — 관련 캐시 무효화
+      // 설정이 메일 템플릿·상담 키워드 등에 영향 — 관련 캐시 무효화
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })

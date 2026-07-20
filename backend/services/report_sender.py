@@ -66,7 +66,7 @@ DEFAULT_REPORT_MAIL_BODY = (
 
 
 def _config_template(db: Session, key: str, default: str) -> str:
-    """tb_config 문자열 템플릿 오버라이드 존중 — 파싱 실패/빈 값이면 코드 기본값 (funnel_mapping 패턴)."""
+    """tb_config 문자열 템플릿 오버라이드 존중 — 파싱 실패/빈 값이면 코드 기본값 (알려진 키 기본값 패턴)."""
     row = db.get(Config, key)
     if row and row.config_value:
         try:

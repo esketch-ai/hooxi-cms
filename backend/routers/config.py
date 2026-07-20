@@ -1,6 +1,6 @@
 """시스템 설정(tb_config) 관리 — SCR-14 설정 탭 (§10.1: 사용자 관리·tb_config·백업 = ADMIN 전용).
 
-- 알려진 키(funnel_mapping·sensitive_keywords)는 DB 미저장 시 코드 기본값을
+- 알려진 키(sensitive_keywords 등)는 DB 미저장 시 코드 기본값을
   "기본값(미저장)"으로 노출해 화면에서 현재 유효값을 확인할 수 있게 한다.
 - 값 변경 시 tb_config_history에 이전 값 기록(변경자·시각) +
   tb_audit_log(action=CONFIG_CHANGE) 적재.
@@ -17,7 +17,6 @@ from auth import require_role
 from models import Config, ConfigHistory, User, get_db
 from routers import common
 from routers.batch import DEFAULT_CHECK_AGENCIES
-from routers.dashboard import _DEFAULT_FUNNEL_MAPPING
 from routers.kakao import DEFAULT_SENSITIVE_KEYWORDS
 from services.audit_logger import AuditLogger
 from services.report_sender import DEFAULT_REPORT_MAIL_BODY, DEFAULT_REPORT_MAIL_SUBJECT
@@ -26,10 +25,6 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 # 알려진 키의 코드 기본값 — key: (기본값 객체, 설명)
 KNOWN_DEFAULTS = {
-    "funnel_mapping": (
-        _DEFAULT_FUNNEL_MAPPING,
-        "리텐션 8단계 → 대시보드 퍼널 4단계 매핑 (§10.2)",
-    ),
     "sensitive_keywords": (
         DEFAULT_SENSITIVE_KEYWORDS,
         "카카오 AI 응대 민감 키워드 — 감지 시 담당자 연결 (CR-3)",
@@ -50,9 +45,6 @@ KNOWN_DEFAULTS = {
         "(구독별 오버라이드가 우선)",
     ),
 }
-
-# §10.2: 퍼널은 4단계 구조 고정 (단계명은 재정의 가능)
-FUNNEL_STAGE_COUNT = 4
 
 
 def _default_out(key: str) -> schemas.ConfigOut:
@@ -81,24 +73,7 @@ def _validate_config_value(key: str, raw_value: str):
             status_code=422, detail="config_value는 파싱 가능한 JSON 문자열이어야 합니다"
         )
 
-    if key == "funnel_mapping":
-        # §10.2: 퍼널 4단계 키 → 리텐션 단계 문자열 배열
-        if not isinstance(parsed, dict) or len(parsed) != FUNNEL_STAGE_COUNT:
-            raise HTTPException(
-                status_code=422,
-                detail="funnel_mapping은 퍼널 4단계 키를 가진 JSON 객체여야 합니다 (§10.2)",
-            )
-        for stage, retention_stages in parsed.items():
-            if not str(stage).strip():
-                raise HTTPException(status_code=422, detail="funnel_mapping의 퍼널 단계명은 비울 수 없습니다")
-            if not isinstance(retention_stages, list) or not all(
-                isinstance(s, str) and s.strip() for s in retention_stages
-            ):
-                raise HTTPException(
-                    status_code=422,
-                    detail="funnel_mapping의 값은 리텐션 단계 문자열 배열이어야 합니다 (§10.2)",
-                )
-    elif key == "sensitive_keywords":
+    if key == "sensitive_keywords":
         if (
             not isinstance(parsed, list)
             or not parsed

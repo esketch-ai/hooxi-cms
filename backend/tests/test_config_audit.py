@@ -1,9 +1,8 @@
 """시스템 설정(tb_config)·감사 로그 API 테스트 — SCR-14 (§10.1: ADMIN 전용).
 
-- config CRUD: STAFF 403 / ADMIN OK / 잘못된 JSON 422 / funnel 구조 검증 /
+- config CRUD: STAFF 403 / ADMIN OK / 잘못된 JSON 422 / 알려진 키 구조 검증 /
   이력(tb_config_history)·감사 로그(CONFIG_CHANGE) 적재 / 기본값(미저장) 표시
 - audit-logs: 필터(action·target_type·기간·actor) + STAFF 403
-- 회귀: 대시보드 퍼널이 변경된 funnel_mapping을 반영
 """
 
 import json
@@ -13,7 +12,6 @@ import models
 
 API = "/api/v1"
 
-FUNNEL_DEFAULT_STAGES = ["관심/접촉", "제안/검토", "계약 진행", "온보딩/활성"]
 SENSITIVE_DEFAULTS = ["수수료", "단가", "계약금액", "보수율", "정산액"]
 
 
@@ -37,7 +35,7 @@ def _delete_config(config_key):
 # ---------------------------------------------------------------------------
 def test_config_requires_admin(client, staff_headers):
     assert client.get(API + "/config", headers=staff_headers).status_code == 403
-    assert client.get(API + "/config/funnel_mapping", headers=staff_headers).status_code == 403
+    assert client.get(API + "/config/sensitive_keywords", headers=staff_headers).status_code == 403
     assert (
         client.put(
             API + "/config/sensitive_keywords",
@@ -47,7 +45,7 @@ def test_config_requires_admin(client, staff_headers):
         == 403
     )
     assert (
-        client.get(API + "/config/funnel_mapping/history", headers=staff_headers).status_code
+        client.get(API + "/config/sensitive_keywords/history", headers=staff_headers).status_code
         == 403
     )
 
@@ -64,10 +62,8 @@ def test_config_list_includes_unsaved_defaults(client, admin_headers):
     assert resp.status_code == 200, resp.text
     items = {item["config_key"]: item for item in resp.json()}
 
-    funnel = items["funnel_mapping"]
-    assert funnel["is_default"] is True
-    assert "기본값(미저장)" in funnel["description"]
-    assert list(json.loads(funnel["config_value"]).keys()) == FUNNEL_DEFAULT_STAGES
+    # funnel_mapping 은 퍼널 위젯 제거와 함께 알려진 키에서 빠졌다 (회귀)
+    assert "funnel_mapping" not in items
 
     sensitive = items["sensitive_keywords"]
     assert sensitive["is_default"] is True
@@ -76,13 +72,12 @@ def test_config_list_includes_unsaved_defaults(client, admin_headers):
 
 
 def test_config_get_single_default(client, admin_headers):
-    resp = client.get(API + "/config/funnel_mapping", headers=admin_headers)
+    resp = client.get(API + "/config/sensitive_keywords", headers=admin_headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["is_default"] is True
     assert body["updated_at"] is None
-    mapping = json.loads(body["config_value"])
-    assert len(mapping) == 4
+    assert json.loads(body["config_value"]) == SENSITIVE_DEFAULTS
 
 
 def test_config_get_unknown_key_404(client, admin_headers):
@@ -98,34 +93,6 @@ def test_config_put_invalid_json_422(client, admin_headers):
         API + "/config/sensitive_keywords",
         headers=admin_headers,
         json={"config_value": "이건 JSON이 아님 {{"},
-    )
-    assert resp.status_code == 422, resp.text
-
-
-def test_config_put_funnel_structure_validation(client, admin_headers):
-    # 4개 퍼널 키가 아니면 422
-    bad_three_keys = {"A": ["인지"], "B": ["검토"], "C": ["활용"]}
-    resp = client.put(
-        API + "/config/funnel_mapping",
-        headers=admin_headers,
-        json={"config_value": json.dumps(bad_three_keys, ensure_ascii=False)},
-    )
-    assert resp.status_code == 422, resp.text
-
-    # 값이 문자열 배열이 아니면 422
-    bad_values = {"A": ["인지"], "B": ["검토"], "C": ["활용"], "D": "확장"}
-    resp = client.put(
-        API + "/config/funnel_mapping",
-        headers=admin_headers,
-        json={"config_value": json.dumps(bad_values, ensure_ascii=False)},
-    )
-    assert resp.status_code == 422, resp.text
-
-    # dict가 아니면 422
-    resp = client.put(
-        API + "/config/funnel_mapping",
-        headers=admin_headers,
-        json={"config_value": json.dumps(["인지", "관심", "검토", "활용"])},
     )
     assert resp.status_code == 422, resp.text
 
@@ -270,29 +237,3 @@ def test_audit_logs_filters(client, admin_headers):
     body = resp.json()
     assert len(body["items"]) == 1
     assert body["total"] >= 2
-
-
-# ---------------------------------------------------------------------------
-# 회귀 — 대시보드 퍼널이 변경된 funnel_mapping을 반영
-# ---------------------------------------------------------------------------
-def test_dashboard_reflects_updated_funnel_mapping(client, admin_headers, staff_headers):
-    new_mapping = {
-        "신규 접점": ["인지", "관심"],
-        "협상": ["검토"],
-        "계약": ["구매결정"],
-        "운영": ["온보딩", "활용", "재계약", "확장"],
-    }
-    resp = client.put(
-        API + "/config/funnel_mapping",
-        headers=admin_headers,
-        json={"config_value": json.dumps(new_mapping, ensure_ascii=False)},
-    )
-    assert resp.status_code == 200, resp.text
-
-    resp = client.get(API + "/dashboard/stats", headers=staff_headers)
-    assert resp.status_code == 200, resp.text
-    funnel = resp.json()["funnel"]
-    assert [f["stage"] for f in funnel] == list(new_mapping.keys())
-
-    # 뒤 테스트(test_p1_smoke 오버라이드 등)와의 격리 — 저장분 정리
-    _delete_config("funnel_mapping")

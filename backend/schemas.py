@@ -1049,15 +1049,9 @@ class DashboardKpi(BaseModel):
     expected_billing_amount: Optional[float] = None  # 당월 예상 청구액 🔒 — 단가 미입력 시 None
 
 
-class FunnelStage(BaseModel):
-    stage: str
-    count: int
-
-
 class DashboardStats(BaseModel):
     period: str
     kpi: DashboardKpi
-    funnel: List[FunnelStage]
     recent_activities: List[HistoryOut]
     open_issues: List[HistoryOut]
 

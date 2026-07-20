@@ -1,5 +1,5 @@
 // SCR-14 시스템 설정 탭 (ADMIN 전용) — tb_config 카드 목록
-// sensitive_keywords: chips 편집 · funnel_mapping: 퍼널 4단계별 리텐션 다중 선택 · 그 외: JSON textarea
+// sensitive_keywords 등 배열형: chips 편집 · 메일 템플릿: 텍스트 편집 · 그 외: JSON textarea
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CaretDown,
@@ -20,35 +20,10 @@ import {
   type ConfigItem,
 } from './api'
 
-// 리텐션 8단계 — 백엔드 funnel_mapping 기본값은 한국어 라벨을 사용(§10.2)
-const RETENTION_STAGES = [
-  { code: 'AWARENESS', label: '인지' },
-  { code: 'INTEREST', label: '관심' },
-  { code: 'REVIEW', label: '검토' },
-  { code: 'DECISION', label: '구매결정' },
-  { code: 'ONBOARDING', label: '온보딩' },
-  { code: 'UTILIZATION', label: '활용' },
-  { code: 'RENEWAL', label: '재계약' },
-  { code: 'EXPANSION', label: '확장' },
-]
-
-const RETENTION_CODE_TO_LABEL: Record<string, string> = Object.fromEntries(
-  RETENTION_STAGES.map((s) => [s.code, s.label]),
-)
-
-// §10.2 기본 매핑 — 파싱 실패 시 편집 시작점
-const DEFAULT_FUNNEL_MAPPING: Record<string, string[]> = {
-  '관심/접촉': ['인지', '관심'],
-  '제안/검토': ['검토'],
-  '계약 진행': ['구매결정'],
-  '온보딩/활성': ['온보딩', '활용', '재계약', '확장'],
-}
-
 // 알려진 키 한국어 제목 (미등록 키는 키 그대로 노출)
 const CONFIG_TITLES: Record<string, string> = {
   sensitive_keywords: '민감 키워드 (카카오 상담)',
   account_check_agencies: '계정 점검 기관 (월초 배치)',
-  funnel_mapping: '리텐션 퍼널 매핑 (대시보드)',
   report_mail_subject: '보고서 메일 제목 템플릿',
   report_mail_body: '보고서 메일 본문 템플릿',
 }
@@ -56,7 +31,6 @@ const CONFIG_TITLES: Record<string, string> = {
 const CONFIG_ORDER = [
   'sensitive_keywords',
   'account_check_agencies',
-  'funnel_mapping',
   'report_mail_subject',
   'report_mail_body',
 ]
@@ -187,16 +161,6 @@ function ConfigCard({ item }: { item: ConfigItem }) {
         onChange={(next, valid) => {
           setDraft(next)
           setDraftValid(valid)
-        }}
-      />
-    )
-  } else if (item.key === 'funnel_mapping') {
-    editor = (
-      <FunnelMappingEditor
-        value={draft}
-        onChange={(next) => {
-          setDraft(next)
-          setDraftValid(true)
         }}
       />
     )
@@ -454,99 +418,6 @@ function TextTemplateEditor({
         <p className="mt-1 text-[11px] text-rose-500">템플릿은 비워 둘 수 없습니다.</p>
       )}
       <p className="mt-1.5 text-[11px] text-slatey">{TEMPLATE_VARS_HINT}</p>
-    </div>
-  )
-}
-
-// ── funnel_mapping: 퍼널 4단계별 리텐션 다중 선택 ───────────────────
-function parseFunnelMapping(value: string): Record<string, string[]> {
-  try {
-    const parsed = JSON.parse(value)
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed) &&
-      Object.values(parsed).every((v) => Array.isArray(v))
-    ) {
-      // 영문 코드(AWARENESS 등)로 저장된 경우 한국어 라벨로 정규화
-      const normalized: Record<string, string[]> = {}
-      for (const [stage, list] of Object.entries(parsed as Record<string, unknown[]>)) {
-        normalized[stage] = list
-          .filter((v): v is string => typeof v === 'string')
-          .map((v) => RETENTION_CODE_TO_LABEL[v] ?? v)
-      }
-      return normalized
-    }
-  } catch {
-    /* 파싱 실패 → 기본 매핑에서 시작 */
-  }
-  return { ...DEFAULT_FUNNEL_MAPPING }
-}
-
-function FunnelMappingEditor({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (serialized: string) => void
-}) {
-  const mapping = useMemo(() => parseFunnelMapping(value), [value])
-  const funnelStages = Object.keys(mapping)
-
-  const toggle = (stage: string, label: string) => {
-    const current = mapping[stage] ?? []
-    const next = {
-      ...mapping,
-      [stage]: current.includes(label)
-        ? current.filter((l) => l !== label)
-        : [...current, label],
-    }
-    onChange(JSON.stringify(next))
-  }
-
-  // 검증 힌트: 중복 배정 / 미배정 리텐션 단계
-  const assigned = Object.values(mapping).flat()
-  const duplicated = RETENTION_STAGES.filter(
-    (s) => assigned.filter((a) => a === s.label).length > 1,
-  ).map((s) => s.label)
-  const unassigned = RETENTION_STAGES.filter((s) => !assigned.includes(s.label)).map(
-    (s) => s.label,
-  )
-
-  return (
-    <div className="space-y-3">
-      {funnelStages.map((stage) => (
-        <div key={stage}>
-          <p className="mb-1.5 text-xs font-semibold text-ash">{stage}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {RETENTION_STAGES.map((s) => {
-              const selected = (mapping[stage] ?? []).includes(s.label)
-              return (
-                <button
-                  key={s.code}
-                  type="button"
-                  onClick={() => toggle(stage, s.label)}
-                  aria-pressed={selected}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    selected
-                      ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                      : 'border-hairline text-slatey hover:border-hairline-strong hover:text-ash'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-      {(duplicated.length > 0 || unassigned.length > 0) && (
-        <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
-          {duplicated.length > 0 && `중복 배정: ${duplicated.join(', ')}`}
-          {duplicated.length > 0 && unassigned.length > 0 && ' · '}
-          {unassigned.length > 0 && `미배정: ${unassigned.join(', ')}`}
-        </p>
-      )}
     </div>
   )
 }

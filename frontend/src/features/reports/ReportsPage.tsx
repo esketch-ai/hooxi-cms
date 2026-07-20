@@ -1,6 +1,6 @@
 // SCR-12 월간 보고서 발송 관리 — "이번 달, 어느 고객사에 어디까지 됐는가" 한 화면
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   CaretLeft,
   CaretRight,
@@ -39,14 +39,15 @@ import { ReportDrawer } from './ReportDrawer'
 
 const SUMMARY_ORDER: {
   key: 'standby' | 'writing' | 'review' | 'approved' | 'sent' | 'confirmed'
+  status: string
   label: string
 }[] = [
-  { key: 'standby', label: '미착수' },
-  { key: 'writing', label: '작성중' },
-  { key: 'review', label: '검토' },
-  { key: 'approved', label: '발송승인' },
-  { key: 'sent', label: '발송완료' },
-  { key: 'confirmed', label: '고객확인' },
+  { key: 'standby', status: 'STANDBY', label: '미착수' },
+  { key: 'writing', status: 'WRITING', label: '작성중' },
+  { key: 'review', status: 'REVIEW', label: '내부검토' },
+  { key: 'approved', status: 'APPROVED', label: '발송승인' },
+  { key: 'sent', status: 'SENT', label: '발송완료' },
+  { key: 'confirmed', status: 'CONFIRMED', label: '고객확인' },
 ]
 
 export function ReportsPage() {
@@ -56,6 +57,16 @@ export function ReportsPage() {
   const [period, setPeriod] = useState(() => fmtMonth(new Date()))
   const { data, isLoading, isError, refetch } = useReports(period)
   const reports = useMemo(() => data?.items ?? [], [data])
+
+  // 상태 필터 — URL ?status= 단일 원천 (현황판 위젯 클릭 진입·공유 링크 지원)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const statusFilter = searchParams.get('status')
+  const setStatusFilter = (status: string | null) =>
+    setSearchParams(status ? { status } : {}, { replace: true })
+  const visibleReports = useMemo(
+    () => (statusFilter ? reports.filter((r) => r.status === statusFilter) : reports),
+    [reports, statusFilter],
+  )
 
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [uploadTarget, setUploadTarget] = useState<ReportDelivery | null>(null)
@@ -405,16 +416,48 @@ export function ReportsPage() {
               <CaretRight size={14} />
             </button>
           </div>
-          <p className="text-sm text-ash">
-            대상 <b className="text-bone">{summary.total}</b>개사
-            <span className="mx-2 text-slatey">|</span>
-            {SUMMARY_ORDER.map(({ key, label }, i) => (
-              <span key={key}>
-                {i > 0 && <span className="mx-1 text-slatey">·</span>}
-                {label} <b className="text-bone">{summary.counts[key] ?? 0}</b>
-              </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setStatusFilter(null)}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                !statusFilter
+                  ? 'border-transparent bg-primary text-on-primary'
+                  : 'border-hairline text-ash hover:bg-elevate'
+              }`}
+            >
+              대상 <b>{summary.total}</b>개사
+            </button>
+            {SUMMARY_ORDER.map(({ key, status, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === status ? null : status)}
+                title={`${label} 건만 보기`}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter === status
+                    ? 'border-transparent bg-primary text-on-primary'
+                    : 'border-hairline text-ash hover:bg-elevate'
+                }`}
+              >
+                {label} <b>{summary.counts[key] ?? 0}</b>
+              </button>
             ))}
-          </p>
+            {(summary.counts.canceled ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'CANCELED' ? null : 'CANCELED')}
+                title="취소 건만 보기"
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter === 'CANCELED'
+                    ? 'border-transparent bg-primary text-on-primary'
+                    : 'border-hairline text-slatey hover:bg-elevate'
+                }`}
+              >
+                취소 <b>{summary.counts.canceled}</b>
+              </button>
+            )}
+          </div>
           <div className="ml-auto flex min-w-[160px] items-center gap-2">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-elevate">
               <div
@@ -444,15 +487,23 @@ export function ReportsPage() {
       ) : (
         <DataTable
           columns={columns}
-          rows={reports}
+          rows={visibleReports}
           rowKey={(r) => r.report_id}
           isLoading={isLoading}
           onRowClick={(r) => setDrawerId(r.report_id)}
           rowClassName={(r) =>
             r.status === 'CANCELED' || r.status === 'MERGED' ? 'opacity-50' : ''
           }
-          emptyTitle={`${period} 발송 대상이 없습니다`}
-          emptyDescription="[대상 생성]으로 보고서 수신 설정 고객사의 당월 대상을 만들 수 있습니다."
+          emptyTitle={
+            statusFilter && reports.length > 0
+              ? '해당 상태의 보고서가 없습니다'
+              : `${period} 발송 대상이 없습니다`
+          }
+          emptyDescription={
+            statusFilter && reports.length > 0
+              ? '위 상태 칩을 다시 누르면 전체 목록으로 돌아갑니다.'
+              : '[대상 생성]으로 보고서 수신 설정 고객사의 당월 대상을 만들 수 있습니다.'
+          }
           renderCard={(r) => (
             <button
               type="button"

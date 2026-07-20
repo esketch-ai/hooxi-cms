@@ -775,39 +775,13 @@ def test_dashboard_stats(client, staff_headers):
     assert kpi["urgent_open_issues"] >= 1  # URGENT ISSUE(IN_PROGRESS) 잔존
     assert kpi["expected_billing_amount"] is None  # 정산 매핑 없음 → 미정
 
-    # §10.2 기본 퍼널 4단계
-    assert [f["stage"] for f in body["funnel"]] == ["관심/접촉", "제안/검토", "계약 진행", "온보딩/활성"]
-    funnel = {f["stage"]: f["count"] for f in body["funnel"]}
-    assert funnel["온보딩/활성"] >= 1  # retention_stage=활용
+    # 퍼널 제거 회귀 — 이달 보고서 진행 위젯은 GET /reports summary 를 재사용하므로
+    # 대시보드 응답에 funnel 필드가 더 이상 없어야 한다
+    assert "funnel" not in body
 
     assert 0 < len(body["recent_activities"]) <= 20
     assert all("created_by_name" in h for h in body["recent_activities"])
     assert all(i["issue_status"] != "CLOSED" for i in body["open_issues"])
-
-
-def test_dashboard_funnel_config_override(client, staff_headers):
-    """tb_config funnel_mapping 오버라이드 존중."""
-    import json as _json
-
-    import models
-
-    db = models.SessionLocal()
-    try:
-        db.add(
-            models.Config(
-                config_key="funnel_mapping",
-                config_value=_json.dumps({"전체": ["인지", "관심", "검토", "구매결정", "온보딩", "활용", "재계약", "확장"]}),
-                description="테스트 오버라이드",
-            )
-        )
-        db.commit()
-    finally:
-        db.close()
-
-    resp = client.get(API + "/dashboard/stats", headers=staff_headers)
-    body = resp.json()
-    assert [f["stage"] for f in body["funnel"]] == ["전체"]
-    assert body["funnel"][0]["count"] >= 1
 
 
 def test_dashboard_expected_billing_current_month_only(client, staff_headers):

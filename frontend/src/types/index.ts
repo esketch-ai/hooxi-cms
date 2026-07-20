@@ -548,15 +548,9 @@ export interface DashboardKpi {
   expected_billing_amount?: number | null
 }
 
-export interface FunnelStage {
-  stage: string
-  count: number
-}
-
 export interface DashboardStats {
   period: string
   kpi: DashboardKpi
-  funnel: FunnelStage[]
   recent_activities: ActivityHistory[]
   open_issues: ActivityHistory[]
 }
