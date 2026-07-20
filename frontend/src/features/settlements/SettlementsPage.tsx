@@ -155,17 +155,46 @@ export function SettlementsPage() {
 
   /** 상태별 액션 — STANDBY→발행 / BILLED→입금 완료 / COMPLETED→읽기 전용(+회차 이력) */
   const actionCell = (row: ProjectClientMap) => {
-    if (!canManage) return historyButton(row) ?? <span className="text-xs text-slatey">—</span>
+    if (!canManage) {
+      // 막다른 정보 방지 — 처리 가능한 상태면 왜 버튼이 없는지(권한)를 보여준다
+      const history = historyButton(row)
+      const actionable =
+        row.settlement_status === 'STANDBY' || row.settlement_status === 'BILLED'
+      return (
+        <>
+          {history}
+          {actionable ? (
+            <span
+              className="text-xs text-slatey"
+              title="청구서 발행·입금 처리는 팀장(MANAGER) 이상이 할 수 있습니다"
+            >
+              팀장 권한
+            </span>
+          ) : (
+            !history && <span className="text-xs text-slatey">—</span>
+          )}
+        </>
+      )
+    }
     if (row.settlement_status === 'STANDBY') {
-      // 금액 미정(단가 NULL) 건은 발행 차단 (R2-A6)
-      const blocked = row.expected_amount == null
+      // 금액 미정(단가 NULL) 건은 발행 불가 (R2-A6) — 비활성 버튼 대신 해결 동선으로 직행
+      if (row.expected_amount == null) {
+        return (
+          <Link
+            to={`/projects/${row.project_id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-full border border-amber-400/40 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+            title="배출권 단가가 없어 청구할 수 없습니다 — 사업 상세에서 단가를 입력하면 발행 버튼이 활성화됩니다"
+          >
+            단가 입력 →
+          </Link>
+        )
+      }
       return (
         <button
           type="button"
           onClick={() => setPending({ row, next: 'BILLED' })}
-          disabled={blocked}
-          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-40"
-          title={blocked ? '배출권 단가를 입력하면 청구할 수 있습니다 (사업 상세에서 입력)' : undefined}
+          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-elevate"
         >
           청구서 발행
         </button>
@@ -323,6 +352,30 @@ export function SettlementsPage() {
         {total > rows.length && (
           <span className="text-xs text-slatey">(금액 합은 현재 페이지 기준)</span>
         )}
+        {/* 상태 흐름 안내 — "어디서 어떻게 바뀌는가"를 화면이 스스로 설명 */}
+        <div
+          className="flex items-center gap-1.5 text-xs text-slatey sm:ml-auto"
+          title={
+            canManage
+              ? '상태 변경은 각 행 오른쪽의 버튼으로 진행합니다. 청구 시점 금액은 동결되며, 역순 변경은 불가합니다.'
+              : '청구서 발행·입금 처리는 팀장(MANAGER) 이상이 각 행의 버튼으로 진행합니다.'
+          }
+        >
+          <StatusBadge domain="settlement" value="STANDBY" />
+          <span aria-hidden>→</span>
+          <span className="rounded-md border border-hairline bg-elevate px-1.5 py-0.5 font-medium text-ash">
+            청구서 발행
+          </span>
+          <span aria-hidden>→</span>
+          <StatusBadge domain="settlement" value="BILLED" />
+          <span aria-hidden>→</span>
+          <span className="rounded-md border border-hairline bg-elevate px-1.5 py-0.5 font-medium text-ash">
+            입금 완료
+          </span>
+          <span aria-hidden>→</span>
+          <StatusBadge domain="settlement" value="COMPLETED" />
+          {!canManage && <span className="ml-1">(팀장 이상)</span>}
+        </div>
       </div>
 
       {isError ? (
