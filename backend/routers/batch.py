@@ -12,6 +12,7 @@
 
 import json
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Optional
@@ -19,6 +20,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import schemas
@@ -99,6 +101,16 @@ def _seed_admin_id(db: Session) -> Optional[str]:
 def _marker(asset_id: str, period: str) -> str:
     """멱등·추적용 태그 — 이슈 content 말미에 삽입."""
     return "[점검:{0}:{1}]".format(asset_id, period)
+
+
+# 점검 이슈 PK 를 (자산, 월)에서 결정적으로 생성하기 위한 고정 네임스페이스.
+# 동시 실행(수동 중복 클릭·스케줄러 겹침)이 read-check 를 동시에 통과해도
+# 두 번째 insert 가 PK 제약으로 거부되어 DB 수준에서 중복이 차단된다.
+_CHECK_ISSUE_NAMESPACE = uuid.UUID("6c1f2c62-6a3d-4c58-9a41-6a3f0b6a8d21")
+
+
+def _check_issue_id(asset_id: str, period: str) -> str:
+    return str(uuid.uuid5(_CHECK_ISSUE_NAMESPACE, "account-check:{0}:{1}".format(asset_id, period)))
 
 
 def _optional_admin(
@@ -219,22 +231,29 @@ def account_check(
             marker=marker,
         )
 
-        db.add(
-            ActivityHistory(
-                client_id=asset.client_id,
-                manager_id=manager_id,
-                created_by=actor_id,
-                activity_date=now,
-                activity_type="ISSUE",
-                issue_status="OPEN",
-                priority=priority,
-                due_date=due,
-                next_action="계정 로그인 유효성 확인 후 이상 시 기관 연락",
-                title="{0} {1} 계정 월별 점검 — {2}".format(common.AUTO_PREFIX, agency, company),
-                content=content,
-            )
-        )
-        created += 1
+        try:
+            # 결정적 PK + savepoint — 동시 실행이 read-check 를 같이 통과해도
+            # 두 번째 insert 는 IntegrityError 로 떨어져 '건너뜀' 처리 (중복 생성 불가)
+            with db.begin_nested():
+                db.add(
+                    ActivityHistory(
+                        history_id=_check_issue_id(asset.asset_id, period),
+                        client_id=asset.client_id,
+                        manager_id=manager_id,
+                        created_by=actor_id,
+                        activity_date=now,
+                        activity_type="ISSUE",
+                        issue_status="OPEN",
+                        priority=priority,
+                        due_date=due,
+                        next_action="계정 로그인 유효성 확인 후 이상 시 기관 연락",
+                        title="{0} {1} 계정 월별 점검 — {2}".format(common.AUTO_PREFIX, agency, company),
+                        content=content,
+                    )
+                )
+            created += 1
+        except IntegrityError:
+            skipped += 1
 
     AuditLogger.log_action(
         db, actor_id, "BATCH_ACCOUNT_CHECK", target_type="BATCH", target_id=period,

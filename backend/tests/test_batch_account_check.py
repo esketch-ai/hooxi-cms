@@ -122,6 +122,49 @@ def test_idempotent(client, admin_headers, monkeypatch):
     assert second["created"] == 0 and second["skipped"] == first["targets"]
 
 
+def test_duplicate_guard_by_deterministic_pk(client, admin_headers, monkeypatch):
+    """동시 실행 경합 회귀 — read-check(마커 검색)를 통과해도 결정적 PK 가 중복을 차단한다.
+
+    실사례: 수동 점검 두 요청이 서로의 미커밋 데이터를 못 보고 둘 다 이슈를 생성.
+    마커를 훼손해 read-check 를 무력화한 상태로 재실행 → PK 충돌은 '건너뜀'으로
+    집계되고 이슈는 여전히 1건이어야 한다.
+    """
+    monkeypatch.setattr(batch, "_site_reachable", lambda url: True)
+    db = models.SessionLocal()
+    cid, _ = _client_with_pm(db)
+    asset_id = _mk_asset(db, cid, "ETAS 경합", site="https://etas-race.test")
+    db.commit()
+    db.close()
+
+    first = client.post(CHECK + "?period=2030-06", headers=admin_headers).json()
+    assert first["created"] >= 1
+
+    # 마커를 지워 read-check(멱등 필터)가 이 자산을 '미생성'으로 오판하게 만든다
+    db = models.SessionLocal()
+    issue = (
+        db.query(models.ActivityHistory)
+        .filter(models.ActivityHistory.history_id == batch._check_issue_id(asset_id, "2030-06"))
+        .one()
+    )
+    issue.content = issue.content.replace(batch._marker(asset_id, "2030-06"), "[마커훼손]")
+    db.commit()
+    db.close()
+
+    second = client.post(CHECK + "?period=2030-06", headers=admin_headers)
+    assert second.status_code == 200, second.text  # IntegrityError 로 500 나면 안 됨
+    body = second.json()
+    assert body["created"] == 0  # PK 차단 → 새 이슈 없음
+
+    db = models.SessionLocal()
+    count = (
+        db.query(models.ActivityHistory)
+        .filter(models.ActivityHistory.history_id == batch._check_issue_id(asset_id, "2030-06"))
+        .count()
+    )
+    assert count == 1  # 중복 생성 없음
+    db.close()
+
+
 def test_secret_env_path(client, monkeypatch):
     monkeypatch.setenv("BATCH_SECRET", "batch-xyz")
     monkeypatch.setattr(batch, "_site_reachable", lambda url: True)
