@@ -312,7 +312,7 @@ def update_segment(
     active=Y 부활은 전용 의도가 아니므로 수정 경로에서는 허용하지 않는다."""
     row = common.get_or_404(db, Segment, segment_id, "세그먼트")
     if row.active != "Y":
-        raise HTTPException(status_code=404, detail="세그먼트을(를) 찾을 수 없습니다 (삭제됨)")
+        raise HTTPException(status_code=404, detail="세그먼트를 찾을 수 없습니다 (삭제됨)")
     before = "{0} — {1}".format(row.name, _criteria_summary(_row_criteria(row)))
 
     if payload.criteria is not None:
@@ -626,7 +626,7 @@ def send_segment(
     soft 삭제(active=N) 세그먼트는 404 — 목록에서 안 보이는 대상으로 발송 방지."""
     row = common.get_or_404(db, Segment, segment_id, "세그먼트")
     if row.active != "Y":
-        raise HTTPException(status_code=404, detail="세그먼트을(를) 찾을 수 없습니다 (삭제됨)")
+        raise HTTPException(status_code=404, detail="세그먼트를 찾을 수 없습니다 (삭제됨)")
     return _execute_send(db, user, _row_criteria(row), payload, segment=row)
 
 

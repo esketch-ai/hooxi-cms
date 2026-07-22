@@ -168,6 +168,8 @@ def update_settlement_status(
         )
         values["billed_at"] = now
         values["billed_by"] = user.user_id
+        # 발행 크레딧도 청구 시점 값으로 동결 (스냅샷 정본)
+        issued_credits_snap = project.issued_credits
     else:  # COMPLETED — 재계산 금지: 직전 BILLED 스냅샷 금액 승계(청구·입금 회차 일치)
         billed_snap = (
             db.query(SettlementSnapshot)
@@ -181,6 +183,11 @@ def update_settlement_status(
         # BILLED 스냅샷이 없으면 현재 expected_amount 유지 (방어)
         values["expected_amount"] = (
             billed_snap.amount if billed_snap is not None else mapping.expected_amount
+        )
+        # amount와 동일하게 issued_credits도 BILLED 스냅샷에서 승계 — 동결 금액과 근거(발행
+        # 크레딧)를 일치시킨다. BILLED~COMPLETED 사이 project.issued_credits 변동에 영향받지 않음.
+        issued_credits_snap = (
+            billed_snap.issued_credits if billed_snap is not None else project.issued_credits
         )
         values["completed_at"] = now
         values["completed_by"] = user.user_id
@@ -217,7 +224,7 @@ def update_settlement_status(
         SettlementSnapshot(
             map_id=map_id,
             seq=next_seq,
-            issued_credits=project.issued_credits,
+            issued_credits=issued_credits_snap,
             amount=values["expected_amount"],
             unit_price=project.unit_price,
             allocation_ratio=mapping.allocation_ratio,

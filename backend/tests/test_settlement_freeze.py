@@ -287,3 +287,76 @@ def test_completed_without_billed_snapshot_keeps_amount(client, staff_headers, a
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["expected_amount"] == 800000  # 현재 금액 유지(방어)
+
+
+# ---------------------------------------------------------------------------
+# 6. COMPLETED 스냅샷 issued_credits 승계 (QAQC 시나리오 P0-1) — 자족 시나리오
+# ---------------------------------------------------------------------------
+def test_completed_snapshot_inherits_billed_issued_credits(client, admin_headers, staff_headers):
+    """COMPLETED 스냅샷 issued_credits = BILLED 스냅샷 값(승계).
+
+    BILLED~COMPLETED 사이 project.issued_credits가 바뀌어도, 동결 금액(amount)과
+    근거(issued_credits)가 일치해야 한다. 수정 전에는 project 재조회로 변경값이 기록됐다.
+    """
+    resp = client.post(
+        API + "/clients", headers=staff_headers,
+        json={"client_type": "TRANSPORT", "company_name": "발행크레딧승계운수"},
+    )
+    assert resp.status_code == 201, resp.text
+    cid = resp.json()["client_id"]
+    resp = client.post(
+        API + "/projects", headers=staff_headers,
+        json={"project_name": "발행크레딧 승계 검증", "project_status": "모니터링",
+              "expected_credits": 1000, "unit_price": 10000, "manager_id": "u-manager"},
+    )
+    assert resp.status_code == 201, resp.text
+    pid = resp.json()["project_id"]
+    resp = client.post(
+        API + "/projects/" + pid + "/clients", headers=staff_headers,
+        json={"client_id": cid, "allocation_ratio": 50, "success_fee_rate": 10},
+    )
+    assert resp.status_code == 201, resp.text
+    map_id = resp.json()["map_id"]
+
+    # BILLED 전 발행 크레딧 = 100 (직접 세팅 — 발급완료 흐름 대체)
+    db = _db()
+    try:
+        db.get(models.Project, pid).issued_credits = 100
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.put(
+        API + "/settlements/" + map_id + "/status", headers=admin_headers,
+        json={"settlement_status": "BILLED"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # BILLED 후 발행 크레딧 변경 (100 → 999)
+    db = _db()
+    try:
+        db.get(models.Project, pid).issued_credits = 999
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.put(
+        API + "/settlements/" + map_id + "/status", headers=admin_headers,
+        json={"settlement_status": "COMPLETED", "paid_amount": 500000, "payment_type": "FULL"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    db = _db()
+    try:
+        snaps = (
+            db.query(SettlementSnapshot)
+            .filter(SettlementSnapshot.map_id == map_id)
+            .order_by(SettlementSnapshot.seq.asc())
+            .all()
+        )
+        assert [s.action for s in snaps] == ["BILLED", "COMPLETED"]
+        assert float(snaps[0].issued_credits) == 100
+        # 승계값(100)이어야 함 — 변경된 999가 아니어야 한다
+        assert float(snaps[1].issued_credits) == 100
+    finally:
+        db.close()

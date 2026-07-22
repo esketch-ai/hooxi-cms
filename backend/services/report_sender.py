@@ -279,10 +279,10 @@ def send_report_core(
             ),
         )
 
-    # common.get_or_404와 동일한 404 detail 문구 유지 (동작 불변)
+    # 발송 전용 404 문구 (SendPrecondition → 라우터가 HTTPException 404로 변환)
     client = db.get(Client, delivery.client_id) if delivery.client_id else None
     if client is None:
-        raise SendPrecondition(404, "고객사을(를) 찾을 수 없습니다")
+        raise SendPrecondition(404, "고객사를 찾을 수 없습니다")
 
     # 발송 파일: 고정본(pinned) 우선, 없으면 최신본 (R2-B4)
     doc_id = delivery.pinned_doc_id or delivery.doc_id
