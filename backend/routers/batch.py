@@ -11,6 +11,7 @@
 """
 
 import json
+import logging
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -28,8 +29,11 @@ from auth import ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payl
 from models import ActivityHistory, Asset, Client, Config, ReportDelivery, User, get_db
 from routers import common
 from routers.reports import generate_for_period
+from services import client_folders, dropbox_storage
 from services.audit_logger import AuditLogger
 from services.report_sender import SendPrecondition, send_report_core
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/batch", tags=["batch"])
 
@@ -364,4 +368,46 @@ def report_send(
         sent=sent,
         failed=failed,
         details=details,
+    )
+
+
+@router.post(
+    "/provision-dropbox-folders", response_model=schemas.DropboxProvisionResponse
+)
+def provision_dropbox_folders(
+    secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """기존 고객사 Dropbox 전용 폴더 일괄 생성(백필).
+
+    dropbox_folder가 없는 전 고객사(운수사·건물)를 provision한다. 건별 실패는 격리해
+    카운트만 반환하고, 재실행하면 이미 생성된 건은 대상에서 제외되어 안전(멱등).
+    Dropbox 미설정 시 503(게이트 규약).
+    """
+    actor = _optional_admin(credentials, db)
+    _authorize(secret, db, actor)
+
+    if not dropbox_storage.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Dropbox 연동이 설정되지 않았습니다 — 먼저 연동을 설정하세요.",
+        )
+
+    targets = db.query(Client).filter(Client.dropbox_folder.is_(None)).all()
+    provisioned = 0
+    failed = 0
+    for c in targets:
+        try:
+            client_folders.provision(db, c)
+            db.commit()
+            provisioned += 1
+        except Exception:
+            db.rollback()
+            failed += 1
+            log.warning(
+                "Dropbox 폴더 백필 실패 (client_id=%s)", c.client_id, exc_info=True
+            )
+    return schemas.DropboxProvisionResponse(
+        total=len(targets), provisioned=provisioned, failed=failed
     )

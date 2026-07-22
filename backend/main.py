@@ -147,6 +147,13 @@ def seed_codes():
         ("AGENCY", "BMS", "BMS", None, "https://gbms.gg.go.kr", 20),
         ("AGENCY", "KECO", "한국환경공단", None, "https://www.keco.or.kr", 30),
         ("AGENCY", "K_FMS", "K-FMS", None, None, 40),
+        # 고객사 Dropbox 전용 폴더의 구분 서브폴더 (라벨=실제 폴더명, code=안정 키)
+        ("CLIENT_FOLDER", "CONTRACT", "계약서", None, None, 10),
+        ("CLIENT_FOLDER", "SETTLEMENT", "정산", None, None, 20),
+        ("CLIENT_FOLDER", "REPORT", "보고서", None, None, 30),
+        ("CLIENT_FOLDER", "ASSET_AUTH", "자산·인증정보", None, None, 40),
+        ("CLIENT_FOLDER", "COLLECTED_DATA", "수집데이터", None, None, 50),
+        ("CLIENT_FOLDER", "EVIDENCE", "증빙자료", None, None, 60),
     ]
     try:
         db = SessionLocal()

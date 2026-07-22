@@ -103,6 +103,7 @@ class Client(Base):
     report_yn = Column(String(1), default="N")  # 보고서 대상 여부 (GAN A7)
     lat = Column(Numeric(10, 7))  # 지오코딩 — 결정 3호
     lng = Column(Numeric(10, 7))
+    dropbox_folder = Column(String(255))  # provision된 Dropbox 전용 폴더 경로(없으면 미생성)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -580,6 +581,7 @@ def ensure_schema():
         ("tb_document", "asset_id", "VARCHAR(50)"),
         ("tb_report_subscription", "mail_subject", "VARCHAR(200)"),
         ("tb_report_subscription", "mail_body", "TEXT"),
+        ("tb_client", "dropbox_folder", "VARCHAR(255)"),
     ]
     try:
         insp = _inspect(engine)

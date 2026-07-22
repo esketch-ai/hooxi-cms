@@ -91,6 +91,29 @@ def _retry_once(call, *args, **kwargs):
         return call(*args, **kwargs)
 
 
+def ensure_folder(path: str) -> bool:
+    """빈 폴더를 생성한다 — 이미 존재(conflict)하면 성공으로 간주(멱등).
+
+    반환: 생성 또는 기존 존재 시 True. 미설정 시 DropboxConfigError.
+    conflict가 아닌 ApiError(권한 등)는 호출부가 처리하도록 그대로 전파.
+    """
+    import dropbox
+
+    dbx = _get_client()
+    try:
+        _retry_once(dbx.files_create_folder_v2, path)
+        return True
+    except dropbox.exceptions.ApiError as exc:
+        err = exc.error
+        if (
+            isinstance(err, dropbox.files.CreateFolderError)
+            and err.is_path()
+            and err.get_path().is_conflict()
+        ):
+            return True  # 이미 존재 — 멱등
+        raise
+
+
 def upload(content: bytes, path: str) -> str:
     """업로드 — 상위 폴더 자동 생성, 이름 충돌 시 autorename.
 

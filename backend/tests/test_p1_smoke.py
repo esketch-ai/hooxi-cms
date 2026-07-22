@@ -630,7 +630,7 @@ def test_upload_document_sign_and_history_filter(client, staff_headers):
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["doc_type"] == "SIGN"
-    assert "/서명/" in body["file_url"]  # 업체별 서명 폴더 규칙
+    assert "/증빙자료/" in body["file_url"]  # SIGN → 고객사 폴더의 증빙자료 구분
     sign_doc_id = body["doc_id"]
 
     # history_id 필터 — 해당 활동 이력에 연결된 문서만

@@ -5,9 +5,10 @@
 - 민감 필드(success_fee_rate)는 응답에 포함하되 프론트가 마스킹 (reveal 감사 로그는 P2)
 """
 
+import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -23,14 +24,42 @@ from models import (
     ReportDelivery,
     ReportRecipient,
     ReportSubscription,
+    SessionLocal,
     User,
     get_db,
 )
 from routers import common
 from routers.codes import validate_active_code
+from services import client_folders
 from services.audit_logger import AuditLogger
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/clients", tags=["clients"])
+
+
+def _provision_dropbox_folder_bg(client_id: str) -> None:
+    """등록 응답 이후 백그라운드로 Dropbox 전용 폴더 생성 (best-effort).
+
+    등록 요청 스레드를 블로킹하지 않도록 응답 후 실행되며, 자체 DB 세션을 연다.
+    Dropbox 미설정이면 조용히 스킵되고, 생성 실패(API·네트워크·지연)는 등록에 영향을
+    주지 않는다(이미 커밋됨). 실패분은 백필(POST /batch/provision-dropbox-folders)로 복구.
+    """
+    db = SessionLocal()
+    try:
+        client = db.get(Client, client_id)
+        if client is None:
+            return
+        result = client_folders.provision(db, client)
+        if not result.get("skipped"):
+            db.commit()
+    except Exception:
+        db.rollback()
+        log.warning(
+            "Dropbox 폴더 provision 실패 (client_id=%s)", client_id, exc_info=True
+        )
+    finally:
+        db.close()
 
 _CLIENT_FIELDS = [
     "client_type", "company_name", "biz_reg_no", "region", "address",
@@ -184,6 +213,7 @@ def list_clients(
 @router.post("", response_model=schemas.ClientDetailOut, status_code=201)
 def create_client(
     payload: schemas.ClientCreate,
+    background_tasks: BackgroundTasks,
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
@@ -200,6 +230,8 @@ def create_client(
         _upsert_subscription(db, client, payload.subscription)
     db.commit()
     db.refresh(client)
+    # 등록 응답을 블로킹하지 않도록 폴더 생성은 응답 후 백그라운드로 (실패는 백필 복구)
+    background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id)
     return _client_detail(db, client)
 
 

@@ -5,21 +5,13 @@ import io
 from sqlalchemy import func as sa_func
 
 import models
-from routers.documents import storage_folder
 from services import dropbox_storage, storage
 
 
 # ---------------------------------------------------------------------------
-# 폴더 규칙
+# 폴더 규칙 (storage_folder 매핑 테스트는 test_client_folders.py로 이동 —
+#  이제 고객사 폴더/6구분 기준이라 tb_code·client가 필요)
 # ---------------------------------------------------------------------------
-def test_storage_folder_rule():
-    assert storage_folder("한빛운수", "PHOTO") == "한빛운수/현장사진"
-    assert storage_folder("한빛운수", "CONTRACT") == "한빛운수/계약서"
-    assert storage_folder("한빛운수", "SIGN") == "한빛운수/서명"  # 태블릿 현장 서명
-    assert storage_folder(None, "FORM") == "_공용/양식"
-    assert storage_folder("A/B상사", "ETC") == "A/B상사/기타"  # sanitize는 storage에서
-
-
 def test_sanitize_folder_segments():
     # 세그먼트별 안전화 — 슬래시로 폴더 깊이 유지, 특수문자 치환, 한글·공백 유지
     assert storage.sanitize_folder("한빛운수/현장사진") == "한빛운수/현장사진"
@@ -46,6 +38,53 @@ def _configure(monkeypatch):
     monkeypatch.setenv("DROPBOX_APP_KEY", "k")
     monkeypatch.setenv("DROPBOX_APP_SECRET", "s")
     monkeypatch.setenv("DROPBOX_REFRESH_TOKEN", "r")
+
+
+# ---------------------------------------------------------------------------
+# ensure_folder — 빈 폴더 생성(멱등)
+# ---------------------------------------------------------------------------
+def test_ensure_folder_creates(monkeypatch):
+    _configure(monkeypatch)
+    calls = []
+
+    class FakeDbx:
+        def files_create_folder_v2(self, path):
+            calls.append(path)
+            return object()
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    assert dropbox_storage.ensure_folder("/Hooxi-CMS/행복운수_3f9a/계약서") is True
+    assert calls == ["/Hooxi-CMS/행복운수_3f9a/계약서"]
+
+
+def test_ensure_folder_idempotent_on_conflict(monkeypatch):
+    _configure(monkeypatch)
+    import dropbox
+
+    conflict = dropbox.exceptions.ApiError(
+        "req",
+        dropbox.files.CreateFolderError.path(
+            dropbox.files.WriteError.conflict(dropbox.files.WriteConflictError.folder)
+        ),
+        "already exists",
+        None,
+    )
+
+    class FakeDbx:
+        def files_create_folder_v2(self, path):
+            raise conflict
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    # 이미 존재하는 폴더 → conflict를 성공으로 흡수(멱등)
+    assert dropbox_storage.ensure_folder("/Hooxi-CMS/중복") is True
+
+
+def test_ensure_folder_raises_when_unconfigured():
+    import pytest
+
+    assert not dropbox_storage.is_configured()  # conftest는 Dropbox env 없음
+    with pytest.raises(dropbox_storage.DropboxConfigError):
+        dropbox_storage.ensure_folder("/Hooxi-CMS/x")
 
 
 def test_save_uses_dropbox_scheme_and_path(monkeypatch):
@@ -84,6 +123,8 @@ def test_document_upload_uses_company_folder(client, admin_headers, monkeypatch)
         return path
 
     monkeypatch.setattr(dropbox_storage, "upload", fake_upload)
+    # 등록 훅(provision)이 실 네트워크를 타지 않도록 폴더 생성도 모킹
+    monkeypatch.setattr(dropbox_storage, "ensure_folder", lambda p: True)
 
     resp = client.post(
         "/api/v1/clients",
@@ -91,7 +132,6 @@ def test_document_upload_uses_company_folder(client, admin_headers, monkeypatch)
         headers=admin_headers,
     )
     assert resp.status_code == 201, resp.text
-    company = "QA-드롭박스운수"
     cid = resp.json()["client_id"]
 
     resp = client.post(
@@ -101,8 +141,9 @@ def test_document_upload_uses_company_folder(client, admin_headers, monkeypatch)
         headers=admin_headers,
     )
     assert resp.status_code == 201, resp.text
+    # PHOTO → 고객사 폴더(회사명_짧은ID)/자산·인증정보 (provision과 동일 위치)
     assert captured["path"].startswith(
-        "/Hooxi-CMS/{0}/현장사진/".format(company)
+        "/Hooxi-CMS/QA-드롭박스운수_{0}/자산·인증정보/".format(cid[:4])
     )
     assert resp.json()["file_url"].startswith("dropbox:/Hooxi-CMS/")
 

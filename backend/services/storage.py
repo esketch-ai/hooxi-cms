@@ -34,10 +34,19 @@ def _sanitize_filename(filename: str) -> str:
     return re.sub(r"[^\w.\-가-힣]", "_", name)
 
 
+def sanitize_segment(name: str) -> str:
+    """단일 경로 세그먼트 안전화 — 폴더명·라벨 공용 단일 소스.
+
+    슬래시 등 허용 외 문자는 _로 치환(단일 세그먼트 보장). 가운뎃점(·)은 공통코드
+    라벨(예: 자산·인증정보)에 쓰이므로 보존 — provision 폴더명과 업로드 경로 일치 유지.
+    """
+    return re.sub(r"[^\w.\-가-힣· ]", "_", name or "").strip()
+
+
 def sanitize_folder(folder: str) -> str:
-    """폴더 경로 세그먼트별 sanitize — 업체명 등 사용자 유래 문자열 안전화."""
+    """폴더 경로 세그먼트별 sanitize — 슬래시로 깊이 유지, 세그먼트는 sanitize_segment."""
     parts = [p for p in (folder or "").split("/") if p.strip()]
-    return "/".join(re.sub(r"[^\w.\-가-힣 ]", "_", p).strip() for p in parts)
+    return "/".join(sanitize_segment(p) for p in parts)
 
 
 def _object_name(filename: str, folder: str) -> str:

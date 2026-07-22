@@ -1266,6 +1266,14 @@ class ReportSendBatchResponse(BaseModel):
     details: List[ReportSendBatchDetail] = []
 
 
+class DropboxProvisionResponse(BaseModel):
+    """고객사 Dropbox 폴더 백필 결과 (POST /batch/provision-dropbox-folders)."""
+
+    total: int  # dropbox_folder 없던 대상 고객사 수
+    provisioned: int  # 폴더 생성 성공
+    failed: int  # 생성 실패(재실행으로 재시도 가능)
+
+
 # ---------------------------------------------------------------------------
 # 세그먼트 보고서 발송 (SCR-12 확장 — tb_segment / routers/segments.py)
 # ---------------------------------------------------------------------------

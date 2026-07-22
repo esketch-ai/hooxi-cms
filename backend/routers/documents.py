@@ -11,31 +11,39 @@ import schemas
 from auth import get_current_user, require_permission
 from models import ActivityHistory, Asset, Client, Document, User, get_db
 from routers import common
-from services import storage
+from services import client_folders, storage
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _DOC_TYPES = ("CONTRACT", "REPORT", "FORM", "PHOTO", "SIGN", "ETC")
 
-# 문서 유형 → 저장 폴더 (Dropbox: /Hooxi-CMS/{업체명}/{유형폴더}/)
-TYPE_DIR = {
-    "CONTRACT": "계약서",
-    "REPORT": "보고서",
-    "FORM": "양식",
-    "PHOTO": "현장사진",
-    "SIGN": "서명",
-    "ETC": "기타",
+# 업로드 유형 → 고객사 폴더의 6구분(tb_code CLIENT_FOLDER) 코드 매핑.
+# 실제 폴더명은 라벨을 해석해 사용(하드코딩 금지) → provision된 서브폴더와 동일 위치.
+DOC_TYPE_TO_FOLDER_CODE = {
+    "CONTRACT": "CONTRACT",   # 계약서
+    "REPORT": "REPORT",       # 보고서
+    "PHOTO": "ASSET_AUTH",    # 현장사진 → 자산·인증정보
+    "SIGN": "EVIDENCE",       # 서명 → 증빙자료
+    "FORM": "EVIDENCE",       # 양식 → 증빙자료
+    "ETC": "EVIDENCE",        # 기타 → 증빙자료
 }
 
 # 업로드 파일 크기 상한 — 태블릿 현장 사진·서명 기준 25MB
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
-def storage_folder(company_name: Optional[str], doc_type: str) -> str:
-    """업체별 서브 폴더 규칙 — 고객사 미지정(공용 양식 등)은 _공용."""
-    company = company_name or "_공용"
-    return "{0}/{1}".format(company, TYPE_DIR.get(doc_type, "기타"))
+def storage_folder(db: Session, client: Optional[Client], doc_type: str) -> str:
+    """업로드 저장 폴더(root 제외 상대경로) — 고객사 폴더(회사명_짧은ID)/매핑된 6구분 라벨.
+
+    고객사 폴더(provision과 동일한 folder_name) 아래 매핑 라벨에 저장한다. 고객사 미지정
+    (공용 양식 등)은 _공용/{라벨}. 라벨은 tb_code CLIENT_FOLDER에서 해석.
+    """
+    code = DOC_TYPE_TO_FOLDER_CODE.get(doc_type, "EVIDENCE")
+    label = client_folders.subfolder_label_for_code(db, code) or "증빙자료"
+    # provision된 폴더(dropbox_folder) 기준 — 회사명 개명 후에도 같은 폴더로 저장
+    base = client_folders.upload_base(client)
+    return "{0}/{1}".format(base, label)
 
 
 @router.get("", response_model=schemas.DocumentListResponse)
@@ -118,7 +126,7 @@ async def upload_document(
     file_url = storage.save_file(
         content,
         file.filename or "document",
-        folder=storage_folder(client.company_name if client else None, doc_type),
+        folder=storage_folder(db, client, doc_type),
     )
 
     doc = Document(
