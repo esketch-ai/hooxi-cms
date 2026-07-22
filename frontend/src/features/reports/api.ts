@@ -1,7 +1,12 @@
 // SCR-12 월간 보고서 발송 관리 API 훅 — 플랜 §5 SCR-12 엔드포인트
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
-import type { ReportDelivery, ReportListResponse, ReportStatus } from '../../types'
+import type {
+  DropboxTreeResponse,
+  ReportDelivery,
+  ReportListResponse,
+  ReportStatus,
+} from '../../types'
 
 export function useReports(period: string) {
   return useQuery({
@@ -56,15 +61,42 @@ export function useUploadReportFile() {
   })
 }
 
-/** 발송 — POST /reports/{id}/send (Gmail + 카카오 연동 시 알림톡 병행) */
+/** 발송 — POST /reports/{id}/send (Gmail + 카카오 연동 시 알림톡 병행).
+ *  dropboxPaths: 발송 시 추가 첨부할 고객사 Dropbox 파일 경로(라이브 브라우즈 선택). */
 export function useSendReport() {
   const invalidate = useInvalidateReports()
   return useMutation({
-    mutationFn: async (reportId: string) => {
-      const { data } = await api.post(`/reports/${reportId}/send`, {}, { timeout: 60_000 })
+    mutationFn: async ({
+      reportId,
+      dropboxPaths,
+    }: {
+      reportId: string
+      dropboxPaths?: string[]
+    }) => {
+      const { data } = await api.post(
+        `/reports/${reportId}/send`,
+        { dropbox_attachment_paths: dropboxPaths?.length ? dropboxPaths : null },
+        { timeout: 60_000 },
+      )
       return data
     },
-    onSuccess: (_data, reportId) => invalidate(reportId),
+    onSuccess: (_data, vars) => invalidate(vars.reportId),
+  })
+}
+
+/** 고객사 Dropbox 폴더 라이브 조회 — GET /clients/{id}/dropbox/tree (발송 첨부 선택용). */
+export function useDropboxTree(clientId: string | null | undefined, path: string | null) {
+  return useQuery({
+    queryKey: ['dropbox-tree', clientId, path],
+    enabled: !!clientId,
+    retry: false, // 409/503/403은 재시도 무의미 — 즉시 안내
+    queryFn: async () => {
+      const { data } = await api.get<DropboxTreeResponse>(
+        `/clients/${clientId}/dropbox/tree`,
+        { params: path ? { path } : undefined },
+      )
+      return data
+    },
   })
 }
 

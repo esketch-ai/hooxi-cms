@@ -320,7 +320,11 @@ def send_report(
 
     try:
         result = send_report_core(
-            db, delivery, user.user_id, reason=payload.reason if payload else None
+            db,
+            delivery,
+            user.user_id,
+            reason=payload.reason if payload else None,
+            dropbox_paths=payload.dropbox_attachment_paths if payload else None,
         )
     except SendPrecondition as exc:
         # 코어의 타입 예외 → 동일 상태코드·detail의 HTTPException (동작 불변)

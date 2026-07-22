@@ -892,6 +892,8 @@ class ReportStatusUpdate(BaseModel):
 
 class ReportSendRequest(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=200)  # 정정 재발송 사유
+    # 발송 시 추가 첨부할 고객사 Dropbox 파일 경로(라이브 브라우즈 선택) — 해당 고객사 폴더 하위만 허용
+    dropbox_attachment_paths: Optional[List[str]] = Field(default=None)
 
 
 class ReportSendResponse(BaseModel):
@@ -1272,6 +1274,21 @@ class DropboxProvisionResponse(BaseModel):
     total: int  # dropbox_folder 없던 대상 고객사 수
     provisioned: int  # 폴더 생성 성공
     failed: int  # 생성 실패(재실행으로 재시도 가능)
+
+
+class DropboxEntry(BaseModel):
+    """Dropbox 폴더 항목 (조회 — GET /clients/{id}/dropbox/tree)."""
+
+    name: str
+    path_display: str
+    is_dir: bool
+    size: Optional[int] = None
+    modified: Optional[str] = None
+
+
+class DropboxTreeResponse(BaseModel):
+    path: str  # 현재 조회한 폴더 경로(정규화)
+    entries: List[DropboxEntry] = []
 
 
 # ---------------------------------------------------------------------------

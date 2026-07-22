@@ -813,3 +813,17 @@ export interface ImportCommitResult {
   skipped: number
   errors: ImportRowResult[]
 }
+
+// 고객사 Dropbox 폴더 라이브 조회 항목 (GET /clients/{id}/dropbox/tree)
+export interface DropboxEntry {
+  name: string
+  path_display: string
+  is_dir: boolean
+  size?: number | null
+  modified?: string | null
+}
+
+export interface DropboxTreeResponse {
+  path: string
+  entries: DropboxEntry[]
+}

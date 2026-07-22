@@ -22,6 +22,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { DropboxPicker } from '../../components/DropboxPicker'
 import { FileUploader } from '../../components/FileUploader'
 import { useToast } from '../../components/Toast'
 import { downloadDocument, downloadErrorMessage } from '../../lib/download'
@@ -72,6 +73,8 @@ export function ReportsPage() {
   const [uploadTarget, setUploadTarget] = useState<ReportDelivery | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [sendTarget, setSendTarget] = useState<ReportDelivery | null>(null)
+  const [dropboxPaths, setDropboxPaths] = useState<string[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
 
@@ -100,12 +103,17 @@ export function ReportsPage() {
     setPeriod(fmtMonth(new Date(y, m - 1 + delta, 1)))
   }
 
+  const closeSend = () => {
+    setSendTarget(null)
+    setDropboxPaths([])
+  }
+
   const handleSend = async () => {
     if (!sendTarget) return
     try {
-      await send.mutateAsync(sendTarget.report_id)
+      await send.mutateAsync({ reportId: sendTarget.report_id, dropboxPaths })
       showToast('보고서가 발송되었습니다. 활동 이력에 자동 기록됩니다.', 'success')
-      setSendTarget(null)
+      closeSend()
     } catch {
       showToast('발송에 실패했습니다. 직전 상태가 유지됩니다.', 'danger')
     }
@@ -577,13 +585,37 @@ export function ReportsPage() {
             <br />
             회사 대표 지메일 계정으로 이메일(파일 첨부)이 발송되고, 카카오 채널 연동
             고객사는 알림톡 안내가 병행됩니다.
+            <span className="mt-3 flex items-center gap-2 border-t border-hairline pt-3">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
+              >
+                Dropbox에서 첨부 선택
+              </button>
+              {dropboxPaths.length > 0 && (
+                <span className="text-xs text-slatey">{dropboxPaths.length}개 추가 첨부</span>
+              )}
+            </span>
           </>
         }
         confirmLabel="발송"
         danger
         loading={send.isPending}
         onConfirm={handleSend}
-        onCancel={() => setSendTarget(null)}
+        onCancel={closeSend}
+      />
+
+      {/* Dropbox 라이브 브라우즈 파일 피커 (발송 첨부 선택) */}
+      <DropboxPicker
+        open={pickerOpen}
+        clientId={sendTarget?.client_id}
+        initialSelected={dropboxPaths}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={(paths) => {
+          setDropboxPaths(paths)
+          setPickerOpen(false)
+        }}
       />
 
       {/* 월초 배치 수동 실행 확인 (ADMIN) */}

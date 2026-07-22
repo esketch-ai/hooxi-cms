@@ -87,6 +87,87 @@ def test_ensure_folder_raises_when_unconfigured():
         dropbox_storage.ensure_folder("/Hooxi-CMS/x")
 
 
+# ---------------------------------------------------------------------------
+# list_folder — 폴더 목록(분류·페이지네이션·정렬)
+# ---------------------------------------------------------------------------
+def _folder_meta():
+    import dropbox
+
+    return dropbox.files.FolderMetadata(
+        name="계약서", path_display="/C_1a2b/계약서", path_lower="/c_1a2b/계약서",
+        id="id:bbbbbbbbbbbbbbbbbbbbbbb",
+    )
+
+
+def _file_meta():
+    import datetime
+
+    import dropbox
+
+    return dropbox.files.FileMetadata(
+        name="a.pdf", path_display="/C_1a2b/a.pdf", path_lower="/c_1a2b/a.pdf",
+        id="id:aaaaaaaaaaaaaaaaaaaaaaa", size=123,
+        client_modified=datetime.datetime(2026, 7, 22),
+        server_modified=datetime.datetime(2026, 7, 22, 1, 2, 3), rev="0123456789abc",
+    )
+
+
+def test_list_folder_classifies_paginates_and_sorts(monkeypatch):
+    _configure(monkeypatch)
+
+    class Page:
+        def __init__(self, entries, has_more):
+            self.entries = entries
+            self.has_more = has_more
+            self.cursor = "cur"
+
+    fm, dm = _file_meta(), _folder_meta()
+
+    class FakeDbx:
+        def files_list_folder(self, path):
+            return Page([fm], True)  # 1페이지: 파일, has_more
+
+        def files_list_folder_continue(self, cursor):
+            return Page([dm], False)  # 2페이지: 폴더 (페이지네이션 검증)
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    out = dropbox_storage.list_folder("/C_1a2b")
+    # 폴더 우선·이름순 → 폴더가 앞. 페이지네이션으로 dm까지 수집됨
+    assert [e["name"] for e in out] == ["계약서", "a.pdf"]
+    assert out[0]["is_dir"] is True and out[0]["size"] is None
+    assert out[1]["is_dir"] is False and out[1]["size"] == 123
+    assert out[1]["modified"] == "2026-07-22T01:02:03"
+
+
+def test_list_folder_not_found_raises(monkeypatch):
+    import pytest
+
+    import dropbox
+
+    _configure(monkeypatch)
+    err = dropbox.exceptions.ApiError(
+        "req",
+        dropbox.files.ListFolderError.path(dropbox.files.LookupError.not_found),
+        "nf", None,
+    )
+
+    class FakeDbx:
+        def files_list_folder(self, path):
+            raise err
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    with pytest.raises(dropbox_storage.DropboxNotFound):
+        dropbox_storage.list_folder("/nope")
+
+
+def test_list_folder_unconfigured_raises():
+    import pytest
+
+    assert not dropbox_storage.is_configured()
+    with pytest.raises(dropbox_storage.DropboxConfigError):
+        dropbox_storage.list_folder("/x")
+
+
 def test_save_uses_dropbox_scheme_and_path(monkeypatch):
     _configure(monkeypatch)
     captured = {}

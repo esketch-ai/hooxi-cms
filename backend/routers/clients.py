@@ -30,7 +30,7 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
-from services import client_folders
+from services import client_folders, dropbox_storage
 from services.audit_logger import AuditLogger
 
 log = logging.getLogger(__name__)
@@ -490,3 +490,41 @@ def remove_recipient(
     db.delete(recipient)
     db.commit()
     return schemas.MessageResponse(message="수신자가 삭제되었습니다")
+
+
+@router.get("/{client_id}/dropbox/tree", response_model=schemas.DropboxTreeResponse)
+def get_client_dropbox_tree(
+    client_id: str,
+    path: Optional[str] = Query(None, description="조회 폴더 경로(미지정 시 고객사 루트)"),
+    user: User = Depends(require_permission("crm.read_write")),
+    db: Session = Depends(get_db),
+):
+    """고객사 Dropbox 폴더 라이브 조회 — 발송 첨부 선택용.
+
+    경로는 반드시 해당 고객사 폴더 하위로 제한(confinement). 미provision 409,
+    Dropbox 미설정 503, 없는 경로 404.
+    """
+    client = common.get_or_404(db, Client, client_id, "고객사")
+    if not client.dropbox_folder:
+        raise HTTPException(
+            status_code=409,
+            detail="이 고객사는 아직 Dropbox 폴더가 생성되지 않았습니다. 폴더 생성(백필) 후 이용하세요.",
+        )
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
+
+    target = client_folders.normalize_dropbox_path(path or client.dropbox_folder)
+    if not client_folders.is_within_client_folder(client, target):
+        raise HTTPException(status_code=403, detail="고객사 폴더 밖의 경로에는 접근할 수 없습니다.")
+
+    try:
+        entries = dropbox_storage.list_folder(target)
+    except dropbox_storage.DropboxNotFound:
+        raise HTTPException(status_code=404, detail="해당 경로를 찾을 수 없습니다.")
+    except dropbox_storage.DropboxConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return schemas.DropboxTreeResponse(
+        path=target,
+        entries=[schemas.DropboxEntry(**e) for e in entries],
+    )

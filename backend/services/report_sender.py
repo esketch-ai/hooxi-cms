@@ -35,8 +35,18 @@ from models import (
     utcnow,
 )
 from routers import common
-from services import email_service, integration_config, kakao_service, storage
+from services import (
+    client_folders,
+    dropbox_storage,
+    email_service,
+    integration_config,
+    kakao_service,
+    storage,
+)
 from services.audit_logger import AuditLogger
+
+# 이메일 첨부 총량 상한 — Gmail 25MB보다 보수적(세그먼트 발송과 동일 기준)
+MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024
 
 
 class SendPrecondition(Exception):
@@ -245,7 +255,11 @@ def _next_seq(db: Session, report_id: str) -> int:
 
 
 def send_report_core(
-    db: Session, delivery: ReportDelivery, actor_id: str, reason: Optional[str] = None
+    db: Session,
+    delivery: ReportDelivery,
+    actor_id: str,
+    reason: Optional[str] = None,
+    dropbox_paths: Optional[list] = None,
 ) -> dict:
     """보고서 이메일 발송 코어 (CR-2: 대표 지메일) — send_report 본문 그대로 이동.
 
@@ -306,6 +320,35 @@ def send_report_core(
     actor = db.get(User, actor_id) if actor_id else None
     reply_to = (manager.email if manager else None) or (actor.email if actor else None)
     filename = os.path.basename(doc.file_url) or "report"
+
+    # 선택된 Dropbox 파일 추가 첨부 — 반드시 이 고객사 폴더 하위로 제한(confinement 재검증,
+    # 엔드포인트 신뢰 금지). 총량 상한 초과 시 사전 차단. (R2-E6: 경로/파일명만 취급)
+    attachments = [(filename, content, None)]
+    total_bytes = len(content)
+    for raw_path in dropbox_paths or []:
+        norm = client_folders.normalize_dropbox_path(raw_path)
+        if not client_folders.is_within_client_folder(client, norm):
+            raise SendPrecondition(
+                403, "고객사 폴더 밖의 파일은 첨부할 수 없습니다: {0}".format(raw_path)
+            )
+        # 다운로드(메모리 적재) 전에 메타데이터 size로 총량 사전 검사 — 대용량 파일 OOM 방지
+        size = dropbox_storage.file_size(norm)
+        if size is None:
+            raise SendPrecondition(
+                409, "첨부 파일을 찾을 수 없습니다(폴더이거나 삭제됨): {0}".format(os.path.basename(norm))
+            )
+        total_bytes += size
+        if total_bytes > MAX_ATTACHMENT_TOTAL_BYTES:
+            raise SendPrecondition(
+                413, "첨부 총량이 20MB를 초과합니다. 파일 수를 줄이거나 더 작은 파일을 선택하세요"
+            )
+        extra = storage.read_file("dropbox:" + norm)
+        if extra is None:
+            raise SendPrecondition(
+                409, "첨부 파일을 저장소에서 읽을 수 없습니다: {0}".format(os.path.basename(norm))
+            )
+        attachments.append((os.path.basename(norm) or "file", extra, None))
+
     seq = _next_seq(db, report_id)
     recipients_snapshot = json.dumps({"to": to, "cc": cc}, ensure_ascii=False)
 
@@ -315,7 +358,7 @@ def send_report_core(
             subject=subject,
             body=body,
             cc=cc or None,
-            attachments=[(filename, content, None)],
+            attachments=attachments,
             reply_to=reply_to,
         )
     except email_service.EmailConfigError as exc:
@@ -356,6 +399,20 @@ def send_report_core(
     delivery.status = "SENT"
     delivery.sent_at = now
     delivery.sent_channel = "EMAIL"
+
+    # Dropbox 추가 첨부 발송 감사 — 파일명(basename)만 기록(비밀값 없음, R2-E6)
+    if dropbox_paths:
+        AuditLogger.log_action(
+            db,
+            actor_id,
+            "REPORT_SEND_DROPBOX_ATTACH",
+            target_type="REPORT",
+            target_id=report_id,
+            new_value="; ".join(
+                os.path.basename(client_folders.normalize_dropbox_path(p))
+                for p in dropbox_paths
+            ),
+        )
 
     # 카카오 알림톡 시도 — 구독 채널 KAKAO/BOTH (동일 seq KAKAO 행, 성공 시 BOTH)
     if sub and (sub.channel or "EMAIL") in ("KAKAO", "BOTH"):

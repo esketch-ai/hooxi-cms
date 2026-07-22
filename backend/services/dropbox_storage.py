@@ -26,6 +26,10 @@ class DropboxConfigError(RuntimeError):
     """Dropbox 연동 미설정/초기화 실패."""
 
 
+class DropboxNotFound(RuntimeError):
+    """요청한 Dropbox 경로가 존재하지 않음(폴더 조회 등)."""
+
+
 def is_configured() -> bool:
     return bool(
         resolve("DROPBOX_APP_KEY")
@@ -174,3 +178,61 @@ def delete(path: str) -> bool:
         return True
     except dropbox.exceptions.ApiError:
         return False
+
+
+def file_size(path: str) -> Optional[int]:
+    """파일 크기(bytes) — 다운로드 없이 메타데이터로 조회(총량 사전검사용).
+
+    폴더이거나 존재하지 않으면 None. 미설정 시 DropboxConfigError(_get_client).
+    """
+    import dropbox
+
+    dbx = _get_client()
+    try:
+        meta = _retry_once(dbx.files_get_metadata, path)
+    except dropbox.exceptions.ApiError:
+        return None
+    return getattr(meta, "size", None) if isinstance(meta, dropbox.files.FileMetadata) else None
+
+
+def list_folder(path: str) -> list:
+    """폴더 내용 목록(하위 폴더·파일). has_more 페이지네이션을 끝까지 이어받는다.
+
+    반환: [{name, path_display, path_lower, is_dir, size, modified}], 폴더 우선·이름순.
+    경로 없음 → DropboxNotFound, 미설정 → DropboxConfigError(_get_client).
+    """
+    import dropbox
+
+    dbx = _get_client()
+    try:
+        res = _retry_once(dbx.files_list_folder, path)
+        entries = list(res.entries)
+        while res.has_more:
+            res = _retry_once(dbx.files_list_folder_continue, res.cursor)
+            entries.extend(res.entries)
+    except dropbox.exceptions.ApiError as exc:
+        err = exc.error
+        if (
+            isinstance(err, dropbox.files.ListFolderError)
+            and err.is_path()
+            and err.get_path().is_not_found()
+        ):
+            raise DropboxNotFound(path)
+        raise
+
+    out = []
+    for e in entries:
+        is_dir = isinstance(e, dropbox.files.FolderMetadata)
+        modified = getattr(e, "server_modified", None)
+        out.append(
+            {
+                "name": e.name,
+                "path_display": e.path_display,
+                "path_lower": e.path_lower,
+                "is_dir": is_dir,
+                "size": None if is_dir else getattr(e, "size", None),
+                "modified": modified.isoformat() if (modified and not is_dir) else None,
+            }
+        )
+    out.sort(key=lambda d: (not d["is_dir"], d["name"]))
+    return out

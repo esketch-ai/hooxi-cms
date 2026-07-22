@@ -38,6 +38,26 @@ def subfolder_label_for_code(db, code):
     return row.label if row else None
 
 
+def normalize_dropbox_path(path):
+    """Dropbox 경로 정규화 — 앞 '/' 보장, 빈·'.'·'..' 세그먼트 제거(상위 탈출 방지)."""
+    segs = [s for s in (path or "").split("/") if s and s not in (".", "..")]
+    return "/" + "/".join(segs)
+
+
+def is_within_client_folder(client, path):
+    """path가 해당 고객사 dropbox_folder(정규화) 하위(자신 포함)인지.
+
+    미provision(dropbox_folder=None)이면 무조건 False. 접두사 유사경로 오탐 방지를 위해
+    경계는 folder 자신 또는 'folder/' 접두로만 인정한다.
+    """
+    folder = getattr(client, "dropbox_folder", None)
+    if not folder:
+        return False
+    folder = normalize_dropbox_path(folder)
+    p = normalize_dropbox_path(path)
+    return p == folder or p.startswith(folder + "/")
+
+
 def _short_id(client_id):
     return (client_id or "")[:4] or "0000"
 
