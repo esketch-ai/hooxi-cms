@@ -11,6 +11,8 @@
 """
 
 import smtplib
+import urllib.parse
+import uuid
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +30,11 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 SOLAPI_BALANCE_URL = "https://api.solapi.com/cash/v1/balance"
 DROPBOX_AUTHORIZE_URL = "https://www.dropbox.com/oauth2/authorize"
 DROPBOX_TOKEN_URL = "https://api.dropbox.com/oauth2/token"
+# authorize 시 명시적으로 요청할 scope. 미지정 시 발급 토큰에 파일 스코프가
+# 누락될 수 있어 반드시 지정한다. 여기 값은 Dropbox 앱 콘솔 Permissions에
+# 활성화된 스코프와 일치해야 하며(미활성 scope 요청 시 authorize 단계 에러),
+# 파일 업로드/다운로드/삭제·임시링크에 필요한 최소 집합이다.
+DROPBOX_SCOPES = "account_info.read files.content.read files.content.write"
 
 WEBHOOK_PATH = "/api/v1/kakao/webhook"
 
@@ -141,16 +148,12 @@ def _test_dropbox() -> schemas.IntegrationTestOut:
             message="Dropbox 설정이 완료되지 않았습니다 — 앱 키·시크릿·리프레시 토큰을 저장하세요.",
         )
     try:
+        import dropbox  # 지연 import — 로컬/테스트 미설치 환경 대응
+
         dbx = dropbox_storage._get_client()
         account = dbx.users_get_current_account()
         email = getattr(account, "email", None) or "알 수 없음"
         is_team = bool(getattr(account, "team", None))
-        return schemas.IntegrationTestOut(
-            ok=True,
-            message="Dropbox 연결 성공 — 계정: {0}{1}".format(
-                email, " (팀 계정)" if is_team else ""
-            ),
-        )
     except dropbox_storage.DropboxConfigError as exc:
         return schemas.IntegrationTestOut(ok=False, message=str(exc))
     except Exception:
@@ -158,6 +161,41 @@ def _test_dropbox() -> schemas.IntegrationTestOut:
             ok=False,
             message="Dropbox 연결에 실패했습니다 — 자격증명이 올바른지 확인하세요.",
         )
+
+    # 파일 쓰기 권한(scope) 실검증 — 계정 조회(account_info.read)만으로는
+    # files.content.* 스코프 누락을 잡지 못해 "성공" 오탐이 난다. 임시 파일을
+    # 업로드→삭제해 실제 쓰기 권한을 확인한다. (R2-E6: 파일명에 비밀값 미포함)
+    probe_path = "{0}/.hooxi_scope_probe_{1}".format(
+        dropbox_storage.root(), uuid.uuid4().hex
+    )
+    try:
+        stored = dropbox_storage.upload(b"", probe_path)
+    except dropbox.exceptions.AuthError:
+        return schemas.IntegrationTestOut(
+            ok=False,
+            message=(
+                "계정 연결은 되지만 파일 권한(scope)이 없습니다 — Dropbox 앱 Permissions에 "
+                "files.content.write·files.content.read를 켠 뒤 authorize를 다시 진행하세요."
+            ),
+        )
+    except Exception:
+        return schemas.IntegrationTestOut(
+            ok=False,
+            message="Dropbox 파일 쓰기 테스트에 실패했습니다 — 권한·네트워크를 확인하세요.",
+        )
+    # 프로브 파일 정리 — best-effort. 삭제 실패(5xx·rate-limit·네트워크)가 쓰기
+    # 권한 판정을 뒤집지 않도록 예외를 삼킨다(쓰기는 이미 입증됨).
+    try:
+        dropbox_storage.delete(stored)
+    except Exception:
+        pass
+
+    return schemas.IntegrationTestOut(
+        ok=True,
+        message="Dropbox 연결 성공 — 계정: {0}{1}".format(
+            email, " (팀 계정)" if is_team else ""
+        ),
+    )
 
 
 def _test_gmail() -> schemas.IntegrationTestOut:
@@ -255,9 +293,16 @@ def dropbox_authorize_url(_: User = Depends(require_role("ADMIN"))):
             status_code=422,
             detail="Dropbox 앱 키(DROPBOX_APP_KEY)가 설정되지 않았습니다. 먼저 저장하세요.",
         )
-    url = "{0}?client_id={1}&response_type=code&token_access_type=offline".format(
-        DROPBOX_AUTHORIZE_URL, app_key
+    params = urllib.parse.urlencode(
+        {
+            "client_id": app_key,
+            "response_type": "code",
+            "token_access_type": "offline",
+            "scope": DROPBOX_SCOPES,
+        },
+        quote_via=urllib.parse.quote,
     )
+    url = "{0}?{1}".format(DROPBOX_AUTHORIZE_URL, params)
     return schemas.DropboxAuthorizeUrlOut(url=url)
 
 

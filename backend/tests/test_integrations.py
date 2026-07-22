@@ -408,6 +408,9 @@ def test_dropbox_authorize_url_requires_app_key(client, admin_headers, monkeypat
     url = resp.json()["url"]
     assert "client_id=app-key-1" in url
     assert "token_access_type=offline" in url
+    # scope가 명시되어야 발급 토큰에 파일 권한이 포함된다 (누락 시 missing_scope)
+    assert "files.content.write" in url
+    assert "files.content.read" in url
 
 
 def test_dropbox_oauth_exchange_failure_502(client, admin_headers, monkeypatch):
@@ -448,6 +451,9 @@ def test_dropbox_oauth_exchange_success_saves_token(client, admin_headers, monke
 
     monkeypatch.setattr(integ_router.httpx, "post", fake_post)
     monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    # 연결 테스트의 쓰기 프로브 스텁 (실제 Dropbox 호출 없이 성공 경로)
+    monkeypatch.setattr(dropbox_storage, "upload", lambda content, path: path)
+    monkeypatch.setattr(dropbox_storage, "delete", lambda path: True)
 
     resp = client.post(
         API + "/integrations/dropbox/oauth/exchange",
@@ -481,8 +487,34 @@ def test_dropbox_test_endpoint_mocked(client, admin_headers, monkeypatch):
             return FakeAccount()
 
     monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    monkeypatch.setattr(dropbox_storage, "upload", lambda content, path: path)
+    monkeypatch.setattr(dropbox_storage, "delete", lambda path: True)
     resp = client.post(API + "/integrations/dropbox/test", headers=admin_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
     assert "팀 계정" in body["message"]
+
+
+def test_dropbox_test_endpoint_missing_scope(client, admin_headers, monkeypatch):
+    """계정 조회는 되지만 파일 쓰기 scope가 없으면 ok=False로 정확히 판정(오탐 방지)."""
+    import dropbox
+
+    class FakeAccount:
+        email = "ops@hooxipartners.com"
+        team = None
+
+    class FakeDbx:
+        def users_get_current_account(self):
+            return FakeAccount()
+
+    def raise_missing_scope(content, path):
+        raise dropbox.exceptions.AuthError("req-id", "missing_scope")
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    monkeypatch.setattr(dropbox_storage, "upload", raise_missing_scope)
+    resp = client.post(API + "/integrations/dropbox/test", headers=admin_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is False
+    assert "권한" in body["message"]
