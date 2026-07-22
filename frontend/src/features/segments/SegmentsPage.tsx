@@ -22,6 +22,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { DropboxPicker } from '../../components/DropboxPicker'
 import { StatusBadge } from '../../components/StatusBadge'
 import { FilterSearch } from '../../components/FilterBar'
 import { useToast } from '../../components/Toast'
@@ -165,6 +166,8 @@ export function SegmentsPage() {
   const { showToast } = useToast()
   const [attachedDocs, setAttachedDocs] = useState<Document[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [dropboxPaths, setDropboxPaths] = useState<string[]>([])
+  const [dbxPickerOpen, setDbxPickerOpen] = useState(false)
   const [subject, setSubject] = useState(DEFAULT_SUBJECT)
   const [body, setBody] = useState(DEFAULT_BODY)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -179,7 +182,10 @@ export function SegmentsPage() {
     )
   }
 
-  const canSend = attachedDocs.length > 0 && targetTotal > 0 && !send.isPending
+  const canSend =
+    (attachedDocs.length > 0 || dropboxPaths.length > 0) &&
+    targetTotal > 0 &&
+    !send.isPending
 
   const handleSend = async () => {
     try {
@@ -188,6 +194,7 @@ export function SegmentsPage() {
         segmentId: selectedSegmentId ?? undefined,
         payload: {
           doc_ids: attachedDocs.map((d) => d.doc_id),
+          dropbox_paths: dropboxPaths.length ? dropboxPaths : undefined,
           subject: subject.trim() || undefined,
           body: body.trim() || undefined,
           ...(selectedSegmentId ? {} : { criteria }), // 즉석 발송 — 현재 조건 스냅샷
@@ -442,6 +449,14 @@ export function SegmentsPage() {
               <FileText size={14} />
               문서함에서 선택
             </button>
+            <button
+              type="button"
+              onClick={() => setDbxPickerOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
+            >
+              <FileText size={14} />
+              공용 Dropbox에서 선택
+            </button>
             <span className="text-xs text-slatey">
               새 파일 업로드는 문서 아카이브에서 먼저 해주세요.
             </span>
@@ -460,6 +475,27 @@ export function SegmentsPage() {
                     onClick={() => toggleDoc(d)}
                     className="rounded-full text-smoke hover:text-bone"
                     aria-label={`${d.title} 첨부 제거`}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {dropboxPaths.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {dropboxPaths.map((p) => (
+                <span
+                  key={p}
+                  className="inline-flex items-center gap-1 rounded-full border border-hairline bg-elevate-strong px-2.5 py-1 text-xs font-medium text-bone"
+                >
+                  <FileText size={12} className="text-ash" />
+                  {p.split('/').pop()}
+                  <button
+                    type="button"
+                    onClick={() => setDropboxPaths((prev) => prev.filter((x) => x !== p))}
+                    className="rounded-full text-smoke hover:text-bone"
+                    aria-label={`${p} 첨부 제거`}
                   >
                     <X size={12} />
                   </button>
@@ -496,7 +532,7 @@ export function SegmentsPage() {
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-3 border-t border-hairline pt-3">
-          {attachedDocs.length === 0 && (
+          {attachedDocs.length === 0 && dropboxPaths.length === 0 && (
             <span className="text-xs text-slatey">첨부 파일을 1개 이상 선택하세요</span>
           )}
           <button
@@ -626,6 +662,18 @@ export function SegmentsPage() {
         onToggle={toggleDoc}
       />
 
+      {/* 공용 발송자료 Dropbox 픽커 (라이브 브라우즈 공통 첨부) */}
+      <DropboxPicker
+        open={dbxPickerOpen}
+        endpoint="/segments/dropbox/tree"
+        initialSelected={dropboxPaths}
+        onClose={() => setDbxPickerOpen(false)}
+        onConfirm={(paths) => {
+          setDropboxPaths(paths)
+          setDbxPickerOpen(false)
+        }}
+      />
+
       {/* 발송 확인 다이얼로그 — 대상 수·파일 목록·제목 최종 확인 */}
       <ConfirmDialog
         open={confirmOpen}
@@ -656,6 +704,11 @@ export function SegmentsPage() {
               {attachedDocs.map((d) => (
                 <li key={d.doc_id} className="text-bone">
                   {d.title}
+                </li>
+              ))}
+              {dropboxPaths.map((p) => (
+                <li key={p} className="text-bone">
+                  {p.split('/').pop()} <span className="text-slatey">(Dropbox)</span>
                 </li>
               ))}
             </ul>

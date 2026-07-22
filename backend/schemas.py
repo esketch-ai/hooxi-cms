@@ -1412,13 +1412,15 @@ class SegmentSendOut(BaseModel):
 
 
 class SegmentSendRequest(BaseModel):
-    """세그먼트 발송 요청 (B5) — doc_ids 1개 이상 필수(존재 검증은 라우터 404).
+    """세그먼트 발송 요청 (B5) — doc_ids 또는 dropbox_paths 중 최소 1개(라우터에서 검증).
 
     subject/body 미지정 시 세그먼트 오버라이드 → tb_config report_mail_* → 코드 기본값.
     criteria는 즉석 발송(POST /segments/send)에서만 필수 — 저장 세그먼트 발송은 저장분 사용.
+    dropbox_paths: 공용 발송자료(공용_발송자료) 폴더에서 고른 공통 첨부 파일 경로.
     """
 
-    doc_ids: List[str] = Field(min_length=1)
+    doc_ids: List[str] = Field(default_factory=list)
+    dropbox_paths: Optional[List[str]] = None
     subject: Optional[str] = Field(default=None, max_length=200)
     body: Optional[str] = None
     criteria: Optional[SegmentCriteria] = None

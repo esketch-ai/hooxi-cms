@@ -707,6 +707,7 @@ export interface SegmentFacets {
 /** 발송 요청 (schemas.SegmentSendRequest) — criteria는 즉석 발송에서만 */
 export interface SegmentSendPayload {
   doc_ids: string[]
+  dropbox_paths?: string[] // 공용 발송자료 폴더에서 고른 공통 첨부 경로
   subject?: string
   body?: string
   criteria?: SegmentCriteria

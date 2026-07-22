@@ -44,18 +44,27 @@ def normalize_dropbox_path(path):
     return "/" + "/".join(segs)
 
 
-def is_within_client_folder(client, path):
-    """path가 해당 고객사 dropbox_folder(정규화) 하위(자신 포함)인지.
+def is_within_folder(base, path):
+    """path가 base(정규화) 하위(자신 포함)인지. base가 비면 False.
 
-    미provision(dropbox_folder=None)이면 무조건 False. 접두사 유사경로 오탐 방지를 위해
-    경계는 folder 자신 또는 'folder/' 접두로만 인정한다.
+    접두사 유사경로 오탐 방지를 위해 경계는 base 자신 또는 'base/' 접두로만 인정한다.
+    (고객사 폴더·공용 폴더 등 임의 base에 재사용하는 단일 소스.)
     """
-    folder = getattr(client, "dropbox_folder", None)
-    if not folder:
+    if not base:
         return False
-    folder = normalize_dropbox_path(folder)
+    base = normalize_dropbox_path(base)
     p = normalize_dropbox_path(path)
-    return p == folder or p.startswith(folder + "/")
+    return p == base or p.startswith(base + "/")
+
+
+def is_within_client_folder(client, path):
+    """path가 해당 고객사 dropbox_folder 하위인지 — 미provision이면 False."""
+    return is_within_folder(getattr(client, "dropbox_folder", None), path)
+
+
+def public_send_root():
+    """세그먼트 공용 발송자료 폴더(root 기준). 예: root()='' → '/공용_발송자료'."""
+    return normalize_dropbox_path("{0}/공용_발송자료".format(dropbox_storage.root()))
 
 
 def _short_id(client_id):

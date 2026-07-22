@@ -3,12 +3,13 @@
 import { CaretUp, CircleNotch, File as FileIcon, Folder } from '@phosphor-icons/react'
 import { isAxiosError } from 'axios'
 import { useEffect, useState } from 'react'
-import { useDropboxTree } from '../features/reports/api'
+import { useDropboxTree } from '../lib/api/queries'
 import { Modal } from './Modal'
 
 interface DropboxPickerProps {
   open: boolean
-  clientId: string | null | undefined
+  // 조회 엔드포인트 — 고객사 폴더(`/clients/{id}/dropbox/tree`) 또는 공용(`/segments/dropbox/tree`)
+  endpoint: string | null | undefined
   initialSelected?: string[]
   onClose: () => void
   onConfirm: (paths: string[]) => void
@@ -34,12 +35,12 @@ function errorMessage(err: unknown): string {
 
 export function DropboxPicker({
   open,
-  clientId,
+  endpoint,
   initialSelected,
   onClose,
   onConfirm,
 }: DropboxPickerProps) {
-  const [path, setPath] = useState<string | null>(null) // null = 고객사 루트
+  const [path, setPath] = useState<string | null>(null) // null = 루트
   const [rootPath, setRootPath] = useState<string | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
@@ -52,9 +53,9 @@ export function DropboxPicker({
     }
     // initialSelected는 open 시점 값만 사용 — 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, clientId])
+  }, [open, endpoint])
 
-  const { data, isLoading, isError, error } = useDropboxTree(open ? clientId : null, path)
+  const { data, isLoading, isError, error } = useDropboxTree(open ? endpoint ?? null : null, path)
 
   // 첫 응답의 경로를 고객사 루트로 기억(상위로 이동 하한)
   useEffect(() => {

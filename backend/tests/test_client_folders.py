@@ -54,6 +54,26 @@ def test_confinement_false_when_unprovisioned():
     assert client_folders.is_within_client_folder(NoFolder(), "/무엇이든/x") is False
 
 
+def test_is_within_folder_generic_boundary():
+    base = "/공용_발송자료"
+    assert client_folders.is_within_folder(base, base) is True
+    assert client_folders.is_within_folder(base, base + "/공지.pdf") is True
+    assert client_folders.is_within_folder(base, "/공용_발송자료_evil/x") is False  # 접두사 오탐
+    assert client_folders.is_within_folder(base, "/다른/x") is False
+    assert client_folders.is_within_folder("", "/x") is False  # base 없음
+    assert client_folders.is_within_folder(None, "/x") is False
+
+
+def test_public_send_root_uses_root(monkeypatch):
+    # DROPBOX_ROOT 미설정 → 기본 /Hooxi-CMS 하위
+    assert client_folders.public_send_root() == "/Hooxi-CMS/공용_발송자료"
+    monkeypatch.setenv("DROPBOX_ROOT", "/")  # 앱폴더 루트 → 접두 없음
+    from services.integration_config import _cache
+
+    _cache.clear()
+    assert client_folders.public_send_root() == "/공용_발송자료"
+
+
 # ---------------------------------------------------------------------------
 # 폴더 이름 규칙 (회사명_짧은ID, 단일 세그먼트)
 # ---------------------------------------------------------------------------
@@ -347,3 +367,54 @@ def test_tree_404_when_not_found(client, admin_headers, monkeypatch):
         params={"path": "/트리404_tree/없는폴더"}, headers=admin_headers,
     )
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 세그먼트 공용 발송자료 폴더 조회 GET /segments/dropbox/tree
+# ---------------------------------------------------------------------------
+PUBLIC_ROOT = "/Hooxi-CMS/공용_발송자료"  # 테스트 env: DROPBOX_ROOT 미설정 → 기본 /Hooxi-CMS
+
+
+def test_public_tree_503_when_unconfigured(client, admin_headers):
+    assert not dropbox_storage.is_configured()
+    r = client.get(API + "/segments/dropbox/tree", headers=admin_headers)
+    assert r.status_code == 503
+
+
+def test_public_tree_200_lists_root(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    monkeypatch.setattr(
+        dropbox_storage, "list_folder",
+        lambda p: [{"name": "공지.pdf", "path_display": p + "/공지.pdf",
+                    "path_lower": (p + "/공지.pdf").lower(), "is_dir": False,
+                    "size": 5, "modified": None}],
+    )
+    r = client.get(API + "/segments/dropbox/tree", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["path"] == PUBLIC_ROOT
+    assert body["entries"][0]["name"] == "공지.pdf"
+
+
+def test_public_tree_403_outside_public_root(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    r = client.get(
+        API + "/segments/dropbox/tree",
+        params={"path": "/트리e2e운수_9z9z/계약서"}, headers=admin_headers,  # 고객사 폴더는 공용 밖
+    )
+    assert r.status_code == 403
+
+
+def test_public_tree_autocreates_root_when_missing(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    created = []
+
+    def _missing(p):
+        raise dropbox_storage.DropboxNotFound(p)
+
+    monkeypatch.setattr(dropbox_storage, "list_folder", _missing)
+    monkeypatch.setattr(dropbox_storage, "ensure_folder", lambda p: created.append(p) or True)
+    r = client.get(API + "/segments/dropbox/tree", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["entries"] == []  # 자동 생성 후 빈 목록
+    assert created == [PUBLIC_ROOT]

@@ -37,11 +37,44 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
-from services import email_service, storage
+from services import client_folders, dropbox_storage, email_service, storage
 from services.audit_logger import AuditLogger
 from services.report_sender import render_template, resolve_recipients
 
 router = APIRouter(prefix="/segments", tags=["segments"])
+
+
+@router.get("/dropbox/tree", response_model=schemas.DropboxTreeResponse)
+def get_public_dropbox_tree(
+    path: Optional[str] = Query(None, description="조회 폴더 경로(미지정 시 공용 발송자료 루트)"),
+    _: User = Depends(require_permission("master.write")),
+):
+    """세그먼트 공용 발송자료 Dropbox 폴더 라이브 조회 — 발송 첨부 선택용.
+
+    경로는 공용 발송자료 폴더(공용_발송자료) 하위로 제한(confinement). 루트가 없으면
+    자동 생성 후 빈 목록. Dropbox 미설정 503, 경계 밖 403, 없는 하위 경로 404.
+    """
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
+    root = client_folders.public_send_root()
+    target = client_folders.normalize_dropbox_path(path or root)
+    if not client_folders.is_within_folder(root, target):
+        raise HTTPException(
+            status_code=403, detail="공용 발송자료 폴더 밖의 경로에는 접근할 수 없습니다."
+        )
+    try:
+        entries = dropbox_storage.list_folder(target)
+    except dropbox_storage.DropboxNotFound:
+        if target == root:
+            dropbox_storage.ensure_folder(root)  # 최초 조회 시 공용 루트 자동 생성
+            entries = []
+        else:
+            raise HTTPException(status_code=404, detail="해당 경로를 찾을 수 없습니다.")
+    except dropbox_storage.DropboxConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return schemas.DropboxTreeResponse(
+        path=target, entries=[schemas.DropboxEntry(**e) for e in entries]
+    )
 
 # criteria 축 → 공통 코드 카테고리 매핑 (region은 자유값, project_id는 존재 검증)
 CRITERIA_CODE_CATEGORIES = {
@@ -311,9 +344,12 @@ def update_segment(
 # ---------------------------------------------------------------------------
 # 발송 실행 (B5) — tb_segment_send + 고객사별 tb_segment_send_log (변경 — master.write)
 # ---------------------------------------------------------------------------
-def _load_attachments(db: Session, doc_ids: List[str]) -> List[tuple]:
-    """첨부 문서 선로딩 — 발송 전 1회. 없는 doc_id 404, 저장소 유실·총량 초과 422로 사전 차단.
+def _load_attachments(
+    db: Session, doc_ids: List[str], dropbox_paths: Optional[List[str]] = None
+) -> List[tuple]:
+    """첨부 선로딩 — 발송 전 1회(팬아웃 전원 공통). 없는 doc_id 404, 유실·총량 초과 422.
 
+    문서함(doc_ids) + 공용 발송자료 Dropbox(dropbox_paths)를 합산 총량으로 검사한다.
     반환: email_service.Attachment 목록 [(filename, bytes, None)].
     """
     attachments = []
@@ -334,6 +370,40 @@ def _load_attachments(db: Session, doc_ids: List[str]) -> List[tuple]:
             )
         filename = os.path.basename(doc.file_url) or (doc.title or "document")
         attachments.append((filename, content, None))
+
+    # 공용 발송자료 Dropbox 파일(공통) — 반드시 공용 폴더 하위로 제한(confinement),
+    # 다운로드 전 size로 doc_ids와 합산 총량 사전검사(OOM 방지).
+    if dropbox_paths and not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
+    public_root = client_folders.public_send_root()
+    for raw_path in dropbox_paths or []:
+        norm = client_folders.normalize_dropbox_path(raw_path)
+        if not client_folders.is_within_folder(public_root, norm):
+            raise HTTPException(
+                status_code=403,
+                detail="공용 발송자료 폴더 밖의 파일은 첨부할 수 없습니다: {0}".format(raw_path),
+            )
+        size = dropbox_storage.file_size(norm)
+        if size is None:
+            raise HTTPException(
+                status_code=422,
+                detail="첨부 파일을 찾을 수 없습니다(폴더이거나 삭제됨): {0}".format(
+                    os.path.basename(norm)
+                ),
+            )
+        total_bytes += size
+        if total_bytes > MAX_ATTACHMENT_TOTAL_BYTES:
+            raise HTTPException(
+                status_code=422,
+                detail="첨부 총량이 20MB를 초과합니다. 파일 수를 줄이거나 더 작은 파일을 선택하세요",
+            )
+        content = storage.read_file("dropbox:" + norm)
+        if content is None:
+            raise HTTPException(
+                status_code=422,
+                detail="첨부 파일을 저장소에서 읽을 수 없습니다: {0}".format(os.path.basename(norm)),
+            )
+        attachments.append((os.path.basename(norm) or "file", content, None))
     return attachments
 
 
@@ -385,7 +455,12 @@ def _execute_send(
             ),
         )
 
-    attachments = _load_attachments(db, payload.doc_ids)
+    if not payload.doc_ids and not (payload.dropbox_paths or []):
+        raise HTTPException(
+            status_code=422,
+            detail="문서함 파일 또는 공용 Dropbox 파일을 최소 1개 선택하세요",
+        )
+    attachments = _load_attachments(db, payload.doc_ids, payload.dropbox_paths)
     targets = _segment_query(db, criteria).order_by(Client.company_name.asc()).all()
     subject_tpl, body_tpl = _resolve_send_templates(segment, payload.subject, payload.body)
 
@@ -502,10 +577,18 @@ def _execute_send(
         )
 
     # 감사 로그 — 카운트·조건 요약만 (R2-E6: 수신자 이메일 미기록)
+    # 첨부 요약: 문서함 수 + 공용 Dropbox 파일명(basename만, R2-E6) — 이력 재현/감사용
+    dbx_names = [
+        os.path.basename(client_folders.normalize_dropbox_path(p))
+        for p in (payload.dropbox_paths or [])
+    ]
+    attach_summary = "docs={0}, dropbox=[{1}]".format(
+        len(payload.doc_ids), ", ".join(dbx_names)
+    )
     AuditLogger.log_action(
         db, user.user_id, "SEGMENT_SEND", target_type="SEGMENT_SEND", target_id=send.send_id,
-        new_value="targets={0}, sent={1}, failed={2} — {3}".format(
-            len(targets), sent, failed, _criteria_summary(criteria)
+        new_value="targets={0}, sent={1}, failed={2}, {3} — {4}".format(
+            len(targets), sent, failed, attach_summary, _criteria_summary(criteria)
         ),
     )
     db.commit()

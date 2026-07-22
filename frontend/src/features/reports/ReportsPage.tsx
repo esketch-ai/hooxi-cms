@@ -609,7 +609,7 @@ export function ReportsPage() {
       {/* Dropbox 라이브 브라우즈 파일 피커 (발송 첨부 선택) */}
       <DropboxPicker
         open={pickerOpen}
-        clientId={sendTarget?.client_id}
+        endpoint={sendTarget ? `/clients/${sendTarget.client_id}/dropbox/tree` : null}
         initialSelected={dropboxPaths}
         onClose={() => setPickerOpen(false)}
         onConfirm={(paths) => {

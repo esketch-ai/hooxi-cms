@@ -2,7 +2,33 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './client'
-import type { ChatBadge, Client, Code, Document, Paginated, User } from '../../types'
+import type {
+  ChatBadge,
+  Client,
+  Code,
+  Document,
+  DropboxTreeResponse,
+  Paginated,
+  User,
+} from '../../types'
+
+/**
+ * Dropbox 폴더 라이브 조회 — endpoint별 재사용(고객사 폴더·공용 발송자료 폴더 공통).
+ * endpoint 예: `/clients/{id}/dropbox/tree`, `/segments/dropbox/tree`. null이면 비활성.
+ */
+export function useDropboxTree(endpoint: string | null, path: string | null) {
+  return useQuery({
+    queryKey: ['dropbox-tree', endpoint, path],
+    enabled: !!endpoint,
+    retry: false, // 409/503/403은 재시도 무의미 — 즉시 안내
+    queryFn: async () => {
+      const { data } = await api.get<DropboxTreeResponse>(endpoint as string, {
+        params: path ? { path } : undefined,
+      })
+      return data
+    },
+  })
+}
 
 /**
  * 공통 코드 마스터 조회 (tb_code). 드롭다운 옵션 + 코드값→표시명 매핑을 함께 제공.

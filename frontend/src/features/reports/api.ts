@@ -1,12 +1,7 @@
 // SCR-12 월간 보고서 발송 관리 API 훅 — 플랜 §5 SCR-12 엔드포인트
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
-import type {
-  DropboxTreeResponse,
-  ReportDelivery,
-  ReportListResponse,
-  ReportStatus,
-} from '../../types'
+import type { ReportDelivery, ReportListResponse, ReportStatus } from '../../types'
 
 export function useReports(period: string) {
   return useQuery({
@@ -81,22 +76,6 @@ export function useSendReport() {
       return data
     },
     onSuccess: (_data, vars) => invalidate(vars.reportId),
-  })
-}
-
-/** 고객사 Dropbox 폴더 라이브 조회 — GET /clients/{id}/dropbox/tree (발송 첨부 선택용). */
-export function useDropboxTree(clientId: string | null | undefined, path: string | null) {
-  return useQuery({
-    queryKey: ['dropbox-tree', clientId, path],
-    enabled: !!clientId,
-    retry: false, // 409/503/403은 재시도 무의미 — 즉시 안내
-    queryFn: async () => {
-      const { data } = await api.get<DropboxTreeResponse>(
-        `/clients/${clientId}/dropbox/tree`,
-        { params: path ? { path } : undefined },
-      )
-      return data
-    },
   })
 }
 
