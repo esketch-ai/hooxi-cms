@@ -201,8 +201,22 @@ def seed_codes():
         print(f"⚠ Code seed skipped (database unavailable): {exc}")
 
 
+def require_secure_jwt_secret():
+    """프로덕션 가드 — JWT_SECRET이 개발 기본값인데 dev-login도 꺼져 있으면(=운영 추정)
+    안전하지 않은 기본 서명키 사용을 막기 위해 예외를 던진다."""
+    if (
+        auth.JWT_SECRET == auth._DEFAULT_JWT_SECRET
+        and os.getenv("ENABLE_DEV_LOGIN", "false").lower() != "true"
+    ):
+        raise RuntimeError(
+            "JWT_SECRET이 개발용 기본값입니다. 프로덕션에서는 JWT_SECRET 환경변수를 "
+            "반드시 설정하세요(개발 환경이면 ENABLE_DEV_LOGIN=true)."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    require_secure_jwt_secret()
     if init_db():
         seed_admin()
         seed_codes()

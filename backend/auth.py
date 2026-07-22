@@ -24,7 +24,8 @@ from models import User, get_db
 from services.integration_config import resolve
 
 # --- JWT 설정 ---
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-insecure-secret-change-me")
+_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
+JWT_SECRET = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL = timedelta(hours=8)
 REFRESH_TOKEN_TTL = timedelta(days=7)

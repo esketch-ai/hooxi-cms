@@ -2,7 +2,10 @@
 """P0 우선순위: 핵심 기능 종합 QAQC 테스트"""
 
 import sys
-sys.path.insert(0, '/Users/ssh/Documents/Develope/hooxi-cms/backend')
+from pathlib import Path
+
+# 이 스크립트(backend/qaqc_p0_core.py)의 디렉토리를 import 경로에 추가 — 하드코딩 절대경로 제거
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi.testclient import TestClient
 from main import app

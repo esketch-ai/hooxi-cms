@@ -9,6 +9,23 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // 단일 번들(1MB+) 분리 — 벤더를 별도 청크로. rolldown(vite v8)은 함수형 manualChunks 사용.
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('@phosphor-icons')) return 'icons'
+          if (id.includes('@tanstack') || id.includes('/axios/')) return 'query'
+          if (
+            id.includes('/react-dom/') ||
+            id.includes('/react-router') ||
+            id.includes('/react/')
+          )
+            return 'react-vendor'
+          return 'vendor'
+        },
+      },
+    },
   },
   server: {
     proxy: {

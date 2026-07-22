@@ -68,7 +68,7 @@
 - ORM 모델: `backend/models.py` (테이블 25종, `tb_` 접두 규약).
 - 공통 분류·상태값은 공통 코드 마스터(`tb_code`)로 관리한다(하드코딩 금지).
 - 스키마 정합: 앱 기동 시 `ensure_schema()`가 `create_all`을 보완해 누락 컬럼·인덱스·유니크 제약을 멱등적으로 보강한다. 배포 테이블에 컬럼을 추가할 때는 `ensure_schema`에 반영한다.
-- `db_init.sql`은 초기 참고용 SQL이며, 운영 스키마의 기준은 SQLAlchemy 모델 + `ensure_schema`다.
+- 스키마의 유일한 기준은 `backend/models.py` + `ensure_schema`다(별도 SQL 초기화 스크립트는 두지 않는다).
 
 ## 로컬 개발
 
