@@ -42,7 +42,7 @@ def storage_folder(db: Session, client: Optional[Client], doc_type: str) -> str:
     code = DOC_TYPE_TO_FOLDER_CODE.get(doc_type, "EVIDENCE")
     label = client_folders.subfolder_label_for_code(db, code) or "증빙자료"
     # provision된 폴더(dropbox_folder) 기준 — 회사명 개명 후에도 같은 폴더로 저장
-    base = client_folders.upload_base(client)
+    base = client_folders.upload_base(db, client)
     return "{0}/{1}".format(base, label)
 
 

@@ -55,6 +55,19 @@ router = APIRouter(prefix="/batch", tags=["batch"])
 # 운수사(ETAS·BMS)뿐 아니라 건물(태양광 발전사·히트펌프 등) 계정도 모두 대상이므로
 # 기본은 전체. 특정 기관만 점검하려면 config account_check_agencies에 키워드 지정.
 DEFAULT_CHECK_AGENCIES = []
+
+# 반자동 점검용 — 기관별 '직접 로그인' 딥링크(담당자 1클릭 로그인).
+# 이미지 CAPTCHA 등으로 자동 로그인이 불가한 기관은 사람이 직접 로그인해 확인한다
+# (운영자 통제를 우회하지 않는 정당한 방식). tb_config account_check_login_urls
+# (JSON: {"기관키워드": "URL"})로 override/추가 가능.
+_DEFAULT_LOGIN_URLS = {
+    # ETAS = KOTSA 공단통합(TSUM) SSO 로그인. 로그인마다 이미지 캡차 필수 → 자동 불가,
+    # 담당자가 이 링크로 직접 로그인(캡차 입력)해 확인. 로그인 성공 시 etas로 SSO 복귀.
+    "ETAS": (
+        "https://tsum.kotsa.or.kr/tsum/mbs/inqFrmLogin.do?mobileGubun=PC"
+        "&nextPage=https://etas.kotsa.or.kr/sso/CreateRequest.jsp?RelayState=/sso/ssoLogin.jsp"
+    ),
+}
 _SITE_TIMEOUT = 5.0
 _SITE_CHECK_WORKERS = 8  # 사이트 도달성 확인 동시 실행 수 — 직렬(대상×5초)이면 프론트 타임아웃 초과
 _UA = "Mozilla/5.0 (compatible; HooxiCMS-AccountCheck/1.0)"
@@ -90,6 +103,35 @@ def check_agencies(db: Session) -> list:
     return DEFAULT_CHECK_AGENCIES
 
 
+def login_check_urls(db: Session) -> dict:
+    """기관별 직접 로그인 딥링크 — tb_config account_check_login_urls(JSON) 우선, 기본값 병합.
+
+    키는 기관명 키워드(대문자 부분일치), 값은 로그인 페이지 URL. 자동 로그인이 불가한
+    기관(캡차 등)에서 담당자가 1클릭으로 로그인해 수동 확인하도록 이슈에 링크를 넣는다.
+    """
+    urls = dict(_DEFAULT_LOGIN_URLS)
+    row = db.get(Config, "account_check_login_urls")
+    if row and row.config_value:
+        try:
+            parsed = json.loads(row.config_value)
+            if isinstance(parsed, dict):
+                urls.update({str(k).upper(): str(v) for k, v in parsed.items() if v})
+        except ValueError:
+            pass
+    return urls
+
+
+def _manual_login_url(agency_name, url_map):
+    """기관명에 매칭되는 직접 로그인 딥링크(대문자 부분일치). 매칭 없으면 None."""
+    if not agency_name:
+        return None
+    up = agency_name.upper()
+    for kw, url in url_map.items():
+        if kw in up:
+            return url
+    return None
+
+
 def _site_reachable(url: Optional[str]) -> Optional[bool]:
     """site_url 도달성 — 로그인 없이 GET. None=URL 없음(판정 보류), True/False=도달 여부."""
     if not url:
@@ -121,14 +163,9 @@ def _marker(asset_id: str, period: str) -> str:
     return "[점검:{0}:{1}]".format(asset_id, period)
 
 
-# 점검 이슈 PK 를 (자산, 월)에서 결정적으로 생성하기 위한 고정 네임스페이스.
-# 동시 실행(수동 중복 클릭·스케줄러 겹침)이 read-check 를 동시에 통과해도
-# 두 번째 insert 가 PK 제약으로 거부되어 DB 수준에서 중복이 차단된다.
-_CHECK_ISSUE_NAMESPACE = uuid.UUID("6c1f2c62-6a3d-4c58-9a41-6a3f0b6a8d21")
-
-
-def _check_issue_id(asset_id: str, period: str) -> str:
-    return str(uuid.uuid5(_CHECK_ISSUE_NAMESPACE, "account-check:{0}:{1}".format(asset_id, period)))
+# 점검 이슈 PK 를 (자산, 월)에서 결정적으로 생성 — 동시 실행 중복 차단 + 계정 화면의
+# 이슈 역추적을 위해 공용 헬퍼(routers.common)로 통일한다(네임스페이스 단일 소스).
+_check_issue_id = common.account_check_issue_id
 
 
 def _optional_admin(
@@ -179,6 +216,7 @@ def account_check(
     else:
         targets = assets
 
+    login_urls = login_check_urls(db)  # 반자동: 기관별 직접 로그인 딥링크
     created = 0
     skipped = 0
     unreachable = 0
@@ -231,12 +269,22 @@ def account_check(
             priority = "NORMAL"
 
         agency = asset.agency_name or "공공기관"
+        # 반자동: 자동 로그인이 불가한 기관(캡차 등)은 담당자가 1클릭 로그인하도록 딥링크·안내 추가
+        manual_url = _manual_login_url(asset.agency_name, login_urls)
+        login_section = "· 로그인 바로가기: {0}\n".format(manual_url) if manual_url else ""
+        manual_note = (
+            "\n※ 이 기관은 로그인 시 캡차 등으로 자동 점검이 불가합니다. 위 '로그인 바로가기'로 "
+            "담당자가 직접 로그인(캡차 입력)해 유효성을 확인한 뒤 이 이슈를 완료 처리하세요.\n"
+            if manual_url else ""
+        )
         content = (
             "{period} 월별 계정 점검 대상입니다.\n"
             "· 기관: {agency}\n"
             "· 계정 ID: {login_id}\n"
             "· 사이트: {site}\n"
-            "· 상태: {status}\n\n"
+            "{login_section}"
+            "· 상태: {status}\n"
+            "{manual_note}\n"
             "담당자는 위 계정으로 직접 로그인해 유효성(암호 변경·계정 삭제 등)을 확인하고, "
             "이상이 있으면 기관에 전화해 재발급/변경을 요청한 뒤 이 이슈를 처리해 주세요.\n"
             "(비밀번호는 자산 상세의 보안 정보 열람으로 확인)\n{marker}"
@@ -245,7 +293,9 @@ def account_check(
             agency=agency,
             login_id=asset.login_id or "-",
             site=asset.site_url or "-",
+            login_section=login_section,
             status=status_line,
+            manual_note=manual_note,
             marker=marker,
         )
 

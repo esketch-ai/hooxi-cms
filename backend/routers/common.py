@@ -1,6 +1,7 @@
 """P1 라우터 공용 헬퍼 — 이름 조인·기간 파싱·응답 빌더."""
 
 import re
+import uuid
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -50,6 +51,16 @@ def current_period() -> str:
     generate 기본값·배치가 모두 이 함수를 공유해 '당월' 기준을 KST로 통일한다.
     """
     return now_kst().strftime("%Y-%m")
+
+
+# 계정 점검 이슈 PK를 (자산, 월)에서 결정적으로 생성 — 동시 실행 중복 차단 + 계정 화면에서
+# 이슈를 역추적(자산별 이번 달 점검 상태 라이브 조회)하는 단일 소스. 네임스페이스는 불변.
+_ACCOUNT_CHECK_NAMESPACE = uuid.UUID("6c1f2c62-6a3d-4c58-9a41-6a3f0b6a8d21")
+
+
+def account_check_issue_id(asset_id: str, period: str) -> str:
+    """(자산, 월) → 계정 점검 이슈 history_id (uuid5, 결정적)."""
+    return str(uuid.uuid5(_ACCOUNT_CHECK_NAMESPACE, "account-check:{0}:{1}".format(asset_id, period)))
 
 
 def previous_period(period: str) -> str:

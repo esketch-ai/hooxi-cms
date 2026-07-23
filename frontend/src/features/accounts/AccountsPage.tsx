@@ -86,6 +86,32 @@ function SecretCell({
   )
 }
 
+// 이번 달 점검 상태 배지 — 이슈가 있으면 이슈 보드로 이동해 확인·수정.
+const _CHECK_META: Record<string, { label: string; cls: string }> = {
+  DONE: { label: '완료', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  PENDING: { label: '미완료', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
+  ISSUE: { label: '이상', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
+  NOT_CREATED: { label: '미생성', cls: 'bg-elevate-strong text-ash border-hairline' },
+}
+
+function CheckStatusCell({ asset }: { asset: Asset }) {
+  const cs = asset.check_status
+  if (!cs) return <span className="text-xs text-slatey">—</span>
+  const m = _CHECK_META[cs.state] ?? _CHECK_META.NOT_CREATED
+  const badge = (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${m.cls}`}>
+      {m.label}
+    </span>
+  )
+  return cs.issue_id ? (
+    <Link to="/issues" className="hover:opacity-80" title="점검 이슈에서 확인·수정">
+      {badge}
+    </Link>
+  ) : (
+    badge
+  )
+}
+
 export function AccountsPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
@@ -95,6 +121,7 @@ export function AccountsPage() {
   const [assetGroup, setAssetGroup] = useState('')
   const [authType, setAuthType] = useState('')
   const [search, setSearch] = useState('')
+  const [checkState, setCheckState] = useState('') // '' 전체 / 'pending' 미완료만
   const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Asset | null>(null)
@@ -106,15 +133,17 @@ export function AccountsPage() {
       asset_category: assetGroup,
       auth_method: authType,
       search,
+      check_state: checkState,
       page,
       page_size: PAGE_SIZE,
     }),
-    [assetGroup, authType, search, page],
+    [assetGroup, authType, search, checkState, page],
   )
 
   const { data, isLoading, isError, refetch } = useCredentialAssets(filters)
   const rows = data?.items ?? []
   const total = data?.total ?? 0
+  const summary = data?.check_summary
 
   const { revealed, loadingId, reveal, hide } = useRevealAuth()
   const accountCheck = useAccountCheck()
@@ -218,6 +247,7 @@ export function AccountsPage() {
       header: '상태',
       render: (a) => (a.status ? <StatusBadge domain="assetStatus" value={a.status} /> : null),
     },
+    { key: 'check', header: '이번 달 점검', render: (a) => <CheckStatusCell asset={a} /> },
     {
       key: 'actions',
       header: '수정',
@@ -311,6 +341,45 @@ export function AccountsPage() {
         </div>
       )}
 
+      {/* 이번 달 점검 진척 요약 + 미완료만 보기 토글 (점검 상태 = 점검 이슈에서 라이브 도출) */}
+      {summary && summary.total > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-hairline bg-graphite px-4 py-3 text-sm">
+          <span className="font-medium text-bone">이번 달({summary.period}) 점검</span>
+          <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            완료 {summary.done}/{summary.total}
+          </span>
+          {summary.pending > 0 && (
+            <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              진행 {summary.pending}
+            </span>
+          )}
+          {summary.issue > 0 && (
+            <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300">
+              이상 {summary.issue}
+            </span>
+          )}
+          {summary.not_created > 0 && (
+            <span className="rounded-full border border-hairline px-2.5 py-0.5 text-xs font-medium text-ash">
+              미생성 {summary.not_created}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setCheckState(checkState === 'pending' ? '' : 'pending')
+              setPage(1)
+            }}
+            className={`ml-auto rounded-full border px-3 py-1 text-xs font-medium ${
+              checkState === 'pending'
+                ? 'border-primary bg-primary text-on-primary'
+                : 'border-hairline text-bone hover:bg-elevate'
+            }`}
+          >
+            {checkState === 'pending' ? '전체 보기' : '미완료만 보기'}
+          </button>
+        </div>
+      )}
+
       <FilterBar>
         <FilterSelect
           label="대분류"
@@ -381,6 +450,7 @@ export function AccountsPage() {
                     <p className="mt-0.5 text-xs text-slatey">{a.agency_name ?? '기관 미설정'}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    <CheckStatusCell asset={a} />
                     {a.status && <StatusBadge domain="assetStatus" value={a.status} />}
                     <button
                       type="button"

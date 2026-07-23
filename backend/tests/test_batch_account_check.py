@@ -198,3 +198,41 @@ def test_config_keyword_customization(client, admin_headers, monkeypatch):
         json={"config_value": "[]"},
         headers=admin_headers,
     )
+
+
+def test_manual_login_deeplink_for_etas(client, admin_headers, monkeypatch):
+    """반자동: ETAS 이슈엔 직접 로그인 딥링크+캡차 수동 안내가 들어가고, 비대상 기관엔 없음."""
+    db = models.SessionLocal()
+    cid, _pm = _client_with_pm(db)
+    etas_id = _mk_asset(db, cid, "ETAS 운행기록", login_id="etas777", site="https://etas.kotsa.or.kr/")
+    solar_id = _mk_asset(db, cid, "한화 태양광 모니터링", login_id="sol1", site="https://solar.test")
+    db.commit()
+    db.close()
+
+    monkeypatch.setattr(batch, "_site_reachable", lambda url: True)
+    resp = client.post(CHECK + "?period=2031-03", headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+
+    db = models.SessionLocal()
+
+    def issue_for(asset_id):
+        return (
+            db.query(models.ActivityHistory)
+            .filter(
+                models.ActivityHistory.activity_type == "ISSUE",
+                models.ActivityHistory.content.like("%[점검:{0}:2031-03]%".format(asset_id)),
+            )
+            .first()
+        )
+
+    etas = issue_for(etas_id)
+    solar = issue_for(solar_id)
+    # ETAS: 딥링크(TSUM) + '로그인 바로가기' + 캡차 수동 안내
+    assert "로그인 바로가기" in etas.content
+    assert "tsum.kotsa.or.kr" in etas.content
+    assert "캡차" in etas.content
+    # 비대상 기관(태양광): 딥링크 섹션 없음 (기존 동작 유지)
+    assert "로그인 바로가기" not in solar.content
+    # 비밀값 미노출 유지
+    assert "login_password" not in etas.content
+    db.close()

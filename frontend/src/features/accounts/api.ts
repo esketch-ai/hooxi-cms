@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
-import type { AccountCheckResponse, Asset, Paginated } from '../../types'
+import type { AccountCheckResponse, AccountCheckSummary, Asset, Paginated } from '../../types'
 
 export interface AccountFilters {
   /** 대분류 MOBILITY/FACILITY */
@@ -12,11 +12,14 @@ export interface AccountFilters {
   auth_method?: string
   /** 고객사명 검색 */
   search?: string
+  /** 점검 상태 필터 pending/done/issue (계정 관리 뷰) */
+  check_state?: string
   page: number
   page_size: number
 }
 
-/** 로그인 계정 보유 자산 목록 — credentials_only로 백엔드가 auth_type != NONE만 반환 */
+/** 로그인 계정 보유 자산 목록 — credentials_only로 백엔드가 auth_type != NONE만 반환.
+ *  응답에 자산별 이번 달 점검 상태(check_status)와 상단 요약(check_summary) 포함. */
 export function useCredentialAssets(filters: AccountFilters) {
   return useQuery({
     queryKey: ['accounts', filters],
@@ -29,8 +32,14 @@ export function useCredentialAssets(filters: AccountFilters) {
       if (filters.asset_category) params.asset_category = filters.asset_category
       if (filters.auth_method) params.auth_method = filters.auth_method
       if (filters.search) params.search = filters.search
+      if (filters.check_state) params.check_state = filters.check_state
       const { data } = await api.get<Asset[] | Paginated<Asset>>('/assets', { params })
-      return unwrapList(data)
+      const list = unwrapList(data)
+      const check_summary =
+        !Array.isArray(data) && data
+          ? (data as { check_summary?: AccountCheckSummary }).check_summary
+          : undefined
+      return { ...list, check_summary }
     },
   })
 }

@@ -380,6 +380,28 @@ export interface Asset {
   updated_at?: string
   // 목록 조인 보강
   client_name?: string | null
+  /** 계정 관리 뷰(credentials_only)에서만 채워지는 이번 달 점검 상태 */
+  check_status?: AccountCheckStatus | null
+}
+
+/** 계정별 월별 점검 상태 (schemas.AccountCheckStatus) — 점검 이슈에서 라이브 도출 */
+export interface AccountCheckStatus {
+  period: string
+  /** NOT_CREATED(미생성) | PENDING(진행) | ISSUE(이상) | DONE(완료) */
+  state: 'NOT_CREATED' | 'PENDING' | 'ISSUE' | 'DONE'
+  issue_status?: string | null
+  priority?: string | null
+  issue_id?: string | null
+}
+
+/** 계정 관리 상단 요약 (schemas.AccountCheckSummary) */
+export interface AccountCheckSummary {
+  period: string
+  total: number
+  done: number
+  pending: number
+  issue: number
+  not_created: number
 }
 
 /** 자산 등록/수정 payload (schemas.AssetCreate/AssetUpdate) — 인증 정보는 입력 시에만 전송 */

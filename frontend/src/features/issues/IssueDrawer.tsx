@@ -1,5 +1,5 @@
 // SCR-02 이슈 카드 상세 Drawer — 내용·코멘트 스레드·상태 변경 이력·고객사 딥링크
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowSquareOut, CircleNotch, PaperPlaneRight, Phone } from '@phosphor-icons/react'
 import { Drawer } from '../../components/Drawer'
@@ -21,6 +21,26 @@ import {
 interface IssueDrawerProps {
   issue: ActivityHistory | null
   onClose: () => void
+}
+
+// 이슈 본문의 URL을 클릭 가능한 링크로 렌더 — 반자동 계정 점검의 '로그인 바로가기' 딥링크 등.
+// split(캡처 그룹)은 [텍스트, URL, 텍스트, ...]로 분리되어 홀수 인덱스가 URL (stateful test 회피).
+function renderWithLinks(text: string): ReactNode[] {
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    i % 2 === 1 ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="break-all text-primary underline hover:opacity-80"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  )
 }
 
 export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
@@ -185,7 +205,7 @@ export function IssueDrawer({ issue, onClose }: IssueDrawerProps) {
         <div>
           <p className="mb-1 text-xs font-semibold text-slatey">이슈 내용</p>
           <p className="text-sm leading-relaxed whitespace-pre-wrap text-bone">
-            {issue.content || '—'}
+            {issue.content ? renderWithLinks(issue.content) : '—'}
           </p>
           {issue.main_needs && (
             <p className="mt-2 text-sm text-ash">주요 니즈: {issue.main_needs}</p>

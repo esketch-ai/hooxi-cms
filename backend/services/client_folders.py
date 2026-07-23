@@ -7,10 +7,24 @@
   dropbox_folder에 고정돼 유지되며, 재실행은 ensure_folder 멱등성으로 누락분을 복구한다.
 """
 
-from models import Code
+import json
+
+from models import Client, Code, Config
 from services import dropbox_storage, storage
 
 CATEGORY = "CLIENT_FOLDER"
+
+# 폴더 분류 토큰 — client_type 코드 → 폴더용 짧은 분류(공통코드 '라벨'과는 별개).
+# tb_config client_type_folder_tokens(JSON {code: token})로 override/추가 가능.
+_FOLDER_TOKEN_CONFIG_KEY = "client_type_folder_tokens"
+_DEFAULT_FOLDER_TOKENS = {
+    "TRANSPORT": "운수",
+    "BUILDING": "빌딩",
+    "FACTORY": "공장",
+    "FARM": "농장",
+    "FACILITY": "시설",
+    "ETC": "기타",
+}
 
 
 def subfolder_labels(db):
@@ -100,29 +114,64 @@ def public_send_root():
     return normalize_dropbox_path("{0}/공용_발송자료".format(dropbox_storage.root()))
 
 
-def _short_id(client_id):
-    return (client_id or "")[:4] or "0000"
+def folder_tokens(db):
+    """client_type 코드 → 폴더 분류 토큰. tb_config 우선, 기본값 병합."""
+    tokens = dict(_DEFAULT_FOLDER_TOKENS)
+    row = db.get(Config, _FOLDER_TOKEN_CONFIG_KEY)
+    if row and row.config_value:
+        try:
+            parsed = json.loads(row.config_value)
+            if isinstance(parsed, dict):
+                tokens.update({str(k): str(v) for k, v in parsed.items() if v})
+        except ValueError:
+            pass
+    return tokens
 
 
-def folder_name(client):
-    """단일 세그먼트 폴더명 — 슬래시는 공백으로, 그 외는 공용 sanitize + 짧은ID(client_id[:4])."""
+def _region_seg(client):
+    """지역 세그먼트 — sanitize(region), 미입력이면 '지역미상'."""
+    return storage.sanitize_segment((getattr(client, "region", None) or "").strip()) or "지역미상"
+
+
+def _type_seg(client, tokens):
+    """분류 토큰 세그먼트 — client_type 매핑 토큰, 없으면 코드값(그것도 없으면 '기타')."""
+    tok = tokens.get(client.client_type or "")
+    return storage.sanitize_segment(tok or client.client_type or "") or "기타"
+
+
+def folder_name(db, client):
+    """폴더명 = {지역}_{회사명}_{분류토큰}. (실무 규약: 지역+고객사명+분류)
+
+    유일성은 짧은ID 대신 provision 단계의 충돌 접미사(_2, _3 …)로 보장 — 정상 케이스는
+    깨끗한 이름 그대로, 동명·동지역·동분류 충돌 시에만 접미사가 붙어 파일 혼입을 막는다.
+    """
     raw = (client.company_name or "").replace("/", " ")
-    seg = storage.sanitize_segment(raw)
-    return "{0}_{1}".format(seg or "client", _short_id(client.client_id))
+    name = storage.sanitize_segment(raw) or "client"
+    return "{0}_{1}_{2}".format(_region_seg(client), name, _type_seg(client, folder_tokens(db)))
 
 
-def upload_base(client):
+def upload_base(db, client):
     """업로드 저장 base 세그먼트(root 제외).
 
-    provision된 폴더명(dropbox_folder의 마지막 세그먼트)을 우선 사용해, 회사명 개명 후에도
-    업로드가 provision 폴더로 고정된다. 미provision(None)이면 현재 회사명으로 계산.
+    provision된 폴더명(dropbox_folder의 마지막 세그먼트)을 우선 사용해, 회사명 개명·규칙
+    변경 후에도 업로드가 provision 폴더로 고정된다. 미provision(None)이면 현재 규칙으로 계산.
     고객사 미지정(공용 양식 등)은 _공용.
     """
     if client is None:
         return "_공용"
     if getattr(client, "dropbox_folder", None):
         return client.dropbox_folder.rstrip("/").split("/")[-1]
-    return folder_name(client)
+    return folder_name(db, client)
+
+
+def _folder_taken_by_other(db, client, root):
+    """다른 고객사가 이미 이 dropbox_folder 경로를 점유 중인지 — 충돌(파일 혼입) 방지."""
+    return (
+        db.query(Client)
+        .filter(Client.dropbox_folder == root, Client.client_id != client.client_id)
+        .first()
+        is not None
+    )
 
 
 def provision(db, client):
@@ -130,11 +179,23 @@ def provision(db, client):
 
     미설정 시 {"skipped": True}. 성공 시 루트 경로를 client.dropbox_folder에 세팅한다
     (commit은 호출부 책임). 부분 실패도 재실행 시 ensure_folder 멱등성으로 복구된다.
+    충돌(동명·동지역·동분류)이면 _2, _3 … 접미사로 고유 경로를 확보해 파일 혼입을 막는다.
     """
     if not dropbox_storage.is_configured():
         return {"skipped": True, "reason": "dropbox_unconfigured"}
 
-    root = "{0}/{1}".format(dropbox_storage.root(), folder_name(client))
+    if getattr(client, "dropbox_folder", None):
+        # 이미 provision됨 — 저장 경로를 재사용해 누락 서브폴더만 멱등 복구한다.
+        # 이름을 재계산하지 않으므로 회사명 개명·규칙 변경 후 재실행해도 폴더 orphan/이중생성이 없다.
+        root = client.dropbox_folder
+    else:
+        # 신규 — 새 규칙으로 계산. 충돌(동명·동지역·동분류) 시 _2, _3 … 접미사로 고유 경로 확보.
+        root_base = "{0}/{1}".format(dropbox_storage.root(), folder_name(db, client))
+        root = root_base
+        suffix = 2
+        while _folder_taken_by_other(db, client, root):
+            root = "{0}_{1}".format(root_base, suffix)
+            suffix += 1
     dropbox_storage.ensure_folder(root)
     subs = subfolder_labels(db)
     for label in subs:

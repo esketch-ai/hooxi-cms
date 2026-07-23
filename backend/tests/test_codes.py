@@ -78,11 +78,11 @@ def test_client_type_validation_and_in_use_guard(client, admin_headers):
     # 신규 구분 추가 → 활성
     resp = client.post(
         f"{API}/codes",
-        json={"category": "CLIENT_TYPE", "code": "FARM", "label": "농장", "sort_order": 40},
+        json={"category": "CLIENT_TYPE", "code": "WAREHOUSE", "label": "창고", "sort_order": 45},
         headers=admin_headers,
     )
     assert resp.status_code == 201, resp.text
-    farm_id = resp.json()["code_id"]
+    ware_id = resp.json()["code_id"]
 
     # 유효하지 않은 구분으로 고객사 등록 → 422
     bad = client.post(
@@ -95,22 +95,22 @@ def test_client_type_validation_and_in_use_guard(client, admin_headers):
     # 신규 활성 구분으로 고객사 등록 → 성공
     ok = client.post(
         f"{API}/clients",
-        json={"client_type": "FARM", "company_name": "행복농장"},
+        json={"client_type": "WAREHOUSE", "company_name": "행복창고"},
         headers=admin_headers,
     )
     assert ok.status_code == 201, ok.text
 
     # 사용 중이므로 삭제 차단 409
-    blocked = client.delete(f"{API}/codes/{farm_id}", headers=admin_headers)
+    blocked = client.delete(f"{API}/codes/{ware_id}", headers=admin_headers)
     assert blocked.status_code == 409
 
     # 비활성 전환은 허용 → 드롭다운(활성)에서 제외, 관리 목록엔 표시
-    deact = client.put(f"{API}/codes/{farm_id}", json={"active": "N"}, headers=admin_headers)
+    deact = client.put(f"{API}/codes/{ware_id}", json={"active": "N"}, headers=admin_headers)
     assert deact.status_code == 200, deact.text
     active_codes = {c["code"] for c in _codes(client, admin_headers).json()}
-    assert "FARM" not in active_codes
+    assert "WAREHOUSE" not in active_codes
     all_codes = {c["code"] for c in _codes(client, admin_headers, include_inactive=True).json()}
-    assert "FARM" in all_codes
+    assert "WAREHOUSE" in all_codes
 
 
 def test_contract_status_seeded_with_color_and_lock(client, admin_headers):

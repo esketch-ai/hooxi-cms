@@ -94,8 +94,15 @@ def seed_codes():
     builtin = [
         # (category, code, label, color, extra, sort_order)
         # color=시맨틱 팔레트명 / extra=부가값(AGENCY는 기본 접속 URL)
+        # 고객사 구분(재분류) — 폴더 분류 토큰은 client_folders._DEFAULT_FOLDER_TOKENS 참조
+        # (라벨과 별개, tb_config client_type_folder_tokens로 override 가능).
         ("CLIENT_TYPE", "TRANSPORT", "운수사", None, None, 10),
-        ("CLIENT_TYPE", "FACILITY", "건물·농장", None, None, 20),
+        ("CLIENT_TYPE", "BUILDING", "빌딩", None, None, 20),
+        ("CLIENT_TYPE", "FACTORY", "공장", None, None, 30),
+        ("CLIENT_TYPE", "FARM", "농장", None, None, 40),
+        ("CLIENT_TYPE", "ETC", "기타", None, None, 50),
+        # 구(舊) 통합 구분 — 기존 데이터 하위호환용으로만 유지(신규 선택 지양), 정렬 뒤로
+        ("CLIENT_TYPE", "FACILITY", "건물·농장", None, None, 90),
         # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
         ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
         ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),

@@ -357,3 +357,6 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/coverage/
 backend/e2e.db
+
+# 외부 기관 로그인 점검 PoC — 스텔스/실계정 자격증명 취급, 로컬 전용(운영은 차후)
+worker/poc/

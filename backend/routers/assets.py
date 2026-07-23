@@ -14,7 +14,16 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission, require_role
-from models import Asset, Client, Document, ProjectClientMap, User, get_db, utcnow
+from models import (
+    ActivityHistory,
+    Asset,
+    Client,
+    Document,
+    ProjectClientMap,
+    User,
+    get_db,
+    utcnow,
+)
 from routers import common
 from routers.codes import validate_active_code
 from services import crypto
@@ -78,6 +87,7 @@ def list_assets(
     monitoring_yn: Optional[str] = Query(None, description="관제 연동 Y/N"),
     auth_method: Optional[str] = Query(None, description="인증 방식 API_KEY/ID_PW/NONE"),
     credentials_only: bool = Query(False, description="로그인 계정 보유 자산만 (계정 관리 뷰)"),
+    check_state: Optional[str] = Query(None, description="계정 관리 뷰 점검 상태 필터: pending/done/issue"),
     client_id: Optional[str] = Query(None, description="고객사"),
     search: Optional[str] = Query(None, description="고객사명·자산 분류·제원·대상 기관 검색"),
     page: int = Query(1, ge=1),
@@ -115,6 +125,72 @@ def list_assets(
         if matched_clients:
             conditions.append(Asset.client_id.in_(matched_clients))
         query = query.filter(or_(*conditions))
+
+    # 계정 관리 뷰 — 자산별 이번 달 점검 상태를 이슈(결정적 PK)에서 라이브 도출 + 요약/필터.
+    # 대상 집합이 소규모라 파이썬에서 계산·필터·페이지네이션한다(일반 자산 뷰는 아래 SQL 경로 유지).
+    if credentials_only:
+        all_rows = query.order_by(Asset.created_at.desc()).all()
+        period = common.current_period()
+        id_to_asset = {
+            common.account_check_issue_id(a.asset_id, period): a.asset_id for a in all_rows
+        }
+        issue_by_asset = {}
+        if id_to_asset:
+            for iss in (
+                db.query(ActivityHistory)
+                .filter(ActivityHistory.history_id.in_(list(id_to_asset)))
+                .all()
+            ):
+                issue_by_asset[id_to_asset[iss.history_id]] = iss
+
+        def _status(asset):
+            iss = issue_by_asset.get(asset.asset_id)
+            if iss is None:
+                state = "NOT_CREATED"
+            elif iss.issue_status == "CLOSED":
+                state = "DONE"
+            elif iss.priority == "URGENT":
+                state = "ISSUE"
+            else:
+                state = "PENDING"
+            return schemas.AccountCheckStatus(
+                period=period,
+                state=state,
+                issue_status=iss.issue_status if iss else None,
+                priority=iss.priority if iss else None,
+                issue_id=iss.history_id if iss else None,
+            )
+
+        statuses = {a.asset_id: _status(a) for a in all_rows}
+        summary = schemas.AccountCheckSummary(
+            period=period,
+            total=len(all_rows),
+            done=sum(1 for s in statuses.values() if s.state == "DONE"),
+            pending=sum(1 for s in statuses.values() if s.state == "PENDING"),
+            issue=sum(1 for s in statuses.values() if s.state == "ISSUE"),
+            not_created=sum(1 for s in statuses.values() if s.state == "NOT_CREATED"),
+        )
+        if check_state == "pending":  # '미완료' = 아직 확인 안 된 전부(완료 제외)
+            all_rows = [a for a in all_rows if statuses[a.asset_id].state != "DONE"]
+        elif check_state == "done":
+            all_rows = [a for a in all_rows if statuses[a.asset_id].state == "DONE"]
+        elif check_state == "issue":
+            all_rows = [a for a in all_rows if statuses[a.asset_id].state == "ISSUE"]
+
+        total = len(all_rows)
+        page_rows = all_rows[(page - 1) * page_size:(page - 1) * page_size + page_size]
+        cnames = common.client_name_map(db, [a.client_id for a in page_rows])
+        items = [
+            schemas.AssetListItem.model_validate(a, from_attributes=True).model_copy(
+                update={
+                    "client_name": cnames.get(a.client_id),
+                    "has_credentials": bool(a.login_password or a.api_token),
+                    "check_status": statuses[a.asset_id],
+                }
+            )
+            for a in page_rows
+        ]
+        return schemas.AssetListResponse(items=items, total=total, check_summary=summary)
 
     total = query.count()
     rows = (

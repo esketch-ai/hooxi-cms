@@ -404,15 +404,42 @@ class AssetUpdate(BaseModel):
     usage_purpose: Optional[str] = Field(default=None, max_length=100)
 
 
+class AccountCheckStatus(BaseModel):
+    """계정별 월별 점검 상태 — 점검 이슈(결정적 PK)에서 라이브 도출. 계정 관리 뷰 전용.
+
+    state: NOT_CREATED(이번 달 이슈 미생성) | PENDING(진행 중) | ISSUE(이상·긴급) | DONE(완료).
+    담당자가 이슈를 처리(CLOSED)하면 계정 화면 상태도 자동 반영된다(비정규화 없음).
+    """
+
+    period: str
+    state: str
+    issue_status: Optional[str] = None  # OPEN/IN_PROGRESS/HOLD/CLOSED
+    priority: Optional[str] = None       # URGENT/NORMAL
+    issue_id: Optional[str] = None       # 이슈 보드 딥링크용
+
+
+class AccountCheckSummary(BaseModel):
+    """계정 관리 상단 요약 — 대상 기간 점검 진척(전체/완료/미완료/이상/미생성)."""
+
+    period: str
+    total: int
+    done: int
+    pending: int
+    issue: int
+    not_created: int
+
+
 class AssetListItem(AssetOut):
     """자산 목록 행 (SCR-04) — 고객사명 조인. 인증정보는 has_credentials·auth_type만."""
 
     client_name: Optional[str] = None
+    check_status: Optional[AccountCheckStatus] = None  # 계정 관리 뷰(credentials_only)에서만 채움
 
 
 class AssetListResponse(BaseModel):
     items: List[AssetListItem]
     total: int
+    check_summary: Optional[AccountCheckSummary] = None  # 계정 관리 뷰에서만 채움
 
 
 class AssetRevealOut(BaseModel):

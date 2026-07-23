@@ -222,9 +222,10 @@ def test_document_upload_uses_company_folder(client, admin_headers, monkeypatch)
         headers=admin_headers,
     )
     assert resp.status_code == 201, resp.text
-    # PHOTO → 고객사 폴더(회사명_짧은ID)/자산·인증정보 (provision과 동일 위치)
+    # PHOTO → 고객사 폴더(지역_회사명_분류)/자산·인증정보 (provision과 동일 위치)
+    # region 미지정 → 지역미상, TRANSPORT → 운수
     assert captured["path"].startswith(
-        "/Hooxi-CMS/QA-드롭박스운수_{0}/자산·인증정보/".format(cid[:4])
+        "/Hooxi-CMS/지역미상_QA-드롭박스운수_운수/자산·인증정보/"
     )
     assert resp.json()["file_url"].startswith("dropbox:/Hooxi-CMS/")
 
