@@ -541,6 +541,7 @@ class SegmentSend(Base):
     )  # null=저장 없이 즉석 발송
     criteria_snapshot = Column(Text)  # 발송 시점 조건 JSON 동결
     doc_ids = Column(Text)  # JSON 배열 — 첨부 문서 doc_id 목록
+    merge_rule = Column(Text)  # mail-merge 규칙 JSON {folder_code, name_contains} (없으면 null)
     subject = Column(String(200))  # 발송 제목 스냅샷
     body = Column(Text)  # 발송 본문 스냅샷
     target_count = Column(Integer, default=0)
@@ -582,6 +583,7 @@ def ensure_schema():
         ("tb_report_subscription", "mail_subject", "VARCHAR(200)"),
         ("tb_report_subscription", "mail_body", "TEXT"),
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
+        ("tb_segment_send", "merge_rule", "TEXT"),
     ]
     try:
         insp = _inspect(engine)

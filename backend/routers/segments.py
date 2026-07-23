@@ -444,6 +444,8 @@ def _execute_send(
       SUCCESS/FAIL 로그 + 성공 시 활동 이력 EMAIL "[자동]" 적재 → 건별 commit
       (batch.py 관용구 — 중간 실패로 프로세스가 끊겨도 기왕 발송분 이력 보존)
     - 감사 로그는 카운트 요약만 (R2-E6 — 수신자 이메일 미기록)
+    - mail-merge(merge_folder_code): 고객사별로 list_folder+download를 순차 수행하므로
+      대량 세그먼트일수록 발송 시간이 대상 수에 비례해 증가한다(공통 첨부는 1회 로드).
     """
     if not email_service.is_configured():
         raise HTTPException(
@@ -455,12 +457,22 @@ def _execute_send(
             ),
         )
 
-    if not payload.doc_ids and not (payload.dropbox_paths or []):
+    if (
+        not payload.doc_ids
+        and not (payload.dropbox_paths or [])
+        and not payload.merge_folder_code
+    ):
         raise HTTPException(
             status_code=422,
-            detail="문서함 파일 또는 공용 Dropbox 파일을 최소 1개 선택하세요",
+            detail="문서함 파일·공용 Dropbox 파일·수신자별 개별 첨부 중 최소 1개를 지정하세요",
         )
+    if payload.merge_folder_code:
+        validate_active_code(db, "CLIENT_FOLDER", payload.merge_folder_code)
+        # 공용 Dropbox 경로 가드와 대칭 — 미설정이면 개별 첨부 해석이 불가하므로 사전 503
+        if not dropbox_storage.is_configured():
+            raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
     attachments = _load_attachments(db, payload.doc_ids, payload.dropbox_paths)
+    common_bytes = sum(len(content) for _, content, _ in attachments)  # 개별 첨부 합산 검사용
     targets = _segment_query(db, criteria).order_by(Client.company_name.asc()).all()
     subject_tpl, body_tpl = _resolve_send_templates(segment, payload.subject, payload.body)
 
@@ -468,6 +480,15 @@ def _execute_send(
         segment_id=segment.segment_id if segment else None,
         criteria_snapshot=_dump_criteria(criteria),
         doc_ids=json.dumps(payload.doc_ids, ensure_ascii=False),
+        merge_rule=(
+            json.dumps(
+                {"folder_code": payload.merge_folder_code,
+                 "name_contains": payload.merge_name_contains},
+                ensure_ascii=False,
+            )
+            if payload.merge_folder_code
+            else None
+        ),
         subject=subject_tpl[:200],  # tb_segment_send.subject String(200)
         body=body_tpl,
         target_count=len(targets),
@@ -487,6 +508,26 @@ def _execute_send(
 
     sent = failed = 0
     details = []
+
+    def _fail(target, reason, recipients=None):
+        """건별 실패 격리 기록 — mail-merge 개별 첨부 해석 실패용(전체 중단 금지)."""
+        nonlocal failed
+        failed += 1
+        db.add(
+            SegmentSendLog(
+                send_id=send.send_id, client_id=target.client_id,
+                recipients=recipients, channel="EMAIL", result="FAIL", reason=reason[:300],
+            )
+        )
+        send.failed_count = failed
+        db.commit()
+        details.append(
+            schemas.SegmentSendDetail(
+                client_id=target.client_id, client_name=target.company_name,
+                result="FAIL", reason=reason[:300],
+            )
+        )
+
     for target in targets:
         to, cc = resolve_recipients(db, target, sub=None)
         if not to:
@@ -508,6 +549,31 @@ def _execute_send(
             )
             continue
 
+        # mail-merge: 이 고객사 폴더에서 개별 첨부 1개 해석 (실패 시 FAIL 격리)
+        send_attachments = attachments
+        if payload.merge_folder_code:
+            resolved = client_folders.resolve_recipient_file(
+                db, target, payload.merge_folder_code, payload.merge_name_contains
+            )
+            reason = None
+            if resolved is None:
+                reason = "수신자별 개별 첨부 파일이 없습니다 (폴더 미생성/미provision 또는 매칭 파일 없음)"
+            else:
+                merge_path, msize = resolved
+                if (msize or 0) + common_bytes > MAX_ATTACHMENT_TOTAL_BYTES:
+                    reason = "첨부 총량이 20MB를 초과합니다"
+                else:
+                    mcontent = storage.read_file("dropbox:" + merge_path)
+                    if mcontent is None:
+                        reason = "개별 첨부 파일을 저장소에서 읽을 수 없습니다"
+                    else:
+                        send_attachments = attachments + [
+                            (os.path.basename(merge_path) or "file", mcontent, None)
+                        ]
+            if reason:
+                _fail(target, reason, json.dumps({"to": to, "cc": cc}, ensure_ascii=False))
+                continue
+
         manager = managers.get(target.manager_id)
         variables = {
             "고객사명": target.company_name or "",
@@ -525,7 +591,7 @@ def _execute_send(
                 subject=subject,
                 body=body,
                 cc=cc or None,
-                attachments=attachments,
+                attachments=send_attachments,
                 reply_to=(manager.email if manager else None) or user.email,
             )
         except Exception as exc:  # 건별 실패 격리 — 전체 중단 금지 (batch.py 관용구)
@@ -582,8 +648,11 @@ def _execute_send(
         os.path.basename(client_folders.normalize_dropbox_path(p))
         for p in (payload.dropbox_paths or [])
     ]
-    attach_summary = "docs={0}, dropbox=[{1}]".format(
-        len(payload.doc_ids), ", ".join(dbx_names)
+    merge_summary = (
+        ", merge={0}".format(payload.merge_folder_code) if payload.merge_folder_code else ""
+    )
+    attach_summary = "docs={0}, dropbox=[{1}]{2}".format(
+        len(payload.doc_ids), ", ".join(dbx_names), merge_summary
     )
     AuditLogger.log_action(
         db, user.user_id, "SEGMENT_SEND", target_type="SEGMENT_SEND", target_id=send.send_id,

@@ -1421,6 +1421,9 @@ class SegmentSendRequest(BaseModel):
 
     doc_ids: List[str] = Field(default_factory=list)
     dropbox_paths: Optional[List[str]] = None
+    # mail-merge: 각 수신 고객사 자신의 이 구분폴더(CLIENT_FOLDER 코드)에서 최신 1개를 개별 첨부
+    merge_folder_code: Optional[str] = None
+    merge_name_contains: Optional[str] = Field(default=None, max_length=100)
     subject: Optional[str] = Field(default=None, max_length=200)
     body: Optional[str] = None
     criteria: Optional[SegmentCriteria] = None

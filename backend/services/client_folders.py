@@ -38,6 +38,39 @@ def subfolder_label_for_code(db, code):
     return row.label if row else None
 
 
+def resolve_recipient_file(db, client, folder_code, name_contains=None):
+    """mail-merge용 — 고객사 자신의 {folder_code} 구분폴더에서 첨부할 파일 1개 해석.
+
+    선택 규칙: (선택) name_contains 부분일치 필터 → server_modified 최신 1개.
+    반환: (Dropbox 절대경로, size바이트) 튜플. 아래는 None(호출부가 FAIL 격리):
+    - 고객사 미provision(dropbox_folder 없음)
+    - 코드→라벨 해석 실패 / 폴더 미생성(DropboxNotFound) / Dropbox 미설정(DropboxConfigError)
+    - 조건에 맞는 파일 없음
+    provision과 동일 sanitize(폴더명) + confinement 재검증으로 경로 일치·탈출 방지.
+    size를 함께 반환해 호출부의 별도 file_size 재조회(메타 API 왕복)를 없앤다.
+    """
+    if not getattr(client, "dropbox_folder", None):
+        return None
+    label = subfolder_label_for_code(db, folder_code)
+    if not label:
+        return None
+    safe = storage.sanitize_segment(label)
+    folder_path = normalize_dropbox_path("{0}/{1}".format(client.dropbox_folder, safe))
+    if not is_within_client_folder(client, folder_path):  # 방어적 재검증
+        return None
+    try:
+        entries = dropbox_storage.list_folder(folder_path)
+    except (dropbox_storage.DropboxNotFound, dropbox_storage.DropboxConfigError):
+        return None
+    files = [e for e in entries if not e["is_dir"]]
+    if name_contains:
+        files = [e for e in files if name_contains in e["name"]]
+    if not files:
+        return None
+    files.sort(key=lambda e: e.get("modified") or "", reverse=True)  # 최신 1개
+    return files[0]["path_display"], files[0].get("size")
+
+
 def normalize_dropbox_path(path):
     """Dropbox 경로 정규화 — 앞 '/' 보장, 빈·'.'·'..' 세그먼트 제거(상위 탈출 방지)."""
     segs = [s for s in (path or "").split("/") if s and s not in (".", "..")]

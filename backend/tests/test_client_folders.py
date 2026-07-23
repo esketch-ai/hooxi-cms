@@ -418,3 +418,75 @@ def test_public_tree_autocreates_root_when_missing(client, admin_headers, monkey
     assert r.status_code == 200, r.text
     assert r.json()["entries"] == []  # 자동 생성 후 빈 목록
     assert created == [PUBLIC_ROOT]
+
+
+# ---------------------------------------------------------------------------
+# mail-merge: resolve_recipient_file (수신자별 개별 파일 해석)
+# ---------------------------------------------------------------------------
+class _MergeClient:
+    def __init__(self, folder="/행복운수_1a2b"):
+        self.dropbox_folder = folder
+        self.client_id = "1a2b0000"
+        self.company_name = "행복운수"
+
+
+def _entry(name, path, is_dir=False, modified=None):
+    return {"name": name, "path_display": path, "path_lower": path.lower(),
+            "is_dir": is_dir, "size": None if is_dir else 1, "modified": modified}
+
+
+def test_resolve_recipient_file_latest(client, monkeypatch):
+    p_expected = "/행복운수_1a2b/보고서"
+    monkeypatch.setattr(dropbox_storage, "list_folder", lambda p: [
+        _entry("a.pdf", p + "/a.pdf", modified="2026-07-01T00:00:00"),
+        _entry("b.pdf", p + "/b.pdf", modified="2026-07-20T00:00:00"),  # 최신
+        _entry("sub", p + "/sub", is_dir=True),
+    ])
+    db = models.SessionLocal()
+    try:
+        assert client_folders.resolve_recipient_file(db, _MergeClient(), "REPORT") == (p_expected + "/b.pdf", 1)
+    finally:
+        db.close()
+
+
+def test_resolve_recipient_file_name_contains(client, monkeypatch):
+    monkeypatch.setattr(dropbox_storage, "list_folder", lambda p: [
+        _entry("2026-06.pdf", p + "/2026-06.pdf", modified="2026-06-30T00:00:00"),
+        _entry("2026-07.pdf", p + "/2026-07.pdf", modified="2026-07-31T00:00:00"),
+    ])
+    db = models.SessionLocal()
+    try:
+        got = client_folders.resolve_recipient_file(db, _MergeClient(), "REPORT", name_contains="2026-06")
+        assert got[0].endswith("/2026-06.pdf")  # 최신(07)이 아니라 필터 매칭분
+    finally:
+        db.close()
+
+
+def test_resolve_recipient_file_preserves_middot_label(client, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(dropbox_storage, "list_folder",
+                        lambda p: seen.update(path=p) or [_entry("x.jpg", p + "/x.jpg", modified="2026-07-01T00:00:00")])
+    db = models.SessionLocal()
+    try:
+        got = client_folders.resolve_recipient_file(db, _MergeClient(), "ASSET_AUTH")  # 라벨 자산·인증정보
+        assert seen["path"] == "/행복운수_1a2b/자산·인증정보"  # · 보존(provision과 동일)
+        assert got[0] == "/행복운수_1a2b/자산·인증정보/x.jpg"
+    finally:
+        db.close()
+
+
+def test_resolve_recipient_file_none_cases(client, monkeypatch):
+    db = models.SessionLocal()
+    try:
+        # 미provision
+        assert client_folders.resolve_recipient_file(db, _MergeClient(folder=None), "REPORT") is None
+        # 폴더 없음(DropboxNotFound)
+        def _nf(p):
+            raise dropbox_storage.DropboxNotFound(p)
+        monkeypatch.setattr(dropbox_storage, "list_folder", _nf)
+        assert client_folders.resolve_recipient_file(db, _MergeClient(), "REPORT") is None
+        # 조건 맞는 파일 없음(폴더뿐)
+        monkeypatch.setattr(dropbox_storage, "list_folder", lambda p: [_entry("d", p + "/d", is_dir=True)])
+        assert client_folders.resolve_recipient_file(db, _MergeClient(), "REPORT") is None
+    finally:
+        db.close()

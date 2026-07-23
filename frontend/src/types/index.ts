@@ -708,6 +708,8 @@ export interface SegmentFacets {
 export interface SegmentSendPayload {
   doc_ids: string[]
   dropbox_paths?: string[] // 공용 발송자료 폴더에서 고른 공통 첨부 경로
+  merge_folder_code?: string // mail-merge: 각 고객사 폴더의 이 구분에서 최신 1개 개별 첨부
+  merge_name_contains?: string // (선택) 파일명 부분일치 필터
   subject?: string
   body?: string
   criteria?: SegmentCriteria

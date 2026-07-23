@@ -84,6 +84,7 @@ export function SegmentsPage() {
   const contractStatus = useCodes('CONTRACT_STATUS')
   const assetGroup = useCodes('ASSET_GROUP')
   const settlementStatus = useCodes('SETTLEMENT_STATUS')
+  const clientFolderCodes = useCodes('CLIENT_FOLDER') // mail-merge 구분폴더 선택지
 
   const projectNameOf = useMemo(() => {
     const m: Record<string, string> = {}
@@ -168,6 +169,8 @@ export function SegmentsPage() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [dropboxPaths, setDropboxPaths] = useState<string[]>([])
   const [dbxPickerOpen, setDbxPickerOpen] = useState(false)
+  const [mergeFolderCode, setMergeFolderCode] = useState('') // mail-merge 구분폴더(빈값=미사용)
+  const [mergeNameContains, setMergeNameContains] = useState('')
   const [subject, setSubject] = useState(DEFAULT_SUBJECT)
   const [body, setBody] = useState(DEFAULT_BODY)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -183,7 +186,7 @@ export function SegmentsPage() {
   }
 
   const canSend =
-    (attachedDocs.length > 0 || dropboxPaths.length > 0) &&
+    (attachedDocs.length > 0 || dropboxPaths.length > 0 || !!mergeFolderCode) &&
     targetTotal > 0 &&
     !send.isPending
 
@@ -195,6 +198,8 @@ export function SegmentsPage() {
         payload: {
           doc_ids: attachedDocs.map((d) => d.doc_id),
           dropbox_paths: dropboxPaths.length ? dropboxPaths : undefined,
+          merge_folder_code: mergeFolderCode || undefined,
+          merge_name_contains: mergeNameContains.trim() || undefined,
           subject: subject.trim() || undefined,
           body: body.trim() || undefined,
           ...(selectedSegmentId ? {} : { criteria }), // 즉석 발송 — 현재 조건 스냅샷
@@ -503,6 +508,42 @@ export function SegmentsPage() {
               ))}
             </div>
           )}
+
+          {/* mail-merge — 수신자별 각 고객사 폴더에서 개별 파일 첨부 */}
+          <div className="mt-3 border-t border-hairline pt-3">
+            <label className="mb-1 block text-xs font-medium text-ash">
+              수신자별 개별 첨부 (각 고객사 폴더의 최신 파일)
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={mergeFolderCode}
+                onChange={(e) => setMergeFolderCode(e.target.value)}
+                className="h-9 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
+              >
+                <option value="">사용 안 함</option>
+                {clientFolderCodes.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {mergeFolderCode && (
+                <input
+                  value={mergeNameContains}
+                  onChange={(e) => setMergeNameContains(e.target.value)}
+                  placeholder="파일명 포함(선택)"
+                  className="h-9 w-40 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+                />
+              )}
+            </div>
+            {mergeFolderCode && (
+              <p className="mt-1 text-xs text-slatey">
+                각 고객사의 '{clientFolderCodes.labelOf(mergeFolderCode)}' 폴더에서
+                {mergeNameContains.trim() ? ` '${mergeNameContains.trim()}' 포함 ` : ' '}
+                최신 파일 1개를 개별 첨부합니다. 파일이 없는 고객사는 실패로 기록됩니다.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* 제목·본문 — 고객사별 변수 치환 */}
@@ -711,6 +752,12 @@ export function SegmentsPage() {
                   {p.split('/').pop()} <span className="text-slatey">(Dropbox)</span>
                 </li>
               ))}
+              {mergeFolderCode && (
+                <li className="text-bone">
+                  각 고객사 '{clientFolderCodes.labelOf(mergeFolderCode)}' 폴더 최신 1개{' '}
+                  <span className="text-slatey">(개별 첨부)</span>
+                </li>
+              )}
             </ul>
             <p className="mt-2">
               제목: <b className="text-bone">{subject.trim() || '(기본 템플릿)'}</b>
