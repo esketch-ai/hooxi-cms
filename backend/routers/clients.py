@@ -38,19 +38,20 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 
-def _provision_dropbox_folder_bg(client_id: str) -> None:
+def _provision_dropbox_folder_bg(client_id: str, actor_id: Optional[str] = None) -> None:
     """등록 응답 이후 백그라운드로 Dropbox 전용 폴더 생성 (best-effort).
 
     등록 요청 스레드를 블로킹하지 않도록 응답 후 실행되며, 자체 DB 세션을 연다.
     Dropbox 미설정이면 조용히 스킵되고, 생성 실패(API·네트워크·지연)는 등록에 영향을
     주지 않는다(이미 커밋됨). 실패분은 백필(POST /batch/provision-dropbox-folders)로 복구.
+    actor_id는 폴더 생성 감사 로그(CLIENT_FOLDER_PROVISION)의 처리자로 기록된다.
     """
     db = SessionLocal()
     try:
         client = db.get(Client, client_id)
         if client is None:
             return
-        result = client_folders.provision(db, client)
+        result = client_folders.provision(db, client, actor_id=actor_id)
         if not result.get("skipped"):
             db.commit()
     except Exception:
@@ -231,7 +232,7 @@ def create_client(
     db.commit()
     db.refresh(client)
     # 등록 응답을 블로킹하지 않도록 폴더 생성은 응답 후 백그라운드로 (실패는 백필 복구)
-    background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id)
+    background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id, user.user_id)
     return _client_detail(db, client)
 
 
@@ -520,6 +521,14 @@ def get_client_dropbox_tree(
     try:
         entries = dropbox_storage.list_folder(target)
     except dropbox_storage.DropboxNotFound:
+        # 루트 폴더 자체가 없음 = 외부(수동) 삭제 신호 → 감사 로그로 근거를 남긴다(오명 방지).
+        # 하위 경로 404(오래된 링크 재요청 등)는 잡음이라 제외하고 루트 소실만 기록. 경로만(R2-E6).
+        if target == client_folders.normalize_dropbox_path(client.dropbox_folder):
+            AuditLogger.log_action(
+                db, user.user_id, "CLIENT_FOLDER_MISSING",
+                target_type="CLIENT", target_id=client_id, new_value=target,
+            )
+            db.commit()
         raise HTTPException(status_code=404, detail="해당 경로를 찾을 수 없습니다.")
     except dropbox_storage.DropboxConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc))

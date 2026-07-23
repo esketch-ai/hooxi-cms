@@ -11,6 +11,7 @@ import json
 
 from models import Client, Code, Config
 from services import dropbox_storage, storage
+from services.audit_logger import AuditLogger
 
 CATEGORY = "CLIENT_FOLDER"
 
@@ -174,12 +175,15 @@ def _folder_taken_by_other(db, client, root):
     )
 
 
-def provision(db, client):
+def provision(db, client, actor_id=None):
     """고객사 Dropbox 폴더 provision(멱등). 반환 요약 dict.
 
     미설정 시 {"skipped": True}. 성공 시 루트 경로를 client.dropbox_folder에 세팅한다
     (commit은 호출부 책임). 부분 실패도 재실행 시 ensure_folder 멱등성으로 복구된다.
     충돌(동명·동지역·동분류)이면 _2, _3 … 접미사로 고유 경로를 확보해 파일 혼입을 막는다.
+
+    actor_id를 주면 CLIENT_FOLDER_PROVISION 감사 로그를 남긴다(action=reused/created/
+    created_suffixed + 경로) — 폴더가 언제·누구에 의해·어떤 경로로 만들어졌는지 추적용.
     """
     if not dropbox_storage.is_configured():
         return {"skipped": True, "reason": "dropbox_unconfigured"}
@@ -188,6 +192,7 @@ def provision(db, client):
         # 이미 provision됨 — 저장 경로를 재사용해 누락 서브폴더만 멱등 복구한다.
         # 이름을 재계산하지 않으므로 회사명 개명·규칙 변경 후 재실행해도 폴더 orphan/이중생성이 없다.
         root = client.dropbox_folder
+        action = "reused"
     else:
         # 신규 — 새 규칙으로 계산. 충돌(동명·동지역·동분류) 시 _2, _3 … 접미사로 고유 경로 확보.
         root_base = "{0}/{1}".format(dropbox_storage.root(), folder_name(db, client))
@@ -196,6 +201,7 @@ def provision(db, client):
         while _folder_taken_by_other(db, client, root):
             root = "{0}_{1}".format(root_base, suffix)
             suffix += 1
+        action = "created" if root == root_base else "created_suffixed"
     dropbox_storage.ensure_folder(root)
     subs = subfolder_labels(db)
     for label in subs:
@@ -204,4 +210,11 @@ def provision(db, client):
         safe = storage.sanitize_segment(label)
         dropbox_storage.ensure_folder("{0}/{1}".format(root, safe))
     client.dropbox_folder = root
-    return {"skipped": False, "folder": root, "subfolders": subs}
+    if actor_id:
+        # 폴더 생성/재사용 이력 — 경로만 기록(비밀값 없음, R2-E6)
+        AuditLogger.log_action(
+            db, actor_id, "CLIENT_FOLDER_PROVISION",
+            target_type="CLIENT", target_id=client.client_id,
+            new_value="{0}: {1}".format(action, root),
+        )
+    return {"skipped": False, "folder": root, "subfolders": subs, "action": action}

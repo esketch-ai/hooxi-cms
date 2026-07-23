@@ -536,12 +536,14 @@ def provision_dropbox_folders(
             detail="Dropbox 연동이 설정되지 않았습니다 — 먼저 연동을 설정하세요.",
         )
 
+    actor_id = (actor.user_id if actor else None) or _seed_admin_id(db)
     targets = db.query(Client).filter(Client.dropbox_folder.is_(None)).all()
     provisioned = 0
     failed = 0
     for c in targets:
         try:
-            client_folders.provision(db, c)
+            # actor_id 전달 → 건별 CLIENT_FOLDER_PROVISION 감사 로그(폴더 경로 추적)
+            client_folders.provision(db, c, actor_id=actor_id)
             db.commit()
             provisioned += 1
         except Exception:
@@ -550,6 +552,15 @@ def provision_dropbox_folders(
             log.warning(
                 "Dropbox 폴더 백필 실패 (client_id=%s)", c.client_id, exc_info=True
             )
+    if actor_id and targets:
+        # 백필 요약 감사 — 대상이 있을 때만(빈 실행 잡음 방지). 건수만(개별은 위 건별 로그로 추적)
+        AuditLogger.log_action(
+            db, actor_id, "DROPBOX_BACKFILL", target_type="BATCH",
+            new_value="total={0}, provisioned={1}, failed={2}".format(
+                len(targets), provisioned, failed
+            ),
+        )
+        db.commit()
     return schemas.DropboxProvisionResponse(
         total=len(targets), provisioned=provisioned, failed=failed
     )
