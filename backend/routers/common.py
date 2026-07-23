@@ -82,10 +82,27 @@ def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def josa(word: str, with_batchim: str, without_batchim: str) -> str:
+    """한글 받침 유무로 조사 선택 (예: josa("고객사","을","를")→"를").
+
+    마지막 글자가 완성형 한글이면 받침 유무로 판별, 아니면(영문·숫자 등) 둘 다 표기하는
+    안전 폴백("을(를)")을 쓴다.
+    """
+    if not word:
+        return with_batchim
+    code = ord(word[-1])
+    if 0xAC00 <= code <= 0xD7A3:  # 완성형 한글 음절
+        return with_batchim if (code - 0xAC00) % 28 else without_batchim
+    return "{0}({1})".format(with_batchim, without_batchim)
+
+
 def get_or_404(db: Session, model, pk: Optional[str], label: str):
     obj = db.get(model, pk) if pk else None
     if obj is None:
-        raise HTTPException(status_code=404, detail="{0}을(를) 찾을 수 없습니다".format(label))
+        raise HTTPException(
+            status_code=404,
+            detail="{0}{1} 찾을 수 없습니다".format(label, josa(label, "을", "를")),
+        )
     return obj
 
 

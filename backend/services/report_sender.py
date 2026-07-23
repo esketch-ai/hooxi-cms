@@ -290,7 +290,7 @@ def send_report_core(
         raise SendPrecondition(409, "발송할 보고서 파일이 없습니다. 먼저 파일을 업로드하세요")
     doc = db.get(Document, doc_id)
     if doc is None:
-        raise SendPrecondition(404, "보고서 파일을(를) 찾을 수 없습니다")
+        raise SendPrecondition(404, "보고서 파일을 찾을 수 없습니다")
     content = storage.read_file(doc.file_url)
     if content is None:
         # 사전조건 실패(파일 소실)이지 서버 오류가 아님 — 500이면 프론트가 '서버 오류'로 오인 (P1-F)
