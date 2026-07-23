@@ -570,7 +570,7 @@ class SettlementRow(BaseModel):
     project_name: Optional[str] = None
     client_id: str
     client_name: Optional[str] = None
-    allocation_ratio: Optional[float] = None  # 지분율(%)
+    allocation_ratio: Optional[float] = None  # 배분율(%)
     success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
     expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
     settlement_status: str
@@ -580,6 +580,7 @@ class SettlementRow(BaseModel):
     completed_at: Optional[datetime] = None
     paid_amount: Optional[float] = None
     payment_type: Optional[str] = None
+    snapshot_count: int = 0  # 회차 스냅샷 수 — 0보다 크면 이력 존재(청구 취소 후 STANDBY 포함)
 
 
 class SettlementListResponse(BaseModel):
@@ -597,7 +598,7 @@ class ClientProjectRow(BaseModel):
     project_id: str
     project_name: Optional[str] = None
     project_status: Optional[str] = None  # 진행 상태 배지 (기획/등록완료/모니터링/검증/발급완료)
-    allocation_ratio: Optional[float] = None  # 지분율(%)
+    allocation_ratio: Optional[float] = None  # 배분율(%)
     success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
     expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
     settlement_status: str
@@ -614,7 +615,7 @@ class SettlementSnapshotOut(BaseModel):
     issued_credits: Optional[float] = None
     amount: Optional[float] = None  # 회차 확정 금액 🔒
     unit_price: Optional[float] = None  # 🔒
-    allocation_ratio: Optional[float] = None  # 지분율(%)
+    allocation_ratio: Optional[float] = None  # 배분율(%)
     success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
     paid_amount: Optional[float] = None
     reason: Optional[str] = None
@@ -636,6 +637,12 @@ class SettlementStatusUpdate(BaseModel):
     paid_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # COMPLETED
     payment_type: Optional[str] = Field(default=None, pattern="^(FULL|PARTIAL)$")
     reason: Optional[str] = Field(default=None, max_length=200)  # 스냅샷 사유
+
+
+class SettlementRevert(BaseModel):
+    """청구 취소 (BILLED→STANDBY) — ADMIN 전용. 오발행 정정, REVERTED 스냅샷 기록."""
+
+    reason: Optional[str] = Field(default=None, max_length=200)  # 취소 사유(스냅샷)
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import schemas
-from auth import get_current_user, require_permission
+from auth import get_current_user, require_permission, require_role
 from models import (
     Project,
     ProjectClientMap,
@@ -31,7 +31,8 @@ _TRANSITIONS = {"STANDBY": "BILLED", "BILLED": "COMPLETED"}
 
 
 def _settlement_row(m: ProjectClientMap, project: Optional[Project],
-                    client_name: Optional[str]) -> schemas.SettlementRow:
+                    client_name: Optional[str],
+                    snapshot_count: int = 0) -> schemas.SettlementRow:
     return schemas.SettlementRow(
         map_id=m.map_id,
         project_id=m.project_id,
@@ -52,6 +53,7 @@ def _settlement_row(m: ProjectClientMap, project: Optional[Project],
         completed_at=m.completed_at,
         paid_amount=float(m.paid_amount) if m.paid_amount is not None else None,
         payment_type=m.payment_type,
+        snapshot_count=snapshot_count,
     )
 
 
@@ -98,8 +100,23 @@ def list_settlements(
 
     total = len(rows)
     page_rows = rows[(page - 1) * page_size:(page - 1) * page_size + page_size]
+    # 회차 스냅샷 수 — 현재 페이지 map_id들만 그룹 집계(청구 취소 후 STANDBY도 이력 노출용)
+    page_ids = [m.map_id for m in page_rows]
+    snap_counts = (
+        dict(
+            db.query(SettlementSnapshot.map_id, func.count(SettlementSnapshot.seq))
+            .filter(SettlementSnapshot.map_id.in_(page_ids))
+            .group_by(SettlementSnapshot.map_id)
+            .all()
+        )
+        if page_ids
+        else {}
+    )
     items = [
-        _settlement_row(m, projects.get(m.project_id), cnames.get(m.client_id))
+        _settlement_row(
+            m, projects.get(m.project_id), cnames.get(m.client_id),
+            snap_counts.get(m.map_id, 0),
+        )
         for m in page_rows
     ]
     return schemas.SettlementListResponse(items=items, total=total)
@@ -240,4 +257,112 @@ def update_settlement_status(
     db.commit()
     db.refresh(mapping)  # 조건부 UPDATE(synchronize_session=False) 반영분으로 응답 직렬화
     cnames = common.client_name_map(db, [mapping.client_id])
-    return _settlement_row(mapping, project, cnames.get(mapping.client_id))
+    snap_count = (
+        db.query(func.count(SettlementSnapshot.seq))
+        .filter(SettlementSnapshot.map_id == map_id)
+        .scalar()
+        or 0
+    )
+    return _settlement_row(mapping, project, cnames.get(mapping.client_id), snap_count)
+
+
+@router.post("/{map_id}/revert", response_model=schemas.SettlementRow)
+def revert_settlement_billing(
+    map_id: str,
+    payload: schemas.SettlementRevert,
+    user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """청구 취소 (BILLED→STANDBY) — 오발행 정정. ADMIN 전용(§10.1).
+
+    - 청구(BILLED) 상태에서만 취소 가능. STANDBY·COMPLETED(종단)는 409로 거절.
+    - billed_at/by 초기화 후 STANDBY 복귀 — 금액은 재청구 시 서버 재계산(동결 해제).
+    - REVERTED 스냅샷(append-only)에 취소 직전 청구 회차(금액·발행크레딧)를 담아 이력 보존.
+    - 낙관적 동시성: 읽은 상태가 BILLED 그대로일 때만 갱신, 아니면 409.
+    """
+    mapping = common.get_or_404(db, ProjectClientMap, map_id, "정산 대상")
+    project = common.get_or_404(db, Project, mapping.project_id, "감축 사업")
+
+    current = mapping.settlement_status or "STANDBY"
+    if current != "BILLED":
+        raise HTTPException(
+            status_code=409,
+            detail="청구 취소는 청구(BILLED) 상태에서만 가능합니다 (현재 {0})".format(current),
+        )
+
+    now = utcnow()
+    # 취소 이력 스냅샷은 취소 직전 청구 회차 값을 담는다 — 직전 BILLED 스냅샷(정본) 승계
+    billed_snap = (
+        db.query(SettlementSnapshot)
+        .filter(SettlementSnapshot.map_id == map_id, SettlementSnapshot.action == "BILLED")
+        .order_by(SettlementSnapshot.seq.desc())
+        .first()
+    )
+    # 취소 이력은 직전 BILLED 스냅샷(동결 정본)을 그대로 복제 — 금액·크레딧뿐 아니라
+    # 단가·배분율·보수율도 승계해 "새 배분율 + 옛 금액" 혼재를 막는다(정본성 보존).
+    if billed_snap is not None:
+        reverted_amount = billed_snap.amount
+        reverted_credits = billed_snap.issued_credits
+        reverted_unit_price = billed_snap.unit_price
+        reverted_alloc = billed_snap.allocation_ratio
+        reverted_fee = billed_snap.success_fee_rate
+    else:
+        reverted_amount = mapping.expected_amount
+        reverted_credits = project.issued_credits
+        reverted_unit_price = project.unit_price
+        reverted_alloc = mapping.allocation_ratio
+        reverted_fee = mapping.success_fee_rate
+
+    values = {
+        "settlement_status": "STANDBY",
+        "billed_at": None,
+        "billed_by": None,
+        "updated_at": now,
+    }
+    updated = (
+        db.query(ProjectClientMap)
+        .filter(
+            ProjectClientMap.map_id == map_id,
+            ProjectClientMap.settlement_status == "BILLED",
+        )
+        .update(values, synchronize_session=False)
+    )
+    if updated == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="다른 사용자가 방금 정산 상태를 변경했습니다. 새로고침 후 다시 시도하세요",
+        )
+
+    next_seq = (
+        db.query(func.coalesce(func.max(SettlementSnapshot.seq), 0))
+        .filter(SettlementSnapshot.map_id == map_id)
+        .scalar()
+        or 0
+    ) + 1
+    db.add(
+        SettlementSnapshot(
+            map_id=map_id,
+            seq=next_seq,
+            issued_credits=reverted_credits,
+            amount=reverted_amount,
+            unit_price=reverted_unit_price,
+            allocation_ratio=reverted_alloc,
+            success_fee_rate=reverted_fee,
+            paid_amount=mapping.paid_amount,
+            action="REVERTED",
+            reason=payload.reason,
+            created_by=user.user_id,
+        )
+    )
+    AuditLogger.settlement_change(db, user.user_id, map_id, current, "STANDBY")
+    db.commit()
+    db.refresh(mapping)
+    cnames = common.client_name_map(db, [mapping.client_id])
+    snap_count = (
+        db.query(func.count(SettlementSnapshot.seq))
+        .filter(SettlementSnapshot.map_id == map_id)
+        .scalar()
+        or 0
+    )
+    return _settlement_row(mapping, project, cnames.get(mapping.client_id), snap_count)
