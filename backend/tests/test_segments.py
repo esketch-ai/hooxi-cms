@@ -96,12 +96,12 @@ def seg_data(client, staff_headers):
     """모듈 전용 시드 — 고객사 3·사업 2·매핑 3·자산 2·공통 수신자 1.
 
     - c1: TRANSPORT/ACTIVE/서울, 이메일 O, MOBILITY 자산, 사업A(STANDBY)
-    - c2: FACILITY/HOLD/부산, 이메일 X, FACILITY 자산, 사업A(STANDBY)+사업B(BILLED)
+    - c2: BUILDING/HOLD/부산, 이메일 X, FACILITY 자산, 사업A(STANDBY)+사업B(BILLED)
     - c3: TRANSPORT/END/서울, 이메일 X(공통 수신자 O), 사업A(BILLED)
     """
     c1 = _create_client(client, staff_headers, "세그운수A", "TRANSPORT", "ACTIVE",
                         REGION_A, "seg-c1@segments.example.com")
-    c2 = _create_client(client, staff_headers, "세그건물B", "FACILITY", "HOLD", REGION_B)
+    c2 = _create_client(client, staff_headers, "세그건물B", "BUILDING", "HOLD", REGION_B)
     c3 = _create_client(client, staff_headers, "세그운수C", "TRANSPORT", "END", REGION_A)
 
     project_a = _create_project(client, staff_headers, "세그사업A")
@@ -144,7 +144,7 @@ def test_axis_region(client, staff_headers, seg_data):
 
 
 def test_axis_client_type(client, staff_headers, seg_data):
-    ids = _preview_ids(client, staff_headers, {"client_type": ["FACILITY"]})
+    ids = _preview_ids(client, staff_headers, {"client_type": ["BUILDING"]})
     assert seg_data["c2"] in ids
     assert seg_data["c1"] not in ids and seg_data["c3"] not in ids
 

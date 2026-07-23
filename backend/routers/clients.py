@@ -257,7 +257,9 @@ def update_client(
     """고객사 수정 — 전달된 필드만 반영."""
     client = common.get_or_404(db, Client, client_id, "고객사")
     data = payload.model_dump(exclude_unset=True)
-    if "client_type" in data:
+    # client_type은 '변경될 때만' 활성 검증 — 은퇴(비활성) 코드를 쓰던 기존 고객사도
+    # 다른 필드 수정이 막히지 않게(값 유지는 허용, 비활성 코드로 새로 바꾸는 것만 차단).
+    if "client_type" in data and data["client_type"] != client.client_type:
         validate_active_code(db, "CLIENT_TYPE", data["client_type"])
     if "contract_status" in data:
         validate_active_code(db, "CONTRACT_STATUS", data["contract_status"])

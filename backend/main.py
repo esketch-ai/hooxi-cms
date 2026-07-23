@@ -199,9 +199,22 @@ def seed_codes():
                         changed = True
                     if changed:
                         backfilled += 1
-            if added or backfilled:
+            # 레거시 CLIENT_TYPE 'FACILITY(건물·농장)' 은퇴 — 재분류(운수/빌딩/공장/농장/기타)
+            # 후 신규 등록 '구분'에서 제외. 코드/라벨은 남겨 기존 FACILITY 고객사 표시·검증은
+            # 유지하고 active만 N으로. (seed는 기존 코드 미갱신이라, 배포된 DB도 여기서 정리)
+            retired = 0
+            db.flush()  # 위 loop의 신규 삽입(FACILITY 포함)을 반영 후 조회 (신규 DB에서도 은퇴 적용)
+            legacy = (
+                db.query(Code)
+                .filter(Code.category == "CLIENT_TYPE", Code.code == "FACILITY", Code.active == "Y")
+                .first()
+            )
+            if legacy is not None:
+                legacy.active = "N"
+                retired = 1
+            if added or backfilled or retired:
                 db.commit()
-                print(f"✓ Seeded {added} / backfilled {backfilled} built-in code(s)")
+                print(f"✓ Seeded {added} / backfilled {backfilled} / retired {retired} code(s)")
         finally:
             db.close()
     except Exception as exc:

@@ -19,9 +19,15 @@ def test_builtin_client_types_seeded(client, admin_headers):
     resp = _codes(client, admin_headers)
     assert resp.status_code == 200, resp.text
     by_code = {c["code"]: c for c in resp.json()}
+    # 재분류: 운수사/빌딩/공장/농장/기타가 활성 (구분 드롭다운 소스)
     assert by_code["TRANSPORT"]["label"] == "운수사"
-    assert by_code["FACILITY"]["label"] == "건물·농장"
     assert by_code["TRANSPORT"]["is_system"] == "Y"
+    assert by_code["BUILDING"]["label"] == "빌딩"
+    assert by_code["FARM"]["label"] == "농장"
+    # 레거시 FACILITY(건물·농장)는 은퇴(비활성) — 활성 목록에 없음
+    assert "FACILITY" not in by_code
+    all_codes = {c["code"] for c in _codes(client, admin_headers, include_inactive=True).json()}
+    assert "FACILITY" in all_codes  # 코드 자체는 남아 기존 데이터 라벨 해석 유지
 
 
 def test_staff_cannot_mutate(client, staff_headers):

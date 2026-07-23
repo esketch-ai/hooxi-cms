@@ -50,7 +50,7 @@ def test_crypto_roundtrip():
 # ---------------------------------------------------------------------------
 def test_setup_clients(client, staff_headers):
     """P2 테스트용 고객사 2곳 생성."""
-    for name, ctype in [("P2운수", "TRANSPORT"), ("P2에너지", "FACILITY")]:
+    for name, ctype in [("P2운수", "TRANSPORT"), ("P2에너지", "BUILDING")]:
         resp = client.post(
             API + "/clients",
             headers=staff_headers,
