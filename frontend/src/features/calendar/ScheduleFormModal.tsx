@@ -7,7 +7,7 @@ import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { useClientOptions } from '../../lib/api/queries'
 import { toDatetimeLocal } from '../../lib/format'
-import type { SchedulePayload, ScheduleType } from '../../types'
+import type { Schedule, SchedulePayload, ScheduleType } from '../../types'
 
 const inputCls =
   'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
@@ -25,9 +25,11 @@ interface ScheduleFormModalProps {
   onClose: () => void
   /** 캘린더 빈 칸 클릭 시 해당 일자 기본값 */
   defaultDate?: Date | null
+  /** 지정 시 수정 모드 — 해당 일정을 프리필하고 PUT으로 저장 */
+  editing?: Schedule | null
 }
 
-export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormModalProps) {
+export function ScheduleFormModal({ open, onClose, defaultDate, editing }: ScheduleFormModalProps) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
   const queryClient = useQueryClient()
@@ -42,22 +44,38 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
   const [monthly, setMonthly] = useState(false)
 
   useEffect(() => {
-    if (open) {
-      const base = defaultDate ?? new Date()
-      base.setHours(10, 0, 0, 0)
-      setScheduleType('MEETING')
-      setTitle('')
-      setClientId('')
-      setStartAt(toDatetimeLocal(base))
-      setEndAt('')
-      setLocation('')
-      setMemo('')
+    if (!open) return
+    if (editing) {
+      // 수정 모드 — 기존 값 프리필 (REPORT_DUE 등 폼에 없는 유형은 MEETING로 폴백)
+      const t = editing.schedule_type as ScheduleType
+      setScheduleType(TYPE_OPTIONS.some((o) => o.value === t) ? t : 'MEETING')
+      setTitle(editing.title ?? '')
+      setClientId(editing.client_id ?? '')
+      setStartAt(editing.start_at ? toDatetimeLocal(new Date(editing.start_at)) : '')
+      setEndAt(editing.end_at ? toDatetimeLocal(new Date(editing.end_at)) : '')
+      setLocation(editing.location ?? '')
+      setMemo(editing.memo ?? '')
       setMonthly(false)
+      return
     }
-  }, [open, defaultDate])
+    const base = defaultDate ?? new Date()
+    base.setHours(10, 0, 0, 0)
+    setScheduleType('MEETING')
+    setTitle('')
+    setClientId('')
+    setStartAt(toDatetimeLocal(base))
+    setEndAt('')
+    setLocation('')
+    setMemo('')
+    setMonthly(false)
+  }, [open, defaultDate, editing])
 
   const create = useMutation({
     mutationFn: async (payload: SchedulePayload) => {
+      if (editing) {
+        const { data } = await api.put(`/schedules/${editing.schedule_id}`, payload)
+        return data
+      }
       const { data } = await api.post('/schedules', payload)
       return data
     },
@@ -87,15 +105,15 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
         memo: memo || null,
         recur_rule: monthly ? 'MONTHLY' : null,
       })
-      showToast('일정이 등록되었습니다.', 'success')
+      showToast(editing ? '일정이 수정되었습니다.' : '일정이 등록되었습니다.', 'success')
       onClose()
     } catch {
-      showToast('일정 등록에 실패했습니다.', 'danger')
+      showToast(editing ? '일정 수정에 실패했습니다.' : '일정 등록에 실패했습니다.', 'danger')
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="일정 등록" size="md">
+    <Modal open={open} onClose={onClose} title={editing ? '일정 수정' : '일정 등록'} size="md">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -176,15 +194,17 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
             className="w-full rounded-lg border border-hairline bg-graphite px-3 py-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm text-ash">
-          <input
-            type="checkbox"
-            checked={monthly}
-            onChange={(e) => setMonthly(e.target.checked)}
-            className="h-4 w-4 rounded border-hairline-strong"
-          />
-          매월 반복
-        </label>
+        {!editing && (
+          <label className="flex items-center gap-2 text-sm text-ash">
+            <input
+              type="checkbox"
+              checked={monthly}
+              onChange={(e) => setMonthly(e.target.checked)}
+              className="h-4 w-4 rounded border-hairline-strong"
+            />
+            매월 반복
+          </label>
+        )}
 
         <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
@@ -200,7 +220,7 @@ export function ScheduleFormModal({ open, onClose, defaultDate }: ScheduleFormMo
             className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
           >
             {create.isPending && <CircleNotch size={14} className="animate-spin" />}
-            등록
+            {editing ? '저장' : '등록'}
           </button>
         </div>
       </form>

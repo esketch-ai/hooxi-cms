@@ -68,3 +68,20 @@ export function useUpdateSettlementStatus() {
     },
   })
 }
+
+/** 청구 취소 (BILLED→STANDBY) — ADMIN 전용, POST /settlements/{id}/revert */
+export function useRevertSettlement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ mapId, reason }: { mapId: string; reason?: string }) => {
+      const { data } = await api.post<ProjectClientMap>(`/settlements/${mapId}/revert`, {
+        reason: reason || null,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settlements'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}

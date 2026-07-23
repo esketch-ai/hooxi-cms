@@ -495,6 +495,7 @@ export interface ProjectClientMap {
   completed_at?: string | null
   paid_amount?: number | null
   payment_type?: string | null
+  snapshot_count?: number // 회차 스냅샷 수 — >0이면 이력 존재(청구 취소 후 STANDBY 포함)
   created_at?: string
   updated_at?: string
   // 조인 보강 (schemas.ProjectMapOut / SettlementRow / ClientProjectRow)

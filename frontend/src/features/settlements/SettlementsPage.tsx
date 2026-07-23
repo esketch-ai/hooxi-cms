@@ -17,7 +17,12 @@ import { useCodes } from '../../lib/api/queries'
 import { fmtMoney, fmtServerDate, fmtServerDateTime, parseServerUtc } from '../../lib/format'
 import type { ProjectClientMap, SettlementStatus } from '../../types'
 import { useProjectOptions } from '../projects/api'
-import { useSettlementSnapshots, useSettlements, useUpdateSettlementStatus } from './api'
+import {
+  useRevertSettlement,
+  useSettlementSnapshots,
+  useSettlements,
+  useUpdateSettlementStatus,
+} from './api'
 
 const PAGE_SIZE = 20
 
@@ -81,6 +86,8 @@ export function SettlementsPage() {
   const { showToast } = useToast()
   // 상태 변경·발행은 MANAGER 이상 (§10.1) — 미만이면 버튼 숨김
   const canManage = user?.role === 'MANAGER' || user?.role === 'ADMIN'
+  // 청구 취소(BILLED→STANDBY)는 ADMIN 전용 — 오발행 정정
+  const isAdmin = user?.role === 'ADMIN'
 
   const [searchParams] = useSearchParams()
   const { data: projects = [] } = useProjectOptions()
@@ -120,6 +127,8 @@ export function SettlementsPage() {
   const summaryExpected = rows.reduce((acc, r) => acc + (Number(r.expected_amount) || 0), 0)
 
   const updateStatus = useUpdateSettlementStatus()
+  const revert = useRevertSettlement()
+  const [revertRow, setRevertRow] = useState<ProjectClientMap | null>(null)
 
   const confirmAction = async () => {
     if (!pending) return
@@ -137,9 +146,22 @@ export function SettlementsPage() {
     }
   }
 
-  /** 회차 이력 버튼 — 스냅샷은 상태 전이 시에만 생기므로 STANDBY(스냅샷 0)는 숨김. 열람은 전 직급 */
+  const confirmRevert = async () => {
+    if (!revertRow) return
+    try {
+      await revert.mutateAsync({ mapId: revertRow.map_id })
+      showToast('청구를 취소했습니다. 정산 상태가 미청구(STANDBY)로 되돌아갔습니다.', 'success')
+      setRevertRow(null)
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '청구 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'danger')
+    }
+  }
+
+  /** 회차 이력 버튼 — 스냅샷이 1건이라도 있으면 노출(청구 취소 후 STANDBY 복귀 건 포함). 열람은 전 직급 */
   const historyButton = (row: ProjectClientMap) => {
-    if (!row.settlement_status || row.settlement_status === 'STANDBY') return null
+    if (!row.snapshot_count) return null
     return (
       <button
         type="button"
@@ -191,19 +213,32 @@ export function SettlementsPage() {
         )
       }
       return (
-        <button
-          type="button"
-          onClick={() => setPending({ row, next: 'BILLED' })}
-          className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-elevate"
-        >
-          청구서 발행
-        </button>
+        <>
+          {historyButton(row)}
+          <button
+            type="button"
+            onClick={() => setPending({ row, next: 'BILLED' })}
+            className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-bone hover:bg-elevate"
+          >
+            청구서 발행
+          </button>
+        </>
       )
     }
     if (row.settlement_status === 'BILLED') {
       return (
         <>
           {historyButton(row)}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setRevertRow(row)}
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/10"
+              title="오발행 정정 — 청구를 취소하고 미청구(STANDBY)로 되돌립니다 (ADMIN 전용)"
+            >
+              청구 취소
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setPending({ row, next: 'COMPLETED' })}
@@ -470,6 +505,26 @@ export function SettlementsPage() {
         loading={updateStatus.isPending}
         onConfirm={confirmAction}
         onCancel={() => setPending(null)}
+      />
+
+      {/* 청구 취소 (BILLED→STANDBY) — ADMIN 전용, 오발행 정정 */}
+      <ConfirmDialog
+        open={!!revertRow}
+        title="청구 취소"
+        message={
+          revertRow && (
+            <>
+              <b>{revertRow.client_name ?? ''}</b> · {revertRow.project_name ?? ''} 건의 청구를
+              취소하고 <b>미청구(STANDBY)</b>로 되돌립니다. 청구 취소 이력은 회차 스냅샷에
+              남으며, 재청구 시 금액은 현재 기준으로 다시 계산됩니다.
+            </>
+          )
+        }
+        confirmLabel="청구 취소"
+        danger
+        loading={revert.isPending}
+        onConfirm={confirmRevert}
+        onCancel={() => setRevertRow(null)}
       />
 
       {/* 회차 스냅샷 이력 — 청구/입금 시점 동결 금액의 정본 (R3-1) */}

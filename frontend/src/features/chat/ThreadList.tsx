@@ -1,4 +1,4 @@
-// SCR-08 좌측 스레드 리스트 — 검색 + pill 필터(전체/직원 상담/AI 응대) + 스레드 아이템
+// SCR-08 좌측 스레드 리스트 — 검색 + pill 필터(전체/연결 대기/직원 상담/AI 응대) + 스레드 아이템
 import { ChatCircleDots, MagnifyingGlass } from '@phosphor-icons/react'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
@@ -6,7 +6,7 @@ import { elapsedServer } from '../../lib/format'
 import type { ChatThread } from '../../types'
 import { ThreadModePill, ThreadWaitingBadge } from './ThreadBadges'
 
-export type ThreadFilter = 'ALL' | 'HUMAN' | 'AI'
+export type ThreadFilter = 'ALL' | 'WAITING' | 'HUMAN' | 'AI'
 
 interface ThreadListProps {
   threads: ChatThread[]
@@ -36,13 +36,25 @@ export function ThreadList({
 }: ThreadListProps) {
   const counts = {
     ALL: threads.length,
+    WAITING: threads.filter((t) => t.status === 'WAITING').length,
     HUMAN: threads.filter((t) => t.mode === 'HUMAN').length,
     AI: threads.filter((t) => t.mode === 'AI').length,
   }
-  const filtered = filter === 'ALL' ? threads : threads.filter((t) => t.mode === filter)
+  const matched =
+    filter === 'ALL'
+      ? threads
+      : filter === 'WAITING'
+        ? threads.filter((t) => t.status === 'WAITING')
+        : threads.filter((t) => t.mode === filter)
+  // 연결 대기(WAITING)는 즉시 상담원이 붙어야 할 건 — 어느 필터에서든 항상 상단 고정.
+  // 입력이 last_message_at 역순으로 정렬돼 있고 Array.sort는 안정적이라 순서가 보존된다.
+  const filtered = [...matched].sort(
+    (a, b) => Number(b.status === 'WAITING') - Number(a.status === 'WAITING'),
+  )
 
   const PILLS: { key: ThreadFilter; label: string }[] = [
     { key: 'ALL', label: `전체 (${counts.ALL})` },
+    { key: 'WAITING', label: `연결 대기 (${counts.WAITING})` },
     { key: 'HUMAN', label: `직원 상담 (${counts.HUMAN})` },
     { key: 'AI', label: `AI 응대 (${counts.AI})` },
   ]
@@ -65,21 +77,28 @@ export function ThreadList({
             aria-label="상담 검색"
           />
         </div>
-        <div className="flex gap-2">
-          {PILLS.map((pill) => (
-            <button
-              key={pill.key}
-              type="button"
-              onClick={() => onFilterChange(pill.key)}
-              className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
-                filter === pill.key
-                  ? 'bg-primary text-on-primary'
-                  : 'border border-hairline bg-graphite text-ash hover:bg-elevate'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          {PILLS.map((pill) => {
+            // 대기 건이 있는데 지금 그 필터가 아니면 rose로 강조 — '지금 붙어야 할 건'을 부각
+            const urgent = pill.key === 'WAITING' && counts.WAITING > 0
+            const selected = filter === pill.key
+            return (
+              <button
+                key={pill.key}
+                type="button"
+                onClick={() => onFilterChange(pill.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
+                  selected
+                    ? 'bg-primary text-on-primary'
+                    : urgent
+                      ? 'border border-rose-400/40 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25 dark:text-rose-300'
+                      : 'border border-hairline bg-graphite text-ash hover:bg-elevate'
+                }`}
+              >
+                {pill.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 

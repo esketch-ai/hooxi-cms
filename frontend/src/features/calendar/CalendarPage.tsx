@@ -16,6 +16,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { CalendarView, type CalendarEventItem } from '../../components/CalendarView'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
@@ -67,6 +68,7 @@ export function CalendarPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [formDate, setFormDate] = useState<Date | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Schedule | null>(null)
 
   // 조회 범위: 표시 월(±1주) 또는 주
   const range = useMemo(() => {
@@ -288,10 +290,22 @@ export function CalendarPage() {
 
       <ScheduleFormModal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormOpen(false)
+          setEditing(null)
+        }}
         defaultDate={formDate}
+        editing={editing}
       />
-      <ScheduleDetailModal schedule={selected} onClose={() => setSelectedId(null)} />
+      <ScheduleDetailModal
+        schedule={selected}
+        onClose={() => setSelectedId(null)}
+        onEdit={(s) => {
+          setSelectedId(null)
+          setEditing(s)
+          setFormOpen(true)
+        }}
+      />
     </div>
   )
 }
@@ -300,13 +314,63 @@ export function CalendarPage() {
 function ScheduleDetailModal({
   schedule,
   onClose,
+  onEdit,
 }: {
   schedule: Schedule | null
   onClose: () => void
+  onEdit: (s: Schedule) => void
 }) {
+  const { showToast } = useToast()
+  const queryClient = useQueryClient()
+  const [cancelOpen, setCancelOpen] = useState(false)
+
+  const cancel = useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.put(`/schedules/${id}`, { status: 'CANCELED' })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedules'] })
+      showToast('일정을 취소했습니다.', 'success')
+      setCancelOpen(false)
+      onClose()
+    },
+    onError: () => showToast('일정 취소에 실패했습니다.', 'danger'),
+  })
+
   if (!schedule) return null
+  // 자동 생성(보고서 마감)·이미 종료(완료/취소)된 일정은 수정·취소 대상에서 제외
+  const editable = schedule.schedule_type !== 'REPORT_DUE' && schedule.status === 'PLANNED'
   return (
-    <Modal open onClose={onClose} title={schedule.title} size="md">
+    <Modal
+      open
+      // 취소 확인창이 위에 떠 있을 땐 Esc/백드롭이 상세까지 닫지 않도록 가드(중첩 Modal 이중 닫힘 방지)
+      onClose={() => {
+        if (!cancel.isPending && !cancelOpen) onClose()
+      }}
+      title={schedule.title}
+      size="md"
+      footer={
+        editable ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setCancelOpen(true)}
+              className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-rose-500 hover:bg-elevate"
+            >
+              일정 취소
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(schedule)}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90"
+            >
+              수정
+            </button>
+          </>
+        ) : undefined
+      }
+    >
         <dl className="space-y-2.5 text-sm">
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 text-xs font-medium text-slatey">유형</dt>
@@ -369,6 +433,21 @@ function ScheduleDetailModal({
             </p>
           )}
         </dl>
+        <ConfirmDialog
+          open={cancelOpen}
+          title="일정 취소"
+          message={
+            <>
+              <b>{schedule.title}</b> 일정을 취소 처리합니다. 취소된 일정은 캘린더에 흐리게
+              남으며 목록에서 구분됩니다.
+            </>
+          }
+          confirmLabel="일정 취소"
+          danger
+          loading={cancel.isPending}
+          onConfirm={() => void cancel.mutateAsync(schedule.schedule_id)}
+          onCancel={() => setCancelOpen(false)}
+        />
     </Modal>
   )
 }

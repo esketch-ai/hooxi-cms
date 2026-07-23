@@ -311,7 +311,7 @@ export function DashboardPage() {
                 '—'
               )
             }
-            sub="발송 완료 / 대상"
+            sub="발송 완료 / 발송 대상 (취소 제외)"
             icon={<FileText size={18} />}
             to="/reports"
             compact
