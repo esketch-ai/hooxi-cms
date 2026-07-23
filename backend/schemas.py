@@ -1268,6 +1268,29 @@ class ReportSendBatchResponse(BaseModel):
     details: List[ReportSendBatchDetail] = []
 
 
+class ReportSendPreviewItem(BaseModel):
+    """일괄 발송 미리보기 항목 (발송 없이 대상 1건을 사전 점검)."""
+
+    report_id: str
+    client_name: Optional[str] = None
+    report_type: str  # 보고서 유형(코드)
+    period: str  # 대상 기간 YYYY-MM
+    filename: Optional[str] = None  # 실제 발송될 첨부파일명(고정본 우선, 없으면 최신본)
+    recipients: int = 0  # TO 수신자 수(폴백 포함)
+    ready: bool  # 발송 가능 여부(파일·수신자 충족)
+    issue: Optional[str] = None  # 발송 불가 사유(ready=False일 때)
+
+
+class ReportSendPreviewResponse(BaseModel):
+    """일괄 발송 미리보기 — 대상 기간 APPROVED 전건의 발송 전 점검 결과(읽기 전용)."""
+
+    period: str  # 발송 대상 기간 (기본: 전월)
+    total: int  # 발송 대상(APPROVED) 건수
+    ready_count: int  # 발송 가능 건수
+    blocked_count: int  # 확인 필요(발송 불가) 건수
+    items: List[ReportSendPreviewItem] = []
+
+
 class DropboxProvisionResponse(BaseModel):
     """고객사 Dropbox 폴더 백필 결과 (POST /batch/provision-dropbox-folders)."""
 

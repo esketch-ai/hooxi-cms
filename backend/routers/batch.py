@@ -26,12 +26,26 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payload
-from models import ActivityHistory, Asset, Client, Config, ReportDelivery, User, get_db
+from models import (
+    ActivityHistory,
+    Asset,
+    Client,
+    Config,
+    Document,
+    ReportDelivery,
+    ReportSubscription,
+    User,
+    get_db,
+)
 from routers import common
 from routers.reports import generate_for_period
 from services import client_folders, dropbox_storage
 from services.audit_logger import AuditLogger
-from services.report_sender import SendPrecondition, send_report_core
+from services.report_sender import (
+    SendPrecondition,
+    resolve_recipients,
+    send_report_core,
+)
 
 log = logging.getLogger(__name__)
 
@@ -280,6 +294,84 @@ def account_check(
 # 배치 전용 _current_period_kst 중복 제거 (기존 이름은 테스트 하위호환 별칭).
 _current_period_kst = common.current_period
 _previous_period = common.previous_period
+
+
+def _preview_item(db: Session, delivery: ReportDelivery) -> schemas.ReportSendPreviewItem:
+    """발송 대상 1건을 발송 없이 사전 점검 — 첨부파일명·수신자·발송가능 여부.
+
+    send_report_core의 사전조건과 동일 규칙으로 판정하되 파일 본문은 읽지 않는다
+    (파일명은 메타의 file_url만 사용). issue는 첫 번째 차단 사유 1개만 담는다.
+    """
+    client = db.get(Client, delivery.client_id) if delivery.client_id else None
+    item = schemas.ReportSendPreviewItem(
+        report_id=delivery.report_id,
+        client_name=client.company_name if client else None,
+        report_type=delivery.report_type,
+        period=delivery.period,
+        ready=False,
+    )
+    if client is None:
+        item.issue = "고객사를 찾을 수 없습니다"
+        return item
+
+    # 발송 파일: 고정본(pinned) 우선, 없으면 최신본 (send_report_core와 동일)
+    doc_id = delivery.pinned_doc_id or delivery.doc_id
+    doc = db.get(Document, doc_id) if doc_id else None
+    if doc is None:
+        item.issue = "발송할 보고서 파일이 없습니다"
+    else:
+        item.filename = os.path.basename(doc.file_url) or "report"
+
+    # 수신자: 구독 지정분 + 공통분 → TO 0건이면 주 담당자 이메일 폴백 (R2-B5)
+    sub = (
+        db.query(ReportSubscription)
+        .filter(
+            ReportSubscription.client_id == delivery.client_id,
+            ReportSubscription.report_type == delivery.report_type,
+        )
+        .first()
+    )
+    to, _cc = resolve_recipients(db, client, sub)
+    item.recipients = len(to)
+    if not to and item.issue is None:
+        item.issue = "TO 수신자가 없습니다 (수신자 또는 주 담당자 이메일 확인)"
+
+    item.ready = item.issue is None
+    return item
+
+
+@router.get("/report-send/preview", response_model=schemas.ReportSendPreviewResponse)
+def report_send_preview(
+    period: Optional[str] = Query(None, description="대상 YYYY-MM (기본: 전월)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """일괄 발송 미리보기 — 대상 기간 APPROVED 전건의 발송 전 점검(읽기 전용, ADMIN).
+
+    발송·당월 대상 생성 등 부작용 없이, 실제 발송될 첨부파일명과 수신자 충족 여부를
+    미리 확인하기 위한 화면 전용 엔드포인트. 순서는 발송과 동일(created_at 오름차순).
+    """
+    actor = _optional_admin(credentials, db)
+    _authorize(None, db, actor)  # 미리보기는 화면 전용 — ADMIN 토큰만 허용(시크릿 경로 없음)
+
+    period = common.validate_period(period) if period else common.previous_period(
+        common.current_period()
+    )
+    targets = (
+        db.query(ReportDelivery)
+        .filter(ReportDelivery.period == period, ReportDelivery.status == "APPROVED")
+        .order_by(ReportDelivery.created_at.asc())
+        .all()
+    )
+    items = [_preview_item(db, d) for d in targets]
+    ready_count = sum(1 for it in items if it.ready)
+    return schemas.ReportSendPreviewResponse(
+        period=period,
+        total=len(items),
+        ready_count=ready_count,
+        blocked_count=len(items) - ready_count,
+        items=items,
+    )
 
 
 @router.post("/report-send", response_model=schemas.ReportSendBatchResponse)
