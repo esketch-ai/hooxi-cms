@@ -353,3 +353,7 @@ backend/uploads/
 !Docs/USER_GUIDE.html
 Docs/*
 !Docs/USER_GUIDE.html
+frontend/test-results/
+frontend/playwright-report/
+frontend/coverage/
+backend/e2e.db
