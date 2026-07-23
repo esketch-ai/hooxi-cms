@@ -124,6 +124,41 @@ export interface ReportSendBatchResult {
   failed: number
 }
 
+/** 일괄 발송 미리보기 항목 (schemas.ReportSendPreviewItem) */
+export interface ReportSendPreviewItem {
+  report_id: string
+  client_name: string | null
+  report_type: string
+  period: string
+  filename: string | null
+  recipients: number
+  ready: boolean
+  issue: string | null
+}
+
+/** 일괄 발송 미리보기 응답 (schemas.ReportSendPreviewResponse) */
+export interface ReportSendPreview {
+  period: string
+  total: number
+  ready_count: number
+  blocked_count: number
+  items: ReportSendPreviewItem[]
+}
+
+/** 일괄 발송 미리보기 — GET /batch/report-send/preview (ADMIN, 발송 없이 사전 점검) */
+export function useReportSendPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ['batch', 'report-send-preview'],
+    queryFn: async () => {
+      const { data } = await api.get<ReportSendPreview>('/batch/report-send/preview')
+      return data
+    },
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
 /** 월초 배치 수동 실행 — POST /batch/report-send (ADMIN 토큰, 전월 APPROVED 일괄 발송) */
 export function useRunReportSendBatch() {
   const invalidate = useInvalidateReports()

@@ -365,7 +365,7 @@ function ScheduleDetailModal({
           )}
           {schedule.schedule_type === 'REPORT_DUE' && (
             <p className="rounded-lg bg-elevate px-3 py-2 text-xs text-ash">
-              보고서 마감 일정은 월간 보고서 발송 관리(SCR-12)에서 자동 생성됩니다.
+              보고서 마감 일정은 '월간 보고서 발송 관리' 화면에서 자동 생성됩니다.
             </p>
           )}
         </dl>

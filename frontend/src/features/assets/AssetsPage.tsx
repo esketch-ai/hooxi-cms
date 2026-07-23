@@ -363,7 +363,7 @@ export function AssetsPage() {
             rowKey={(a) => a.asset_id}
             isLoading={isLoading}
             emptyTitle="등록된 자산이 없습니다"
-            emptyDescription="우측 상단 [신규 자산 등록]으로 첫 자산을 등록해 보세요."
+            emptyDescription="데스크톱 화면 우측 상단 [신규 자산 등록]으로 첫 자산을 등록할 수 있습니다. (등록·수정은 데스크톱 전용)"
             renderCard={(a) => (
               /* 모바일 카드 — 열람 위주, reveal 3초 (§7) */
               <div className="space-y-2.5">

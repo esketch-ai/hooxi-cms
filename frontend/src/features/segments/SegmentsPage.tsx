@@ -278,7 +278,7 @@ export function SegmentsPage() {
     <div className="animate-fade-in space-y-4">
       <PageHeader
         title="세그먼트 발송"
-        subtitle="조건으로 고객사를 묶어 자료를 일괄 메일 발송 — 축 간 AND, 축 내 OR"
+        subtitle="조건으로 고객사를 묶어 자료를 일괄 메일 발송 — 서로 다른 항목은 모두 만족(AND), 같은 항목의 여러 값은 하나만 맞아도(OR)"
       />
 
       {/* ── 상단: 저장된 세그먼트 칩 — 클릭 시 조건 로드 ─────────────── */}
@@ -363,7 +363,7 @@ export function SegmentsPage() {
 
           {!hasCriteria && (
             <p className="mt-3 text-xs text-slatey">
-              조건이 없으면 전체 고객사가 대상입니다. 축을 추가해 범위를 좁히세요.
+              조건이 없으면 전체 고객사가 대상입니다. 항목을 추가해 범위를 좁히세요.
             </p>
           )}
         </section>
@@ -723,6 +723,15 @@ export function SegmentsPage() {
           <>
             대상 <b className="text-bone">{targetTotal}개사</b>에 아래 파일을 첨부해
             메일을 발송합니다.
+            {!hasCriteria && (
+              <>
+                <br />
+                <span className="font-bold text-rose-400">
+                  조건이 없어 전체 고객사 {targetTotal}개사가 대상입니다. 의도한 발송인지
+                  반드시 확인하세요.
+                </span>
+              </>
+            )}
             {previewItems.length - receivable > 0 && (
               <>
                 <br />

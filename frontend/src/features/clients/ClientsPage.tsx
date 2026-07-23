@@ -255,7 +255,7 @@ export function ClientsPage() {
             /* HOLD 행 톤 다운 */
             rowClassName={(c) => (c.contract_status === 'HOLD' ? 'opacity-55' : '')}
             emptyTitle="등록된 고객사가 없습니다"
-            emptyDescription="우측 상단 [신규 고객사 등록]으로 첫 고객사를 등록해 보세요."
+            emptyDescription="데스크톱 화면 우측 상단 [신규 고객사 등록]으로 첫 고객사를 등록할 수 있습니다. (등록·수정은 데스크톱 전용)"
             renderCard={(c) => (
               /* 모바일 카드 — Click-to-Call (§7) */
               <div>

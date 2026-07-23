@@ -138,7 +138,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
     update.mutate(
       {
         mode,
-        // 직원 개입 시 본인 배정 + WAITING 해제
+        // 직원 상담 시 본인 배정 + WAITING 해제
         ...(mode === 'HUMAN' && user ? { assigned_manager_id: user.user_id } : {}),
         ...(mode === 'HUMAN' && thread.status === 'WAITING' ? { status: 'OPEN' as const } : {}),
       },
@@ -146,7 +146,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
         onSuccess: () =>
           showToast(
             mode === 'HUMAN'
-              ? '직원 개입 모드로 전환되었습니다.'
+              ? '직원 상담 모드로 전환되었습니다.'
               : 'AI 자동 응대 모드로 전환되었습니다.',
             'success',
           ),
@@ -233,7 +233,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                   : 'font-medium text-ash hover:text-bone'
               }`}
             >
-              직원 개입
+              직원 상담
             </button>
             <button
               type="button"
@@ -286,7 +286,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
                   : 'font-medium text-ash'
               }`}
             >
-              직원 개입
+              직원 상담
             </button>
             <button
               type="button"
@@ -381,8 +381,8 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-slatey">
               <span className="truncate">
                 {thread.mode === 'HUMAN'
-                  ? '직원 개입 모드 — 메시지를 보내면 고객의 카카오톡으로 즉시 전송됩니다.'
-                  : 'AI 자동 응대 모드 — 메시지를 보내면 직원 개입 모드로 자동 전환됩니다.'}
+                  ? '직원 상담 모드 — 메시지를 보내면 고객의 카카오톡으로 즉시 전송됩니다.'
+                  : 'AI 자동 응대 모드 — 메시지를 보내면 직원 상담 모드로 자동 전환됩니다.'}
               </span>
               <span className={`shrink-0 ${text.length >= MAX_LEN ? 'font-bold text-rose-400' : ''}`}>
                 {text.length} / {MAX_LEN}자

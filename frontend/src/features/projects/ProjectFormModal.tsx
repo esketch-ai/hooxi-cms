@@ -307,7 +307,7 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
                 className={inputCls}
               />
             </Field>
-            <Field label="예상 발행량 (tCO₂)">
+            <Field label="예상 발급량 (tCO₂)">
               <input
                 type="number"
                 min={0}

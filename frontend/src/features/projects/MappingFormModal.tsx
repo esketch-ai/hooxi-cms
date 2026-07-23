@@ -186,8 +186,8 @@ export function MappingFormModal({ open, onClose, projectId, mapping, mappings }
         </div>
 
         <p className="text-xs text-slatey">
-          예상 정산액은 발행량 × 배분율 × 단가 × 보수율로 서버가 자동 계산합니다. 단가 미입력 시
-          &ldquo;미정&rdquo;으로 표시됩니다. (§10.3)
+          예상 정산액은 발급량 × 배분율 × 단가 × 보수율로 서버가 자동 계산합니다. 단가 미입력 시
+          &ldquo;미정&rdquo;으로 표시됩니다.
         </p>
 
         <div className="flex justify-end gap-2 border-t border-hairline pt-3">

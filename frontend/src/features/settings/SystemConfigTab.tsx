@@ -77,7 +77,7 @@ export function SystemConfigTab() {
       <EmptyState
         icon={<Gear size={36} />}
         title="시스템 설정을 불러오지 못했습니다"
-        description="설정 API(GET /config)가 아직 배포되지 않았거나 서버에 연결할 수 없습니다."
+        description="시스템 설정을 불러오지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요."
         action={
           <button
             type="button"
@@ -240,9 +240,7 @@ function ConfigHistoryList({ configKey }: { configKey: string }) {
   }
   if (isError) {
     return (
-      <p className="mt-3 text-xs text-rose-500">
-        이력을 불러오지 못했습니다 (GET /config/{configKey}/history)
-      </p>
+      <p className="mt-3 text-xs text-rose-500">변경 이력을 불러오지 못했습니다.</p>
     )
   }
   if (!history || history.length === 0) {

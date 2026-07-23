@@ -51,6 +51,7 @@ export function ActivityForm({
   const { data: clients = [] } = useClientOptions()
   const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
   const { options: activityTypeOptions } = useCodes('ACTIVITY_TYPE')
+  const { options: issueStatusOptions } = useCodes('ISSUE_STATUS')
   const queryClient = useQueryClient()
 
   const [clientId, setClientId] = useState(defaultClientId ?? '')
@@ -285,10 +286,11 @@ export function ActivityForm({
                 onChange={(e) => setIssueStatus(e.target.value as IssueStatus)}
                 className={inputCls}
               >
-                <option value="OPEN">접수</option>
-                <option value="IN_PROGRESS">처리중</option>
-                <option value="HOLD">보류</option>
-                <option value="CLOSED">완료</option>
+                {issueStatusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

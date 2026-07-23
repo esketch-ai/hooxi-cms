@@ -1,4 +1,4 @@
-// SCR-08 좌측 스레드 리스트 — 검색 + pill 필터(전체/직원 연결/AI 응대) + 스레드 아이템
+// SCR-08 좌측 스레드 리스트 — 검색 + pill 필터(전체/직원 상담/AI 응대) + 스레드 아이템
 import { ChatCircleDots, MagnifyingGlass } from '@phosphor-icons/react'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonTableRows } from '../../components/Skeleton'
@@ -43,7 +43,7 @@ export function ThreadList({
 
   const PILLS: { key: ThreadFilter; label: string }[] = [
     { key: 'ALL', label: `전체 (${counts.ALL})` },
-    { key: 'HUMAN', label: `직원 연결 (${counts.HUMAN})` },
+    { key: 'HUMAN', label: `직원 상담 (${counts.HUMAN})` },
     { key: 'AI', label: `AI 응대 (${counts.AI})` },
   ]
 

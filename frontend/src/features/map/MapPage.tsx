@@ -1,5 +1,5 @@
 // SCR-09 전국 관제 지도 /map — P3 (SCREEN_DESIGN_PLAN §5)
-// 지도 전용 레이아웃 · 좌측 필터(계약 상태 3종 + 마지막 컨택 기준) · 지역별 집계 · 인포윈도
+// 지도 전용 레이아웃 · 좌측 필터(계약 상태 3종 + 최근 활동 기준) · 지역별 집계 · 인포윈도
 // 지도 공급자 2종: 구글(VITE_GOOGLE_MAPS_KEY) / 네이버(VITE_NAVER_MAPS_CLIENT_ID) — 우상단 토글 전환
 // 키 미설정/로드 실패 시에도 필터·집계 패널은 정상 동작
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -75,7 +75,7 @@ function matchContact(client: Client, filter: ContactFilter): boolean {
   if (!filter) return true
   const days = daysSince(client.last_activity_at)
   if (filter === 'WITHIN_30') return days !== null && days <= 30
-  // OVER_30: 30일 초과 미접촉 — 활동 이력이 아예 없는 곳도 포함
+  // OVER_30: 30일 초과 활동 없음 — 활동 이력이 아예 없는 곳도 포함
   return days === null || days > 30
 }
 
@@ -322,7 +322,7 @@ export function MapPage() {
   if (isError) {
     return (
       <div className="animate-fade-in space-y-4">
-        <PageHeader title="전국 관제 지도" subtitle="고객사 분포·계약 상태 관제 (SCR-09)" />
+        <PageHeader title="전국 관제 지도" subtitle="고객사 분포·계약 상태 관제" />
         <EmptyState
           icon={<MapTrifold size={36} />}
           title="고객사 데이터를 불러오지 못했습니다"
@@ -348,7 +348,7 @@ export function MapPage() {
         title="전국 관제 지도"
         subtitle={
           isLoading
-            ? '고객사 분포·계약 상태 관제 (SCR-09)'
+            ? '고객사 분포·계약 상태 관제'
             : `표시 ${withCoords.length}곳 / 필터 일치 ${filtered.length}곳 / 전체 ${clients.length}곳${
                 // 표시 < 일치 시 차이 사유 명시 — 좌표(지오코딩) 미등록 고객사 안내
                 noCoords.length > 0
@@ -405,7 +405,7 @@ export function MapPage() {
                   }
                   description={
                     provider === 'google'
-                      ? 'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다. (§10.4)'
+                      ? 'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다.'
                       : 'NCP 콘솔에서 Maps Application 을 등록하고 Client ID 를 환경변수(VITE_NAVER_MAPS_CLIENT_ID)로 설정하세요. 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.'
                   }
                   className="w-full max-w-md"
@@ -484,7 +484,7 @@ export function MapPage() {
               ))}
             </div>
 
-            <p className="mt-4 mb-2 text-xs font-semibold text-ash">마지막 컨택 기준</p>
+            <p className="mt-4 mb-2 text-xs font-semibold text-ash">최근 활동 기준</p>
             <select
               value={contactFilter}
               onChange={(e) => setContactFilter(e.target.value as ContactFilter)}
@@ -492,7 +492,7 @@ export function MapPage() {
             >
               <option value="">전체 기간</option>
               <option value="WITHIN_30">최근 30일 이내</option>
-              <option value="OVER_30">30일 초과 미접촉</option>
+              <option value="OVER_30">30일 초과 활동 없음</option>
             </select>
           </div>
 

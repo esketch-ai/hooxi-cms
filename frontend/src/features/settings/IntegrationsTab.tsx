@@ -98,7 +98,7 @@ export function IntegrationsTab() {
       <EmptyState
         icon={<PlugsConnected size={36} />}
         title="연동 정보를 불러오지 못했습니다"
-        description="연동 API(GET /integrations)가 아직 배포되지 않았거나 서버에 연결할 수 없습니다."
+        description="연동 설정을 불러오지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요."
         action={
           <button
             type="button"
@@ -132,17 +132,27 @@ export function IntegrationsTab() {
 }
 
 // ── 상태 뱃지 ────────────────────────────────────────────────────────
-function statusOf(fields: IntegrationField[]): { label: string; cls: string } {
+// 뱃지는 "값이 저장됐는지"만 나타낸다 — 실제 연결 성공은 '연결 테스트'로 확인한다.
+// (예: Gmail 앱 비밀번호를 틀리게 저장해도 값은 채워지므로, 초록 '연동됨'은 오해를 준다)
+function statusOf(fields: IntegrationField[]): { label: string; cls: string; hint: string } {
   const required = fields.filter((f) => f.required)
   const target = required.length > 0 ? required : fields
   const configured = fields.filter((f) => f.configured)
   if (target.length > 0 && target.every((f) => f.configured)) {
-    return { label: '연동됨', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' }
+    return {
+      label: '설정됨',
+      cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25',
+      hint: '필수 값이 모두 저장됨 — 실제 연결 여부는 아래 [연결 테스트]로 확인하세요.',
+    }
   }
   if (configured.length > 0) {
-    return { label: '부분 설정', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' }
+    return {
+      label: '부분 설정',
+      cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25',
+      hint: '일부 값만 저장됨 — 필수 값을 모두 채워야 연동이 동작합니다.',
+    }
   }
-  return { label: '미설정', cls: 'bg-elevate-strong text-ash border-hairline' }
+  return { label: '미설정', cls: 'bg-elevate-strong text-ash border-hairline', hint: '저장된 값이 없습니다.' }
 }
 
 // ── 연동 카드 ────────────────────────────────────────────────────────
@@ -228,6 +238,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
         </code>
         <span
           className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.cls}`}
+          title={status.hint}
         >
           {status.label}
         </span>

@@ -127,7 +127,7 @@ export function ProjectsPage() {
     },
     {
       key: 'credits',
-      header: '예상 발행량',
+      header: '예상 발급량',
       render: (p) =>
         p.expected_credits != null ? (
           <SensitiveData

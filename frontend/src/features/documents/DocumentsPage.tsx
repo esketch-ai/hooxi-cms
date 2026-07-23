@@ -162,7 +162,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setUploadOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
           >
             <Plus size={16} weight="bold" />
             문서 업로드

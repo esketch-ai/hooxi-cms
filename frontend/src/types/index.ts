@@ -518,7 +518,7 @@ export interface SettlementSnapshot {
   /** 회차 확정 금액 🔒 — 청구 시점 동결, 이후 단가 변경에 영향받지 않음 */
   amount?: number | null
   unit_price?: number | null // 🔒
-  allocation_ratio?: number | null // 지분율(%)
+  allocation_ratio?: number | null // 배분율(%)
   success_fee_rate?: number | null // 보수율(%) 🔒
   paid_amount?: number | null
   reason?: string | null

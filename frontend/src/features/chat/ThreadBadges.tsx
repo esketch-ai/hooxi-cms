@@ -2,7 +2,7 @@
 import { CheckCircle, Robot, User } from '@phosphor-icons/react'
 import type { ChatThread } from '../../types'
 
-/** 응대 모드 pill: AI 로봇 / 직원 개입 / 상담 종료 */
+/** 응대 모드 pill: AI 로봇 / 직원 상담 / 상담 종료 */
 export function ThreadModePill({ thread }: { thread: ChatThread }) {
   if (thread.status === 'CLOSED') {
     return (
@@ -16,7 +16,7 @@ export function ThreadModePill({ thread }: { thread: ChatThread }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-sm border border-hairline bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-ash">
         <User size={11} weight="fill" className="text-slatey" />
-        직원 개입 중
+        직원 상담 중
       </span>
     )
   }

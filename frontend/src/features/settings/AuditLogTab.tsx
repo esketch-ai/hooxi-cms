@@ -148,7 +148,7 @@ export function AuditLogTab() {
       <EmptyState
         icon={<ClipboardText size={36} />}
         title="감사 로그를 불러오지 못했습니다"
-        description="감사 로그 API(GET /audit-logs)가 아직 배포되지 않았거나 서버에 연결할 수 없습니다."
+        description="감사 로그를 불러오지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요."
         action={
           <button
             type="button"

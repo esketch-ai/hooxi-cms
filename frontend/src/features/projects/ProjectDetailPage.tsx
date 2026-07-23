@@ -422,7 +422,7 @@ export function ProjectDetailPage() {
               '미정'
             )}
           </OverviewItem>
-          <OverviewItem label="예상 발행량">
+          <OverviewItem label="예상 발급량">
             {project.expected_credits != null ? (
               <SensitiveData
                 type="text"

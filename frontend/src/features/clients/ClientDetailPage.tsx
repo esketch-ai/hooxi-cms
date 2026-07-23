@@ -227,10 +227,7 @@ function OverviewTab({ client }: { client: Client }) {
         <h2 className="mb-2 text-sm font-semibold text-bone">기본 정보</h2>
         <dl>
           <InfoRow label="고객사명">{client.company_name}</InfoRow>
-          <InfoRow label="구분">
-            {clientTypeLabel(client.client_type)}
-            <span className="ml-1 text-xs text-slatey">({client.client_type})</span>
-          </InfoRow>
+          <InfoRow label="구분">{clientTypeLabel(client.client_type)}</InfoRow>
           <InfoRow label="사업자번호">{client.biz_reg_no ?? '—'}</InfoRow>
           <InfoRow label="지역 / 주소">
             {client.region ?? '—'} / {client.address ?? '—'}
@@ -615,7 +612,7 @@ function ProjectsTab({ clientId }: { clientId: string }) {
         <EmptyState
           icon={<TreeStructure size={36} />}
           title="참여 중인 감축 사업이 없습니다"
-          description="감축 사업 상세(SCR-06)에서 참여 고객사로 매핑하면 여기에 표시됩니다."
+          description="감축 사업 상세 화면에서 참여 고객사로 매핑하면 여기에 표시됩니다."
         />
       ) : (
         <div className="overflow-x-auto">
@@ -624,7 +621,7 @@ function ProjectsTab({ clientId }: { clientId: string }) {
               <tr className="border-b border-hairline text-xs font-semibold text-ash">
                 <th className="px-3 py-2">사업명</th>
                 <th className="px-3 py-2">진행 상태</th>
-                <th className="px-3 py-2">지분율</th>
+                <th className="px-3 py-2">배분율</th>
                 <th className="px-3 py-2">보수율</th>
                 <th className="px-3 py-2">예상 정산액</th>
                 <th className="px-3 py-2">정산 상태</th>
@@ -697,7 +694,7 @@ function AssetsTab({ clientId }: { clientId: string }) {
       ) : assets.length === 0 ? (
         <EmptyState
           title="등록된 자산이 없습니다"
-          description="자산 등록·연동 관리는 P2(SCR-04)에서 제공됩니다."
+          description="자산 등록·연동 관리는 '자산 및 연동 현황' 화면에서 제공됩니다."
         />
       ) : (
         <div className="overflow-x-auto">

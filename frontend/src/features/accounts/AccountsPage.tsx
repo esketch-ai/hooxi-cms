@@ -275,9 +275,16 @@ export function AccountsPage() {
       <div className="flex items-start gap-2.5 rounded-2xl border border-hairline bg-graphite px-4 py-3">
         <KeyReturn size={18} className="mt-0.5 shrink-0 text-slatey" />
         <p className="text-sm leading-relaxed text-ash">
-          고객이 제공한 로그인 계정을 관리합니다. 매월 1일 자동 점검 이슈가 생성되며,
-          <span className="font-semibold text-bone"> [지금 전체 점검]</span>으로 즉시 생성할 수
-          있습니다.
+          고객이 제공한 로그인 계정을 관리합니다. 매월 1일 자동 점검 이슈가 생성됩니다.
+          {isAdmin ? (
+            <>
+              {' '}
+              <span className="font-semibold text-bone">[지금 전체 점검]</span>으로 즉시 생성할 수
+              있습니다.
+            </>
+          ) : (
+            ' 즉시 점검 실행은 관리자(ADMIN)만 가능합니다.'
+          )}
         </p>
       </div>
 
@@ -360,7 +367,7 @@ export function AccountsPage() {
             rowKey={(a) => a.asset_id}
             isLoading={isLoading}
             emptyTitle="등록된 수집 계정이 없습니다"
-            emptyDescription="우측 상단 [계정 등록]으로 첫 로그인 계정을 등록해 보세요."
+            emptyDescription="데스크톱 화면 우측 상단 [계정 등록]으로 첫 로그인 계정을 등록할 수 있습니다. (등록·수정은 데스크톱 전용)"
             renderCard={(a) => (
               <div className="space-y-2.5">
                 <div className="flex items-start justify-between gap-2">

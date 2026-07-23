@@ -256,7 +256,7 @@ export function SettlementsPage() {
     },
     {
       key: 'ratio',
-      header: '지분율',
+      header: '배분율',
       render: (r) => (
         <span className="text-sm font-semibold text-bone">
           {r.allocation_ratio != null ? `${Number(r.allocation_ratio)} %` : '—'}
@@ -418,7 +418,7 @@ export function SettlementsPage() {
                 </div>
                 <div className="flex items-center justify-between border-t border-hairline pt-2 text-sm">
                   <span className="text-ash">
-                    지분율{' '}
+                    배분율{' '}
                     <b className="text-bone">
                       {r.allocation_ratio != null ? `${Number(r.allocation_ratio)} %` : '—'}
                     </b>
@@ -461,7 +461,7 @@ export function SettlementsPage() {
               </b>
               {pending.next === 'BILLED'
                 ? ' 건을 청구(BILLED) 상태로 전환합니다. 청구 시점 금액이 증빙으로 동결됩니다.'
-                : ' 건을 입금 완료(COMPLETED) 처리합니다. 활동 이력에 자동 기록됩니다.'}
+                : ' 건을 입금 완료(COMPLETED) 처리합니다. 완료 후에는 이전 상태로 되돌릴 수 없습니다. 활동 이력에 자동 기록됩니다.'}
             </>
           )
         }
@@ -564,7 +564,7 @@ function SnapshotHistoryModal({
                       )}
                     </div>
                     <div>
-                      <p className="text-xs text-ash">지분율 / 보수율</p>
+                      <p className="text-xs text-ash">배분율 / 보수율</p>
                       <span className="text-bone">
                         {s.allocation_ratio != null ? `${Number(s.allocation_ratio)} %` : '—'}
                       </span>{' '}

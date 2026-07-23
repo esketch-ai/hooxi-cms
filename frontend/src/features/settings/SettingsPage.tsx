@@ -45,20 +45,23 @@ export function SettingsPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
-      <PageHeader title="환경 설정" subtitle="계정·권한·시스템 설정·감사 로그 (SCR-14)" />
+      <PageHeader title="환경 설정" subtitle="계정·권한·시스템 설정·감사 로그" />
 
-      {/* 탭 */}
+      {/* 탭 — 접근 가능한 탭만 노출(권한 없는 탭을 눌러 막히는 죽은 동선 방지).
+          계정 관리는 MANAGER도 조회 가능, 나머지는 ADMIN 전용. */}
       <div className="flex gap-1 border-b border-hairline">
         {(
           [
-            { key: 'accounts', label: '계정 관리' },
-            { key: 'codes', label: '공통 코드 관리' },
-            { key: 'system', label: '시스템 설정' },
-            { key: 'integrations', label: '연동 관리' },
-            { key: 'backup', label: '백업·복구' },
-            { key: 'audit', label: '감사 로그' },
-          ] as { key: TabKey; label: string }[]
-        ).map((t) => (
+            { key: 'accounts', label: '계정 관리', adminOnly: false },
+            { key: 'codes', label: '공통 코드 관리', adminOnly: true },
+            { key: 'system', label: '시스템 설정', adminOnly: true },
+            { key: 'integrations', label: '연동 관리', adminOnly: true },
+            { key: 'backup', label: '백업·복구', adminOnly: true },
+            { key: 'audit', label: '감사 로그', adminOnly: true },
+          ] as { key: TabKey; label: string; adminOnly: boolean }[]
+        )
+          .filter((t) => isAdmin || !t.adminOnly)
+          .map((t) => (
           <button
             key={t.key}
             type="button"
@@ -104,7 +107,7 @@ function AdminOnlyNotice({ feature }: { feature: string }) {
     <EmptyState
       icon={<ShieldCheck size={36} />}
       title="ADMIN 전용 기능입니다"
-      description={`${feature}은(는) 관리자(ADMIN) 권한으로만 조회·변경할 수 있습니다. (§10.1)`}
+      description={`${feature}은(는) 관리자(ADMIN) 권한으로만 조회·변경할 수 있습니다.`}
     />
   )
 }

@@ -382,7 +382,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 value={subMailSubject}
                 onChange={(e) => setSubMailSubject(e.target.value)}
                 className={inputCls}
-                placeholder="예: [흑시파트너스] {고객사명} {기간} {보고서유형} 송부드립니다"
+                placeholder="예: [후시파트너스] {고객사명} {기간} {보고서유형} 송부드립니다"
                 disabled={form.report_yn !== 'Y'}
               />
             </Field>
