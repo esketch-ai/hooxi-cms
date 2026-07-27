@@ -1348,6 +1348,12 @@ class DropboxTreeResponse(BaseModel):
     entries: List[DropboxEntry] = []
 
 
+class DropboxFileLinkOut(BaseModel):
+    """Dropbox 파일 임시 열람 링크 — 문서 아카이브 'Dropbox 폴더 보기' 파일 열람용."""
+
+    url: str  # 4시간 유효 임시 다운로드 URL
+
+
 # ---------------------------------------------------------------------------
 # 세그먼트 보고서 발송 (SCR-12 확장 — tb_segment / routers/segments.py)
 # ---------------------------------------------------------------------------

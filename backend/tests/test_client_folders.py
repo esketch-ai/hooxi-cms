@@ -572,3 +572,60 @@ def test_resolve_recipient_file_none_cases(client, monkeypatch):
         assert client_folders.resolve_recipient_file(db, _MergeClient(), "REPORT") is None
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# GET /clients/{id}/dropbox/file — 경로 기반 파일 임시링크 (문서 아카이브 Dropbox 보기)
+# ---------------------------------------------------------------------------
+def test_dropbox_file_link_200(client, admin_headers, monkeypatch):
+    _mk_client("dbxf200a", "파일열람", "/파일열람_tree")
+    _dbx_env(monkeypatch)
+    monkeypatch.setattr(dropbox_storage, "temporary_link", lambda p: "https://dl.example/" + p)
+    r = client.get(
+        API + "/clients/dbxf200a/dropbox/file",
+        params={"path": "/파일열람_tree/보고서/a.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["url"].endswith("/파일열람_tree/보고서/a.pdf")
+
+
+def test_dropbox_file_link_403_confinement(client, admin_headers, monkeypatch):
+    _mk_client("dbxf403a", "파일403", "/파일403_tree")
+    _dbx_env(monkeypatch)
+    r = client.get(
+        API + "/clients/dbxf403a/dropbox/file",
+        params={"path": "/다른고객_evil/x.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 403
+
+
+def test_dropbox_file_link_404_missing(client, admin_headers, monkeypatch):
+    _mk_client("dbxf404a", "파일404", "/파일404_tree")
+    _dbx_env(monkeypatch)
+    monkeypatch.setattr(dropbox_storage, "temporary_link", lambda p: None)  # 삭제/폴더
+    r = client.get(
+        API + "/clients/dbxf404a/dropbox/file",
+        params={"path": "/파일404_tree/없는.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 404
+
+
+def test_dropbox_file_link_409_unprovisioned(client, admin_headers, monkeypatch):
+    _mk_client("dbxf409a", "파일409", None)
+    _dbx_env(monkeypatch)
+    r = client.get(
+        API + "/clients/dbxf409a/dropbox/file",
+        params={"path": "/x/y.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 409
+
+
+def test_dropbox_file_link_503_unconfigured(client, admin_headers):
+    """Dropbox 미설정이면 파일 열람도 503 (tree와 대칭)."""
+    _mk_client("dbxf503a", "파일503", "/파일503_tree")
+    assert not dropbox_storage.is_configured()
+    r = client.get(
+        API + "/clients/dbxf503a/dropbox/file",
+        params={"path": "/파일503_tree/a.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 503

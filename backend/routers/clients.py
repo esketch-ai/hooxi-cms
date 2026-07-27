@@ -539,3 +539,41 @@ def get_client_dropbox_tree(
         path=target,
         entries=[schemas.DropboxEntry(**e) for e in entries],
     )
+
+
+@router.get("/{client_id}/dropbox/file", response_model=schemas.DropboxFileLinkOut)
+def get_client_dropbox_file_link(
+    client_id: str,
+    path: str = Query(..., description="열람할 파일의 Dropbox 경로(고객사 폴더 하위)"),
+    user: User = Depends(require_permission("crm.read_write")),
+    db: Session = Depends(get_db),
+):
+    """고객사 Dropbox 폴더 내 파일 임시 열람 링크 — 문서 아카이브 'Dropbox 폴더 보기'용.
+
+    확인(confinement) 필수: 고객사 폴더 하위 경로만 허용. 미provision 409, 미설정 503,
+    폴더 밖 403, 없음/폴더 404. 앱 문서 레코드가 없어도 Dropbox에 직접 넣은 파일을 연다.
+    """
+    client = common.get_or_404(db, Client, client_id, "고객사")
+    if not client.dropbox_folder:
+        raise HTTPException(status_code=409, detail="이 고객사는 아직 Dropbox 폴더가 생성되지 않았습니다.")
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
+
+    target = client_folders.normalize_dropbox_path(path)
+    if not client_folders.is_within_client_folder(client, target):
+        raise HTTPException(status_code=403, detail="고객사 폴더 밖의 경로에는 접근할 수 없습니다.")
+
+    try:
+        url = dropbox_storage.temporary_link(target)  # 실패 시 None(파일 아님/삭제)
+    except dropbox_storage.DropboxConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if not url:
+        raise HTTPException(status_code=404, detail="해당 파일을 찾을 수 없습니다.")
+
+    # 파일 열람 감사 — 경로만 기록(R2-E6). Dropbox 폴더 열람 추적.
+    AuditLogger.log_action(
+        db, user.user_id, "CLIENT_FOLDER_FILE_OPEN",
+        target_type="CLIENT", target_id=client_id, new_value=target,
+    )
+    db.commit()
+    return schemas.DropboxFileLinkOut(url=url)

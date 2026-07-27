@@ -1,5 +1,5 @@
 // SCR-13 문서 아카이브 — 고객사 폴더 트리(좌) + 문서 리스트(우)
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CircleNotch,
@@ -17,7 +17,7 @@ import { FileUploader } from '../../components/FileUploader'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { unwrapList, useClientOptions } from '../../lib/api/queries'
+import { unwrapList, useClientOptions, useDropboxTree } from '../../lib/api/queries'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtServerDateTime } from '../../lib/format'
 import type { DocType, Document, Paginated } from '../../types'
@@ -49,6 +49,10 @@ export function DocumentsPage() {
 
   // 폴더 트리 선택: null=전체, 'COMMON'=공용(미지정), client_id
   const [folder, setFolder] = useState<string | null>(null)
+  // 보기 모드: 'records'=앱 문서 대장(tb_document) / 'dropbox'=Dropbox 폴더 라이브 브라우즈
+  // (dropbox 보기는 특정 고객사 폴더 선택 시에만 의미 — Dropbox에 직접 넣은 파일까지 열람)
+  const [view, setView] = useState<'records' | 'dropbox'>('records')
+  const isClientFolder = !!folder && folder !== 'COMMON'
   const [docType, setDocType] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -228,9 +232,30 @@ export function DocumentsPage() {
           </div>
         </aside>
 
-        {/* 문서 리스트 */}
-        <div>
-          {isError ? (
+        {/* 문서 리스트 / Dropbox 폴더 보기 */}
+        <div className="space-y-3">
+          {isClientFolder && (
+            <div className="flex w-fit gap-1 rounded-full border border-hairline bg-graphite p-1 text-sm">
+              <button
+                type="button"
+                onClick={() => setView('records')}
+                className={`rounded-full px-3 py-1 font-medium ${view === 'records' ? 'bg-primary text-on-primary' : 'text-ash hover:text-bone'}`}
+              >
+                문서 대장
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('dropbox')}
+                className={`rounded-full px-3 py-1 font-medium ${view === 'dropbox' ? 'bg-primary text-on-primary' : 'text-ash hover:text-bone'}`}
+                title="Dropbox 폴더를 직접 열람(앱 미등록 파일 포함)"
+              >
+                Dropbox 폴더
+              </button>
+            </div>
+          )}
+          {isClientFolder && view === 'dropbox' ? (
+            <ClientDropboxBrowser key={folder} clientId={folder as string} />
+          ) : isError ? (
             <EmptyState
               icon={<FolderOpen size={36} />}
               title="문서를 불러오지 못했습니다"
@@ -292,6 +317,110 @@ export function DocumentsPage() {
         defaultClientId={folder && folder !== 'COMMON' ? folder : ''}
       />
       <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+    </div>
+  )
+}
+
+// 고객사 Dropbox 폴더 라이브 브라우저 — 앱 미등록 파일 포함, 파일 클릭 시 임시링크로 열람.
+function ClientDropboxBrowser({ clientId }: { clientId: string }) {
+  const { showToast } = useToast()
+  const [path, setPath] = useState<string | null>(null) // null = 고객사 루트
+  const [rootPath, setRootPath] = useState<string | null>(null)
+  const { data, isLoading, isError, error } = useDropboxTree(
+    `/clients/${clientId}/dropbox/tree`,
+    path,
+  )
+
+  // clientId 변경 시엔 부모가 key로 remount하므로 별도 리셋 불필요(초기 상태로 새로 마운트).
+  useEffect(() => {
+    if (data && rootPath === null) setRootPath(data.path)
+  }, [data, rootPath])
+
+  const currentPath = data?.path ?? ''
+  const atRoot = !rootPath || currentPath === rootPath
+  const goUp = () => {
+    const parent = currentPath.replace(/\/[^/]*$/, '')
+    setPath(rootPath && parent.length < rootPath.length ? rootPath : parent)
+  }
+  const openFile = async (p: string) => {
+    try {
+      const { data: link } = await api.get<{ url: string }>(
+        `/clients/${clientId}/dropbox/file`,
+        { params: { path: p } },
+      )
+      window.open(link.url, '_blank', 'noopener')
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '파일을 열 수 없습니다.', 'danger')
+    }
+  }
+
+  if (isError) {
+    const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    return (
+      <EmptyState
+        icon={<FolderOpen size={36} />}
+        title="Dropbox 폴더를 열 수 없습니다"
+        description={detail ?? 'Dropbox 연동/폴더 상태를 확인하세요.'}
+      />
+    )
+  }
+
+  return (
+    <div className="rounded-3xl border border-hairline bg-graphite p-3">
+      {/* 경로 바 */}
+      <div className="mb-2 flex items-center gap-2 text-xs text-slatey">
+        <button
+          type="button"
+          onClick={goUp}
+          disabled={atRoot}
+          className="rounded-lg border border-hairline px-2 py-1 text-bone hover:bg-elevate disabled:opacity-40"
+        >
+          ↑ 상위로
+        </button>
+        <span className="truncate font-mono">{currentPath || '/'}</span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-2 py-6 text-sm text-slatey">
+          <CircleNotch size={16} className="animate-spin" /> 불러오는 중…
+        </div>
+      ) : !data || data.entries.length === 0 ? (
+        <p className="px-2 py-6 text-center text-sm text-slatey">이 폴더는 비어 있습니다.</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {data.entries.map((e) =>
+            e.is_dir ? (
+              <li key={e.path_display}>
+                <button
+                  type="button"
+                  onClick={() => setPath(e.path_display)}
+                  className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm text-bone hover:bg-elevate"
+                >
+                  <FolderSimple size={16} className="text-amber-500" />
+                  <span className="truncate">{e.name}</span>
+                </button>
+              </li>
+            ) : (
+              <li key={e.path_display}>
+                <button
+                  type="button"
+                  onClick={() => void openFile(e.path_display)}
+                  className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm text-ash hover:bg-elevate hover:text-bone"
+                  title="새 탭에서 열기"
+                >
+                  <DownloadSimple size={15} className="shrink-0 text-smoke" />
+                  <span className="truncate">{e.name}</span>
+                  {e.size != null && (
+                    <span className="ml-auto shrink-0 text-xs text-slatey">
+                      {Math.max(1, Math.round(e.size / 1024))} KB
+                    </span>
+                  )}
+                </button>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
     </div>
   )
 }
