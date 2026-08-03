@@ -4,7 +4,7 @@
 
 - 백엔드: FastAPI(Python 3.9) + SQLAlchemy. `backend/` (routers/·models.py·schemas.py). 테스트 `cd backend && python -m pytest`.
 - 프론트: React 19 + TS + Vite + Tailwind v4. `frontend/src/` (features/·lib/·types/). 빌드 `cd frontend && NODE_OPTIONS= npm run build`.
-- 배포: main push → Cloud Build → Cloud Run(us-west1, 서비스 hooxi-cms). 현재 테스트베드 계정.
+- 배포(비용 최소화 원칙): 개발·검증은 **로컬에서 완결**한다(pytest·프론트 빌드·필요 시 `docker-compose` 스모크). 완료분은 **로컬 커밋까지만** 하고 **자동 push·배포 금지**. GitHub push → Cloud Build → Cloud Run 배포는 **사용자가 "배포"라고 명시할 때만**, 여러 완료분을 모아 **1회로** 수행한다. 잦은 push가 곧 잦은 Cloud Build(빌드 시간·이미지 스토리지 과금)이므로 배포 횟수 자체를 줄이는 게 핵심. 배포는 main push 트리거(현재 테스트베드 계정).
 - 규약: 공통 분류/상태값은 공통 코드 마스터(tb_code)로 관리(하드코딩 금지), 배포 테이블 컬럼 추가 시 `ensure_schema` 반영, 감사 로그에 비밀값 금지(R2-E6).
 
 ## 개발 4원칙 (Andrej Karpathy) — 이 저장소의 작업 도리(doctrine)
@@ -22,7 +22,7 @@
 2. (원칙2·3) 작은 증분마다 `implementer`로 구현 → 즉시 `verifier`로 자동 검증. FAIL이면 원인과 함께 구현으로 반려 → 수정 → 재검증.
 3. (원칙4) 성공 기준을 모두 충족할 때까지 2를 반복(자율 루프).
 4. 기준 충족 후 `reviewer`로 diff 정확성·정합성·보안·규약·단순화 점검. 지적은 커밋 전 반영.
-5. 통과 시 커밋/푸시/배포(사용자 지시 시).
+5. 통과 시 **로컬 커밋**까지만 자동 수행. **push·배포는 사용자가 명시적으로 "배포"라고 지시할 때만** 여러 완료분을 모아 1회로(위 "배포 비용 최소화 원칙").
 
 ### 적용 범위
 - **적용**: 새 기능, 라우터/모델/스키마 변경, 다중 파일 리팩터, 데이터 정합성이 걸린 변경.
