@@ -1,0 +1,14 @@
+# Cloud Build 소스 업로드에서 제외 (도커 빌드 내부는 .dockerignore가 별도 처리)
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/dist
+**/.pytest_cache
+.coverage
+htmlcov/
+.env
+.env.*
+*.log
+.DS_Store
