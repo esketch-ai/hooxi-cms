@@ -28,5 +28,5 @@ gcloud run deploy "$SERVICE" \
   --image="$IMAGE" --platform=managed \
   --add-cloudsql-instances="$SQL_CONN" \
   --set-secrets="DATABASE_URL=hooxi-database-url:latest,JWT_SECRET=hooxi-jwt-secret:latest,ASSET_ENC_KEY=hooxi-asset-enc-key:latest,KAKAO_WEBHOOK_SECRET=hooxi-kakao-webhook-secret:latest" \
-  --set-env-vars="SEED_ADMIN_EMAIL=hooxi12345@hooxipartners.com"
+  --set-env-vars="SEED_ADMIN_EMAIL=hooxi12345@hooxipartners.com,GCP_PROJECT=hooxi-cms-503308,CLOUDSQL_INSTANCE=hooxi-cms-db"
 # 공개 접근(allUsers invoker)은 서비스 레벨에 이미 부여돼 리비전 간 유지되므로 --allow-unauthenticated 생략.
