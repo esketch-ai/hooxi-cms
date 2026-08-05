@@ -401,3 +401,45 @@ def test_recipient_crud_and_resolve(client, admin_headers):
         assert len(removes) == 1
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# 빈 문자열 → None 정규화 (manager_id FK '' → Postgres FK 위반 409 방지)
+# ---------------------------------------------------------------------------
+def test_blank_strings_normalized_to_none(client, admin_headers):
+    """담당 PM 미선택 등으로 빈 문자열이 와도 None으로 저장 — FK(manager_id) '' 위반 방지."""
+    resp = client.post(
+        API + "/clients",
+        headers=admin_headers,
+        json={
+            "client_type": "TRANSPORT",
+            "company_name": "정규화테스트운수",
+            "manager_id": "",
+            "biz_reg_no": "",
+            "region": "",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["manager_id"] is None
+    assert body["biz_reg_no"] is None
+    assert body["region"] is None
+    cid = body["client_id"]
+
+    # 수정 시에도 빈 문자열 manager_id → None (FK 위반 없이 200)
+    resp = client.put(
+        API + "/clients/{0}".format(cid),
+        headers=admin_headers,
+        json={"company_name": "정규화테스트운수-수정", "manager_id": "", "address": ""},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["manager_id"] is None
+    assert resp.json()["address"] is None
+
+    # 필수(고객사명)를 빈 문자열로 보내면 정규화 대상이 아니라 422(min_length)
+    resp = client.put(
+        API + "/clients/{0}".format(cid),
+        headers=admin_headers,
+        json={"company_name": ""},
+    )
+    assert resp.status_code == 422, resp.text

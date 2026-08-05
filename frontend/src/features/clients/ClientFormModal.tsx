@@ -134,8 +134,16 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
       })
       showToast(client ? '고객사 정보가 수정되었습니다.' : '고객사가 등록되었습니다.', 'success')
       onClose()
-    } catch {
-      showToast('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'danger')
+    } catch (err) {
+      // 백엔드가 준 실제 사유(예: 사업자번호 중복 409, 이메일 형식 422)를 그대로 노출 —
+      // 일반 문구로 가리면 사용자가 원인을 알 수 없어 저장이 '무한 실패'처럼 보인다.
+      const raw = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      const detail = Array.isArray(raw)
+        ? String((raw[0] as { msg?: string })?.msg ?? '입력값을 확인해 주세요.')
+        : typeof raw === 'string'
+          ? raw
+          : null
+      showToast(detail || '저장에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'danger')
     }
   }
 

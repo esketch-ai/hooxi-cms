@@ -209,6 +209,20 @@ class ClientCreate(BaseModel):
     lng: Optional[float] = None
     subscription: Optional[ReportSubscriptionIn] = None  # 월간 보고서 설정
 
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_to_none(cls, data):
+        """빈/공백 문자열을 None으로 정규화 — 특히 FK인 manager_id에 ''가 들어가면 Postgres가
+        FK 위반(존재하지 않는 사용자)으로 409를 던진다. 미입력 선택 필드도 '' 대신 null로 저장.
+        필수(구분·고객사명·계약상태)는 제외 — 실제 미입력이면 기존 min_length 검증이 잡는다."""
+        if not isinstance(data, dict):
+            return data
+        keep = {"client_type", "company_name", "contract_status"}
+        return {
+            k: (None if isinstance(v, str) and v.strip() == "" and k not in keep else v)
+            for k, v in data.items()
+        }
+
     @field_validator("ceo_contact_email", "main_contact_email")
     @classmethod
     def _check_email(cls, v):
@@ -243,6 +257,20 @@ class ClientUpdate(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     subscription: Optional[ReportSubscriptionIn] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_to_none(cls, data):
+        """빈/공백 문자열을 None으로 정규화 — FK인 manager_id의 '' FK 위반(→409) 방지 및 미입력
+        선택 필드를 null로 저장(ClientCreate와 동일). 필수(구분·고객사명·계약상태)는 제외 —
+        빈값으로 오면 min_length 검증이 깔끔한 422로 잡도록 ''를 유지한다."""
+        if not isinstance(data, dict):
+            return data
+        keep = {"client_type", "company_name", "contract_status"}
+        return {
+            k: (None if isinstance(v, str) and v.strip() == "" and k not in keep else v)
+            for k, v in data.items()
+        }
 
     @field_validator("ceo_contact_email", "main_contact_email")
     @classmethod
