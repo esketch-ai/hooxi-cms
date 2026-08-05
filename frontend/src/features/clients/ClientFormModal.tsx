@@ -95,17 +95,9 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    // 필수 검증 (플랜 §5 SCR-03: 구분·고객사명·사업자번호·주소·대표자명·대표 연락처·주 담당자명·연락처·이메일·계약 상태·담당 PM)
+    // 필수는 구분·고객사명만 — 나머지는 선택입력(백엔드 스키마도 이 둘만 필수). 빠른 등록 우선.
     const required: [keyof ClientPayload, string][] = [
       ['company_name', '고객사명'],
-      ['biz_reg_no', '사업자번호'],
-      ['address', '주소'],
-      ['ceo_name', '대표자명'],
-      ['ceo_contact_phone', '대표 연락처'],
-      ['main_contact_name', '주 담당자명'],
-      ['main_contact_phone', '주 담당자 연락처'],
-      ['main_contact_email', '주 담당자 이메일'],
-      ['manager_id', '담당 PM'],
     ]
     // 누락 필수 필드 전체 수집 → 인라인 표시 (L-1)
     const nextErrors: Record<string, string> = {}
@@ -183,7 +175,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               placeholder="예: 대성운수"
             />
           </Field>
-          <Field label="사업자번호" required error={errors.biz_reg_no}>
+          <Field label="사업자번호" error={errors.biz_reg_no}>
             <input
               value={form.biz_reg_no ?? ''}
               onChange={(e) => set('biz_reg_no', e.target.value)}
@@ -200,7 +192,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             />
           </Field>
           <div className="sm:col-span-2">
-            <Field label="주소" required error={errors.address}>
+            <Field label="주소" error={errors.address}>
               <input
                 value={form.address ?? ''}
                 onChange={(e) => set('address', e.target.value)}
@@ -208,14 +200,14 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               />
             </Field>
           </div>
-          <Field label="대표자명" required error={errors.ceo_name}>
+          <Field label="대표자명" error={errors.ceo_name}>
             <input
               value={form.ceo_name ?? ''}
               onChange={(e) => set('ceo_name', e.target.value)}
               className={fieldCls('ceo_name')}
             />
           </Field>
-          <Field label="대표 연락처" required error={errors.ceo_contact_phone}>
+          <Field label="대표 연락처" error={errors.ceo_contact_phone}>
             <input
               value={form.ceo_contact_phone ?? ''}
               onChange={(e) => set('ceo_contact_phone', e.target.value)}
@@ -246,14 +238,14 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             고객사 주 담당자
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="주 담당자명" required error={errors.main_contact_name}>
+            <Field label="주 담당자명" error={errors.main_contact_name}>
               <input
                 value={form.main_contact_name ?? ''}
                 onChange={(e) => set('main_contact_name', e.target.value)}
                 className={fieldCls('main_contact_name')}
               />
             </Field>
-            <Field label="연락처 (카카오 매핑 기준)" required error={errors.main_contact_phone}>
+            <Field label="연락처 (카카오 매핑 기준)" error={errors.main_contact_phone}>
               <input
                 value={form.main_contact_phone ?? ''}
                 onChange={(e) => set('main_contact_phone', e.target.value)}
@@ -261,7 +253,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 placeholder="010-0000-0000"
               />
             </Field>
-            <Field label="이메일 (보고서 발송 기준)" required error={errors.main_contact_email}>
+            <Field label="이메일 (보고서 발송 기준)" error={errors.main_contact_email}>
               <input
                 type="email"
                 value={form.main_contact_email ?? ''}
@@ -278,7 +270,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             계약·담당
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="계약 상태" required>
+            <Field label="계약 상태">
               <select
                 value={form.contract_status}
                 onChange={(e) => set('contract_status', e.target.value as ContractStatus)}
@@ -303,7 +295,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
                 className={inputCls}
               />
             </Field>
-            <Field label="담당 PM" required error={errors.manager_id}>
+            <Field label="담당 PM" error={errors.manager_id}>
               <select
                 value={form.manager_id ?? ''}
                 onChange={(e) => set('manager_id', e.target.value)}
