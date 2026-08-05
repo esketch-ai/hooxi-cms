@@ -640,3 +640,46 @@ def test_view_token_expired_and_invalid(client):
     )
     assert client.get("/r/" + wrong_type).status_code == 401
     assert client.get("/r/{0}/file".format(expired)).status_code == 410
+
+
+def test_thread_assign_and_unassign(client, staff_headers):
+    """담당 배정/해제 — 명시적 null은 해제, 필드 미전송은 변경 없음."""
+    tid = S["thread_id"]
+    # 배정
+    resp = client.put(
+        API + "/chat/threads/{0}".format(tid),
+        json={"assigned_manager_id": "u-staff"},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["assigned_manager_id"] == "u-staff"
+
+    # 해제 — 명시적 null
+    resp = client.put(
+        API + "/chat/threads/{0}".format(tid),
+        json={"assigned_manager_id": None},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["assigned_manager_id"] is None
+
+    # 빈 문자열도 해제(정규화 → null)
+    client.put(
+        API + "/chat/threads/{0}".format(tid),
+        json={"assigned_manager_id": "u-manager"},
+        headers=staff_headers,
+    )
+    resp = client.put(
+        API + "/chat/threads/{0}".format(tid),
+        json={"assigned_manager_id": ""},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200 and resp.json()["assigned_manager_id"] is None
+
+    # 필드 미전송 → 변경 없음(직전 해제 상태 유지)
+    resp = client.put(
+        API + "/chat/threads/{0}".format(tid),
+        json={"mode": "AI"},
+        headers=staff_headers,
+    )
+    assert resp.status_code == 200 and resp.json()["assigned_manager_id"] is None

@@ -168,6 +168,17 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
     )
   }
 
+  // 담당 해제 — assigned_manager_id를 명시적 null로 보내 배정을 비운다 (백엔드가 미전송과 구분)
+  const unassign = () => {
+    update.mutate(
+      { assigned_manager_id: null },
+      {
+        onSuccess: () => showToast('담당이 해제되었습니다.', 'success'),
+        onError: () => showToast('담당 해제에 실패했습니다.', 'danger'),
+      },
+    )
+  }
+
   // ── 새 메시지 도착 시 스크롤 하단 고정 ──────────────────────────────
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].message_id : null
@@ -260,6 +271,21 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
             </Link>
           )}
 
+          {!closed && thread.assigned_manager_id && (
+            <button
+              type="button"
+              onClick={unassign}
+              disabled={update.isPending}
+              className="rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-ash hover:bg-elevate hover:text-bone disabled:opacity-60"
+              title={
+                thread.assigned_manager_name
+                  ? `담당: ${thread.assigned_manager_name} — 클릭 시 해제`
+                  : '담당 해제'
+              }
+            >
+              담당 해제
+            </button>
+          )}
           {!closed && (
             <button
               type="button"

@@ -237,11 +237,12 @@ def update_thread(
     prev_status = thread.status
     # mode/status 값은 스키마(ChatThreadUpdate)에서 정규식으로 이미 검증됨.
 
-    if payload.assigned_manager_id is not None:
-        common.get_or_404(db, User, payload.assigned_manager_id, "담당자")
-
     values = {}
-    if payload.assigned_manager_id is not None:
+    # 담당 배정/해제 — 필드가 요청에 '명시적으로 온 경우'에만 반영(생략=변경 없음).
+    # 값이 있으면 배정(사용자 존재 검증), null(또는 빈값 정규화)이면 담당 해제.
+    if "assigned_manager_id" in payload.model_fields_set:
+        if payload.assigned_manager_id:
+            common.get_or_404(db, User, payload.assigned_manager_id, "담당자")
         values["assigned_manager_id"] = payload.assigned_manager_id
     if payload.mode is not None:
         values["mode"] = payload.mode
