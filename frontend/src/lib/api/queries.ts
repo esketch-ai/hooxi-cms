@@ -1,6 +1,6 @@
 // 공용 서버 상태 훅 — 여러 화면에서 재사용하는 셀렉트 옵션(고객사·사용자) 등
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
   ChatBadge,
@@ -151,5 +151,25 @@ export function useAssetDocuments(assetId: string | null | undefined) {
       return unwrapList(data).items
     },
     enabled: !!assetId,
+  })
+}
+
+/** 삭제 불가(보존) 문서 유형 — 백엔드 documents.py _DELETABLE_DOC_TYPES와 정합.
+ *  리포트 발송 파일·고객 확인 서명은 보존 대상이라 삭제 버튼을 노출하지 않는다. */
+const PRESERVED_DOC_TYPES = ['REPORT', 'SIGN']
+export function isDeletableDoc(docType: string | null | undefined): boolean {
+  return !!docType && !PRESERVED_DOC_TYPES.includes(docType)
+}
+
+/** 문서 삭제 — 사진·일반문서만(백엔드가 REPORT/SIGN은 403). 모든 문서 목록 무효화. */
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (docId: string) => {
+      await api.delete(`/documents/${docId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+    },
   })
 }

@@ -168,3 +168,42 @@ def download_document(
     if url.startswith("http://") or url.startswith("https://"):
         return RedirectResponse(url)
     return FileResponse(url, filename=doc.title or "document")
+
+
+# 삭제 허용 유형 — 오촬영/오등록 정리용. 리포트(REPORT)·서명(SIGN)은 보존을 위해 제외.
+_DELETABLE_DOC_TYPES = ("CONTRACT", "FORM", "PHOTO", "ETC")
+
+
+@router.delete("/{doc_id}", response_model=schemas.MessageResponse)
+def delete_document(
+    doc_id: str,
+    user: User = Depends(require_permission("client.delete")),
+    db: Session = Depends(get_db),
+):
+    """문서 삭제 (MANAGER 이상) — 현장사진·제원표·일반문서 오등록 정리용.
+
+    리포트 발송 파일(REPORT)·고객 확인 서명(SIGN)은 발송/증빙 보존을 위해 삭제 불가(403).
+    저장소 파일도 best-effort로 제거하고(실패해도 레코드는 삭제) 감사 로그를 남긴다.
+    """
+    doc = common.get_or_404(db, Document, doc_id, "문서")
+    if doc.doc_type not in _DELETABLE_DOC_TYPES:
+        raise HTTPException(
+            status_code=403,
+            detail="리포트·서명 문서는 보존 대상이라 삭제할 수 없습니다",
+        )
+    # 저장소 파일 제거 — 실패(미설정·일시 오류)해도 레코드 삭제는 진행(고아 레코드보다 UI 정합 우선)
+    try:
+        storage.delete_file(doc.file_url)
+    except storage.StorageError:
+        pass
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "DOCUMENT_DELETE",
+        target_type="DOCUMENT",
+        target_id=doc_id,
+        old_value="{0}: {1}".format(doc.doc_type, doc.title),
+    )
+    db.delete(doc)
+    db.commit()
+    return schemas.MessageResponse(message="문서가 삭제되었습니다")

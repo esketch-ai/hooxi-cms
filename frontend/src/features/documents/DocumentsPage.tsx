@@ -7,17 +7,25 @@ import {
   FolderOpen,
   FolderSimple,
   Plus,
+  Trash,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FileUploader } from '../../components/FileUploader'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { unwrapList, useClientOptions, useDropboxTree } from '../../lib/api/queries'
+import {
+  isDeletableDoc,
+  unwrapList,
+  useClientOptions,
+  useDeleteDocument,
+  useDropboxTree,
+} from '../../lib/api/queries'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtServerDateTime } from '../../lib/format'
 import type { DocType, Document, Paginated } from '../../types'
@@ -59,6 +67,8 @@ export function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   // 문서명 클릭 → 미리보기(이미지/PDF만) — 다운로드 아이콘은 별도 유지
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
+  const [deleteDoc, setDeleteDoc] = useState<Document | null>(null)
+  const deleteDocument = useDeleteDocument()
 
   const params = useMemo(() => {
     const p: Record<string, string | number> = { page_size: 200 }
@@ -138,21 +148,38 @@ export function DocumentsPage() {
       render: (d) => <span className="text-xs text-ash">{fmtServerDateTime(d.created_at)}</span>,
     },
     {
-      key: 'download',
-      header: '다운로드',
+      key: 'actions',
+      header: '',
       className: 'text-right',
       render: (d) => (
-        <button
-          type="button"
-          className="inline-flex rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-          title="다운로드"
-          onClick={(e) => {
-            e.stopPropagation()
-            void handleDownload(d.doc_id, d.title)
-          }}
-        >
-          <DownloadSimple size={16} />
-        </button>
+        <div className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+            title="다운로드"
+            onClick={(e) => {
+              e.stopPropagation()
+              void handleDownload(d.doc_id, d.title)
+            }}
+          >
+            <DownloadSimple size={16} />
+          </button>
+          {/* 리포트·서명은 보존 대상이라 삭제 버튼 비노출 (isDeletableDoc) */}
+          {isDeletableDoc(d.doc_type) && (
+            <button
+              type="button"
+              className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-400"
+              title="삭제"
+              aria-label={`${d.title} 삭제`}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeleteDoc(d)
+              }}
+            >
+              <Trash size={16} />
+            </button>
+          )}
+        </div>
       ),
     },
   ]
@@ -317,6 +344,32 @@ export function DocumentsPage() {
         defaultClientId={folder && folder !== 'COMMON' ? folder : ''}
       />
       <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+      <ConfirmDialog
+        open={!!deleteDoc}
+        title="문서 삭제"
+        message={
+          <>
+            <b>{deleteDoc?.title}</b> 문서를 삭제합니다. 저장된 파일도 함께 제거되며, 되돌릴 수
+            없습니다.
+          </>
+        }
+        confirmLabel="삭제"
+        danger
+        loading={deleteDocument.isPending}
+        onCancel={() => setDeleteDoc(null)}
+        onConfirm={async () => {
+          if (!deleteDoc) return
+          try {
+            await deleteDocument.mutateAsync(deleteDoc.doc_id)
+            showToast('문서가 삭제되었습니다.', 'success')
+            setDeleteDoc(null)
+          } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail
+            showToast(detail || '삭제에 실패했습니다.', 'danger')
+          }
+        }}
+      />
     </div>
   )
 }

@@ -1,11 +1,12 @@
 // SCR-04 자산별 사진 목록 — GET /documents?asset_id= 소비부 (HistoryAttachments 관용구 준용)
 // 열람은 사무실 PC에서도 필요하므로 터치 게이트 없이 모든 기기에서 진입, 목록은 모달 오픈 시에만 조회
 import { useState } from 'react'
-import { CircleNotch, DownloadSimple, Images } from '@phosphor-icons/react'
+import { CircleNotch, DownloadSimple, Images, Trash } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
-import { useAssetDocuments } from '../../lib/api/queries'
+import { useAssetDocuments, useDeleteDocument } from '../../lib/api/queries'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtServerDateTime } from '../../lib/format'
 import type { Asset, Document } from '../../types'
@@ -24,6 +25,8 @@ export function AssetPhotosModal({
   const { data: docs = [], isLoading, isError } = useAssetDocuments(asset?.asset_id)
   // 제목 클릭 → 미리보기(이미지/PDF만) — 사진 모달 위에 미리보기 모달 중첩(DOM 후순위로 최상단)
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
+  const [deleteDoc, setDeleteDoc] = useState<Document | null>(null)
+  const deleteDocument = useDeleteDocument()
 
   const handleDownload = async (docId: string, title?: string) => {
     try {
@@ -80,15 +83,26 @@ export function AssetPhotosModal({
                     )}
                     <p className="text-xs text-slatey">{fmtServerDateTime(d.created_at)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDownload(d.doc_id, d.title)}
-                    className="shrink-0 rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-                    title="다운로드"
-                    aria-label={`${d.title} 다운로드`}
-                  >
-                    <DownloadSimple size={16} />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(d.doc_id, d.title)}
+                      className="rounded-lg p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+                      title="다운로드"
+                      aria-label={`${d.title} 다운로드`}
+                    >
+                      <DownloadSimple size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteDoc(d)}
+                      className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-400"
+                      title="삭제"
+                      aria-label={`${d.title} 삭제`}
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -106,6 +120,31 @@ export function AssetPhotosModal({
       </Modal>
       {/* 사진 모달 위 미리보기 — 동일 z-50이지만 DOM 후순위라 최상단에 겹침 */}
       <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+      <ConfirmDialog
+        open={!!deleteDoc}
+        title="사진 삭제"
+        message={
+          <>
+            <b>{deleteDoc?.title}</b> 사진을 삭제합니다. 되돌릴 수 없습니다.
+          </>
+        }
+        confirmLabel="삭제"
+        danger
+        loading={deleteDocument.isPending}
+        onCancel={() => setDeleteDoc(null)}
+        onConfirm={async () => {
+          if (!deleteDoc) return
+          try {
+            await deleteDocument.mutateAsync(deleteDoc.doc_id)
+            showToast('사진이 삭제되었습니다.', 'success')
+            setDeleteDoc(null)
+          } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail
+            showToast(detail || '삭제에 실패했습니다.', 'danger')
+          }
+        }}
+      />
     </>
   )
 }

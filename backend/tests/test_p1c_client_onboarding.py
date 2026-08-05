@@ -235,6 +235,50 @@ def test_document_upload_asset_ownership(client, admin_headers):
 
 
 # ---------------------------------------------------------------------------
+# 3-b. 문서 삭제 — 사진·일반문서만 허용, 리포트·서명 보존 (client.delete)
+# ---------------------------------------------------------------------------
+def _upload_doc(client, headers, doc_type="PHOTO"):
+    return client.post(
+        API + "/documents",
+        data={"doc_type": doc_type},
+        files={"file": ("f.jpg", io.BytesIO(b"jpg"), "image/jpeg")},
+        headers=headers,
+    )
+
+
+def test_delete_document_photo_allowed(client, admin_headers):
+    """사진(PHOTO)은 삭제 200, 이후 다운로드 404."""
+    resp = _upload_doc(client, admin_headers, "PHOTO")
+    assert resp.status_code == 201, resp.text
+    doc_id = resp.json()["doc_id"]
+
+    resp = client.delete(API + "/documents/{0}".format(doc_id), headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+
+    resp = client.get(API + "/documents/{0}/download".format(doc_id), headers=admin_headers)
+    assert resp.status_code == 404
+
+
+def test_delete_document_report_and_sign_preserved(client, admin_headers):
+    """리포트(REPORT)·서명(SIGN)은 보존 대상 — 403."""
+    for dt in ("REPORT", "SIGN"):
+        resp = _upload_doc(client, admin_headers, dt)
+        assert resp.status_code == 201, resp.text
+        doc_id = resp.json()["doc_id"]
+        resp = client.delete(API + "/documents/{0}".format(doc_id), headers=admin_headers)
+        assert resp.status_code == 403, "{0} should be preserved".format(dt)
+        assert "보존" in resp.json()["detail"]
+
+
+def test_delete_document_forbidden_for_staff(client, admin_headers, staff_headers):
+    """STAFF는 client.delete 권한이 없어 403."""
+    resp = _upload_doc(client, admin_headers, "PHOTO")
+    doc_id = resp.json()["doc_id"]
+    resp = client.delete(API + "/documents/{0}".format(doc_id), headers=staff_headers)
+    assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
 # 4. 수신자 관리 CRUD + resolve_recipients 연계
 # ---------------------------------------------------------------------------
 def test_recipient_crud_and_resolve(client, admin_headers):
