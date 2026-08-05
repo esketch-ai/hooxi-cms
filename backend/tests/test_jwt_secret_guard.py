@@ -14,11 +14,12 @@ def test_guard_blocks_default_secret_in_prod(monkeypatch):
         main.require_secure_jwt_secret()
 
 
-def test_guard_allows_default_secret_in_dev(monkeypatch):
-    # 개발: 기본 시크릿이어도 dev-login 켜져 있으면 허용
+def test_guard_blocks_default_secret_even_with_dev_login(monkeypatch):
+    # 하드닝(H2): dev-login이 켜져 있어도 기본 시크릿은 항상 차단 — '기본키+dev-login' 조합 봉쇄
     monkeypatch.setattr(auth, "JWT_SECRET", auth._DEFAULT_JWT_SECRET)
     monkeypatch.setenv("ENABLE_DEV_LOGIN", "true")
-    main.require_secure_jwt_secret()  # 예외 없음
+    with pytest.raises(RuntimeError):
+        main.require_secure_jwt_secret()
 
 
 def test_guard_allows_custom_secret(monkeypatch):

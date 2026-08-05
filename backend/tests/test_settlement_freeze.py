@@ -360,3 +360,50 @@ def test_completed_snapshot_inherits_billed_issued_credits(client, admin_headers
         assert float(snaps[1].issued_credits) == 100
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# S3 — 금액 산출 불가(단가 미정)면 BILLED 청구 반려 (NULL 금액 청구·동결 방지)
+# ---------------------------------------------------------------------------
+def test_billed_blocked_when_amount_uncomputable(client, admin_headers):
+    """단가 미정(unit_price 없음) 사업은 금액 산출 불가 → BILLED 전이 409, STANDBY 유지."""
+    resp = client.post(
+        API + "/clients",
+        headers=admin_headers,
+        json={"client_type": "TRANSPORT", "company_name": "S3-단가미정운수"},
+    )
+    assert resp.status_code == 201, resp.text
+    cid = resp.json()["client_id"]
+
+    resp = client.post(
+        API + "/projects",
+        headers=admin_headers,
+        json={
+            "project_name": "S3-단가미정사업",
+            "project_status": "모니터링",
+            "expected_credits": 1000,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    pid = resp.json()["project_id"]
+
+    resp = client.post(
+        API + "/projects/" + pid + "/clients",
+        headers=admin_headers,
+        json={"client_id": cid, "allocation_ratio": 50, "success_fee_rate": 10},
+    )
+    assert resp.status_code == 201, resp.text
+    map_id = resp.json()["map_id"]
+
+    # 단가가 없어 expected_amount는 None(미정) — BILLED 전이 반려
+    resp = client.put(
+        API + "/settlements/" + map_id + "/status",
+        headers=admin_headers,
+        json={"settlement_status": "BILLED"},
+    )
+    assert resp.status_code == 409, resp.text
+    assert "산출할 수 없어" in resp.json()["detail"]
+
+    # 여전히 STANDBY (청구되지 않음)
+    row = _settlement_row(client, admin_headers, map_id)
+    assert row["settlement_status"] == "STANDBY"

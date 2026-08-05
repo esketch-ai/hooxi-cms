@@ -353,7 +353,17 @@ def upsert_project_client(
       단가 미입력이면 null(프론트 '미정')
     - 연결 자산은 해당 고객사 소유여야 한다
     """
-    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    # 사업 행을 잠가 같은 사업에 대한 동시 매핑 upsert를 직렬화 — 배분율 합계 검증의
+    # read-validate-write TOCTOU로 합계가 100%를 넘는 과대 청구를 막는다(S2).
+    # (SQLite 등 미지원 백엔드에선 무시되고, 운영 Postgres에서 실효)
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .with_for_update()
+        .first()
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="감축 사업을 찾을 수 없습니다")
     common.get_or_404(db, Client, payload.client_id, "고객사")
     if payload.asset_id:
         asset = common.get_or_404(db, Asset, payload.asset_id, "자산")

@@ -117,6 +117,10 @@ async def upload_document(
             raise HTTPException(
                 status_code=422, detail="연결 자산이 해당 고객사의 자산이 아닙니다"
             )
+        # 자산만 주어지고 고객사 미지정이면 자산 소유 고객사로 귀속 — client_id 없는 고아 문서 방지(L2)
+        if not client_id:
+            client_id = asset.client_id
+            client = db.get(Client, client_id)
 
     content = await file.read()
     if not content:

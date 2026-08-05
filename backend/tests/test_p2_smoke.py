@@ -171,9 +171,9 @@ def test_update_asset(client, staff_headers):
     assert "new-secret-pw" not in resp.text
 
 
-def test_reveal_auth_returns_plaintext_and_audits(client, staff_headers):
-    """reveal-auth — 일시 복호화 평문 반환 + tb_audit_log 기록(누가·언제·어떤 자산)."""
-    resp = client.post(API + "/assets/" + S["asset_id"] + "/reveal-auth", headers=staff_headers)
+def test_reveal_auth_returns_plaintext_and_audits(client, manager_headers):
+    """reveal-auth — 일시 복호화 평문 반환 + tb_audit_log 기록(누가·언제·어떤 자산). MANAGER 이상(H1)."""
+    resp = client.post(API + "/assets/" + S["asset_id"] + "/reveal-auth", headers=manager_headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["auth_value"] == "new-secret-pw"  # 직전 테스트에서 갱신한 값
@@ -187,7 +187,7 @@ def test_reveal_auth_returns_plaintext_and_audits(client, staff_headers):
             .all()
         )
         assert len(logs) == 1
-        assert logs[0].actor_id == "u-staff"
+        assert logs[0].actor_id == "u-manager"
         assert logs[0].target_type == "ASSET"
         # 감사 로그에 인증정보 값 기록 절대 금지 (R2-E6)
         assert not logs[0].new_value
@@ -195,23 +195,29 @@ def test_reveal_auth_returns_plaintext_and_audits(client, staff_headers):
         db.close()
 
 
-def test_reveal_auth_no_credentials_404(client, staff_headers):
+def test_reveal_auth_no_credentials_404(client, manager_headers):
     """인증정보가 없는 자산 reveal → 404."""
-    resp = client.post(API + "/assets/" + S["asset2_id"] + "/reveal-auth", headers=staff_headers)
+    resp = client.post(API + "/assets/" + S["asset2_id"] + "/reveal-auth", headers=manager_headers)
     assert resp.status_code == 404
 
 
-def test_encryption_key_missing_503(client, staff_headers, monkeypatch):
-    """키 미설정 시 — 암호화 필요 작업(저장·reveal)만 503, 그 외 CRUD는 정상."""
+def test_reveal_auth_forbidden_for_staff(client, staff_headers):
+    """H1 — STAFF는 자산 인증정보 reveal 권한이 없어 403 (평문 복호화는 MANAGER 이상)."""
+    resp = client.post(API + "/assets/" + S["asset_id"] + "/reveal-auth", headers=staff_headers)
+    assert resp.status_code == 403
+
+
+def test_encryption_key_missing_503(client, manager_headers, monkeypatch):
+    """키 미설정 시 — 암호화 필요 작업(저장·reveal)만 503, 그 외 CRUD는 정상. (reveal는 MANAGER 이상)"""
     monkeypatch.delenv("ASSET_ENC_KEY")
 
-    resp = client.post(API + "/assets/" + S["asset_id"] + "/reveal-auth", headers=staff_headers)
+    resp = client.post(API + "/assets/" + S["asset_id"] + "/reveal-auth", headers=manager_headers)
     assert resp.status_code == 503
     assert "ASSET_ENC_KEY" in resp.json()["detail"]
 
     resp = client.post(
         API + "/assets",
-        headers=staff_headers,
+        headers=manager_headers,
         json={
             "client_id": S["P2운수"],
             "asset_group": "MOBILITY",
@@ -222,10 +228,10 @@ def test_encryption_key_missing_503(client, staff_headers, monkeypatch):
     assert resp.status_code == 503
 
     # 인증정보 없는 CRUD는 정상 동작
-    resp = client.get(API + "/assets", headers=staff_headers)
+    resp = client.get(API + "/assets", headers=manager_headers)
     assert resp.status_code == 200
     resp = client.put(
-        API + "/assets/" + S["asset_id"], headers=staff_headers, json={"quantity": 21}
+        API + "/assets/" + S["asset_id"], headers=manager_headers, json={"quantity": 21}
     )
     assert resp.status_code == 200
 

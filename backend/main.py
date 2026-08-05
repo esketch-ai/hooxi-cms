@@ -222,15 +222,14 @@ def seed_codes():
 
 
 def require_secure_jwt_secret():
-    """프로덕션 가드 — JWT_SECRET이 개발 기본값인데 dev-login도 꺼져 있으면(=운영 추정)
-    안전하지 않은 기본 서명키 사용을 막기 위해 예외를 던진다."""
-    if (
-        auth.JWT_SECRET == auth._DEFAULT_JWT_SECRET
-        and os.getenv("ENABLE_DEV_LOGIN", "false").lower() != "true"
-    ):
+    """기동 가드 — JWT_SECRET이 개발용 기본값이면 어떤 경우에도 기동을 막는다.
+
+    dev-login이 켜져 있어도 예외 없음: '기본 서명키 + dev-login' 조합은 토큰 위조·계정 탈취로
+    이어지므로(H2), 기본키 사용 자체를 항상 차단한다. 로컬/테스트도 JWT_SECRET을 설정해야 한다.
+    """
+    if auth.JWT_SECRET == auth._DEFAULT_JWT_SECRET:
         raise RuntimeError(
-            "JWT_SECRET이 개발용 기본값입니다. 프로덕션에서는 JWT_SECRET 환경변수를 "
-            "반드시 설정하세요(개발 환경이면 ENABLE_DEV_LOGIN=true)."
+            "JWT_SECRET이 개발용 기본값입니다. JWT_SECRET 환경변수를 반드시 설정하세요."
         )
 
 
@@ -251,8 +250,9 @@ app = FastAPI(
 )
 
 # CORS: comma-separated origins via CORS_ORIGINS env var.
-# Credentials cannot be combined with a wildcard origin per the CORS spec.
-cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+# 기본값은 빈 목록(명시 오리진 필수) — 와일드카드(*) 기본 개방 금지(M2). 프론트가 백엔드와
+# 동일 오리진으로 서빙되므로 미설정이어도 앱 동작엔 영향 없음. 크로스오리진이 필요하면 설정.
+cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

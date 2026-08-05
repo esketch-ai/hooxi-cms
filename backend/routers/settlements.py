@@ -177,12 +177,19 @@ def update_settlement_status(
     values = {"settlement_status": target, "updated_at": now}
     if target == "BILLED":
         # 청구 시점 금액은 서버 계산 값으로 확정 (§10.3) — 이후 동결(스냅샷 정본)
-        values["expected_amount"] = common.validate_expected_amount(
-            common.compute_expected_amount(
-                project.expected_credits, mapping.allocation_ratio,
-                project.unit_price, mapping.success_fee_rate,
-            )
+        amount = common.compute_expected_amount(
+            project.expected_credits, mapping.allocation_ratio,
+            project.unit_price, mapping.success_fee_rate,
         )
+        # 금액 산출 불가(단가·예상발행량·배분율·보수율 중 미입력)면 NULL 금액으로 청구·동결되는
+        # 정합성 붕괴를 막고 청구를 반려한다(S3).
+        if amount is None:
+            raise HTTPException(
+                status_code=409,
+                detail="정산 금액을 산출할 수 없어 청구할 수 없습니다. 사업 단가·예상 발행량 등 "
+                       "필요한 값을 먼저 입력하세요.",
+            )
+        values["expected_amount"] = common.validate_expected_amount(amount)
         values["billed_at"] = now
         values["billed_by"] = user.user_id
         # 발행 크레딧도 청구 시점 값으로 동결 (스냅샷 정본)

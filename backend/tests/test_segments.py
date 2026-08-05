@@ -686,3 +686,34 @@ def test_send_history(client, staff_headers):
 
 def test_send_history_missing_404(client, staff_headers):
     assert client.get(SEG + "/sends/no-such-send", headers=staff_headers).status_code == 404
+
+
+def test_send_rejects_client_owned_attachment_403(client, staff_headers, seg_data, monkeypatch):
+    """S4 — 특정 고객사 소유 문서(client_id 있음)는 전 대상 공용 첨부로 쓸 수 없다(403, 유출 방지)."""
+    _enable_mail(monkeypatch)
+    resp = client.post(
+        API + "/clients",
+        headers=staff_headers,
+        json={"client_type": "TRANSPORT", "company_name": "S4-소유문서고객"},
+    )
+    assert resp.status_code == 201, resp.text
+    owner = resp.json()["client_id"]
+
+    # 특정 고객사에 귀속된 문서 업로드
+    resp = client.post(
+        API + "/documents",
+        headers=staff_headers,
+        files={"file": ("owned.pdf", io.BytesIO(b"OWNED"), "application/pdf")},
+        data={"doc_type": "FORM", "title": "owned.pdf", "client_id": owner},
+    )
+    assert resp.status_code == 201, resp.text
+    owned_doc = resp.json()["doc_id"]
+
+    # 세그먼트 공용 첨부로 사용 시도 → 403
+    resp = client.post(
+        SEG + "/send",
+        headers=staff_headers,
+        json={"doc_ids": [owned_doc], "criteria": {"region": [REGION_A]}},
+    )
+    assert resp.status_code == 403, resp.text
+    assert "특정 고객사 소유" in resp.json()["detail"]

@@ -91,5 +91,10 @@ def admin_headers(client):
 
 
 @pytest.fixture(scope="session")
+def manager_headers(client):
+    return _login(client, "manager@hooxipartners.com")
+
+
+@pytest.fixture(scope="session")
 def staff_headers(client):
     return _login(client, "staff@hooxipartners.com")

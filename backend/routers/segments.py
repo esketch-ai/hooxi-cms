@@ -356,6 +356,15 @@ def _load_attachments(
     total_bytes = 0
     for doc_id in doc_ids:
         doc = common.get_or_404(db, Document, doc_id, "문서")
+        # 세그먼트 공용 첨부는 전 대상 고객사에 동일 발송되므로, 특정 고객사 소유 문서
+        # (client_id 있음)는 타 고객사로 유출되지 않도록 배제한다(S4). 공용 문서만 허용.
+        if doc.client_id is not None:
+            raise HTTPException(
+                status_code=403,
+                detail="특정 고객사 소유 문서는 공용 발송 첨부로 사용할 수 없습니다: '{0}'".format(
+                    doc.title
+                ),
+            )
         content = storage.read_file(doc.file_url)
         if content is None:
             raise HTTPException(

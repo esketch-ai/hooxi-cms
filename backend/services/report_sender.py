@@ -268,6 +268,10 @@ def send_report_core(
     반환 dict는 schemas.ReportSendResponse 필드와 1:1 대응.
     """
     report_id = delivery.report_id
+    prev_status = delivery.status
+    # 이미 다른 요청이 발송 중이면 즉시 반려 (S1)
+    if prev_status == "SENDING":
+        raise SendPrecondition(409, "이미 발송 중인 보고서입니다. 잠시 후 확인하세요")
 
     if not email_service.is_configured():
         raise SendPrecondition(
@@ -352,6 +356,23 @@ def send_report_core(
     seq = _next_seq(db, report_id)
     recipients_snapshot = json.dumps({"to": to, "cc": cc}, ensure_ascii=False)
 
+    # 발송 선점 (S1) — status를 원자적으로 (읽은 값)→SENDING 전이. 동시 발송(수동+배치·스케줄러
+    # 중복발화)에서 두 번째 요청은 rowcount 0으로 409가 되어 이중 발송이 차단된다. 이 UPDATE가
+    # 잡는 행 잠금이 동시 요청을 직렬화하며, 실패 시 아래 except에서 직전 상태로 복구한다.
+    claimed = (
+        db.query(ReportDelivery)
+        .filter(ReportDelivery.report_id == report_id, ReportDelivery.status == prev_status)
+        .update({"status": "SENDING"}, synchronize_session=False)
+    )
+    if claimed == 0:
+        db.rollback()
+        raise SendPrecondition(
+            409, "다른 요청이 방금 이 보고서를 발송했습니다. 새로고침 후 상태를 확인하세요"
+        )
+    # 선점 UPDATE(synchronize_session=False) 반영을 ORM 객체에 동기화 — 이후 status='SENT' 대입이
+    # (재발송 등 직전 상태가 SENT인 경우에도) 확실히 dirty로 잡혀 flush되도록 한다.
+    db.refresh(delivery)
+
     try:
         email_service.send_mail(
             to=to,
@@ -362,9 +383,15 @@ def send_report_core(
             reply_to=reply_to,
         )
     except email_service.EmailConfigError as exc:
+        # 선점(SENDING)을 명시적으로 되돌린다 — 세션 close의 암묵 롤백에 의존하지 않고 대칭 확보(S1)
+        db.rollback()
         raise SendPrecondition(503, str(exc))
     except Exception as exc:
-        # 실패: 직전 상태 유지 + FAIL 회차 기록 (R2-B3)
+        # 실패: 선점했던 SENDING을 직전 상태로 되돌린다. 위 선점 UPDATE(synchronize_session=False)로
+        # ORM 객체가 stale이라 속성 대입은 dirty로 잡히지 않으므로 명시적 UPDATE로 복구(순변화 없음, R2-B3).
+        db.query(ReportDelivery).filter(ReportDelivery.report_id == report_id).update(
+            {"status": prev_status}, synchronize_session=False
+        )
         db.add(
             ReportSendLog(
                 report_id=report_id,

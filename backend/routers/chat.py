@@ -235,16 +235,33 @@ def update_thread(
     """
     thread = common.get_or_404(db, ChatThread, thread_id, "상담 스레드")
     prev_status = thread.status
+    # mode/status 값은 스키마(ChatThreadUpdate)에서 정규식으로 이미 검증됨.
 
     if payload.assigned_manager_id is not None:
         common.get_or_404(db, User, payload.assigned_manager_id, "담당자")
-        thread.assigned_manager_id = payload.assigned_manager_id
-    if payload.mode is not None:
-        thread.mode = payload.mode
-    if payload.status is not None:
-        thread.status = payload.status
 
-    if payload.status == "CLOSED" and prev_status != "CLOSED":
+    values = {}
+    if payload.assigned_manager_id is not None:
+        values["assigned_manager_id"] = payload.assigned_manager_id
+    if payload.mode is not None:
+        values["mode"] = payload.mode
+    if payload.status is not None:
+        values["status"] = payload.status
+
+    closing = payload.status == "CLOSED" and prev_status != "CLOSED"
+    if values:
+        query = db.query(ChatThread).filter(ChatThread.thread_id == thread_id)
+        if closing:
+            # CLOSED 전이는 읽은 상태가 그대로일 때만 반영 — 동시 CLOSED 시 활동이력 중복 적재 방지(L1)
+            query = query.filter(ChatThread.status == prev_status)
+        updated = query.update(values, synchronize_session=False)
+        if closing and updated == 0:
+            # 다른 요청이 먼저 종료 — 이력 중복 없이 현재 상태만 반환
+            db.rollback()
+            thread = common.get_or_404(db, ChatThread, thread_id, "상담 스레드")
+            return _thread_out(db, thread)
+
+    if closing:
         recent = (
             db.query(ChatMessage)
             .filter(ChatMessage.thread_id == thread.thread_id)
@@ -263,7 +280,12 @@ def update_thread(
         db.add(
             ActivityHistory(
                 client_id=thread.client_id,
-                manager_id=thread.assigned_manager_id or user.user_id,
+                # 같은 요청에서 재배정+종료가 함께 오면 신규 담당자로 귀속 (thread는 bulk update로 stale)
+                manager_id=(
+                    payload.assigned_manager_id
+                    or thread.assigned_manager_id
+                    or user.user_id
+                ),
                 created_by=user.user_id,
                 activity_date=utcnow(),
                 activity_type="KAKAO",

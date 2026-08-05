@@ -50,7 +50,7 @@ PERMISSION_MATRIX = {
     "settlement.change": ["MANAGER", "ADMIN"],              # 정산 상태 변경·청구서 발행 (SCR-07)
     "client.delete": ["MANAGER", "ADMIN"],                  # 고객사/사업 삭제
     "admin.users_config_backup": ["ADMIN"],                 # 사용자 관리·tb_config·백업
-    "asset.reveal_auth": ["STAFF", "MANAGER", "ADMIN"],     # reveal-auth (감사 로그 필수)
+    "asset.reveal_auth": ["MANAGER", "ADMIN"],              # reveal-auth 평문 복호화 — 삭제와 동급 이상 게이트(감사 로그 필수)
 }
 
 bearer_scheme = HTTPBearer(auto_error=False)
