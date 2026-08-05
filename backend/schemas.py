@@ -36,6 +36,30 @@ def validate_email_format(value: Optional[str]) -> Optional[str]:
     return stripped
 
 
+# FK 필드에 빈/공백 문자열이 들어가면 Postgres FK 위반(존재하지 않는 사용자·고객사 등)으로
+# 전역 IntegrityError 핸들러가 409를 던진다. 폼에서 미선택 드롭다운이 ''를 보내는 경우가 대표적
+# (SQLite 테스트는 FK 미강제라 안 잡힘). 입력 스키마 공통 베이스로 FK 필드명만 골라 '' → None 정규화.
+_FK_FIELD_NAMES = frozenset({
+    "manager_id", "client_id", "asset_id", "history_id", "sub_id", "assigned_manager_id",
+    "project_id", "parent_schedule_id", "related_history_id", "doc_id", "pinned_doc_id",
+    "kakao_contact_id",
+})
+
+
+class BlankFKToNoneModel(BaseModel):
+    """입력 스키마 공통 베이스 — FK 필드의 빈/공백 문자열을 None으로 정규화(비-FK 필드는 불변)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_fk_to_none(cls, data):
+        if not isinstance(data, dict):
+            return data
+        return {
+            k: (None if k in _FK_FIELD_NAMES and isinstance(v, str) and v.strip() == "" else v)
+            for k, v in data.items()
+        }
+
+
 # ---------------------------------------------------------------------------
 # 공통
 # ---------------------------------------------------------------------------
@@ -332,7 +356,7 @@ class ClientDetailOut(ClientOut):
 # ---------------------------------------------------------------------------
 # P1-C — 보고서 수신자 (tb_report_recipient)
 # ---------------------------------------------------------------------------
-class RecipientCreate(BaseModel):
+class RecipientCreate(BlankFKToNoneModel):
     """수신자 등록 — sub_id null이면 전 보고서 유형 공통 (R2-B8)."""
 
     email: str = Field(max_length=100)
@@ -390,7 +414,7 @@ class AssetOut(BaseModel):
 # ---------------------------------------------------------------------------
 # P2 — 자산 및 연동 (SCR-04)
 # ---------------------------------------------------------------------------
-class AssetCreate(BaseModel):
+class AssetCreate(BlankFKToNoneModel):
     """자산 등록 — auth_value(평문 인증정보)는 서버 AES-256-GCM 암호화 후 저장, 응답 미포함."""
 
     client_id: str = Field(max_length=50)
@@ -412,7 +436,7 @@ class AssetCreate(BaseModel):
     usage_purpose: Optional[str] = Field(default=None, max_length=100)
 
 
-class AssetUpdate(BaseModel):
+class AssetUpdate(BlankFKToNoneModel):
     """자산 수정 — 전달된 필드만 반영. auth_value 전달 시 재암호화(빈 문자열은 삭제)."""
 
     client_id: Optional[str] = Field(default=None, max_length=50)
@@ -492,7 +516,7 @@ _CREDITS_MAX = 99_999_999.99
 _UNIT_PRICE_MAX = 1e12
 
 
-class ProjectCreate(BaseModel):
+class ProjectCreate(BlankFKToNoneModel):
     client_id: Optional[str] = Field(default=None, max_length=50)  # 묶음 사업 시 대표사
     project_name: str = Field(min_length=1, max_length=200)
     reg_code: Optional[str] = Field(default=None, max_length=50)  # 예: R-2024-KR-03-000528
@@ -513,7 +537,7 @@ class ProjectCreate(BaseModel):
     manager_id: Optional[str] = Field(default=None, max_length=50)
 
 
-class ProjectUpdate(BaseModel):
+class ProjectUpdate(BlankFKToNoneModel):
     client_id: Optional[str] = Field(default=None, max_length=50)
     project_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     reg_code: Optional[str] = Field(default=None, max_length=50)
@@ -577,7 +601,7 @@ class UnitPriceUpdate(BaseModel):
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
 
 
-class ProjectMapIn(BaseModel):
+class ProjectMapIn(BlankFKToNoneModel):
     """참여 고객사 매핑 등록/수정 — expected_amount는 서버 계산(§10.3)."""
 
     client_id: str = Field(max_length=50)
@@ -703,7 +727,7 @@ class SettlementRevert(BaseModel):
 # ---------------------------------------------------------------------------
 # P1 — 활동 이력·이슈 (SCR-05 / 02)
 # ---------------------------------------------------------------------------
-class HistoryCreate(BaseModel):
+class HistoryCreate(BlankFKToNoneModel):
     client_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 고객 임시 이력 허용 (GAN E5)
     manager_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 시 현재 사용자
     activity_date: datetime
@@ -785,7 +809,7 @@ class CommentOut(BaseModel):
 # ---------------------------------------------------------------------------
 # P1 — 일정 (SCR-11)
 # ---------------------------------------------------------------------------
-class ScheduleCreate(BaseModel):
+class ScheduleCreate(BlankFKToNoneModel):
     client_id: Optional[str] = Field(default=None, max_length=50)  # null = 내부 일정
     manager_id: Optional[str] = Field(default=None, max_length=50)  # 미지정 시 현재 사용자
     schedule_type: str = Field(pattern="^(MEETING|CALL|SITE_VISIT|REPORT_DUE|INTERNAL)$")
@@ -811,7 +835,7 @@ class ScheduleCreate(BaseModel):
         return self
 
 
-class ScheduleUpdate(BaseModel):
+class ScheduleUpdate(BlankFKToNoneModel):
     """일자 드래그 변경·완료 처리 — DONE 전환 시 활동 이력 자동 적재."""
 
     client_id: Optional[str] = Field(default=None, max_length=50)
@@ -1020,7 +1044,7 @@ class KakaoContactListResponse(BaseModel):
     total: int
 
 
-class KakaoContactUpdate(BaseModel):
+class KakaoContactUpdate(BlankFKToNoneModel):
     """연락처 승인 게이트 (CR-3) — APPROVED는 client_id 매핑 필수. MANAGER 이상."""
 
     status: str = Field(pattern="^(PENDING|APPROVED|REJECTED|BLOCKED)$")
@@ -1088,7 +1112,7 @@ class ChatReplyResponse(BaseModel):
     message: ChatMessageOut
 
 
-class ChatThreadUpdate(BaseModel):
+class ChatThreadUpdate(BlankFKToNoneModel):
     """모드 전환·담당 배정·종료 — CLOSED 전환 시 대화 요약을 활동 이력(KAKAO)으로 적재."""
 
     mode: Optional[str] = Field(default=None, pattern="^(AI|HUMAN)$")
@@ -1412,7 +1436,7 @@ def _parse_criteria_json(v):
     return v if v is not None else {}
 
 
-class SegmentIn(BaseModel):
+class SegmentIn(BlankFKToNoneModel):
     """세그먼트 생성 — criteria는 라우터에서 검증 후 JSON 문자열로 저장."""
 
     name: str = Field(min_length=1, max_length=100)
@@ -1424,7 +1448,7 @@ class SegmentIn(BaseModel):
     mail_body: Optional[str] = None
 
 
-class SegmentUpdate(BaseModel):
+class SegmentUpdate(BlankFKToNoneModel):
     """세그먼트 수정 — 전달된 필드만 반영. active=N은 soft 삭제와 동일."""
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
@@ -1569,7 +1593,7 @@ class HistoryClientLink(BaseModel):
     client_id: str = Field(min_length=1, max_length=50)
 
 
-class HistoryManagerUpdate(BaseModel):
+class HistoryManagerUpdate(BlankFKToNoneModel):
     """이슈 담당자 인계 — ISSUE 유형 전용, ASSIGN 코멘트·감사로 흔적."""
 
     manager_id: str = Field(min_length=1, max_length=50)
@@ -1578,7 +1602,7 @@ class HistoryManagerUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 # P1-F — 보고서 발송 고정본 지정 (SCR-12, R2-B4)
 # ---------------------------------------------------------------------------
-class ReportPinUpdate(BaseModel):
+class ReportPinUpdate(BlankFKToNoneModel):
     """발송 고정본 지정/해제 요청 — doc_id가 None이면 고정 해제(최신본 발송 복귀)."""
 
     doc_id: Optional[str] = None

@@ -103,6 +103,10 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     """문서 업로드 (multipart) — client_id 없으면 공용 양식(R2-C6)."""
+    # 미선택 폼 필드가 빈 문자열 FK를 보내면 Postgres FK 위반(→409) — None으로 정규화
+    client_id = (client_id or "").strip() or None
+    history_id = (history_id or "").strip() or None
+    asset_id = (asset_id or "").strip() or None
     if doc_type not in _DOC_TYPES:
         raise HTTPException(status_code=422, detail="doc_type은 CONTRACT/REPORT/FORM/PHOTO/SIGN/ETC 중 하나여야 합니다")
     client = None

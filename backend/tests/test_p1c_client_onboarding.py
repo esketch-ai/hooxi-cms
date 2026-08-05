@@ -443,3 +443,20 @@ def test_blank_strings_normalized_to_none(client, admin_headers):
         json={"company_name": ""},
     )
     assert resp.status_code == 422, resp.text
+
+
+def test_blank_fk_normalized_in_input_schemas():
+    """FK 필드의 빈 문자열은 입력 스키마 공통 베이스(BlankFKToNoneModel)에서 None으로 정규화된다.
+
+    폼 미선택 드롭다운이 ''를 보내도 Postgres FK 위반(→409)이 나지 않도록 하는 방어.
+    """
+    import schemas
+
+    assert schemas.RecipientCreate(email="a@b.com", sub_id="").sub_id is None
+    s = schemas.ScheduleUpdate(client_id="", manager_id="")
+    assert s.client_id is None and s.manager_id is None
+    assert schemas.ChatThreadUpdate(assigned_manager_id="").assigned_manager_id is None
+    p = schemas.ProjectUpdate(manager_id="", client_id="")
+    assert p.manager_id is None and p.client_id is None
+    a = schemas.AssetUpdate(client_id="")
+    assert a.client_id is None
