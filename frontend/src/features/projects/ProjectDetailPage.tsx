@@ -1,6 +1,6 @@
 // SCR-06 사업 상세 — 개요(단가 수기 입력) + 참여 고객사 매핑 + 배분율 합계 게이지
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
@@ -22,7 +22,13 @@ import { useToast } from '../../components/Toast'
 import { useClientOptions } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type { ProjectClientMap } from '../../types'
-import { isIssueImminent, useDeleteMapping, useProject, useUpdateUnitPrice } from './api'
+import {
+  isIssueImminent,
+  useDeleteMapping,
+  useDeleteProject,
+  useProject,
+  useUpdateUnitPrice,
+} from './api'
 import { ProjectFormModal } from './ProjectFormModal'
 import { MappingFormModal } from './MappingFormModal'
 
@@ -166,11 +172,14 @@ export function ProjectDetailPage() {
   const mappings = useMemo(() => project?.clients ?? [], [project])
   const { data: clientOptions = [] } = useClientOptions()
   const deleteMapping = useDeleteMapping(projectId)
+  const deleteProject = useDeleteProject()
+  const navigate = useNavigate()
 
   const [editOpen, setEditOpen] = useState(false)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [editingMapping, setEditingMapping] = useState<ProjectClientMap | null>(null)
   const [deleting, setDeleting] = useState<ProjectClientMap | null>(null)
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false)
 
   // 배분율 합계 — 서버 집계(allocation_total) 우선, 없으면 클라이언트 합산
   const allocationSum = useMemo(
@@ -361,15 +370,25 @@ export function ProjectDetailPage() {
         title={project.project_name}
         subtitle={project.reg_code ?? undefined}
         actions={
-          /* 수정 — 모바일 숨김 (§7.1) */
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
-          >
-            <PencilSimple size={15} />
-            사업 수정
-          </button>
+          /* 수정·삭제 — 모바일 숨김 (§7.1) */
+          <div className="hidden items-center gap-2 sm:flex">
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate"
+            >
+              <PencilSimple size={15} />
+              사업 수정
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteProjectOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-rose-400 hover:bg-rose-500/10"
+            >
+              <Trash size={15} />
+              사업 삭제
+            </button>
+          </div>
         }
       />
 
@@ -548,6 +567,33 @@ export function ProjectDetailPage() {
         loading={deleteMapping.isPending}
         onConfirm={handleDelete}
         onCancel={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        open={deleteProjectOpen}
+        title="사업 삭제"
+        message={
+          <>
+            <b>{project.project_name}</b> 사업을 삭제합니다. 참여 고객사 매핑도 함께 제거되며, 이
+            작업은 되돌릴 수 없습니다. (정산이 진행된 사업은 삭제되지 않습니다.)
+          </>
+        }
+        confirmLabel="삭제"
+        danger
+        loading={deleteProject.isPending}
+        onCancel={() => setDeleteProjectOpen(false)}
+        onConfirm={async () => {
+          if (!projectId) return
+          try {
+            await deleteProject.mutateAsync(projectId)
+            showToast('사업이 삭제되었습니다.', 'success')
+            setDeleteProjectOpen(false)
+            navigate('/projects')
+          } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail
+            showToast(detail || '삭제에 실패했습니다.', 'danger')
+          }
+        }}
       />
     </div>
   )

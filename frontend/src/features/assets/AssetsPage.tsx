@@ -1,7 +1,7 @@
 // SCR-04 자산 및 연동 현황 — 외부기관 연동 계정의 안전한 공동 관리
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowSquareOut, Camera, CircleNotch, FileXls, HardDrives, Images, PencilSimple, Plus } from '@phosphor-icons/react'
+import { ArrowSquareOut, Camera, CircleNotch, FileXls, HardDrives, Images, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
@@ -9,10 +9,12 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { useToast } from '../../components/Toast'
 import { useCodes } from '../../lib/api/queries'
 import { usePointerCoarse } from '../../lib/usePointerCoarse'
 import type { Asset } from '../../types'
-import { useAssets } from './api'
+import { useAssets, useDeleteAsset } from './api'
 import { useRevealAuth } from './useRevealAuth'
 import { AssetFormModal } from './AssetFormModal'
 import { SpecPhotoModal } from './SpecPhotoModal'
@@ -136,6 +138,9 @@ export function AssetsPage() {
   const [specPhotoAsset, setSpecPhotoAsset] = useState<Asset | null>(null)
   // 사진 보기 — 열람은 사무실 PC에서도 필요하므로 터치 게이트 없이 모든 기기 노출
   const [photosAsset, setPhotosAsset] = useState<Asset | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
+  const deleteAsset = useDeleteAsset()
+  const { showToast } = useToast()
 
   const filters = useMemo(
     () => ({
@@ -257,6 +262,18 @@ export function AssetsPage() {
             aria-label="자산 수정"
           >
             <PencilSimple size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteTarget(a)
+            }}
+            className="rounded-lg p-1.5 text-smoke hover:bg-rose-500/10 hover:text-rose-400"
+            title="삭제"
+            aria-label="자산 삭제"
+          >
+            <Trash size={16} />
           </button>
         </div>
       ),
@@ -428,6 +445,32 @@ export function AssetsPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onDone={() => queryClient.invalidateQueries({ queryKey: ['assets'] })}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="자산 삭제"
+        message={
+          <>
+            <b>{deleteTarget?.agency_name || deleteTarget?.asset_group}</b> 자산을 삭제합니다.
+            되돌릴 수 없습니다.
+          </>
+        }
+        confirmLabel="삭제"
+        danger
+        loading={deleteAsset.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          try {
+            await deleteAsset.mutateAsync(deleteTarget.asset_id)
+            showToast('자산이 삭제되었습니다.', 'success')
+            setDeleteTarget(null)
+          } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail
+            showToast(detail || '삭제에 실패했습니다.', 'danger')
+          }
+        }}
       />
     </div>
   )

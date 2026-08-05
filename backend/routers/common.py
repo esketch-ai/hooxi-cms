@@ -149,6 +149,34 @@ def check_biz_reg_no_duplicate(
             )
 
 
+def check_company_name_duplicate(
+    db: Session, company_name: Optional[str], client_type: Optional[str] = None
+):
+    """회사명(상호) 중복 검사 — 사업자번호 없이 간편 등록되는 인라인 경로(ActivityForm의
+    '신규 업체 직접 입력')의 더블클릭 중복 생성을 막는 방어선.
+
+    정규화(공백 제거·casefold) 후 같은 상호가 있으면(구분이 주어지면 같은 구분에 한해) 409.
+    사업자번호가 있는 정식 등록은 check_biz_reg_no_duplicate로 충분하므로, 이 함수는
+    사업자번호가 빈 경우에만 호출한다(clients.create_client).
+    """
+    normalized = (company_name or "").strip().casefold()
+    if not normalized:
+        return
+    query = db.query(Client)
+    if client_type:  # 스캔 범위를 같은 구분으로 좁힘 (동명 이업종은 애초 대상 아님)
+        query = query.filter(Client.client_type == client_type)
+    for other in query.all():
+        if (other.company_name or "").strip().casefold() != normalized:
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "이미 동일 상호의 고객사가 있습니다 (기존: {0}). 별개 업체라면 사업자번호를 "
+                "입력해 정식 등록하거나, 기존 고객사를 선택하세요."
+            ).format(other.company_name),
+        )
+
+
 # 예상 정산액 상한 — 컬럼 Numeric(15,2)(정수부 13자리)의 저장 가능 한계 (#6 P2)
 EXPECTED_AMOUNT_LIMIT = 1e13
 

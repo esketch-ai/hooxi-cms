@@ -78,6 +78,88 @@ def test_biz_reg_no_update_self_allowed_but_other_conflict(client, admin_headers
 
 
 # ---------------------------------------------------------------------------
+# 1-b. 회사명 중복 차단 — 사업자번호 없는 인라인 경로(ActivityForm) 더블클릭 방어
+# ---------------------------------------------------------------------------
+def test_company_name_duplicate_blocks_inline_double_submit(client, admin_headers):
+    """사업자번호 없이 회사명만으로 등록되는 인라인 경로의 더블클릭 중복 생성 차단.
+
+    같은 상호(같은 구분) 재등록은 409, 표기(공백·대소문자) 차이도 동일 판정,
+    다른 상호는 허용. 사업자번호가 있는 정식 등록은 이 검사를 타지 않는다.
+    """
+    resp = _create_client(client, admin_headers, company_name="P1C-인라인상사")
+    assert resp.status_code == 201, resp.text
+
+    # 같은 상호 재등록(더블클릭 재현) → 409
+    resp = _create_client(client, admin_headers, company_name="P1C-인라인상사")
+    assert resp.status_code == 409
+    assert "동일 상호" in resp.json()["detail"]
+
+    # 앞뒤 공백·대소문자 차이만 있어도 동일 상호로 판정
+    resp = _create_client(client, admin_headers, company_name="  p1c-인라인상사 ")
+    assert resp.status_code == 409
+
+    # 다른 상호는 정상 등록
+    resp = _create_client(client, admin_headers, company_name="P1C-완전다른상사")
+    assert resp.status_code == 201, resp.text
+
+    # 사업자번호가 있으면 회사명 검사를 타지 않음 — 같은 상호라도 사업자번호로만 판정
+    resp = _create_client(
+        client, admin_headers, company_name="P1C-인라인상사", biz_reg_no="123-45-67890"
+    )
+    assert resp.status_code == 201, resp.text
+
+
+# ---------------------------------------------------------------------------
+# 1-c. 고객사 삭제 — 종속 없을 때만 허용 (client.delete: MANAGER·ADMIN)
+# ---------------------------------------------------------------------------
+def test_delete_client_no_dependents(client, admin_headers):
+    """종속 데이터가 없는 고객사는 삭제 200, 이후 조회 404."""
+    resp = _create_client(client, admin_headers, company_name="P1C-빈고객사")
+    assert resp.status_code == 201, resp.text
+    cid = resp.json()["client_id"]
+
+    resp = client.delete(API + "/clients/{0}".format(cid), headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+    assert "삭제" in resp.json()["message"]
+
+    resp = client.get(API + "/clients/{0}".format(cid), headers=admin_headers)
+    assert resp.status_code == 404
+
+
+def test_delete_client_with_dependents_blocked(client, admin_headers):
+    """수신자 등 종속 데이터가 있으면 409 — '종료' 안내. 삭제되지 않고 남아 있어야 함."""
+    resp = _create_client(client, admin_headers, company_name="P1C-종속고객사")
+    assert resp.status_code == 201, resp.text
+    cid = resp.json()["client_id"]
+
+    # 종속 데이터(보고서 수신자) 추가
+    resp = client.post(
+        API + "/clients/{0}/recipients".format(cid),
+        json={"email": "dep@example.com", "name": "종속"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 201, resp.text
+
+    resp = client.delete(API + "/clients/{0}".format(cid), headers=admin_headers)
+    assert resp.status_code == 409
+    assert "삭제할 수 없습니다" in resp.json()["detail"]
+
+    # 여전히 존재
+    resp = client.get(API + "/clients/{0}".format(cid), headers=admin_headers)
+    assert resp.status_code == 200
+
+
+def test_delete_client_forbidden_for_staff(client, admin_headers, staff_headers):
+    """STAFF는 client.delete 권한이 없어 403."""
+    resp = _create_client(client, admin_headers, company_name="P1C-권한고객사")
+    assert resp.status_code == 201, resp.text
+    cid = resp.json()["client_id"]
+
+    resp = client.delete(API + "/clients/{0}".format(cid), headers=staff_headers)
+    assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
 # 2. 이메일 형식 검증 (422)
 # ---------------------------------------------------------------------------
 def test_client_email_format_validated(client, admin_headers):

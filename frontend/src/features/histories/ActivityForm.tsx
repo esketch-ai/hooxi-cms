@@ -1,5 +1,5 @@
 // 공용 활동 이력 등록 폼 (SCR-05) — 고객사 상세·이슈 보드·대시보드에서 재사용
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { CircleNotch, FileImage, X } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FileUploader } from '../../components/FileUploader'
@@ -104,9 +104,17 @@ export function ActivityForm({
   })
 
   const isIssue = activityType === 'ISSUE'
+  // 중복 제출(더블클릭) 방지 — 인라인 신규업체 생성(/clients)까지 포함한 전 구간을 덮는다.
+  // ref는 재렌더 이전의 초고속 2차 클릭까지 동기적으로 차단, state는 버튼 UI 비활성용.
+  const submittingRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
+  // 인라인 신규업체를 만든 뒤 활동이력 저장만 실패한 '부분 성공' 재시도 시, 같은 상호로
+  // 고객사를 재생성(→ 409)하지 않도록 이미 만든 client_id를 상호명과 함께 보존해 재사용.
+  const createdClientRef = useRef<{ name: string; id: string } | null>(null)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (submittingRef.current) return
     if (!clientId) {
       showToast('고객사를 선택해 주세요.', 'danger')
       return
@@ -119,16 +127,25 @@ export function ActivityForm({
       showToast('제목과 상세 내용을 입력해 주세요.', 'danger')
       return
     }
+    submittingRef.current = true
+    setSubmitting(true)
     try {
       let resolvedClientId = clientId
       if (clientId === NEW_CLIENT) {
-        // 업체명·구분만으로 간편 등록 — 상세 정보는 고객사 마스터에서 보완
-        const { data: created } = await api.post('/clients', {
-          company_name: newCompanyName.trim(),
-          client_type: newClientType,
-        })
-        resolvedClientId = created.client_id
-        queryClient.invalidateQueries({ queryKey: ['clients'] })
+        const name = newCompanyName.trim()
+        if (createdClientRef.current && createdClientRef.current.name === name) {
+          // 직전 시도에서 이미 만든 고객사 재사용 (활동이력만 실패한 부분 성공 복구)
+          resolvedClientId = createdClientRef.current.id
+        } else {
+          // 업체명·구분만으로 간편 등록 — 상세 정보는 고객사 마스터에서 보완
+          const { data: created } = await api.post('/clients', {
+            company_name: name,
+            client_type: newClientType,
+          })
+          resolvedClientId = created.client_id
+          createdClientRef.current = { name, id: created.client_id }
+          queryClient.invalidateQueries({ queryKey: ['clients'] })
+        }
       }
       const created = await create.mutateAsync({
         client_id: resolvedClientId,
@@ -172,10 +189,14 @@ export function ActivityForm({
       } else {
         showToast('활동 이력이 등록되었습니다.', 'success')
       }
+      createdClientRef.current = null // 성공 완료 — 다음 등록을 위해 초기화
       onCreated?.()
       onClose()
     } catch {
       showToast('등록에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'danger')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
   }
 
@@ -404,10 +425,10 @@ export function ActivityForm({
           </button>
           <button
             type="submit"
-            disabled={create.isPending}
+            disabled={submitting || create.isPending}
             className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-60"
           >
-            {create.isPending && <CircleNotch size={14} className="animate-spin" />}
+            {(submitting || create.isPending) && <CircleNotch size={14} className="animate-spin" />}
             등록
           </button>
         </div>

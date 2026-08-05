@@ -16,6 +16,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
 import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Skeleton, SkeletonTableRows } from '../../components/Skeleton'
 import { AuditLine } from '../../components/AuditLine'
 import { useToast } from '../../components/Toast'
@@ -36,6 +37,7 @@ import {
   useClientProjects,
   useClientRecipients,
   useClientReports,
+  useDeleteClient,
   useRemoveRecipient,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
@@ -69,6 +71,10 @@ export function ClientDetailPage() {
   const [tab, setTab] = useState<TabKey>('overview')
   const [editOpen, setEditOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const navigate = useNavigate()
+  const { showToast } = useToast()
+  const deleteClient = useDeleteClient()
 
   if (isLoading) {
     return (
@@ -176,6 +182,14 @@ export function ClientDetailPage() {
               <PencilSimple size={15} />
               수정
             </button>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-rose-400 hover:bg-rose-500/10 sm:flex"
+            >
+              <Trash size={15} />
+              삭제
+            </button>
           </div>
         </div>
       </div>
@@ -213,6 +227,32 @@ export function ClientDetailPage() {
         onClose={() => setActivityOpen(false)}
         defaultClientId={client.client_id}
         lockClient
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        title="고객사 삭제"
+        message={
+          <>
+            <b>{client.company_name}</b> 고객사를 삭제합니다. 이력·사업·자산·수신자 등 연결된
+            데이터가 있으면 삭제되지 않으며, 이 경우 계약 상태를 <b>종료</b>로 변경하세요.
+          </>
+        }
+        confirmLabel="삭제"
+        danger
+        loading={deleteClient.isPending}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={async () => {
+          try {
+            await deleteClient.mutateAsync(client.client_id)
+            showToast('고객사가 삭제되었습니다.', 'success')
+            setDeleteOpen(false)
+            navigate('/clients')
+          } catch (err) {
+            const detail = (err as { response?: { data?: { detail?: string } } })?.response
+              ?.data?.detail
+            showToast(detail || '삭제에 실패했습니다.', 'danger')
+          }
+        }}
       />
     </div>
   )

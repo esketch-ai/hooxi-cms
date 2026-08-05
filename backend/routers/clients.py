@@ -17,13 +17,17 @@ from auth import get_current_user, require_permission
 from models import (
     ActivityHistory,
     Asset,
+    ChatThread,
     Client,
     Document,
+    KakaoContact,
     Project,
     ProjectClientMap,
     ReportDelivery,
     ReportRecipient,
     ReportSubscription,
+    Schedule,
+    SegmentSendLog,
     SessionLocal,
     User,
     get_db,
@@ -222,6 +226,10 @@ def create_client(
     validate_active_code(db, "CLIENT_TYPE", payload.client_type)
     validate_active_code(db, "CONTRACT_STATUS", payload.contract_status)
     _check_biz_reg_no_duplicate(db, payload.biz_reg_no)
+    # 사업자번호 없이 간편 등록되는 경로(ActivityForm 인라인)는 위 검사를 우회하므로,
+    # 그 경우 회사명 기준 중복도 막는다(더블클릭 중복 생성 차단).
+    if not common.normalize_biz_no(payload.biz_reg_no):
+        common.check_company_name_duplicate(db, payload.company_name, payload.client_type)
     if payload.manager_id:
         common.get_or_404(db, User, payload.manager_id, "담당 PM")
     client = Client(**{f: getattr(payload, f) for f in _CLIENT_FIELDS})
@@ -275,6 +283,66 @@ def update_client(
     db.commit()
     db.refresh(client)
     return _client_detail(db, client)
+
+
+# 고객사 삭제 시 종속 데이터 검사 대상 — (사용자 표시 라벨, 모델)
+_CLIENT_DEP_CHECKS = [
+    ("활동이력", ActivityHistory),
+    ("사업", Project),
+    ("사업-고객사 매핑", ProjectClientMap),
+    ("자산", Asset),
+    ("일정", Schedule),
+    ("보고서 발송", ReportDelivery),
+    ("보고서 구독", ReportSubscription),
+    ("보고서 수신자", ReportRecipient),
+    ("문서", Document),
+    ("카카오 연락처", KakaoContact),
+    ("채팅 스레드", ChatThread),
+    ("세그먼트 발송 이력", SegmentSendLog),
+]
+
+
+def _client_dependents(db: Session, client_id: str) -> List[str]:
+    """고객사에 연결된 종속 데이터의 종류(존재하는 것만) 반환 — 삭제 가드용."""
+    present = []
+    for label, model in _CLIENT_DEP_CHECKS:
+        if db.query(model).filter(model.client_id == client_id).first() is not None:
+            present.append(label)
+    return present
+
+
+@router.delete("/{client_id}", response_model=schemas.MessageResponse)
+def delete_client(
+    client_id: str,
+    user: User = Depends(require_permission("client.delete")),
+    db: Session = Depends(get_db),
+):
+    """고객사 삭제 — 연결된 종속 데이터가 하나도 없을 때만 허용(MANAGER·ADMIN).
+
+    설계상 고객사는 원칙적으로 '계약 종료'로 관리하나, 실수로 만든 빈 고객사(예: 인라인
+    등록 중복분)를 정리할 수 있도록 종속이 없는 경우에 한해 하드 삭제를 허용한다.
+    이력·사업·자산·수신자 등이 하나라도 있으면 409로 막고 '계약 종료'를 안내한다.
+    """
+    client = common.get_or_404(db, Client, client_id, "고객사")
+    dependents = _client_dependents(db, client_id)
+    if dependents:
+        raise HTTPException(
+            status_code=409,
+            detail="연결된 데이터가 있어 삭제할 수 없습니다 ({0}). 계약 상태를 '종료'로 변경하세요.".format(
+                ", ".join(dependents)
+            ),
+        )
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "CLIENT_DELETE",
+        target_type="CLIENT",
+        target_id=client_id,
+        old_value="{0} ({1})".format(client.company_name, client.client_type),
+    )
+    db.delete(client)
+    db.commit()
+    return schemas.MessageResponse(message="고객사가 삭제되었습니다")
 
 
 # ---------------------------------------------------------------------------

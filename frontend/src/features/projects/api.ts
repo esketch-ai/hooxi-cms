@@ -119,6 +119,20 @@ export function useDeleteMapping(projectId: string | undefined) {
   })
 }
 
+/** 사업 본체 삭제 — 정산 진행(BILLED/COMPLETED) 사업은 백엔드가 409로 막는다. */
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      await api.delete(`/projects/${projectId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['settlements'] })
+    },
+  })
+}
+
 /** D-day 임박 판정 — 예상 발급일 7일 이내·경과 시 빨강 (과업 기준) */
 export function isIssueImminent(dd: { label: string; overdue: boolean } | null): boolean {
   if (!dd) return false

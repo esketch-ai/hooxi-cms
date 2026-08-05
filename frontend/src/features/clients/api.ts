@@ -67,6 +67,19 @@ export function useSaveClient(clientId?: string) {
   })
 }
 
+/** 고객사 삭제 — 종속 데이터가 없을 때만 백엔드가 허용(있으면 409). */
+export function useDeleteClient() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (clientId: string) => {
+      await api.delete(`/clients/${clientId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+  })
+}
+
 // ── 상세 탭 데이터 ──────────────────────────────────────────────────
 export function useClientHistories(clientId: string | undefined) {
   return useQuery({
