@@ -17,6 +17,7 @@ import { SensitiveData } from '../../components/SensitiveData'
 import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { useAuth } from '../../app/AuthProvider'
 import { Skeleton, SkeletonTableRows } from '../../components/Skeleton'
 import { AuditLine } from '../../components/AuditLine'
 import { useToast } from '../../components/Toast'
@@ -72,8 +73,12 @@ export function ClientDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [forceOpen, setForceOpen] = useState(false)
+  const [confirmName, setConfirmName] = useState('')
+  const [depDetail, setDepDetail] = useState('')
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { user } = useAuth()
   const deleteClient = useDeleteClient()
 
   if (isLoading) {
@@ -243,14 +248,71 @@ export function ClientDetailPage() {
         onCancel={() => setDeleteOpen(false)}
         onConfirm={async () => {
           try {
-            await deleteClient.mutateAsync(client.client_id)
+            await deleteClient.mutateAsync({ clientId: client.client_id })
             showToast('고객사가 삭제되었습니다.', 'success')
             setDeleteOpen(false)
             navigate('/clients')
           } catch (err) {
+            const e = err as { response?: { status?: number; data?: { detail?: string } } }
+            const detail = e?.response?.data?.detail
+            if (e?.response?.status === 409) {
+              // 종속 데이터로 삭제 불가 → 강제 삭제(담당자 명의 확인) 흐름으로 전환
+              setDepDetail(detail || '연결된 데이터가 있습니다.')
+              setConfirmName('')
+              setDeleteOpen(false)
+              setForceOpen(true)
+            } else {
+              showToast(detail || '삭제에 실패했습니다.', 'danger')
+            }
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={forceOpen}
+        title="고객사 강제 삭제"
+        message={
+          <div className="space-y-2">
+            <p>
+              <b>{client.company_name}</b> 고객사에 연결된 데이터가 있습니다:
+            </p>
+            <p className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">{depDetail}</p>
+            <p>
+              강제 삭제하면 위 <b>연결 데이터가 함께 영구 삭제</b>됩니다(되돌릴 수 없음). 사업
+              참여·정산이 있으면 강제로도 삭제되지 않습니다.
+            </p>
+            <p className="text-xs text-ash">
+              진행하려면 담당자 <b>본인 이름{user?.name ? ` (${user.name})` : ''}</b>을 입력하세요.
+            </p>
+            <input
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder="담당자 본인 이름"
+              className="h-9 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+            />
+          </div>
+        }
+        confirmLabel="강제 삭제"
+        danger
+        loading={deleteClient.isPending}
+        onCancel={() => setForceOpen(false)}
+        onConfirm={async () => {
+          if (!confirmName.trim()) {
+            showToast('담당자 본인 이름을 입력해 주세요.', 'danger')
+            return
+          }
+          try {
+            await deleteClient.mutateAsync({
+              clientId: client.client_id,
+              force: true,
+              confirmName: confirmName.trim(),
+            })
+            showToast('고객사가 강제 삭제되었습니다.', 'success')
+            setForceOpen(false)
+            navigate('/clients')
+          } catch (err) {
             const detail = (err as { response?: { data?: { detail?: string } } })?.response
               ?.data?.detail
-            showToast(detail || '삭제에 실패했습니다.', 'danger')
+            showToast(detail || '강제 삭제에 실패했습니다.', 'danger')
           }
         }}
       />

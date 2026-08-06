@@ -67,12 +67,19 @@ export function useSaveClient(clientId?: string) {
   })
 }
 
-/** 고객사 삭제 — 종속 데이터가 없을 때만 백엔드가 허용(있으면 409). */
+/** 고객사 삭제 — 종속 없으면 바로 삭제(있으면 409). force+confirmName(담당자 본인 이름)으로
+ *  종속까지 강제 삭제(단 사업/정산 있으면 백엔드가 강제여도 409). */
 export function useDeleteClient() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (clientId: string) => {
-      await api.delete(`/clients/${clientId}`)
+    mutationFn: async (args: { clientId: string; force?: boolean; confirmName?: string }) => {
+      const p = new URLSearchParams()
+      if (args.force) {
+        p.set('force', 'true')
+        if (args.confirmName) p.set('confirm_name', args.confirmName)
+      }
+      const qs = p.toString()
+      await api.delete(`/clients/${args.clientId}${qs ? `?${qs}` : ''}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })

@@ -17,14 +17,17 @@ from auth import get_current_user, require_permission
 from models import (
     ActivityHistory,
     Asset,
+    ChatMessage,
     ChatThread,
     Client,
     Document,
+    IssueComment,
     KakaoContact,
     Project,
     ProjectClientMap,
     ReportDelivery,
     ReportRecipient,
+    ReportSendLog,
     ReportSubscription,
     Schedule,
     SegmentSendLog,
@@ -311,38 +314,138 @@ def _client_dependents(db: Session, client_id: str) -> List[str]:
     return present
 
 
+def _has_project_or_settlement(db: Session, client_id: str) -> bool:
+    """사업 참여(매핑)·대표사 지정 여부 — 강제 삭제여도 차단해 재무기록·공유 사업을 보호."""
+    if db.query(ProjectClientMap).filter(ProjectClientMap.client_id == client_id).first():
+        return True
+    if db.query(Project).filter(Project.client_id == client_id).first():
+        return True
+    return False
+
+
+def _cascade_delete_client(db: Session, client_id: str):
+    """고객사의 종속 데이터를 FK 의존 순서로 정리(사업/정산은 호출 전 차단됨).
+
+    Document↔ReportDelivery 순환참조와 자기참조(Schedule.parent, History.related)는 참조를 먼저
+    끊고(null) 자식→부모 순으로 삭제한다.
+    """
+    q = db.query
+    hist_ids = [r[0] for r in q(ActivityHistory.history_id).filter(ActivityHistory.client_id == client_id)]
+    asset_ids = [r[0] for r in q(Asset.asset_id).filter(Asset.client_id == client_id)]
+    delivery_ids = [r[0] for r in q(ReportDelivery.report_id).filter(ReportDelivery.client_id == client_id)]
+    contact_ids = [r[0] for r in q(KakaoContact.contact_id).filter(KakaoContact.client_id == client_id)]
+    thread_ids = {r[0] for r in q(ChatThread.thread_id).filter(ChatThread.client_id == client_id)}
+    if contact_ids:
+        thread_ids |= {r[0] for r in q(ChatThread.thread_id).filter(ChatThread.kakao_contact_id.in_(contact_ids))}
+    thread_ids = list(thread_ids)
+
+    sched_conds = [Schedule.client_id == client_id]
+    if hist_ids:
+        sched_conds.append(Schedule.history_id.in_(hist_ids))
+    sched_ids = [r[0] for r in q(Schedule.schedule_id).filter(or_(*sched_conds))]
+
+    doc_conds = [Document.client_id == client_id]
+    if hist_ids:
+        doc_conds.append(Document.history_id.in_(hist_ids))
+    if asset_ids:
+        doc_conds.append(Document.asset_id.in_(asset_ids))
+    if delivery_ids:
+        doc_conds.append(Document.report_id.in_(delivery_ids))
+    doc_ids = [r[0] for r in q(Document.doc_id).filter(or_(*doc_conds))]
+
+    def dele(model, cond):
+        q(model).filter(cond).delete(synchronize_session=False)
+
+    # 1) 2차 자식 삭제
+    if thread_ids:
+        dele(ChatMessage, ChatMessage.thread_id.in_(thread_ids))
+    if hist_ids:
+        dele(IssueComment, IssueComment.history_id.in_(hist_ids))
+    if delivery_ids:
+        dele(ReportSendLog, ReportSendLog.report_id.in_(delivery_ids))
+    # 2) 순환/자기 참조 끊기 (삭제 대상 문서·스케줄·이력을 가리키는 참조를 null)
+    if doc_ids:
+        q(ReportDelivery).filter(ReportDelivery.doc_id.in_(doc_ids)).update({"doc_id": None}, synchronize_session=False)
+        q(ReportDelivery).filter(ReportDelivery.pinned_doc_id.in_(doc_ids)).update({"pinned_doc_id": None}, synchronize_session=False)
+        q(ReportSendLog).filter(ReportSendLog.sent_doc_id.in_(doc_ids)).update({"sent_doc_id": None}, synchronize_session=False)
+    if sched_ids:
+        q(Schedule).filter(Schedule.parent_schedule_id.in_(sched_ids)).update({"parent_schedule_id": None}, synchronize_session=False)
+    if hist_ids:
+        q(ActivityHistory).filter(ActivityHistory.related_history_id.in_(hist_ids)).update({"related_history_id": None}, synchronize_session=False)
+    # 3) 자식→부모 순 삭제
+    if doc_ids:
+        dele(Document, Document.doc_id.in_(doc_ids))
+    if sched_ids:
+        dele(Schedule, Schedule.schedule_id.in_(sched_ids))
+    if thread_ids:
+        dele(ChatThread, ChatThread.thread_id.in_(thread_ids))
+    dele(KakaoContact, KakaoContact.client_id == client_id)
+    dele(ActivityHistory, ActivityHistory.client_id == client_id)
+    dele(ReportRecipient, ReportRecipient.client_id == client_id)
+    dele(ReportSubscription, ReportSubscription.client_id == client_id)
+    dele(ReportDelivery, ReportDelivery.client_id == client_id)
+    dele(Asset, Asset.client_id == client_id)
+    dele(SegmentSendLog, SegmentSendLog.client_id == client_id)
+
+
 @router.delete("/{client_id}", response_model=schemas.MessageResponse)
 def delete_client(
     client_id: str,
+    force: bool = Query(False, description="종속 데이터까지 강제 삭제"),
+    confirm_name: Optional[str] = Query(None, description="강제 삭제 시 담당자 본인 이름 확인"),
     user: User = Depends(require_permission("client.delete")),
     db: Session = Depends(get_db),
 ):
-    """고객사 삭제 — 연결된 종속 데이터가 하나도 없을 때만 허용(MANAGER·ADMIN).
+    """고객사 삭제 (MANAGER·ADMIN).
 
-    설계상 고객사는 원칙적으로 '계약 종료'로 관리하나, 실수로 만든 빈 고객사(예: 인라인
-    등록 중복분)를 정리할 수 있도록 종속이 없는 경우에 한해 하드 삭제를 허용한다.
-    이력·사업·자산·수신자 등이 하나라도 있으면 409로 막고 '계약 종료'를 안내한다.
+    - 기본: 연결된 종속 데이터가 없을 때만 삭제. 있으면 409 + '계약 종료' 안내.
+    - 강제(force=true): 재확인 + 담당자 본인 이름(confirm_name==로그인 사용자명) 일치 시 종속까지
+      캐스케이드 삭제. 단 사업 참여·정산이 있으면 재무기록·공유 사업 보호를 위해 강제여도 차단.
+      모든 강제 삭제는 감사 로그(CLIENT_FORCE_DELETE)에 담당자·확인명·종속 요약을 남긴다.
     """
     client = common.get_or_404(db, Client, client_id, "고객사")
     dependents = _client_dependents(db, client_id)
-    if dependents:
+
+    if not dependents:
+        AuditLogger.log_action(
+            db, user.user_id, "CLIENT_DELETE", target_type="CLIENT", target_id=client_id,
+            old_value="{0} ({1})".format(client.company_name, client.client_type),
+        )
+        db.delete(client)
+        db.commit()
+        return schemas.MessageResponse(message="고객사가 삭제되었습니다")
+
+    if not force:
         raise HTTPException(
             status_code=409,
             detail="연결된 데이터가 있어 삭제할 수 없습니다 ({0}). 계약 상태를 '종료'로 변경하세요.".format(
                 ", ".join(dependents)
             ),
         )
+
+    # 강제 삭제 — 사업/정산은 강제여도 차단(재무기록·공유 사업 보호)
+    if _has_project_or_settlement(db, client_id):
+        raise HTTPException(
+            status_code=409,
+            detail="사업 참여·정산 정보가 있어 강제 삭제할 수 없습니다. 먼저 해당 사업에서 제외하고 정산을 정리하세요.",
+        )
+    # 담당자 본인 이름 확인 (책임성)
+    if not confirm_name or confirm_name.strip() != (user.name or "").strip():
+        raise HTTPException(
+            status_code=403,
+            detail="담당자 본인 이름이 일치하지 않아 강제 삭제를 진행할 수 없습니다.",
+        )
+
     AuditLogger.log_action(
-        db,
-        user.user_id,
-        "CLIENT_DELETE",
-        target_type="CLIENT",
-        target_id=client_id,
-        old_value="{0} ({1})".format(client.company_name, client.client_type),
+        db, user.user_id, "CLIENT_FORCE_DELETE", target_type="CLIENT", target_id=client_id,
+        old_value="{0} ({1}) 강제삭제 — 확인:{2}, 종속:{3}".format(
+            client.company_name, client.client_type, confirm_name.strip(), ", ".join(dependents)
+        ),
     )
+    _cascade_delete_client(db, client_id)
     db.delete(client)
     db.commit()
-    return schemas.MessageResponse(message="고객사가 삭제되었습니다")
+    return schemas.MessageResponse(message="고객사가 강제 삭제되었습니다")
 
 
 # ---------------------------------------------------------------------------
