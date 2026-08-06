@@ -13,9 +13,11 @@ import { useUpdateKakaoContact } from './api'
 interface PendingContactsProps {
   contacts: KakaoContact[]
   isLoading: boolean
+  /** 상담 목록 상단 '신규 문의' 섹션에 임베드 — 자체 스크롤/빈상태 없이 아이템만 렌더 */
+  embedded?: boolean
 }
 
-export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
+export function PendingContacts({ contacts, isLoading, embedded = false }: PendingContactsProps) {
   const { user } = useAuth()
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
@@ -66,6 +68,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
   }
 
   if (contacts.length === 0) {
+    if (embedded) return null // 부모(신규 문의 섹션)가 pending>0일 때만 렌더
     return (
       <EmptyState
         icon={<UserCirclePlus size={32} />}
@@ -77,7 +80,7 @@ export function PendingContacts({ contacts, isLoading }: PendingContactsProps) {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className={embedded ? '' : 'min-h-0 flex-1 overflow-y-auto'}>
       <p className="border-b border-hairline bg-amber-500/10 px-4 py-2.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
         승인 전 고객에게는 AI가 일반 안내만 제공합니다. 신원 확인 후 고객사를 매핑해 승인해
         주세요.

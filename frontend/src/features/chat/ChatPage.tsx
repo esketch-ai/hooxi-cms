@@ -7,10 +7,7 @@ import { useDebounced } from '../../lib/useDebounced'
 import { useToast } from '../../components/Toast'
 import { useChatThreads, usePendingContacts } from './api'
 import { ChatRoom } from './ChatRoom'
-import { PendingContacts } from './PendingContacts'
 import { ThreadList, type ThreadFilter } from './ThreadList'
-
-type ListTab = 'threads' | 'pending'
 
 export function ChatPage() {
   const [searchParams] = useSearchParams()
@@ -20,7 +17,6 @@ export function ChatPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search)
   const [filter, setFilter] = useState<ThreadFilter>('ALL')
-  const [tab, setTab] = useState<ListTab>('threads')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const { data: threads = [], isLoading } = useChatThreads(debouncedSearch)
@@ -45,59 +41,26 @@ export function ChatPage() {
     [threads, selectedId],
   )
 
-  const TABS: { key: ListTab; label: string }[] = [
-    { key: 'threads', label: '상담' },
-    {
-      key: 'pending',
-      label: `승인 대기${pendingContacts.length > 0 ? ` (${pendingContacts.length})` : ''}`,
-    },
-  ]
-
   return (
     <div className="animate-fade-in -mx-4 -mt-5 -mb-24 flex h-[calc(100dvh-4rem-3.75rem)] overflow-hidden bg-void lg:-mx-6 lg:-mb-6 lg:h-[calc(100dvh-4rem)]">
-      {/* 좌측: 스레드 리스트 / 승인 대기 큐 */}
+      {/* 좌측: 신규 문의(미매핑) 섹션 + 고객사별 그룹 상담 목록 */}
       <div
         className={`w-full flex-col border-r border-hairline bg-void md:flex md:w-80 lg:w-96 ${
           selected ? 'hidden' : 'flex'
         }`}
       >
-        {/* 상담 / 승인 대기 탭 */}
-        <div className="flex shrink-0 border-b border-hairline bg-graphite">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`flex-1 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
-                tab === t.key
-                  ? 'border-snow text-bone'
-                  : 'border-transparent text-slatey hover:text-ash'
-              }`}
-            >
-              {t.label}
-              {t.key === 'pending' && pendingContacts.length > 0 && (
-                <span className="ml-1.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 py-px align-middle text-[9px] font-bold text-white">
-                  {pendingContacts.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'threads' ? (
-          <ThreadList
-            threads={threads}
-            isLoading={isLoading}
-            search={search}
-            onSearchChange={setSearch}
-            filter={filter}
-            onFilterChange={setFilter}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
-        ) : (
-          <PendingContacts contacts={pendingContacts} isLoading={pendingLoading} />
-        )}
+        <ThreadList
+          threads={threads}
+          isLoading={isLoading}
+          search={search}
+          onSearchChange={setSearch}
+          filter={filter}
+          onFilterChange={setFilter}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          pendingContacts={pendingContacts}
+          pendingLoading={pendingLoading}
+        />
       </div>
 
       {/* 우측: 대화창 (모바일은 선택 시 풀스크린) */}
