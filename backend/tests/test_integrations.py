@@ -374,18 +374,23 @@ def test_gmail_test_endpoint_mocked(client, admin_headers, monkeypatch):
     assert captured["login"] == ("db-sender@hooxipartners.com", "env-app-pass")
 
 
-def test_kakao_bot_test_checks_required_fields(client, admin_headers, monkeypatch):
+def test_kakao_bot_only_requires_webhook_secret(client, admin_headers, monkeypatch):
+    """봇 ID·Event API 키는 아웃바운드(답변 알림 push) 전용 선택 항목 — 인바운드 상담 수신은
+    웹훅 시크릿만 필수. 봇 ID·이벤트키가 없어도 웹훅 시크릿이 있으면 연결 테스트 통과."""
     monkeypatch.delenv("KAKAO_BOT_ID", raising=False)
     monkeypatch.delenv("KAKAO_EVENT_API_KEY", raising=False)
-    resp = client.post(API + "/integrations/kakao_bot/test", headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["ok"] is False  # BOT_ID·EVENT_API_KEY 미설정
-    assert "KAKAO_BOT_ID" in resp.json()["message"]
 
-    monkeypatch.setenv("KAKAO_BOT_ID", "bot-1")
-    monkeypatch.setenv("KAKAO_EVENT_API_KEY", "ek")
+    # 웹훅 시크릿을 DB에 설정 (env 없이)
+    resp = client.put(
+        API + "/integrations/kakao_bot",
+        headers=admin_headers,
+        json={"values": {"KAKAO_WEBHOOK_SECRET": "wh-secret-xyz"}},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # 봇 ID·Event API 키가 비어 있어도 통과 (선택 항목이므로)
     resp = client.post(API + "/integrations/kakao_bot/test", headers=admin_headers)
-    assert resp.json()["ok"] is True  # WEBHOOK_SECRET은 DB(source=db)
+    assert resp.json()["ok"] is True, resp.text
 
 
 # ---------------------------------------------------------------------------

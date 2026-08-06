@@ -73,8 +73,13 @@ REGISTRY: Dict[str, dict] = {
     "kakao_bot": {
         "label": "카카오 챗봇 (오픈빌더)",
         "fields": [
-            IntegrationField("KAKAO_BOT_ID", "봇 ID"),
-            IntegrationField("KAKAO_EVENT_API_KEY", "Event API 키", secret=True),
+            # 봇 ID·Event API 키는 아웃바운드(답변 알림 push, Event API) 전용 — 인바운드 상담
+            # 수신은 웹훅 시크릿만으로 동작하므로 선택 항목으로 둔다.
+            IntegrationField("KAKAO_BOT_ID", "봇 ID (답변 알림 발신용, 선택)", required=False),
+            IntegrationField(
+                "KAKAO_EVENT_API_KEY", "Event API 키 (답변 알림 발신용, 선택)",
+                secret=True, required=False,
+            ),
             IntegrationField("KAKAO_WEBHOOK_SECRET", "웹훅 시크릿", secret=True),
             IntegrationField(
                 "KAKAO_EVENT_NAME", "답변 이벤트명", required=False, default="staff_reply"
