@@ -4,11 +4,13 @@
 // 키 미설정/로드 실패 시에도 필터·집계 패널은 정상 동작
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Buildings, CircleNotch, MapPinLine, MapTrifold, WarningCircle } from '@phosphor-icons/react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Buildings, CircleNotch, MapPin, MapPinLine, MapTrifold, WarningCircle } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
+import { useAuth } from '../../app/AuthProvider'
+import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
 import { unwrapList, useCodes } from '../../lib/api/queries'
 import { hexOf } from '../../lib/codePalette'
@@ -110,6 +112,38 @@ export function MapPage() {
         params: { page_size: 200 },
       })
       return unwrapList(data).items
+    },
+  })
+
+  // ── 좌표 자동 채우기(지오코딩) — ADMIN/MANAGER, 좌표 미등록 고객사 백필 ──
+  const { user } = useAuth()
+  const { showToast } = useToast()
+  const canGeocode = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const geocodeMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ updated: number; failed: number; remaining: number }>(
+        '/clients/geocode-missing',
+      )
+      return data
+    },
+    onSuccess: (r) => {
+      if (r.updated > 0) {
+        const tail = r.remaining > 0 ? ` · 남은 ${r.remaining}곳은 다시 눌러 계속하세요` : ''
+        showToast(`${r.updated}곳 좌표를 채웠습니다${tail}.`, 'success')
+        refetch()
+      } else if (r.failed > 0) {
+        showToast(
+          `${r.failed}곳은 주소로 좌표를 찾지 못했습니다. 고객사 주소를 확인해 주세요.`,
+          'info',
+        )
+      } else {
+        showToast('좌표를 채울 대상이 없습니다.', 'info')
+      }
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '좌표 채우기에 실패했습니다.', 'danger')
     },
   })
 
@@ -564,6 +598,21 @@ export function MapPage() {
               <p className="mb-2 text-xs text-slatey">
                 주소 지오코딩(lat/lng) 미등록으로 지도에 표시되지 않는 고객사입니다.
               </p>
+              {canGeocode && (
+                <button
+                  type="button"
+                  onClick={() => geocodeMutation.mutate()}
+                  disabled={geocodeMutation.isPending}
+                  className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {geocodeMutation.isPending ? (
+                    <CircleNotch size={14} className="animate-spin" />
+                  ) : (
+                    <MapPin size={14} weight="fill" />
+                  )}
+                  {geocodeMutation.isPending ? '좌표 채우는 중…' : '주소로 좌표 자동 채우기'}
+                </button>
+              )}
               <ul className="max-h-56 space-y-1 overflow-y-auto">
                 {noCoords.map((c) => (
                   <li key={c.client_id}>

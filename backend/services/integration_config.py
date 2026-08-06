@@ -86,6 +86,13 @@ REGISTRY: Dict[str, dict] = {
             ),
         ],
     },
+    "kakao_local": {
+        "label": "카카오 지도 (주소→좌표 지오코딩)",
+        "fields": [
+            # 관제 지도(SCR-09) 마커용 — 고객사 주소를 위·경도로 변환. developers.kakao.com REST API 키.
+            IntegrationField("KAKAO_REST_API_KEY", "REST API 키", secret=True),
+        ],
+    },
     "gmail": {
         "label": "Gmail 발송 계정",
         "fields": [

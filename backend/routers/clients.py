@@ -37,7 +37,7 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
-from services import client_folders, dropbox_storage
+from services import client_folders, dropbox_storage, geocoding
 from services.audit_logger import AuditLogger
 
 log = logging.getLogger(__name__)
@@ -66,6 +66,34 @@ def _provision_dropbox_folder_bg(client_id: str, actor_id: Optional[str] = None)
         log.warning(
             "Dropbox 폴더 provision 실패 (client_id=%s)", client_id, exc_info=True
         )
+    finally:
+        db.close()
+
+
+def _geocode_client_bg(client_id: str, force: bool = False) -> None:
+    """등록·수정 이후 백그라운드로 주소→좌표 지오코딩 (best-effort, SCR-09 지도).
+
+    자체 DB 세션을 열고, 키 미설정이면 조용히 스킵. 좌표가 이미 있으면 force=True일 때만
+    갱신하며, 지오코딩 실패 시엔 기존 좌표를 지우지 않는다(빈 값보다 옛 좌표가 낫다).
+    실패는 등록/수정에 영향을 주지 않고, 백필(POST /clients/geocode-missing)로 복구 가능.
+    """
+    if not geocoding.is_configured():
+        return
+    db = SessionLocal()
+    try:
+        client = db.get(Client, client_id)
+        if client is None:
+            return
+        if not force and client.lat is not None and client.lng is not None:
+            return
+        hit = geocoding.geocode(client.address, client.region)
+        if hit is None:
+            return
+        client.lat, client.lng = hit
+        db.commit()
+    except Exception:
+        db.rollback()
+        log.warning("지오코딩 실패 (client_id=%s)", client_id, exc_info=True)
     finally:
         db.close()
 
@@ -244,7 +272,52 @@ def create_client(
     db.refresh(client)
     # 등록 응답을 블로킹하지 않도록 폴더 생성은 응답 후 백그라운드로 (실패는 백필 복구)
     background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id, user.user_id)
+    # 좌표 미제공 시 주소→좌표 지오코딩(백그라운드, best-effort) — helper가 좌표 유무를 재확인
+    if client.lat is None or client.lng is None:
+        background_tasks.add_task(_geocode_client_bg, client.client_id)
     return _client_detail(db, client)
+
+
+@router.post("/geocode-missing", response_model=schemas.GeocodeBackfillResult)
+def geocode_missing_clients(
+    limit: int = Query(30, ge=1, le=50),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """좌표 미등록 고객사 일괄 지오코딩 (SCR-09 지도) — 배치당 최대 limit건.
+
+    주소나 지역이 있으나 lat/lng가 비어있는 고객사를 카카오 로컬로 좌표화한다.
+    한 요청이 오래 붙잡히지 않도록 배치 상한을 두고, 성공분은 건별로 즉시 커밋해
+    도중 타임아웃이 나도 이미 채운 좌표가 유실되지 않게 한다. 남은 건수를 함께 반환한다.
+    """
+    if not geocoding.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "카카오 지도 REST API 키가 설정되지 않아 지오코딩할 수 없습니다. "
+                "환경설정 > 연동에서 '카카오 지도' REST API 키를 등록하세요."
+            ),
+        )
+    has_locus = or_(
+        (Client.address.isnot(None)) & (Client.address != ""),
+        (Client.region.isnot(None)) & (Client.region != ""),
+    )
+    missing_coords = or_(Client.lat.is_(None), Client.lng.is_(None))
+    base = db.query(Client).filter(missing_coords, has_locus)
+    remaining_total = base.count()
+    rows = base.limit(limit).all()
+    updated = 0
+    for c in rows:
+        hit = geocoding.geocode(c.address, c.region)
+        if hit is not None:
+            c.lat, c.lng = hit
+            db.commit()  # 성공분 즉시 보존 (배치 도중 타임아웃 대비)
+            updated += 1
+    return schemas.GeocodeBackfillResult(
+        updated=updated,
+        failed=len(rows) - updated,
+        remaining=max(0, remaining_total - updated),
+    )
 
 
 @router.get("/{client_id}", response_model=schemas.ClientDetailOut)
@@ -262,6 +335,7 @@ def get_client(
 def update_client(
     client_id: str,
     payload: schemas.ClientUpdate,
+    background_tasks: BackgroundTasks,
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
@@ -278,6 +352,9 @@ def update_client(
         _check_biz_reg_no_duplicate(db, data["biz_reg_no"], exclude_client_id=client_id)
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
+    # 지오코딩 재계산 판단용 — 실제 주소·지역 변경 여부를 이전 값과 비교(프론트가 값을 항상
+    # 실어보내므로 'data에 키 존재'만으론 부족). setattr 전에 스냅샷.
+    prev_address, prev_region = client.address, client.region
     for field in _CLIENT_FIELDS:
         if field in data:
             setattr(client, field, data[field])
@@ -285,6 +362,10 @@ def update_client(
         _upsert_subscription(db, client, payload.subscription)
     db.commit()
     db.refresh(client)
+    # 주소·지역이 실제로 바뀌었고 좌표를 직접 지정하지 않았다면 좌표 재계산(백그라운드, best-effort)
+    addr_changed = client.address != prev_address or client.region != prev_region
+    if addr_changed and not ("lat" in data or "lng" in data):
+        background_tasks.add_task(_geocode_client_bg, client.client_id, True)
     return _client_detail(db, client)
 
 

@@ -67,6 +67,14 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class GeocodeBackfillResult(BaseModel):
+    """좌표 미등록 고객사 일괄 지오코딩 결과 (SCR-09)."""
+
+    updated: int  # 이번 배치에서 좌표를 채운 건수
+    failed: int  # 조회했으나 좌표를 못 찾은 건수
+    remaining: int  # 아직 좌표가 없는(다음 배치) 건수
+
+
 class HealthResponse(BaseModel):
     status: str
     timestamp: str
