@@ -10,5 +10,8 @@
 htmlcov/
 .env
 .env.*
+# 단, 프론트 빌드타임 주입용 공개 키(지도 등)는 업로드에 포함해야 한다(.gitignore와 동일 정책).
+# 없으면 Cloud Build 소스에서 빠져 VITE_ 키가 undefined → 지도 로더가 DCE로 제거됨.
+!frontend/.env.production
 *.log
 .DS_Store
