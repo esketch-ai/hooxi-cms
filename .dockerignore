@@ -5,6 +5,9 @@
 # Environment variables
 .env
 .env.*
+# 단, 프론트 빌드타임 주입용 공개 키(지도 등)는 빌드 컨텍스트에 포함해야 한다.
+# (.gitignore도 force-include) — 없으면 VITE_ 키가 undefined가 되고 rolldown이 지도 로더를 DCE로 제거함.
+!frontend/.env.production
 
 # Build outputs
 dist
