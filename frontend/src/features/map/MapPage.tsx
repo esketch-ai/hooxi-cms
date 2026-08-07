@@ -1,6 +1,6 @@
 // SCR-09 전국 관제 지도 /map — P3 (SCREEN_DESIGN_PLAN §5)
 // 지도 전용 레이아웃 · 좌측 필터(계약 상태 3종 + 최근 활동 기준) · 지역별 집계 · 인포윈도
-// 지도 공급자 2종: 구글(VITE_GOOGLE_MAPS_KEY) / 네이버(VITE_NAVER_MAPS_CLIENT_ID) — 우상단 토글 전환
+// 지도 공급자 2종: 구글(VITE_GOOGLE_MAPS_KEY) / 카카오(VITE_KAKAO_MAPS_JS_KEY) — 우상단 토글 전환
 // 키 미설정/로드 실패 시에도 필터·집계 패널은 정상 동작
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -26,47 +26,37 @@ import {
   type GoogleMapsApi,
 } from '../../lib/googleMaps'
 import {
-  NAVER_MAPS_AUTH_FAILURE_EVENT,
-  getNaverMapsKey,
-  loadNaverMaps,
-} from '../../lib/naverMaps'
-import {
   KAKAO_MAPS_AUTH_FAILURE_EVENT,
   getKakaoMapsKey,
   loadKakaoMaps,
 } from '../../lib/kakaoMaps'
 import type { Client, ContractStatus, Paginated } from '../../types'
 
-// ── 지도 공급자 (구글/네이버) — 선택은 localStorage 에 기억 ────────────
-type MapProvider = 'google' | 'naver' | 'kakao'
+// ── 지도 공급자 (구글/카카오) — 선택은 localStorage 에 기억 ────────────
+type MapProvider = 'google' | 'kakao'
 
 const MAP_PROVIDER_STORAGE_KEY = 'hooxi_map_provider'
 
 const PROVIDERS: { id: MapProvider; label: string }[] = [
   { id: 'google', label: '구글' },
-  { id: 'naver', label: '네이버' },
   { id: 'kakao', label: '카카오' },
 ]
 
 function readStoredProvider(): MapProvider {
-  const v = localStorage.getItem(MAP_PROVIDER_STORAGE_KEY)
-  return v === 'naver' || v === 'kakao' ? v : 'google'
+  return localStorage.getItem(MAP_PROVIDER_STORAGE_KEY) === 'kakao' ? 'kakao' : 'google'
 }
 
 function keyOf(provider: MapProvider): string | undefined {
-  if (provider === 'naver') return getNaverMapsKey()
   if (provider === 'kakao') return getKakaoMapsKey()
   return getMapsKey()
 }
 
 function loadFor(provider: MapProvider) {
-  if (provider === 'naver') return loadNaverMaps()
   if (provider === 'kakao') return loadKakaoMaps()
   return loadGoogleMaps()
 }
 
 function authEventFor(provider: MapProvider): string {
-  if (provider === 'naver') return NAVER_MAPS_AUTH_FAILURE_EVENT
   if (provider === 'kakao') return KAKAO_MAPS_AUTH_FAILURE_EVENT
   return MAPS_AUTH_FAILURE_EVENT
 }
@@ -74,22 +64,17 @@ function authEventFor(provider: MapProvider): string {
 // 공급자별 키 미설정/오류 안내 문구
 const NO_KEY_TITLE: Record<MapProvider, string> = {
   google: 'VITE_GOOGLE_MAPS_KEY 설정 후 지도가 표시됩니다',
-  naver: '네이버 지도 — Client ID 설정 후 표시됩니다',
   kakao: '카카오 지도 — JavaScript 키 설정 후 표시됩니다',
 }
 const NO_KEY_DESC: Record<MapProvider, string> = {
   google:
     'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다.',
-  naver:
-    'NCP 콘솔에서 Maps Application 을 등록하고 Client ID 를 환경변수(VITE_NAVER_MAPS_CLIENT_ID)로 설정하세요. 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.',
   kakao:
     '카카오 개발자 앱의 JavaScript 키를 환경변수(VITE_KAKAO_MAPS_JS_KEY)로 설정하세요(지오코딩용 REST 키와 다름). 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.',
 }
 const ERROR_DESC: Record<MapProvider, string> = {
   google:
     '네트워크 또는 API 키 인증 문제일 수 있습니다. 키의 리퍼러 제한 설정을 확인하세요.',
-  naver:
-    '네트워크 또는 Client ID 인증 문제일 수 있습니다. NCP 콘솔의 서비스 도메인(URL) 등록을 확인하세요.',
   kakao:
     '네트워크 또는 키 인증 문제일 수 있습니다. 카카오 개발자 앱 플랫폼(Web)에 서비스 도메인 등록과 카카오맵 활성화를 확인하세요.',
 }
