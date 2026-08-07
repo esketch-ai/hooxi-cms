@@ -38,12 +38,12 @@ def test_mailmerge_per_recipient_with_fail_isolation(client, admin_headers, monk
 
     monkeypatch.setattr(client_folders, "resolve_recipient_file", fake_resolve)
 
-    _mk_client(client, admin_headers, "병합A", "병합존", "a@x.com")
-    _mk_client(client, admin_headers, "병합B", "병합존", "b@x.com")
+    _mk_client(client, admin_headers, "병합A", "광주", "a@x.com")
+    _mk_client(client, admin_headers, "병합B", "광주", "b@x.com")
 
     resp = client.post(
         API + "/segments/send", headers=admin_headers,
-        json={"criteria": {"region": ["병합존"]}, "merge_folder_code": "REPORT"},
+        json={"criteria": {"region": ["광주"]}, "merge_folder_code": "REPORT"},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()

@@ -24,6 +24,11 @@ const CATEGORIES: { value: string; label: string; hint: string }[] = [
     hint: '고객사 계약 진행 상태(계약중·보류·종료 등). 배지·지도 마커 색상에 반영됩니다.',
   },
   {
+    value: 'REGION',
+    label: '지역(시/도)',
+    hint: '고객사 등록 시 선택하는 지역(시/도). 표기 흔들림(제주/제주도/제주특별자치도) 방지용 표준 목록이며, 지도 그룹핑·세그먼트 필터·엑셀 일괄등록에 동일하게 쓰입니다. 코드값은 한글로 저장됩니다.',
+  },
+  {
     value: 'ACTIVITY_TYPE',
     label: '영업활동 유형',
     hint: '활동 이력 등록 시 선택하는 유형(전화·미팅·현장방문 등).',
@@ -66,9 +71,9 @@ const CATEGORIES: { value: string; label: string; hint: string }[] = [
 ]
 
 // 색상을 쓰지 않는 카테고리(단순 분류·기관 목록)
-const NO_COLOR_CATEGORIES = new Set(['CLIENT_TYPE', 'AGENCY'])
+const NO_COLOR_CATEGORIES = new Set(['CLIENT_TYPE', 'AGENCY', 'REGION'])
 // 한글 코드값을 허용하는 카테고리(저장값이 한글)
-const KOREAN_CODE_CATEGORIES = new Set(['PROJECT_STATUS', 'AGENCY'])
+const KOREAN_CODE_CATEGORIES = new Set(['PROJECT_STATUS', 'AGENCY', 'REGION'])
 // 부가값(extra) 라벨 — 해당 카테고리만 부가값 입력을 노출
 const EXTRA_LABELS: Record<string, string> = {
   AGENCY: '기본 접속 URL',

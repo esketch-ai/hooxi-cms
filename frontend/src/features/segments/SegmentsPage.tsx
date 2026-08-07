@@ -42,7 +42,6 @@ import type {
 import {
   useDeleteSegment,
   useSaveSegment,
-  useSegmentFacets,
   useSegmentPreview,
   useSegmentSendDetail,
   useSegmentSends,
@@ -77,9 +76,9 @@ export function SegmentsPage() {
   const [criteria, setCriteria] = useState<SegmentCriteria>({})
   const debouncedCriteria = useDebounced(criteria, 300)
 
-  // 축 선택지 — region은 서버 facets, 코드 축은 공통 코드 마스터, 사업은 목록 API 재사용
-  const { data: facets } = useSegmentFacets()
+  // 축 선택지 — 전 축을 공통 코드 마스터/목록 API로 통일 (region도 REGION 코드 사용)
   const { data: projects = [] } = useProjectOptions()
+  const region = useCodes('REGION')
   const clientType = useCodes('CLIENT_TYPE')
   const contractStatus = useCodes('CONTRACT_STATUS')
   const assetGroup = useCodes('ASSET_GROUP')
@@ -100,8 +99,8 @@ export function SegmentsPage() {
   }[] = [
     {
       key: 'region',
-      options: (facets?.regions ?? []).map((r) => ({ value: r, label: r })),
-      labelOf: (v) => v,
+      options: region.options,
+      labelOf: region.labelOf,
     },
     { key: 'client_type', options: clientType.options, labelOf: clientType.labelOf },
     {

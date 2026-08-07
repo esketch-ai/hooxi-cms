@@ -24,8 +24,8 @@ from services import email_service, storage
 
 API = "/api/v1"
 SEG = API + "/segments"
-REGION_A = "SEG-서울"   # 본 모듈 전용 region — 타 테스트 모듈과 비충돌
-REGION_B = "SEG-부산"
+REGION_A = "제주"   # REGION 코드값(시/도) — 타 테스트 모듈이 안 쓰는 시/도로 격리
+REGION_B = "세종"
 S = {}  # 테스트 간 공유 상태 (생성된 리소스 id)
 
 
@@ -229,7 +229,7 @@ def test_preview_can_receive_cc_only_false(client, staff_headers, seg_data):
 
     실제 발송(resolve_recipients)이 TO 0건 FAIL이 되는 형상을 미리보기도 동일 판정.
     """
-    c4 = _create_client(client, staff_headers, "세그참조전용D", "TRANSPORT", "ACTIVE", "SEG-대전")
+    c4 = _create_client(client, staff_headers, "세그참조전용D", "TRANSPORT", "ACTIVE", "울산")
     db = models.SessionLocal()
     try:
         db.add(models.ReportRecipient(
@@ -240,7 +240,7 @@ def test_preview_can_receive_cc_only_false(client, staff_headers, seg_data):
     finally:
         db.close()
 
-    body = _preview(client, staff_headers, {"region": ["SEG-대전"]})
+    body = _preview(client, staff_headers, {"region": ["울산"]})
     receivable = {i["client_id"]: i["can_receive"] for i in body["items"]}
     assert receivable[c4] is False
 

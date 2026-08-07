@@ -722,11 +722,6 @@ export interface SegmentPreviewResponse {
   items: SegmentPreviewItem[]
 }
 
-/** 조건 축 선택지 — region만 서버 제공(나머지는 /codes·/projects 재사용) */
-export interface SegmentFacets {
-  regions: string[]
-}
-
 /** 발송 요청 (schemas.SegmentSendRequest) — criteria는 즉석 발송에서만 */
 export interface SegmentSendPayload {
   doc_ids: string[]

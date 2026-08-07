@@ -107,6 +107,26 @@ def seed_codes():
         ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
         ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),
         ("CONTRACT_STATUS", "END", "종료", "gray", None, 30),
+        # 지역(시/도) — 자유입력 표기흔들림(제주/제주도/제주특별자치도…) 방지용 표준 코드.
+        # 코드값=한글 시/도명(PROJECT_STATUS 선례) → 지오코딩·폴더명·지도 그룹핑이 한글 region을
+        # 전제로 동작하므로 기존 데이터·로직 변경 없이 편입 가능.
+        ("REGION", "서울", "서울", None, None, 10),
+        ("REGION", "부산", "부산", None, None, 20),
+        ("REGION", "대구", "대구", None, None, 30),
+        ("REGION", "인천", "인천", None, None, 40),
+        ("REGION", "광주", "광주", None, None, 50),
+        ("REGION", "대전", "대전", None, None, 60),
+        ("REGION", "울산", "울산", None, None, 70),
+        ("REGION", "세종", "세종", None, None, 80),
+        ("REGION", "경기", "경기", None, None, 90),
+        ("REGION", "강원", "강원", None, None, 100),
+        ("REGION", "충북", "충북", None, None, 110),
+        ("REGION", "충남", "충남", None, None, 120),
+        ("REGION", "전북", "전북", None, None, 130),
+        ("REGION", "전남", "전남", None, None, 140),
+        ("REGION", "경북", "경북", None, None, 150),
+        ("REGION", "경남", "경남", None, None, 160),
+        ("REGION", "제주", "제주", None, None, 170),
         # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
         ("ACTIVITY_TYPE", "CALL", "전화", "emerald", None, 10),
         ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", None, 20),

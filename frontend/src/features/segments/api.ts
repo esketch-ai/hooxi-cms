@@ -5,7 +5,6 @@ import { api } from '../../lib/api/client'
 import type {
   Segment,
   SegmentCriteria,
-  SegmentFacets,
   SegmentPayload,
   SegmentPreviewResponse,
   SegmentSend,
@@ -22,18 +21,6 @@ export function useSegments() {
       const { data } = await api.get<Segment[]>('/segments')
       return data
     },
-  })
-}
-
-/** 조건 축 선택지 — region만 서버 제공(나머지 축은 useCodes·useProjectOptions 재사용) */
-export function useSegmentFacets() {
-  return useQuery({
-    queryKey: ['segments', 'facets'],
-    queryFn: async () => {
-      const { data } = await api.get<SegmentFacets>('/segments/facets')
-      return data
-    },
-    staleTime: 5 * 60_000,
   })
 }
 

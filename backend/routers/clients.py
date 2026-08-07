@@ -256,6 +256,7 @@ def create_client(
     """고객사 등록 (SCR-03) — 월간 보고서 설정(subscription) 동시 등록 지원."""
     validate_active_code(db, "CLIENT_TYPE", payload.client_type)
     validate_active_code(db, "CONTRACT_STATUS", payload.contract_status)
+    validate_active_code(db, "REGION", payload.region)
     _check_biz_reg_no_duplicate(db, payload.biz_reg_no)
     # 사업자번호 없이 간편 등록되는 경로(ActivityForm 인라인)는 위 검사를 우회하므로,
     # 그 경우 회사명 기준 중복도 막는다(더블클릭 중복 생성 차단).
@@ -348,6 +349,9 @@ def update_client(
         validate_active_code(db, "CLIENT_TYPE", data["client_type"])
     if "contract_status" in data:
         validate_active_code(db, "CONTRACT_STATUS", data["contract_status"])
+    # region도 '변경될 때만' 검증 — 레거시 비표준 지역값을 쓰던 고객사의 타 필드 수정을 막지 않음
+    if "region" in data and data["region"] != client.region:
+        validate_active_code(db, "REGION", data["region"])
     if "biz_reg_no" in data:
         _check_biz_reg_no_duplicate(db, data["biz_reg_no"], exclude_client_id=client_id)
     if data.get("manager_id"):

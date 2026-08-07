@@ -239,9 +239,9 @@ def test_client_field_over_length_422(client, staff_headers):
         resp = client.post(API + "/clients", headers=staff_headers, json=payload)
         assert resp.status_code == 422, (extra, resp.text)
 
-    # 경계값(딱 맞는 길이)은 통과
+    # 경계값(딱 맞는 길이)은 통과 (region은 이제 REGION 코드라 유효값 사용)
     S["c_len"] = _create_client(
-        client, staff_headers, "길이검증운수", main_contact_phone="0" * 20, region="가" * 20
+        client, staff_headers, "길이검증운수", main_contact_phone="0" * 20, region="서울"
     )
 
     # 수정 스키마도 동일 규칙

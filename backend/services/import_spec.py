@@ -80,7 +80,7 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
                 code_category="CLIENT_TYPE", example="TRANSPORT",
             ),
             ImportColumn("biz_reg_no", "사업자번호", example="123-45-67890"),
-            ImportColumn("region", "지역", example="서울"),
+            ImportColumn("region", "지역", code_category="REGION", example="서울"),
             ImportColumn("address", "주소", example="서울시 강남구 테헤란로 1"),
             ImportColumn("ceo_name", "대표자", example="김대표"),
             ImportColumn("ceo_contact_phone", "대표 연락처", example="010-1234-5678"),

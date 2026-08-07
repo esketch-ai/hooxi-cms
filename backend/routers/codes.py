@@ -37,6 +37,7 @@ router = APIRouter(prefix="/codes", tags=["codes"])
 CATEGORY_LABELS = {
     "CLIENT_TYPE": "고객사 구분",
     "CONTRACT_STATUS": "고객사 계약 상태",
+    "REGION": "지역(시/도)",
     "ACTIVITY_TYPE": "영업활동 유형",
     "ASSET_GROUP": "자산 대분류",
     "ASSET_TYPE": "자산 소분류(연료)",
@@ -53,6 +54,7 @@ CATEGORY_LABELS = {
 USAGE_REFS = {
     "CLIENT_TYPE": (Client, "client_type"),
     "CONTRACT_STATUS": (Client, "contract_status"),
+    "REGION": (Client, "region"),
     "ACTIVITY_TYPE": (ActivityHistory, "activity_type"),
     "ASSET_GROUP": (Asset, "asset_group"),
     "ASSET_TYPE": (Asset, "asset_type"),

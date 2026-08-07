@@ -51,6 +51,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
   const { data: users = [] } = useUserOptions()
   const { options: clientTypeOptions } = useCodes('CLIENT_TYPE')
   const { options: contractStatusOptions } = useCodes('CONTRACT_STATUS')
+  const { options: regionOptions } = useCodes('REGION')
   const save = useSaveClient(client?.client_id)
 
   const [form, setForm] = useState<ClientPayload>(() => initForm(client))
@@ -191,13 +192,24 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
               placeholder="000-00-00000"
             />
           </Field>
-          <Field label="지역">
-            <input
+          <Field label="지역 (시/도)">
+            <select
               value={form.region ?? ''}
               onChange={(e) => set('region', e.target.value)}
               className={inputCls}
-              placeholder="예: 서울"
-            />
+            >
+              <option value="">선택 안 함</option>
+              {/* 기존 값이 표준 코드에 없는 레거시 지역이면 선택 유지되도록 폴백 옵션 노출 */}
+              {form.region &&
+                !regionOptions.some((o) => o.value === form.region) && (
+                  <option value={form.region}>{form.region} (표준 아님)</option>
+                )}
+              {regionOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </Field>
           <div className="sm:col-span-2">
             <Field label="주소" error={errors.address}>
