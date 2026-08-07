@@ -30,24 +30,68 @@ import {
   getNaverMapsKey,
   loadNaverMaps,
 } from '../../lib/naverMaps'
+import {
+  KAKAO_MAPS_AUTH_FAILURE_EVENT,
+  getKakaoMapsKey,
+  loadKakaoMaps,
+} from '../../lib/kakaoMaps'
 import type { Client, ContractStatus, Paginated } from '../../types'
 
 // ── 지도 공급자 (구글/네이버) — 선택은 localStorage 에 기억 ────────────
-type MapProvider = 'google' | 'naver'
+type MapProvider = 'google' | 'naver' | 'kakao'
 
 const MAP_PROVIDER_STORAGE_KEY = 'hooxi_map_provider'
 
 const PROVIDERS: { id: MapProvider; label: string }[] = [
   { id: 'google', label: '구글' },
   { id: 'naver', label: '네이버' },
+  { id: 'kakao', label: '카카오' },
 ]
 
 function readStoredProvider(): MapProvider {
-  return localStorage.getItem(MAP_PROVIDER_STORAGE_KEY) === 'naver' ? 'naver' : 'google'
+  const v = localStorage.getItem(MAP_PROVIDER_STORAGE_KEY)
+  return v === 'naver' || v === 'kakao' ? v : 'google'
 }
 
 function keyOf(provider: MapProvider): string | undefined {
-  return provider === 'google' ? getMapsKey() : getNaverMapsKey()
+  if (provider === 'naver') return getNaverMapsKey()
+  if (provider === 'kakao') return getKakaoMapsKey()
+  return getMapsKey()
+}
+
+function loadFor(provider: MapProvider) {
+  if (provider === 'naver') return loadNaverMaps()
+  if (provider === 'kakao') return loadKakaoMaps()
+  return loadGoogleMaps()
+}
+
+function authEventFor(provider: MapProvider): string {
+  if (provider === 'naver') return NAVER_MAPS_AUTH_FAILURE_EVENT
+  if (provider === 'kakao') return KAKAO_MAPS_AUTH_FAILURE_EVENT
+  return MAPS_AUTH_FAILURE_EVENT
+}
+
+// 공급자별 키 미설정/오류 안내 문구
+const NO_KEY_TITLE: Record<MapProvider, string> = {
+  google: 'VITE_GOOGLE_MAPS_KEY 설정 후 지도가 표시됩니다',
+  naver: '네이버 지도 — Client ID 설정 후 표시됩니다',
+  kakao: '카카오 지도 — JavaScript 키 설정 후 표시됩니다',
+}
+const NO_KEY_DESC: Record<MapProvider, string> = {
+  google:
+    'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다.',
+  naver:
+    'NCP 콘솔에서 Maps Application 을 등록하고 Client ID 를 환경변수(VITE_NAVER_MAPS_CLIENT_ID)로 설정하세요. 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.',
+  kakao:
+    '카카오 개발자 앱의 JavaScript 키를 환경변수(VITE_KAKAO_MAPS_JS_KEY)로 설정하세요(지오코딩용 REST 키와 다름). 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.',
+}
+const ERROR_DESC: Record<MapProvider, string> = {
+  google:
+    '네트워크 또는 API 키 인증 문제일 수 있습니다. 키의 리퍼러 제한 설정을 확인하세요.',
+  naver:
+    '네트워크 또는 Client ID 인증 문제일 수 있습니다. NCP 콘솔의 서비스 도메인(URL) 등록을 확인하세요.',
+  kakao:
+    '네트워크 또는 키 인증 문제일 수 있습니다. 카카오 개발자 앱 플랫폼(Web)에 서비스 도메인 등록과 카카오맵 활성화를 확인하세요.',
 }
 
 // 계약상태 마커 색/라벨은 공통 코드 마스터(CONTRACT_STATUS)에서 파생(컴포넌트 내부).
@@ -226,7 +270,7 @@ export function MapPage() {
     let canceled = false
     setMapStatus('loading')
 
-    ;(provider === 'google' ? loadGoogleMaps() : loadNaverMaps())
+    loadFor(provider)
       .then((maps) => {
         if (canceled || !mapElRef.current) return
         apiRef.current = maps
@@ -248,8 +292,7 @@ export function MapPage() {
 
     // 로드 완료 후 비동기 인증 실패 — 활성 공급자의 이벤트만 구독
     // (이전 공급자의 지연 실패가 현재 정상 지도를 'error' 로 오염시키지 않도록)
-    const authEvent =
-      provider === 'google' ? MAPS_AUTH_FAILURE_EVENT : NAVER_MAPS_AUTH_FAILURE_EVENT
+    const authEvent = authEventFor(provider)
     const onAuthFail = () => {
       if (!canceled) setMapStatus('error')
     }
@@ -432,16 +475,8 @@ export function MapPage() {
               {mapStatus === 'no-key' && (
                 <EmptyState
                   icon={<MapTrifold size={36} />}
-                  title={
-                    provider === 'google'
-                      ? 'VITE_GOOGLE_MAPS_KEY 설정 후 지도가 표시됩니다'
-                      : '네이버 지도 — Client ID 설정 후 표시됩니다'
-                  }
-                  description={
-                    provider === 'google'
-                      ? 'Google Maps API 키를 환경변수(VITE_GOOGLE_MAPS_KEY)로 설정하세요. 키가 없어도 좌측 필터·지역별 집계는 정상 동작합니다.'
-                      : 'NCP 콘솔에서 Maps Application 을 등록하고 Client ID 를 환경변수(VITE_NAVER_MAPS_CLIENT_ID)로 설정하세요. 그 전에는 우상단 토글로 구글 지도를 사용할 수 있습니다.'
-                  }
+                  title={NO_KEY_TITLE[provider]}
+                  description={NO_KEY_DESC[provider]}
                   className="w-full max-w-md"
                 />
               )}
@@ -449,11 +484,7 @@ export function MapPage() {
                 <EmptyState
                   icon={<WarningCircle size={36} />}
                   title="지도를 불러오지 못했습니다"
-                  description={
-                    provider === 'google'
-                      ? '네트워크 또는 API 키 인증 문제일 수 있습니다. 키의 리퍼러 제한 설정을 확인하세요.'
-                      : '네트워크 또는 Client ID 인증 문제일 수 있습니다. NCP 콘솔의 서비스 도메인(URL) 등록을 확인하세요.'
-                  }
+                  description={ERROR_DESC[provider]}
                   className="w-full max-w-md"
                   action={
                     <button
