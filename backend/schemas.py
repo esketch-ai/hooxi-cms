@@ -679,6 +679,50 @@ class ProjectStageAlertsOut(BaseModel):
     imminent: List[ProjectStageAlert] = []  # 예정 임박(D-7 이내) & 미도달
 
 
+# 사업 참여 차량 (Phase 2 — 감축량·예상지급액 ingest, 부록 F.2/G) -----------------
+_REDUCTION_YEARS = tuple("reduction_y{0}".format(i) for i in range(1, 11))
+
+
+class ProjectVehicleIn(BlankFKToNoneModel):
+    """차량 등록/수정 — 연차 감축량·도입구분·민간투자비율 ingest. total_reduction은 서버 파생."""
+
+    client_id: Optional[str] = Field(default=None, max_length=50)  # 운수사
+    asset_id: Optional[str] = Field(default=None, max_length=50)
+    vehicle_no: Optional[str] = Field(default=None, max_length=30)
+    region: Optional[str] = Field(default=None, max_length=20)
+    introduction_type: Optional[str] = Field(default=None, max_length=20)  # VEHICLE_INTRO
+    registered_at: Optional[date] = None
+    reduction_y1: Optional[float] = Field(default=None, ge=0)
+    reduction_y2: Optional[float] = Field(default=None, ge=0)
+    reduction_y3: Optional[float] = Field(default=None, ge=0)
+    reduction_y4: Optional[float] = Field(default=None, ge=0)
+    reduction_y5: Optional[float] = Field(default=None, ge=0)
+    reduction_y6: Optional[float] = Field(default=None, ge=0)
+    reduction_y7: Optional[float] = Field(default=None, ge=0)
+    reduction_y8: Optional[float] = Field(default=None, ge=0)
+    reduction_y9: Optional[float] = Field(default=None, ge=0)
+    reduction_y10: Optional[float] = Field(default=None, ge=0)
+    private_invest_ratio: Optional[float] = Field(default=None, ge=0, le=100)
+    expected_payout: Optional[float] = Field(default=None, ge=0)  # 산식 확정 전 입력(보류)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class ProjectVehicleOut(ProjectVehicleIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    vehicle_id: str
+    project_id: str
+    client_name: Optional[str] = None  # 운수사명(조인)
+    total_reduction: Optional[float] = None  # 서버 파생(연차 합)
+
+
+class ProjectVehicleListResponse(BaseModel):
+    items: List[ProjectVehicleOut]
+    total: int
+    total_reduction: float = 0  # 목록 합계(연차 합의 총합)
+    total_expected_payout: Optional[float] = None  # 예상지급액 입력분 합(있을 때만)
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계 + 진행 단계."""
 
@@ -686,6 +730,8 @@ class ProjectDetailOut(ProjectOut):
     allocation_total: float = 0  # 배분율 합계(100% 검증 UI용)
     stages: List[ProjectStageOut] = []  # 진행 단계 타임라인(Phase 1)
     delayed_stage_count: int = 0  # 지연 단계 수(관찰용)
+    vehicle_count: int = 0  # 참여 차량 수(Phase 2)
+    total_reduction: float = 0  # 총 감축량(차량 연차 합의 합, Phase 2)
 
 
 # ---------------------------------------------------------------------------

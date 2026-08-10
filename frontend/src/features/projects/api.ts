@@ -11,6 +11,9 @@ import type {
   ProjectPayload,
   ProjectStage,
   ProjectStageAlerts,
+  ProjectVehicle,
+  ProjectVehicleList,
+  ProjectVehiclePayload,
 } from '../../types'
 
 export interface ProjectFilters {
@@ -63,6 +66,49 @@ export function useProject(projectId: string | undefined) {
       return data
     },
     enabled: !!projectId,
+  })
+}
+
+/** 사업 참여 차량 목록 (Phase 2) */
+export function useProjectVehicles(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['projects', projectId, 'vehicles'],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectVehicleList>(`/projects/${projectId}/vehicles`)
+      return data
+    },
+    enabled: !!projectId,
+  })
+}
+
+/** 차량 등록/수정 (Phase 2) */
+export function useSaveVehicle(projectId: string | undefined, vehicleId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: ProjectVehiclePayload) => {
+      const { data } = vehicleId
+        ? await api.put<ProjectVehicle>(`/projects/${projectId}/vehicles/${vehicleId}`, payload)
+        : await api.post<ProjectVehicle>(`/projects/${projectId}/vehicles`, payload)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'vehicles'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+    },
+  })
+}
+
+/** 차량 삭제 (Phase 2) */
+export function useDeleteVehicle(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (vehicleId: string) => {
+      await api.delete(`/projects/${projectId}/vehicles/${vehicleId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'vehicles'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+    },
   })
 }
 

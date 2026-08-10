@@ -229,6 +229,43 @@ class ProjectStage(Base):
     )
 
 
+class ProjectVehicle(Base):
+    """사업 참여 차량 — Phase 2 원가/지급 축의 감축량·예상지급액 기반(부록 F.2/G).
+
+    감축량 방법론(신규/대체, 부록 G)은 전문 스프레드시트가 산정하고, CMS는 그 결과인
+    연차(1~10) 감축량·도입구분·민간투자비율을 ingest한다(Option A). total_reduction은 서버 파생.
+    expected_payout(운수사 예상지급액)은 지급단가·상하한 규칙 확정 전이라 입력값(nullable)으로 보류.
+    """
+
+    __tablename__ = "tb_project_vehicle"
+
+    vehicle_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사
+    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"))  # 선택적 자산 연결
+    vehicle_no = Column(String(30))  # 차량번호
+    region = Column(String(20))
+    introduction_type = Column(String(20))  # 공통코드 VEHICLE_INTRO: 신규도입/대체도입
+    registered_at = Column(Date)  # 차량등록일
+    # 연차(1~10차) 감축량 — 방법론 산정 결과 ingest
+    reduction_y1 = Column(Numeric(12, 3))
+    reduction_y2 = Column(Numeric(12, 3))
+    reduction_y3 = Column(Numeric(12, 3))
+    reduction_y4 = Column(Numeric(12, 3))
+    reduction_y5 = Column(Numeric(12, 3))
+    reduction_y6 = Column(Numeric(12, 3))
+    reduction_y7 = Column(Numeric(12, 3))
+    reduction_y8 = Column(Numeric(12, 3))
+    reduction_y9 = Column(Numeric(12, 3))
+    reduction_y10 = Column(Numeric(12, 3))
+    total_reduction = Column(Numeric(14, 3))  # 파생: 연차 합(서버 계산·저장)
+    private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
+    expected_payout = Column(Numeric(15, 2))  # 예상지급액 — 산식 확정 전 입력값(보류)
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

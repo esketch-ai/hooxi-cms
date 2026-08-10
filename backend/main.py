@@ -127,6 +127,9 @@ def seed_codes():
         ("REGION", "경북", "경북", None, None, 150),
         ("REGION", "경남", "경남", None, None, 160),
         ("REGION", "제주", "제주", None, None, 170),
+        # 차량 도입구분 — 감축량 산정 방법론 분기(부록 G): 신규도입/대체도입. 한글 코드값.
+        ("VEHICLE_INTRO", "신규도입", "신규도입", "blue", None, 10),
+        ("VEHICLE_INTRO", "대체도입", "대체도입", "teal", None, 20),
         # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
         ("ACTIVITY_TYPE", "CALL", "전화", "emerald", None, 10),
         ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", None, 20),

@@ -481,6 +481,47 @@ export interface Project {
   stages?: ProjectStage[]
   /** 지연 단계 수 (목록·상세 응답) */
   delayed_stage_count?: number
+  /** 참여 차량 수 (Phase 2, 상세 응답) */
+  vehicle_count?: number
+  /** 총 감축량 (차량 연차 합의 합, Phase 2) */
+  total_reduction?: number
+}
+
+// tb_project_vehicle — 사업 참여 차량 (Phase 2, 감축량·예상지급액 ingest)
+export interface ProjectVehiclePayload {
+  client_id?: string | null
+  asset_id?: string | null
+  vehicle_no?: string | null
+  region?: string | null
+  introduction_type?: string | null // VEHICLE_INTRO: 신규도입/대체도입
+  registered_at?: string | null
+  reduction_y1?: number | null
+  reduction_y2?: number | null
+  reduction_y3?: number | null
+  reduction_y4?: number | null
+  reduction_y5?: number | null
+  reduction_y6?: number | null
+  reduction_y7?: number | null
+  reduction_y8?: number | null
+  reduction_y9?: number | null
+  reduction_y10?: number | null
+  private_invest_ratio?: number | null
+  expected_payout?: number | null // 산식 확정 전 입력(보류)
+  memo?: string | null
+}
+
+export interface ProjectVehicle extends ProjectVehiclePayload {
+  vehicle_id: string
+  project_id: string
+  client_name?: string | null
+  total_reduction?: number | null // 서버 파생(연차 합)
+}
+
+export interface ProjectVehicleList {
+  items: ProjectVehicle[]
+  total: number
+  total_reduction: number
+  total_expected_payout?: number | null
 }
 
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)

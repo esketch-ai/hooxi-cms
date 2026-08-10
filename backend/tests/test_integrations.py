@@ -100,7 +100,7 @@ def test_list_integrations_env_source(client, admin_headers, monkeypatch):
     resp = client.get(API + "/integrations", headers=admin_headers)
     assert resp.status_code == 200, resp.text
     items = {item["name"]: item for item in resp.json()["items"]}
-    assert set(items) == {"dropbox", "solapi", "kakao_bot", "kakao_local", "gmail", "naver_works"}
+    assert set(items) == {"dropbox", "solapi", "kakao_bot", "kakao_local", "gmail", "naver_works"}  # 연동 목록(공통코드 카테고리와 무관)
 
     gmail = {f["key"]: f for f in items["gmail"]["fields"]}
     assert gmail["GMAIL_SENDER"]["configured"] is True

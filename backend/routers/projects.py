@@ -24,6 +24,7 @@ from models import (
     Project,
     ProjectClientMap,
     ProjectStage,
+    ProjectVehicle,
     User,
     get_db,
 )
@@ -93,6 +94,33 @@ def _stage_outs(db: Session, project: Project):
         out = schemas.ProjectStageOut.model_validate(s, from_attributes=True)
         outs.append(out.model_copy(update={"delayed": is_delayed}))
     return outs, delayed
+
+
+_REDUCTION_YEARS = tuple("reduction_y{0}".format(i) for i in range(1, 11))
+_VEHICLE_FIELDS = (
+    "client_id", "asset_id", "vehicle_no", "region", "introduction_type",
+    "registered_at", *_REDUCTION_YEARS, "private_invest_ratio", "expected_payout", "memo",
+)
+
+
+def _sum_reductions(obj) -> Optional[float]:
+    """연차(1~10) 감축량 합 — 값이 하나도 없으면 None(미입력)."""
+    nums = [float(getattr(obj, f)) for f in _REDUCTION_YEARS if getattr(obj, f) is not None]
+    return round(sum(nums), 3) if nums else None
+
+
+def _vehicle_out(v: ProjectVehicle, client_names: dict) -> schemas.ProjectVehicleOut:
+    out = schemas.ProjectVehicleOut.model_validate(v, from_attributes=True)
+    return out.model_copy(update={"client_name": client_names.get(v.client_id)})
+
+
+def _vehicle_rollup(db: Session, project_id: str):
+    """사업 참여 차량 집계 — (대수, 총감축량). _project_detail·목록 공용."""
+    rows = db.query(ProjectVehicle.total_reduction).filter(
+        ProjectVehicle.project_id == project_id
+    ).all()
+    total = round(sum(float(r[0]) for r in rows if r[0] is not None), 3)
+    return len(rows), total
 
 
 def _recalc_expected_amounts(db: Session, project: Project):
@@ -166,6 +194,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         .all()
     )
     stages, delayed_count = _stage_outs(db, project)
+    vehicle_count, total_reduction = _vehicle_rollup(db, project.project_id)
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -176,6 +205,8 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             ),
             "stages": stages,
             "delayed_stage_count": delayed_count,
+            "vehicle_count": vehicle_count,
+            "total_reduction": total_reduction,
         }
     )
 
@@ -464,6 +495,134 @@ def update_project_stages(
     return _project_detail(db, project)
 
 
+# ── 사업 참여 차량 (Phase 2 — 감축량·예상지급액 ingest) ────────────────────
+def _client_names(db: Session, ids) -> dict:
+    ids = {i for i in ids if i}
+    if not ids:
+        return {}
+    return {
+        cid: name
+        for cid, name in db.query(Client.client_id, Client.company_name).filter(
+            Client.client_id.in_(ids)
+        )
+    }
+
+
+@router.get("/{project_id}/vehicles", response_model=schemas.ProjectVehicleListResponse)
+def list_project_vehicles(
+    project_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """사업 참여 차량 목록 + 총감축량·예상지급액 합계."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    rows = (
+        db.query(ProjectVehicle)
+        .filter(ProjectVehicle.project_id == project_id)
+        .order_by(ProjectVehicle.created_at.asc())
+        .all()
+    )
+    cnames = _client_names(db, [v.client_id for v in rows])
+    total_reduction = round(
+        sum(float(v.total_reduction) for v in rows if v.total_reduction is not None), 3
+    )
+    payouts = [float(v.expected_payout) for v in rows if v.expected_payout is not None]
+    return schemas.ProjectVehicleListResponse(
+        items=[_vehicle_out(v, cnames) for v in rows],
+        total=len(rows),
+        total_reduction=total_reduction,
+        total_expected_payout=round(sum(payouts), 2) if payouts else None,
+    )
+
+
+@router.post(
+    "/{project_id}/vehicles", response_model=schemas.ProjectVehicleOut, status_code=201
+)
+def create_project_vehicle(
+    project_id: str,
+    payload: schemas.ProjectVehicleIn,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """차량 등록 — 도입구분 검증, 연차 합(total_reduction) 서버 계산."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    if payload.introduction_type:
+        validate_active_code(db, "VEHICLE_INTRO", payload.introduction_type)
+    if payload.client_id:
+        common.get_or_404(db, Client, payload.client_id, "운수사")
+    if payload.asset_id:
+        common.get_or_404(db, Asset, payload.asset_id, "자산")
+    vehicle = ProjectVehicle(
+        project_id=project_id, **{f: getattr(payload, f) for f in _VEHICLE_FIELDS}
+    )
+    vehicle.total_reduction = _sum_reductions(payload)
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+    return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
+
+
+@router.put(
+    "/{project_id}/vehicles/{vehicle_id}", response_model=schemas.ProjectVehicleOut
+)
+def update_project_vehicle(
+    project_id: str,
+    vehicle_id: str,
+    payload: schemas.ProjectVehicleIn,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """차량 수정 — 전달된 필드만 반영, total_reduction 재계산."""
+    vehicle = (
+        db.query(ProjectVehicle)
+        .filter(
+            ProjectVehicle.project_id == project_id,
+            ProjectVehicle.vehicle_id == vehicle_id,
+        )
+        .first()
+    )
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail="차량을 찾을 수 없습니다")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("introduction_type"):
+        validate_active_code(db, "VEHICLE_INTRO", data["introduction_type"])
+    if data.get("client_id"):
+        common.get_or_404(db, Client, data["client_id"], "운수사")
+    if data.get("asset_id"):
+        common.get_or_404(db, Asset, data["asset_id"], "자산")
+    for field in _VEHICLE_FIELDS:
+        if field in data:
+            setattr(vehicle, field, data[field])
+    vehicle.total_reduction = _sum_reductions(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+    return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
+
+
+@router.delete(
+    "/{project_id}/vehicles/{vehicle_id}", response_model=schemas.MessageResponse
+)
+def delete_project_vehicle(
+    project_id: str,
+    vehicle_id: str,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    vehicle = (
+        db.query(ProjectVehicle)
+        .filter(
+            ProjectVehicle.project_id == project_id,
+            ProjectVehicle.vehicle_id == vehicle_id,
+        )
+        .first()
+    )
+    if vehicle is None:
+        raise HTTPException(status_code=404, detail="차량을 찾을 수 없습니다")
+    db.delete(vehicle)
+    db.commit()
+    return schemas.MessageResponse(message="차량이 삭제되었습니다")
+
+
 @router.delete("/{project_id}", response_model=schemas.MessageResponse)
 def delete_project(
     project_id: str,
@@ -483,9 +642,12 @@ def delete_project(
         )
     for m in maps:
         db.delete(m)
-    # 진행 단계 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패(Phase 1)
+    # 진행 단계·참여 차량 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패(Phase 1·2)
     db.query(ProjectStage).filter(
         ProjectStage.project_id == project_id
+    ).delete(synchronize_session=False)
+    db.query(ProjectVehicle).filter(
+        ProjectVehicle.project_id == project_id
     ).delete(synchronize_session=False)
     db.delete(project)
 

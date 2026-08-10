@@ -25,6 +25,7 @@ from models import (
     KakaoContact,
     Project,
     ProjectClientMap,
+    ProjectVehicle,
     ReportDelivery,
     ReportRecipient,
     ReportSendLog,
@@ -378,6 +379,7 @@ _CLIENT_DEP_CHECKS = [
     ("활동이력", ActivityHistory),
     ("사업", Project),
     ("사업-고객사 매핑", ProjectClientMap),
+    ("사업 참여 차량", ProjectVehicle),
     ("자산", Asset),
     ("일정", Schedule),
     ("보고서 발송", ReportDelivery),
@@ -469,6 +471,14 @@ def _cascade_delete_client(db: Session, client_id: str):
     dele(ReportRecipient, ReportRecipient.client_id == client_id)
     dele(ReportSubscription, ReportSubscription.client_id == client_id)
     dele(ReportDelivery, ReportDelivery.client_id == client_id)
+    # 사업 참여 차량 — 이 고객사(운수사)/자산 참조를 끊어 프로젝트 차량은 보존(자산 삭제 전 실행)
+    q(ProjectVehicle).filter(ProjectVehicle.client_id == client_id).update(
+        {"client_id": None}, synchronize_session=False
+    )
+    if asset_ids:
+        q(ProjectVehicle).filter(ProjectVehicle.asset_id.in_(asset_ids)).update(
+            {"asset_id": None}, synchronize_session=False
+        )
     dele(Asset, Asset.client_id == client_id)
     dele(SegmentSendLog, SegmentSendLog.client_id == client_id)
 

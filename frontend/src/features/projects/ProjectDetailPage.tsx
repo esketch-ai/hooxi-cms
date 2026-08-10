@@ -21,17 +21,20 @@ import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
-import type { Project, ProjectClientMap } from '../../types'
+import type { Project, ProjectClientMap, ProjectVehicle } from '../../types'
 import {
   isIssueImminent,
   useDeleteMapping,
   useDeleteProject,
+  useDeleteVehicle,
   useProject,
+  useProjectVehicles,
   useUpdateStages,
   useUpdateUnitPrice,
 } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
 import { MappingFormModal } from './MappingFormModal'
+import { VehicleFormModal } from './VehicleFormModal'
 
 function OverviewItem({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -547,6 +550,9 @@ export function ProjectDetailPage() {
         />
       </section>
 
+      {/* 참여 차량 (Phase 2) */}
+      <VehiclesSection projectId={project.project_id} />
+
       <ProjectFormModal open={editOpen} onClose={() => setEditOpen(false)} project={project} />
       {projectId && (
         <MappingFormModal
@@ -696,6 +702,141 @@ function StageTimeline({ project }: { project: Project }) {
       <p className="mt-3 text-xs text-slatey">
         상태를 진행하면 해당 단계 실제일이 자동 기록됩니다. 예정일이 지났는데 미도달이면 지연으로 표시됩니다.
       </p>
+    </section>
+  )
+}
+
+// 참여 차량 (Phase 2) — 감축량·예상지급액 ingest. 목록 + 등록/수정/삭제
+function VehiclesSection({ projectId }: { projectId: string }) {
+  const { data } = useProjectVehicles(projectId)
+  const { labelOf } = useCodes('VEHICLE_INTRO')
+  const del = useDeleteVehicle(projectId)
+  const { showToast } = useToast()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<ProjectVehicle | null>(null)
+  const [deleting, setDeleting] = useState<ProjectVehicle | null>(null)
+  const vehicles = data?.items ?? []
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (v: ProjectVehicle) => {
+    setEditing(v)
+    setFormOpen(true)
+  }
+  const confirmDelete = async () => {
+    if (!deleting) return
+    try {
+      await del.mutateAsync(deleting.vehicle_id)
+      showToast('차량이 삭제되었습니다.', 'success')
+      setDeleting(null)
+    } catch {
+      showToast('삭제에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-base font-bold text-bone">참여 차량</h2>
+          {data && (
+            <span className="text-xs text-slatey">
+              {data.total}대 · 총감축량 {data.total_reduction.toLocaleString()} tCO₂
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="flex items-center gap-1.5 self-start rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
+        >
+          <Plus size={15} weight="bold" /> 차량 등록
+        </button>
+      </div>
+
+      {vehicles.length === 0 ? (
+        <EmptyState
+          icon={<Plus size={28} />}
+          title="참여 차량이 없습니다"
+          description="[차량 등록]으로 도입구분·연차 감축량을 입력하세요. (엑셀 일괄 업로드는 후속 예정)"
+          className="py-8"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs text-slatey">
+                <th className="px-3 py-2.5 text-left font-semibold">차량번호</th>
+                <th className="px-3 py-2.5 text-left font-semibold">운수사</th>
+                <th className="px-3 py-2.5 text-left font-semibold">도입구분</th>
+                <th className="px-3 py-2.5 text-right font-semibold">총감축량(tCO₂)</th>
+                <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+                <th className="px-3 py-2.5 text-right font-semibold">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((v) => (
+                <tr key={v.vehicle_id} className="border-b border-hairline/60 last:border-b-0">
+                  <td className="px-3 py-2.5 font-medium text-bone">{v.vehicle_no ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{v.client_name ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">
+                    {v.introduction_type ? labelOf(v.introduction_type) : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-ash">
+                    {v.total_reduction != null ? v.total_reduction.toLocaleString() : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    {v.expected_payout != null ? (
+                      <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
+                    ) : (
+                      <span className="text-slatey">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(v)}
+                        className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+                        aria-label="차량 수정"
+                      >
+                        <PencilSimple size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleting(v)}
+                        className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-rose-400"
+                        aria-label="차량 삭제"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <VehicleFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        projectId={projectId}
+        vehicle={editing}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        title="차량 삭제"
+        message={`${deleting?.vehicle_no ?? '해당 차량'}을(를) 삭제합니다.`}
+        confirmLabel="삭제"
+        danger
+        loading={del.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
     </section>
   )
 }

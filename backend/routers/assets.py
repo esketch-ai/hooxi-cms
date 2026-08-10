@@ -20,6 +20,7 @@ from models import (
     Client,
     Document,
     ProjectClientMap,
+    ProjectVehicle,
     User,
     get_db,
     utcnow,
@@ -288,6 +289,10 @@ def delete_asset(
         )
     # 연결된 제원표 사진은 자산 참조만 해제 — 사진 자체는 고객사 문서함에 보존
     db.query(Document).filter(Document.asset_id == asset_id).update({"asset_id": None})
+    # 사업 참여 차량의 선택적 자산 연결도 해제(차량 자체는 보존, Postgres FK 방지)
+    db.query(ProjectVehicle).filter(ProjectVehicle.asset_id == asset_id).update(
+        {"asset_id": None}
+    )
     db.delete(asset)
     db.commit()
     return schemas.MessageResponse(message="자산이 삭제되었습니다")
