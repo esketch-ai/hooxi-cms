@@ -477,6 +477,32 @@ export interface Project {
   clients?: ProjectClientMap[]
   /** 상세 응답 — 배분율 합계 (100% 검증 UI용) */
   allocation_total?: number
+  /** 진행 단계 타임라인 (Phase 1, 상세 응답) */
+  stages?: ProjectStage[]
+  /** 지연 단계 수 (목록·상세 응답) */
+  delayed_stage_count?: number
+}
+
+// tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
+export interface ProjectStage {
+  stage_code: string
+  planned_date?: string | null
+  actual_date?: string | null
+  sort_order?: number | null
+  delayed: boolean
+}
+
+export interface ProjectStageAlert {
+  project_id: string
+  project_name: string
+  stage_code: string
+  planned_date: string
+  days: number
+}
+
+export interface ProjectStageAlerts {
+  delayed: ProjectStageAlert[]
+  imminent: ProjectStageAlert[]
 }
 
 export interface ProjectPayload {

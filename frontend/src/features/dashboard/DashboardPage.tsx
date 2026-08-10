@@ -32,6 +32,7 @@ import type {
 import { useAuth } from '../../app/AuthProvider'
 import { ActivityForm } from '../histories/ActivityForm'
 import { ActionCenter, type ActionItem } from './ActionCenter'
+import { useStageDelays } from '../projects/api'
 
 // 이달 보고서 진행 — 상태별 행. 색은 StatusBadge report 도메인과 같은 계열(회색→파랑→보라→하늘→초록)
 const REPORT_PROGRESS_ROWS: {
@@ -63,6 +64,9 @@ export function DashboardPage() {
       return data
     },
   })
+
+  // 사업 단계 지연/임박 관찰 (Phase 1) — 경영전략실 대응용 위젯
+  const { data: stageDelays } = useStageDelays()
 
   // 당월 보고서 — 액션 센터 + 이달 보고서 진행 위젯 공용. ReportsPage(['reports', period])와 키 분리,
   // 조회 실패 시 null 폴백 (현황판을 막지 않는다)
@@ -279,6 +283,52 @@ export function DashboardPage() {
       </div>
       {/* 세 소스 중 하나라도 로딩 중이면 스켈레톤 — 빈 상태 플래시 방지 */}
       <ActionCenter items={scopedItems} loading={isLoading || reportsLoading || schedulesLoading} />
+
+      {/* 사업 단계 지연/임박 (Phase 1) — 경영전략실 관찰 */}
+      {stageDelays && (stageDelays.delayed.length > 0 || stageDelays.imminent.length > 0) && (
+        <section className="rounded-3xl border border-hairline bg-graphite p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-base font-bold text-bone">사업 단계 지연·임박</h2>
+            {stageDelays.delayed.length > 0 && (
+              <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
+                지연 {stageDelays.delayed.length}
+              </span>
+            )}
+            {stageDelays.imminent.length > 0 && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">
+                임박 {stageDelays.imminent.length}
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1.5">
+            {[...stageDelays.delayed.map((a) => ({ ...a, kind: 'delayed' as const })),
+              ...stageDelays.imminent.map((a) => ({ ...a, kind: 'imminent' as const }))]
+              .slice(0, 8)
+              .map((a) => (
+                <li key={`${a.project_id}-${a.stage_code}`}>
+                  <Link
+                    to={`/projects/${a.project_id}`}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-elevate"
+                  >
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        a.kind === 'delayed'
+                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                      }`}
+                    >
+                      {a.kind === 'delayed' ? `지연 ${a.days}일` : `D-${a.days}`}
+                    </span>
+                    <span className="truncate font-medium text-bone">{a.project_name}</span>
+                    <span className="ml-auto shrink-0 text-xs text-slatey">
+                      {a.stage_code} · {fmtDate(a.planned_date)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
 
       {/* KPI 5카드 */}
       {isLoading ? (

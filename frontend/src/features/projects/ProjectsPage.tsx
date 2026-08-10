@@ -42,6 +42,11 @@ export function ProjectNameCell({ project, link = true }: { project: Project; li
         {project.client_count != null && (
           <span className="text-xs text-slatey">참여 {project.client_count}개사</span>
         )}
+        {project.delayed_stage_count ? (
+          <span className="inline-flex items-center rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+            지연 {project.delayed_stage_count}
+          </span>
+        ) : null}
       </div>
     </div>
   )

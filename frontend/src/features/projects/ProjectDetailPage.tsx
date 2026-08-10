@@ -1,5 +1,5 @@
 // SCR-06 사업 상세 — 개요(단가 수기 입력) + 참여 고객사 매핑 + 배분율 합계 게이지
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -19,14 +19,15 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
-import { useClientOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
-import type { ProjectClientMap } from '../../types'
+import type { Project, ProjectClientMap } from '../../types'
 import {
   isIssueImminent,
   useDeleteMapping,
   useDeleteProject,
   useProject,
+  useUpdateStages,
   useUpdateUnitPrice,
 } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
@@ -473,6 +474,9 @@ export function ProjectDetailPage() {
         </p>
       </section>
 
+      {/* 진행 단계 타임라인 (Phase 1) */}
+      <StageTimeline project={project} />
+
       {/* 참여 고객사 매핑 */}
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -596,5 +600,102 @@ export function ProjectDetailPage() {
         }}
       />
     </div>
+  )
+}
+
+// 진행 단계 타임라인 (Phase 1) — 5단계 예정일 편집 + 실제일·지연 표시
+function StageTimeline({ project }: { project: Project }) {
+  const { labelOf } = useCodes('PROJECT_STATUS')
+  const update = useUpdateStages(project.project_id)
+  const { showToast } = useToast()
+  const stages = useMemo(
+    () => [...(project.stages ?? [])].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999)),
+    [project.stages],
+  )
+  // 예정일 편집 드래프트 — 서버 데이터가 갱신되면 동기화
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  useEffect(() => {
+    setDraft(Object.fromEntries(stages.map((s) => [s.stage_code, s.planned_date ?? ''])))
+  }, [stages])
+
+  const dirty = stages.some((s) => (s.planned_date ?? '') !== (draft[s.stage_code] ?? ''))
+  const delayedCount = stages.filter((s) => s.delayed).length
+
+  const save = async () => {
+    try {
+      await update.mutateAsync(
+        stages.map((s) => ({ stage_code: s.stage_code, planned_date: draft[s.stage_code] || null })),
+      )
+      showToast('진행 단계 예정일을 저장했습니다.', 'success')
+    } catch {
+      showToast('저장에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-bold text-bone">진행 단계</h2>
+          {delayedCount > 0 && (
+            <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
+              지연 {delayedCount}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty || update.isPending}
+          className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary hover:opacity-90 disabled:opacity-50"
+        >
+          {update.isPending ? '저장 중…' : '예정일 저장'}
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-sm">
+          <thead>
+            <tr className="border-b border-hairline text-xs text-slatey">
+              <th className="px-2 py-2 text-left font-semibold">단계</th>
+              <th className="px-2 py-2 text-left font-semibold">예정일</th>
+              <th className="px-2 py-2 text-left font-semibold">실제일</th>
+              <th className="px-2 py-2 text-left font-semibold">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stages.map((s) => (
+              <tr key={s.stage_code} className="border-b border-hairline/60 last:border-b-0">
+                <td className="px-2 py-2 font-medium text-bone">{labelOf(s.stage_code)}</td>
+                <td className="px-2 py-2">
+                  <input
+                    type="date"
+                    value={draft[s.stage_code] ?? ''}
+                    onChange={(e) =>
+                      setDraft((prev) => ({ ...prev, [s.stage_code]: e.target.value }))
+                    }
+                    className="rounded-md border border-hairline bg-graphite-2 px-2 py-1 text-xs text-bone focus:border-white/30 focus:outline-none"
+                  />
+                </td>
+                <td className="px-2 py-2 text-ash">{s.actual_date ? fmtDate(s.actual_date) : '—'}</td>
+                <td className="px-2 py-2">
+                  {s.actual_date ? (
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">완료</span>
+                  ) : s.delayed ? (
+                    <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
+                      지연
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slatey">대기</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-slatey">
+        상태를 진행하면 해당 단계 실제일이 자동 기록됩니다. 예정일이 지났는데 미도달이면 지연으로 표시됩니다.
+      </p>
+    </section>
   )
 }

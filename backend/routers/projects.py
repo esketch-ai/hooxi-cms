@@ -7,7 +7,8 @@
 - 배분율 합계 100% 초과 시 422 (서버 검증)
 """
 
-from typing import Optional
+from datetime import date
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -16,7 +17,16 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import Asset, Client, Project, ProjectClientMap, User, get_db
+from models import (
+    Asset,
+    Client,
+    Code,
+    Project,
+    ProjectClientMap,
+    ProjectStage,
+    User,
+    get_db,
+)
 from routers import common
 from routers.codes import validate_active_code
 from services.audit_logger import AuditLogger
@@ -30,6 +40,59 @@ _PROJECT_FIELDS = [
     "expected_issue_date", "expected_credits", "unit_price",
     "issued_credits", "issued_at", "manager_id",
 ]
+
+
+def _project_status_codes(db: Session):
+    """PROJECT_STATUS 활성 코드를 sort_order 순으로 — 단계 시드/정렬 소스(하드코딩 금지)."""
+    rows = (
+        db.query(Code)
+        .filter(Code.category == "PROJECT_STATUS", Code.active == "Y")
+        .all()
+    )
+    rows.sort(key=lambda r: (r.sort_order if r.sort_order is not None else 999, r.code))
+    return [(r.code, r.sort_order) for r in rows]
+
+
+def _seed_stages(db: Session, project: Project) -> None:
+    """프로젝트 진행 단계 행을 PROJECT_STATUS 코드별로 보강(멱등). 커밋은 호출부 책임.
+
+    신규 프로젝트·기존(레거시) 프로젝트 모두에서 누락 단계만 추가한다."""
+    existing = {
+        s.stage_code
+        for s in db.query(ProjectStage).filter(
+            ProjectStage.project_id == project.project_id
+        )
+    }
+    for code, sort_order in _project_status_codes(db):
+        if code not in existing:
+            db.add(
+                ProjectStage(
+                    project_id=project.project_id,
+                    stage_code=code,
+                    sort_order=sort_order,
+                )
+            )
+
+
+def _stage_outs(db: Session, project: Project):
+    """진행 단계 목록(정렬) + 지연 단계 수. 지연 = 예정 경과 & 미도달(실제일 없음)."""
+    today = date.today()
+    rows = list(
+        db.query(ProjectStage).filter(ProjectStage.project_id == project.project_id)
+    )
+    rows.sort(
+        key=lambda s: (s.sort_order if s.sort_order is not None else 999, s.stage_code)
+    )
+    outs, delayed = [], 0
+    for s in rows:
+        is_delayed = bool(
+            s.planned_date and s.actual_date is None and s.planned_date < today
+        )
+        if is_delayed:
+            delayed += 1
+        out = schemas.ProjectStageOut.model_validate(s, from_attributes=True)
+        outs.append(out.model_copy(update={"delayed": is_delayed}))
+    return outs, delayed
 
 
 def _recalc_expected_amounts(db: Session, project: Project):
@@ -102,6 +165,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         .order_by(ProjectClientMap.created_at.asc())
         .all()
     )
+    stages, delayed_count = _stage_outs(db, project)
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -110,6 +174,8 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "allocation_total": round(
                 sum(float(m.allocation_ratio or 0) for m in maps), 2
             ),
+            "stages": stages,
+            "delayed_stage_count": delayed_count,
         }
     )
 
@@ -163,16 +229,77 @@ def list_projects(
         )
         count_map = {pid: cnt for pid, cnt in count_rows}
 
+    # 지연 단계 수 — 목록 대상 프로젝트의 단계를 한 번에 조회해 파이썬에서 판정(N+1 회피)
+    delay_map = {}
+    if ids:
+        today = date.today()
+        for st in db.query(ProjectStage).filter(ProjectStage.project_id.in_(ids)):
+            if st.planned_date and st.actual_date is None and st.planned_date < today:
+                delay_map[st.project_id] = delay_map.get(st.project_id, 0) + 1
+
     items = [
         schemas.ProjectListItem.model_validate(p, from_attributes=True).model_copy(
             update={
                 "manager_name": unames.get(p.manager_id),
                 "client_count": count_map.get(p.project_id, 0),
+                "delayed_stage_count": delay_map.get(p.project_id, 0),
             }
         )
         for p in rows
     ]
     return schemas.ProjectListResponse(items=items, total=total)
+
+
+@router.get("/stage-delays", response_model=schemas.ProjectStageAlertsOut)
+def project_stage_delays(
+    imminent_days: int = Query(7, ge=1, le=60),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """진행 단계 지연/임박 관찰 (Phase 1 대시보드 위젯) — 경영전략실 대응용.
+
+    지연 = 예정 경과 & 미도달, 임박 = 예정이 imminent_days 이내 & 미도달.
+    (경로가 /{project_id}보다 먼저 등록되도록 목록 바로 뒤에 정의)
+    """
+    today = date.today()
+    stages = (
+        db.query(ProjectStage)
+        .filter(ProjectStage.planned_date.isnot(None), ProjectStage.actual_date.is_(None))
+        .all()
+    )
+    pnames = {
+        p.project_id: p.project_name
+        for p in db.query(Project.project_id, Project.project_name)
+    }
+    delayed, imminent = [], []
+    for s in stages:
+        name = pnames.get(s.project_id)
+        if name is None:
+            continue  # 삭제된 사업의 유령 단계 방어(정상 경로에선 자식 삭제로 발생 안 함)
+        gap = (s.planned_date - today).days
+        if gap < 0:
+            delayed.append(
+                schemas.ProjectStageAlert(
+                    project_id=s.project_id,
+                    project_name=name,
+                    stage_code=s.stage_code,
+                    planned_date=s.planned_date,
+                    days=-gap,
+                )
+            )
+        elif gap <= imminent_days:
+            imminent.append(
+                schemas.ProjectStageAlert(
+                    project_id=s.project_id,
+                    project_name=name,
+                    stage_code=s.stage_code,
+                    planned_date=s.planned_date,
+                    days=gap,
+                )
+            )
+    delayed.sort(key=lambda a: a.days, reverse=True)  # 오래 지연된 것부터
+    imminent.sort(key=lambda a: a.days)  # 임박한 것부터
+    return schemas.ProjectStageAlertsOut(delayed=delayed, imminent=imminent)
 
 
 @router.post("", response_model=schemas.ProjectDetailOut, status_code=201)
@@ -192,6 +319,7 @@ def create_project(
     )
     db.add(project)
     db.flush()  # PK(gen_uuid)는 flush 시점에 생성 — 감사 대상 ID 확보
+    _seed_stages(db, project)  # 진행 단계 5행 자동 시드(Phase 1)
     AuditLogger.log_action(
         db,
         user.user_id,
@@ -210,8 +338,13 @@ def get_project(
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록."""
+    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 진행 단계."""
     project = common.get_or_404(db, Project, project_id, "감축 사업")
+    _seed_stages(db, project)  # 레거시 프로젝트 단계 지연 보강(멱등)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 동시 최초 시드 경합 — 이미 시드됨(uq_project_stage_slot)
     return _project_detail(db, project)
 
 
@@ -232,11 +365,28 @@ def update_project(
     if data.get("manager_id"):
         common.get_or_404(db, User, data["manager_id"], "담당 PM")
     old_price = project.unit_price  # 단가 감사(old→new)용 — setattr 전에 스냅샷
+    old_status = project.project_status  # 실제 전이 판정용 — setattr 전에 스냅샷
     for field in _PROJECT_FIELDS:
         if field in data:
             setattr(project, field, data[field])
     if "unit_price" in data or "expected_credits" in data:
         _recalc_expected_amounts(db, project)
+    # 진행 상태가 '실제로' 바뀔 때만 해당 단계의 실제 도달일 자동 기록(비어 있을 때만) — Phase 1.
+    # (폼이 수정 시에도 project_status를 항상 재전송하므로, 값이 동일하면 도달일을 찍지 않아
+    #  기존 지연 상태가 조용히 해제되는 것을 방지)
+    if "project_status" in data and data["project_status"] != old_status:
+        _seed_stages(db, project)
+        db.flush()
+        stage = (
+            db.query(ProjectStage)
+            .filter(
+                ProjectStage.project_id == project.project_id,
+                ProjectStage.stage_code == data["project_status"],
+            )
+            .first()
+        )
+        if stage is not None and stage.actual_date is None:
+            stage.actual_date = date.today()
 
     # 일반 수정 경유 단가 변경도 전용 엔드포인트(update_unit_price)와 동일하게
     # price_source=MANUAL 설정 + PROJECT_UNIT_PRICE 감사(old→new) 적재 (§10.3, R2)
@@ -270,6 +420,50 @@ def update_project(
     return _project_detail(db, project)
 
 
+@router.put("/{project_id}/stages", response_model=schemas.ProjectDetailOut)
+def update_project_stages(
+    project_id: str,
+    payload: schemas.ProjectStagesUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """진행 단계 예정일/실제일 편집 (Phase 1) — 전달된 필드만 반영."""
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    _seed_stages(db, project)
+    db.flush()
+    valid = {code for code, _ in _project_status_codes(db)}
+    existing = {
+        s.stage_code: s
+        for s in db.query(ProjectStage).filter(
+            ProjectStage.project_id == project_id
+        )
+    }
+    for item in payload.stages:
+        if item.stage_code not in valid:
+            raise HTTPException(
+                status_code=422,
+                detail="유효한 진행 단계가 아닙니다: {0}".format(item.stage_code),
+            )
+        stage = existing.get(item.stage_code)
+        if stage is None:
+            continue
+        fields_set = item.model_fields_set  # 전달된 필드만 갱신(부분 편집)
+        if "planned_date" in fields_set:
+            stage.planned_date = item.planned_date
+        if "actual_date" in fields_set:
+            stage.actual_date = item.actual_date
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_STAGE_UPDATE",
+        target_type="PROJECT",
+        target_id=project_id,
+    )
+    db.commit()
+    db.refresh(project)
+    return _project_detail(db, project)
+
+
 @router.delete("/{project_id}", response_model=schemas.MessageResponse)
 def delete_project(
     project_id: str,
@@ -289,11 +483,15 @@ def delete_project(
         )
     for m in maps:
         db.delete(m)
+    # 진행 단계 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패(Phase 1)
+    db.query(ProjectStage).filter(
+        ProjectStage.project_id == project_id
+    ).delete(synchronize_session=False)
     db.delete(project)
-    
+
     AuditLogger.log_action(
-        db, 
-        user.user_id, 
+        db,
+        user.user_id,
         "PROJECT_DELETE",
         target_type="PROJECT", 
         target_id=project.project_id

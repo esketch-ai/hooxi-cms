@@ -209,6 +209,26 @@ class ProjectClientMap(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class ProjectStage(Base):
+    """사업 진행 단계 타임라인 — Phase 1(단계·지연 관찰). 프로젝트당 PROJECT_STATUS
+    코드별 1행. 예정일/실제일을 두고, 예정 경과 & 미도달(실제일 없음)이면 지연으로 판정.
+    (경량 모델 — 마일스톤 다건 아님. stage_code는 공통코드 PROJECT_STATUS 재사용)"""
+
+    __tablename__ = "tb_project_stage"
+
+    stage_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    stage_code = Column(String(20), nullable=False)  # PROJECT_STATUS 코드값(한글)
+    planned_date = Column(Date)  # 예정일(수기)
+    actual_date = Column(Date)  # 실제 도달일(상태 전이 시 자동 or 수기 소급)
+    sort_order = Column(Integer)  # 단계 순서(공통코드 sort_order 승계)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (
+        UniqueConstraint("project_id", "stage_code", name="uq_project_stage_slot"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

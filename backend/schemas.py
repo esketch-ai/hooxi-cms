@@ -593,9 +593,10 @@ class ProjectOut(BaseModel):
 
 
 class ProjectListItem(ProjectOut):
-    """목록 행 — 참여 고객사 수 포함."""
+    """목록 행 — 참여 고객사 수 + 지연 단계 수(Phase 1)."""
 
     client_count: int = 0
+    delayed_stage_count: int = 0  # 지연 단계 수(목록 표식용)
 
 
 class ProjectListResponse(BaseModel):
@@ -639,11 +640,52 @@ class ProjectMapOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class ProjectStageOut(BaseModel):
+    """사업 진행 단계 1건 (Phase 1) — delayed는 서버가 판정(예정경과 & 미도달)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    stage_code: str
+    planned_date: Optional[date] = None
+    actual_date: Optional[date] = None
+    sort_order: Optional[int] = None
+    delayed: bool = False
+
+
+class ProjectStageIn(BaseModel):
+    stage_code: str = Field(max_length=20)
+    planned_date: Optional[date] = None
+    actual_date: Optional[date] = None
+
+
+class ProjectStagesUpdate(BaseModel):
+    """단계 예정일/실제일 일괄 편집 — 전달된 stage_code만 반영."""
+
+    stages: List[ProjectStageIn]
+
+
+class ProjectStageAlert(BaseModel):
+    """단계 지연/임박 알림 1건 (관찰 대시보드용)."""
+
+    project_id: str
+    project_name: str
+    stage_code: str
+    planned_date: date
+    days: int  # 지연=경과일(양수), 임박=남은일(양수). 구분은 목록으로.
+
+
+class ProjectStageAlertsOut(BaseModel):
+    delayed: List[ProjectStageAlert] = []  # 예정 경과 & 미도달
+    imminent: List[ProjectStageAlert] = []  # 예정 임박(D-7 이내) & 미도달
+
+
 class ProjectDetailOut(ProjectOut):
-    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계."""
+    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계 + 진행 단계."""
 
     clients: List[ProjectMapOut] = []
     allocation_total: float = 0  # 배분율 합계(100% 검증 UI용)
+    stages: List[ProjectStageOut] = []  # 진행 단계 타임라인(Phase 1)
+    delayed_stage_count: int = 0  # 지연 단계 수(관찰용)
 
 
 # ---------------------------------------------------------------------------

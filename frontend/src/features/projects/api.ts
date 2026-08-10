@@ -3,7 +3,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
-import type { MappingPayload, Paginated, Project, ProjectClientMap, ProjectPayload } from '../../types'
+import type {
+  MappingPayload,
+  Paginated,
+  Project,
+  ProjectClientMap,
+  ProjectPayload,
+  ProjectStage,
+  ProjectStageAlerts,
+} from '../../types'
 
 export interface ProjectFilters {
   project_status?: string
@@ -55,6 +63,31 @@ export function useProject(projectId: string | undefined) {
       return data
     },
     enabled: !!projectId,
+  })
+}
+
+/** 진행 단계 예정일/실제일 편집 (Phase 1) — 전달된 필드만 반영 */
+export function useUpdateStages(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (stages: Partial<ProjectStage>[]) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}/stages`, { stages })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 단계 지연/임박 관찰 (Phase 1 대시보드 위젯) */
+export function useStageDelays() {
+  return useQuery({
+    queryKey: ['projects', 'stage-delays'],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectStageAlerts>('/projects/stage-delays')
+      return data
+    },
   })
 }
 
