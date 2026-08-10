@@ -258,8 +258,9 @@
 | base_vehicle_age | Int | 입력 | 기준차령(기본 8년) | 잔여차령 상한 |
 | max_payout | Numeric | 입력 | 최대지급액(기본 2,000,000) | 차량당 예상지급액 상한 |
 | total_reduction / total_expected_payout / total_purchase / total_sale / wip1 / wip2 / liability / product / inventory / payout_rate / revenue_recognized / gross_profit / profit_rate | Numeric | **파생(캐시)** | 프로젝트DB G~S | 부록 B 산식 |
-| unit_price | — | **폐기 예정** | — | 프로젝트 단일 단가 → 거래계약 단가로 이관(F.5) |
-| expected_credits | — | 확인 필요 | — | '발행량(크레딧)' vs '감축량(톤)' 단위 정합(F.9) |
+| unit_price | — | **폐기 확정** | — | 프로젝트 단일 단가 폐기 → 거래계약 단가로 일원화(F.5, F.9-2) |
+| expected_credits / issued_credits | — | 파생/확정 | — | 1톤=1크레딧 — total_reduction(감축량)과 동일 취급(F.9-1) |
+| approved_at | Date | 입력 | 사업승인일 | 승인여부=승인일 존재(단일 소스, F.9-5). project_status와 별개 축 |
 
 ## F.2 `tb_project_vehicle` — 신규 (차량DB)
 | 컬럼 | 타입 | 원천 | 엑셀 | 비고 |
@@ -330,10 +331,12 @@
 - **스냅샷·상태머신·감사·마스킹**: 부록 §8 재사용.
 - **공통코드 신설**: APPROVAL_STATUS(승인상태), (필요시) SALE_CONTRACT_TYPE. 하드코딩 금지.
 
-## F.9 확인 필요 (착수 전 확정)
-1. **단위 정합**: 크레딧(발행량) vs 감축량(톤) — 1t=1크레딧 가정 여부. expected_credits/issued_credits와 total_reduction 관계.
-2. **단가 이관**: 프로젝트 unit_price 폐기 → 거래계약 단가 단일화 확정.
-3. **운수사 배분 폐기 확정**: allocation_ratio/success_fee_rate 완전 폐기 vs 일부 사업 보수 모델 잔존 필요성.
-4. **차량↔Asset 관계**: 별도 테이블 유지 vs Asset 확장.
-5. **승인상태 모델링**: project_status와 별도 approval_status/approved_at 이원화가 맞는지(엑셀은 별도 컬럼).
-6. **기존 정산 데이터 마이그레이션 규칙**(운영 실데이터 존재 시).
+## F.9 확정 결정 (2026-08-10) — 스키마 잠금
+1. **단위**: **1톤 = 1크레딧**. 감축량(톤) `total_reduction`을 발행량·예상지급액의 단일 동인으로. `issued_credits`는 감축량과 동일 취급. 별도 발행비율 필드 없음.
+2. **단가**: **프로젝트 `unit_price` 폐기** → 단가·리스크프리미엄·할인은 **거래계약(`tb_sale_contract`)** 에만. 매출세금계산서는 실발행액 입력(단가는 제안값). 기존 단가 편집 UI(UnitPriceEditor)는 Phase 3에서 제거.
+3. **보수 모델**: **`allocation_ratio`·`success_fee_rate` 완전 폐기**. 후시 이익 = **매출인식 − 제품(매입)** 스프레드. 운수사 지급액 = 차량 예상지급액 합(매입세금계산서로 확정). 성공보수 별도 수취 없음.
+4. **차량**: **신규 `tb_project_vehicle`**(연차 감축량·예상지급액, 엑셀 업로드) + 기존 `Asset`과는 선택적 `asset_id` 링크만. Asset 확장 안 함.
+5. **승인상태**: **`approved_at`(승인일) 단일 소스**. 승인여부 = 승인일 존재. 차량 잔여차령 계산 기준. project_status(진행단계)와 별개 축. 별도 enum 없음.
+6. **마이그레이션**: **불필요** — 운영 DB에 프로젝트·정산·자산 데이터 0건(고객사 후시파트너스 1건뿐, 2026-08-10 확인). 기존 필드 폐기는 스키마 변경만으로 안전.
+
+→ 위 확정으로 Phase 2(원가/지급 축) 스키마 착수 가능.
