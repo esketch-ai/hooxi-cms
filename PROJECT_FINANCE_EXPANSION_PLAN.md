@@ -15,7 +15,7 @@
 | 자금 흐름 | **매출·지급 2원장 + 보수 = 매출−지급(차액)**. 기존 '성공보수 청구' 정산은 Phase 3에서 이 구조로 재편/대체 |
 | 투자사 공개 | **프로젝트별 지정 공개** — 관리자가 투자사↔프로젝트·공개 항목을 지정 |
 | 진행 단계 | **경량: 5단계 + 예정일/실제일** (마일스톤 다건 아님) |
-| 착수 순서 | **Phase 1(단계·지연 관찰) → Phase 2(매출) → Phase 3(지급·보수 재편) → Phase 4(투자사/관찰자 권한)** |
+| 착수 순서 | **Phase 1(단계·지연 관찰) → Phase 2(원가/지급 축: 차량·예상지급액·매입세금계산서) → Phase 3(매출 축: 거래계약·매출세금계산서·매출인식+재무 대시보드) → Phase 4(투자사/관찰자 권한)** — 매출인식이 지급률에 의존해 지급/원가를 먼저(부록 E). 확정 2026-08-10 |
 
 ---
 
@@ -135,11 +135,11 @@
 
 **규약 체크**: PROJECT_STATUS 재사용(신규 코드 없음), ensure_schema 반영, 감사(단계 예정일 변경 audit), 보안(단계 정보는 비민감).
 
-### Phase 2 — 매출 원장
-매각거래 CRUD + 상태 머신 + 스냅샷 + 세금계산서/입금 증빙 첨부. 대시보드 재무요약에 매출·미입금 추가. 신규 코드 SALE_STATUS.
+### Phase 2 — 원가/지급 축 (차량·예상지급액·매입세금계산서) ← 순서 재검토로 매출보다 먼저
+차량 데이터(엑셀 업로드) + 감축량/예상지급액 서버 산식 → 운수사 참여(tb_project_client_map 재편) → **매입세금계산서(운수사 지급)** 등록(분할 지원) → 미착품(1)/(2)·제품·부채·**지급률** 자동 계산. **기존 성공보수 정산(success_fee_rate/settlement_status) 흡수·마이그레이션**(스냅샷 보존). 부록 F 필드 재설계 반영.
 
-### Phase 3 — 지급 원장 + 보수 재편
-매출 R 기반 배분/보수/지급 계산 + 지급거래 상태 머신 + 지출세금계산서/송금/확인서. **기존 성공보수 정산 흡수·마이그레이션**(스냅샷 보존). 신규 코드 PAYOUT_STATUS.
+### Phase 3 — 매출 축 (거래계약·매출세금계산서·매출인식) + 재무 대시보드
+거래계약(구매자) + 프로젝트-계약 배분(소유권비율, 합계 100% 검증) → **매출세금계산서**(실발행액 입력, 단가·프리미엄·할인은 제안값) → **매출인식 = 매출 × 지급률** → 매출이익. 월별현황·대시보드 재무 화면(미인식 매출·미지급·재고자산·손익).
 
 ### Phase 4 — 투자사/관찰자 권한 페이지
 역할 2종 + 라우터 가드 + `tb_investor_access` + 투자사 전용 읽기 페이지(지정 프로젝트·항목). 관찰자 대시보드 정식화.
@@ -232,4 +232,108 @@
 - **Phase 3 = 매출 축**(거래계약·배분 → 매출세금계산서 → 매출인식=매출×지급률 → 이익) + 월별/대시보드 재무.
 - Phase 4 = 투자사/관찰자 권한(변경 없음).
 
-이 조정은 착수 시 사용자 확인 후 확정한다.
+이 조정은 착수 시 사용자 확인 후 확정한다. **→ 2026-08-10 사용자 수용 확정.**
+
+---
+
+# 부록 F — 필드 레벨 데이터 모델 재설계 (엑셀 ↔ CMS)
+
+> 목적: 엑셀 v19.3의 실제 필드/산식을 CMS 스키마로 1:1 재설계하고, **기존 tb_project / tb_project_client_map / success_fee_rate·settlement 과의 정합·폐기·마이그레이션**을 확정한다. (원천 표기: **입력**=사용자 입력, **파생**=서버 계산, **기존**=현행 유지, **폐기**=deprecate)
+
+## F.0 재설계 원칙
+1. **문자열 키 → FK**: 엑셀은 운수사명·프로젝트코드 문자열로 조인. CMS는 `client_id`·`project_id` FK로 전환(임포트 시 운수사명→client 매칭/생성).
+2. **입력 최소·파생 최대**: 미착품/제품/부채/지급률/매출인식/이익은 **저장 안 하거나 캐시 컬럼**으로 서버가 계산(부록 D UX 원칙). 사용자는 이벤트만 입력.
+3. **파생 저장 전략(F.7)**: 대량(차량 5,220) 때문에 프로젝트/운수사/계약 **집계는 캐시 컬럼 + 이벤트 시 재계산**, 단건 차량 파생은 on-read 허용.
+4. **기존 정산 모델 폐기·이관(F.3)**: 엑셀 모델엔 성공보수율·STANDBY/BILLED/COMPLETED가 없음 → 해당 필드 폐기, 지급=매입세금계산서·매출=매출세금계산서 구조로 대체.
+
+## F.1 `tb_project` — 확장
+| 컬럼 | 타입 | 원천 | 엑셀 대응 | 비고 |
+|---|---|---|---|---|
+| project_id / project_name / reg_code / manager_id / dates… | — | 기존 | 프로젝트코드/명 | 유지 |
+| project_status | String | 기존 | (진행단계, §3.1) | 기획~발급완료 |
+| approval_status | String(tb_code) | 입력 | 승인상태 | '승인' 여부 — 미착품(1)→(2) 게이트 |
+| approved_at | Date | 입력 | 사업승인일 | 차량 잔여차령 계산 기준 |
+| applied_at | Date | 입력 | 신청일 | |
+| base_reduction | Numeric | 입력 | 기준감축량(기본 240t) | 잔여반영감축량 상한 |
+| base_vehicle_age | Int | 입력 | 기준차령(기본 8년) | 잔여차령 상한 |
+| max_payout | Numeric | 입력 | 최대지급액(기본 2,000,000) | 차량당 예상지급액 상한 |
+| total_reduction / total_expected_payout / total_purchase / total_sale / wip1 / wip2 / liability / product / inventory / payout_rate / revenue_recognized / gross_profit / profit_rate | Numeric | **파생(캐시)** | 프로젝트DB G~S | 부록 B 산식 |
+| unit_price | — | **폐기 예정** | — | 프로젝트 단일 단가 → 거래계약 단가로 이관(F.5) |
+| expected_credits | — | 확인 필요 | — | '발행량(크레딧)' vs '감축량(톤)' 단위 정합(F.9) |
+
+## F.2 `tb_project_vehicle` — 신규 (차량DB)
+| 컬럼 | 타입 | 원천 | 엑셀 | 비고 |
+|---|---|---|---|---|
+| vehicle_id PK / project_id FK / client_id FK(운수사) | — | — | 프로젝트코드·운수사명 | |
+| asset_id FK? | — | 입력(선택) | — | 기존 Asset(차량) 연결 선택(F.8) |
+| vehicle_no | String | 입력 | 차량번호 | |
+| region | String | 파생/입력 | 지역(=LEFT(차량번호,2)) | |
+| registered_at | Date | 입력 | 차량등록일 | |
+| expire_at | Date | 파생 | 차령만료일 = EDATE(등록일,108개월)−1 | |
+| reduction_y1..y10 | Numeric×10 | 입력 | 1~10년차 | 엑셀 업로드 |
+| total_reduction_10y | Numeric | 파생 | 10년총감축량=SUM | |
+| remaining_age | Numeric | 파생 | 잔여차령=MIN(기준차령,(만료−승인)/365) | |
+| effective_reduction | Numeric | 파생 | 잔여반영감축량=MIN(기준감축량, Σ가중) | |
+| expected_payout | Numeric | 파생 | 예상지급액=MIN(감축기반, 최대지급액) | 운수사 지급 동인 |
+
+## F.3 `tb_project_client_map` — 재편 (운수사 참여 + 지급현황)
+| 컬럼 | 처리 | 비고 |
+|---|---|---|
+| map_id / project_id / client_id | 기존 유지 | 운수사 참여 슬롯 |
+| allocation_ratio | **폐기** | 엑셀엔 운수사 배분율 없음(지급=차량 예상지급액 합) |
+| success_fee_rate | **폐기** | 성공보수 모델 폐기(매출이익=매출인식−제품으로 대체) |
+| expected_amount / settlement_status / billed_* / completed_* / paid_amount / payment_type | **폐기** | STANDBY/BILLED/COMPLETED 정산 흐름 폐기 |
+| (파생) total_vehicles / total_expected_payout / total_purchase / payout_rate / unpaid / pay_status(N/P/Y) | **신규 파생** | = 엑셀 5_매출원가DB(운수사×프로젝트 지급현황) |
+- **마이그레이션**: 기존 정산 스냅샷(tb_settlement_snapshot)은 보존(감사). 운영 데이터의 기존 청구/입금 → 신모델 매핑 규칙은 Phase 2 착수 시 별도 설계.
+
+## F.4 `tb_purchase_invoice` — 신규 (매입세금계산서 = 운수사 지급)
+| 컬럼 | 타입 | 원천 | 엑셀 |
+|---|---|---|---|
+| invoice_id PK / project_id FK / client_id FK(운수사) | — | — | 프로젝트코드·운수사명 |
+| region | String | 파생/입력 | 지역 |
+| issued_at | Date | 입력 | 발행일 |
+| amount | Numeric | 입력 | 금액 |
+| memo | String | 입력 | 비고 |
+- **분할 지급 허용**(한 프로젝트×운수사에 다건). Unique 제약 없음. 등록 or 엑셀 업로드.
+
+## F.5 `tb_sale_contract` — 신규 (거래계약 = 구매자)
+| 컬럼 | 타입 | 원천 | 엑셀 |
+|---|---|---|---|
+| contract_id PK / code / name | — | 입력 | 계약코드/계약명 |
+| buyer_name | String | 입력 | 구매자명(증권사 등) — 추후 거래처 마스터 FK 승격 가능 |
+| sale_ratio | Numeric | 입력 | 판매비율(%) |
+| unit_price | Numeric | 입력 | 단가 |
+| premium_yn / premium_rate | Y/N·Numeric | 입력 | 리스크프리미엄 적용/율 |
+| discount_yn / discount_rate | Y/N·Numeric | 입력 | 할인 적용/율 |
+| contract_date / memo | — | 입력 | 계약일/비고 |
+| is_hold | Bool | 입력 | **후시보유(HXI001, 미판매 잔량)** 특수 계약 표시 |
+
+## F.6 `tb_project_sale_alloc` — 신규 (프로젝트-계약 배분 + 매출세금계산서)
+| 컬럼 | 타입 | 원천 | 엑셀 |
+|---|---|---|---|
+| alloc_id PK / project_id FK / contract_id FK | — | — | 프로젝트코드·거래계약코드 |
+| ownership_ratio | Numeric | 입력/파생 | 소유권비율(%) = 계약 판매비율 참조 |
+| allocated_reduction | Numeric | 파생 | 배분감축량 = 프로젝트총감축량×소유권비율 |
+| sale_invoice_date | Date | 입력 | 매출세금계산서발행일 |
+| sale_amount | Numeric | 입력 | 매출세금계산서(실발행액; 제안값=배분감축량×단가×(1+프리미엄)×(1−할인)) |
+| revenue_recognized | Numeric | 파생 | 매출인식 = sale_amount × 프로젝트 지급률 |
+- **검증**: 프로젝트별 `Σ ownership_ratio = 100%`(후시보유 포함). 다계약 배분·부분매각 지원.
+
+## F.7 파생 계산 전략
+- **집계 캐시 컬럼**(tb_project·map·contract): 차량 업로드/매입·매출 등록/승인 전환 등 **이벤트 트랜잭션 내에서 재계산**(성능·정합). 
+- **단건 파생**(vehicle 예상지급액): 저장 or on-read.
+- 계산 로직은 `services/` 단일 모듈(compute)로 집약, 감사 로그·낙관적 동시성 적용.
+
+## F.8 기존 CMS 자산과의 정합
+- **운수사** = 기존 `Client`(client_type=TRANSPORT). 신규 테이블은 전부 `client_id` FK. 엑셀 운수사명 문자열 → 임포트 시 매칭/생성(공백·표기흔들림 정규화, [[REGION]] 지역 코드 재사용).
+- **차량** vs 기존 `Asset`(MOBILITY): tb_project_vehicle은 사업×감축량 특화. Asset과 중복 관리 지양 — 선택적 `asset_id` 링크만(관계 확정은 F.9).
+- **스냅샷·상태머신·감사·마스킹**: 부록 §8 재사용.
+- **공통코드 신설**: APPROVAL_STATUS(승인상태), (필요시) SALE_CONTRACT_TYPE. 하드코딩 금지.
+
+## F.9 확인 필요 (착수 전 확정)
+1. **단위 정합**: 크레딧(발행량) vs 감축량(톤) — 1t=1크레딧 가정 여부. expected_credits/issued_credits와 total_reduction 관계.
+2. **단가 이관**: 프로젝트 unit_price 폐기 → 거래계약 단가 단일화 확정.
+3. **운수사 배분 폐기 확정**: allocation_ratio/success_fee_rate 완전 폐기 vs 일부 사업 보수 모델 잔존 필요성.
+4. **차량↔Asset 관계**: 별도 테이블 유지 vs Asset 확장.
+5. **승인상태 모델링**: project_status와 별도 approval_status/approved_at 이원화가 맞는지(엑셀은 별도 컬럼).
+6. **기존 정산 데이터 마이그레이션 규칙**(운영 실데이터 존재 시).
