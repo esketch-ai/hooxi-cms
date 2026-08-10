@@ -1,4 +1,10 @@
-"""사업 참여 차량 (Phase 2 skeleton) — 등록·연차합 파생·도입구분 검증·집계·삭제정리."""
+"""사업 참여 차량 (Phase 2 skeleton) — 등록·연차합 파생·도입구분 검증·집계·삭제정리·엑셀 업로드."""
+
+import io
+
+import openpyxl
+
+from services.import_spec import IMPORT_SPECS
 
 API = "/api/v1"
 PROJECTS = API + "/projects"
@@ -86,6 +92,63 @@ def test_delete_project_removes_vehicles(client, staff_headers, manager_headers)
     client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"reduction_y1": 3})
     r = client.delete(f"{PROJECTS}/{pid}", headers=manager_headers)
     assert r.status_code == 200, r.text  # 차량 자식 있어도 삭제 성공(FK)
+
+
+def test_vehicle_template_download(client, staff_headers):
+    pid = _mk_project(client, staff_headers, "차량양식검증")
+    r = client.get(f"{PROJECTS}/{pid}/vehicles/template", headers=staff_headers)
+    assert r.status_code == 200, r.text
+    assert "spreadsheet" in r.headers.get("content-type", "")
+
+
+def test_vehicle_excel_commit(client, staff_headers):
+    pid = _mk_project(client, staff_headers, "차량업로드검증")
+    headers = [c.label for c in IMPORT_SPECS["project_vehicles"].columns]
+    # 헤더 → 값 매핑(빈 값은 생략). 운수사는 resolver 의존 피하려 비움.
+    row = {"차량번호": "테스트차량1", "도입구분": "신규도입", "1차 감축량": 5, "2차 감축량": 10}
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(headers)
+    ws.append([row.get(h, None) for h in headers])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    r = client.post(
+        f"{PROJECTS}/{pid}/vehicles/commit",
+        headers=staff_headers,
+        files={"file": ("veh.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["created"] == 1, body
+    # 삽입된 차량의 total_reduction 서버 파생 확인
+    lr = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()
+    assert lr["total"] == 1
+    v = lr["items"][0]
+    assert v["vehicle_no"] == "테스트차량1"
+    assert v["total_reduction"] == 15
+    assert v["introduction_type"] == "신규도입"
+
+
+def test_vehicle_excel_skips_garbage(client, staff_headers):
+    # 스펙과 무관한 헤더의 파일 → 빈 차량 대량 삽입 방지(created 0, 데이터행은 skipped)
+    pid = _mk_project(client, staff_headers, "차량업로드가비지")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["엉뚱헤더A", "엉뚱헤더B"])
+    ws.append(["값1", "값2"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    r = client.post(
+        f"{PROJECTS}/{pid}/vehicles/commit",
+        headers=staff_headers,
+        files={"file": ("g.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["created"] == 0
+    assert client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()["total"] == 0
 
 
 def test_vehicle_rejects_unknown_asset(client, staff_headers):

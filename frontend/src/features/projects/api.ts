@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
 import type {
+  ImportCommitResult,
   MappingPayload,
   Paginated,
   Project,
@@ -89,6 +90,45 @@ export function useSaveVehicle(projectId: string | undefined, vehicleId?: string
       const { data } = vehicleId
         ? await api.put<ProjectVehicle>(`/projects/${projectId}/vehicles/${vehicleId}`, payload)
         : await api.post<ProjectVehicle>(`/projects/${projectId}/vehicles`, payload)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'vehicles'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+    },
+  })
+}
+
+/** 차량 일괄등록 양식(.xlsx) 다운로드 (Phase 2) */
+export async function downloadVehicleTemplate(projectId: string): Promise<void> {
+  const res = await api.get(`/projects/${projectId}/vehicles/template`, {
+    responseType: 'blob',
+    timeout: 60_000,
+  })
+  const disposition = (res.headers['content-disposition'] as string | undefined) ?? ''
+  const match = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  const filename = match ? decodeURIComponent(match[1]) : '사업참여차량_일괄등록_양식.xlsx'
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** 차량 엑셀 일괄 등록 (Phase 2) — 유효 행만 반영, 결과 카운트·오류 반환 */
+export function useImportVehicles(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post<ImportCommitResult>(
+        `/projects/${projectId}/vehicles/commit`,
+        fd,
+      )
       return data
     },
     onSuccess: () => {

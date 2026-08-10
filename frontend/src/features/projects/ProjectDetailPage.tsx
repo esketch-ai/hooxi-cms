@@ -1,13 +1,15 @@
 // SCR-06 사업 상세 — 개요(단가 수기 입력) + 참여 고객사 매핑 + 배분율 합계 게이지
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
   CircleNotch,
+  DownloadSimple,
   PencilSimple,
   Plus,
   Trash,
+  UploadSimple,
   Warning,
   X,
 } from '@phosphor-icons/react'
@@ -23,10 +25,12 @@ import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type { Project, ProjectClientMap, ProjectVehicle } from '../../types'
 import {
+  downloadVehicleTemplate,
   isIssueImminent,
   useDeleteMapping,
   useDeleteProject,
   useDeleteVehicle,
+  useImportVehicles,
   useProject,
   useProjectVehicles,
   useUpdateStages,
@@ -711,11 +715,41 @@ function VehiclesSection({ projectId }: { projectId: string }) {
   const { data } = useProjectVehicles(projectId)
   const { labelOf } = useCodes('VEHICLE_INTRO')
   const del = useDeleteVehicle(projectId)
+  const importVehicles = useImportVehicles(projectId)
   const { showToast } = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<ProjectVehicle | null>(null)
   const [deleting, setDeleting] = useState<ProjectVehicle | null>(null)
   const vehicles = data?.items ?? []
+
+  const downloadTemplate = async () => {
+    try {
+      await downloadVehicleTemplate(projectId)
+    } catch {
+      showToast('양식 다운로드에 실패했습니다.', 'danger')
+    }
+  }
+
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (fileRef.current) fileRef.current.value = '' // 같은 파일 재선택 허용
+    if (!file) return
+    try {
+      const r = await importVehicles.mutateAsync(file)
+      const tail = r.skipped > 0 ? ` · 건너뜀 ${r.skipped}건(오류 행)` : ''
+      showToast(
+        r.created > 0
+          ? `${r.created}대 등록 완료${tail}.`
+          : `등록된 차량이 없습니다${tail}. 양식·값을 확인해 주세요.`,
+        r.created > 0 ? 'success' : 'info',
+      )
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail || '엑셀 업로드에 실패했습니다.', 'danger')
+    }
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -747,13 +781,42 @@ function VehiclesSection({ projectId }: { projectId: string }) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="flex items-center gap-1.5 self-start rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
-        >
-          <Plus size={15} weight="bold" /> 차량 등록
-        </button>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={downloadTemplate}
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate"
+          >
+            <DownloadSimple size={15} /> 양식
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={importVehicles.isPending}
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+          >
+            {importVehicles.isPending ? (
+              <CircleNotch size={15} className="animate-spin" />
+            ) : (
+              <UploadSimple size={15} />
+            )}
+            엑셀 업로드
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx"
+            onChange={onUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
+          >
+            <Plus size={15} weight="bold" /> 차량 등록
+          </button>
+        </div>
       </div>
 
       {vehicles.length === 0 ? (

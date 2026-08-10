@@ -9,14 +9,17 @@
 
 from datetime import date
 from typing import List, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
+from services import excel_import
 from models import (
     Asset,
     Client,
@@ -548,6 +551,8 @@ def create_project_vehicle(
     common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.introduction_type:
         validate_active_code(db, "VEHICLE_INTRO", payload.introduction_type)
+    if payload.region:
+        validate_active_code(db, "REGION", payload.region)
     if payload.client_id:
         common.get_or_404(db, Client, payload.client_id, "운수사")
     if payload.asset_id:
@@ -586,6 +591,8 @@ def update_project_vehicle(
     data = payload.model_dump(exclude_unset=True)
     if data.get("introduction_type"):
         validate_active_code(db, "VEHICLE_INTRO", data["introduction_type"])
+    if data.get("region"):
+        validate_active_code(db, "REGION", data["region"])
     if data.get("client_id"):
         common.get_or_404(db, Client, data["client_id"], "운수사")
     if data.get("asset_id"):
@@ -621,6 +628,90 @@ def delete_project_vehicle(
     db.delete(vehicle)
     db.commit()
     return schemas.MessageResponse(message="차량이 삭제되었습니다")
+
+
+_XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_VEHICLE_IMPORT_ENTITY = "project_vehicles"
+
+
+@router.get("/{project_id}/vehicles/template")
+def download_vehicle_template(
+    project_id: str,
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """차량 일괄등록 양식(.xlsx) — 헤더+예시 1행(도입구분·지역은 현재 라벨)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    spec = excel_import.get_spec(_VEHICLE_IMPORT_ENTITY)
+    content = excel_import.build_template(db, _VEHICLE_IMPORT_ENTITY)
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA,
+        headers={
+            "Content-Disposition": "attachment; filename*=UTF-8''{0}".format(
+                quote(spec.filename)
+            )
+        },
+    )
+
+
+@router.post(
+    "/{project_id}/vehicles/commit", response_model=schemas.ImportCommitOut
+)
+async def commit_vehicle_import(
+    project_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """차량 엑셀 일괄 등록 — 유효 행만 project_id로 삽입(total_reduction 서버 계산).
+
+    오류 행은 건너뛰고(errors 안내) 감사 로그에 건수만 남긴다(R2-E6)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="파일 크기가 25MB를 초과합니다")
+    result = excel_import.parse_and_validate(db, _VEHICLE_IMPORT_ENTITY, content)
+    created, empty = 0, 0
+    for parsed in result.valid_rows:
+        fields = {f: getattr(parsed.payload, f) for f in _VEHICLE_FIELDS}
+        # 전 컬럼이 비면(헤더 불일치·빈 행) '빈 차량' 삽입 방지 — project_vehicles는
+        # 필수 컬럼이 없어 파서 가드가 안 걸리므로 여기서 방어(리뷰 지적).
+        if all(v is None for v in fields.values()):
+            empty += 1
+            continue
+        vehicle = ProjectVehicle(project_id=project_id, **fields)
+        vehicle.total_reduction = _sum_reductions(vehicle)
+        db.add(vehicle)
+        created += 1
+    error_rows = [r for r in result.rows if r.errors]
+    skipped = len(error_rows) + empty
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "EXCEL_IMPORT",
+        target_type="PROJECT_VEHICLE",
+        target_id=project_id,
+        new_value="사업 참여 차량 일괄 등록 — 생성 {0}건 / 건너뜀 {1}건 (총 {2}행)".format(
+            created, skipped, len(result.rows)
+        ),
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 검증~반영 사이 참조(운수사 등) 삭제 경합 — 배치 무산, 재시도 안내
+        raise HTTPException(
+            status_code=409,
+            detail="참조 데이터가 변경되어 반영하지 못했습니다. 다시 시도해 주세요.",
+        )
+    return schemas.ImportCommitOut(
+        entity=_VEHICLE_IMPORT_ENTITY,
+        created=created,
+        skipped=skipped,
+        errors=[excel_import.row_result(r) for r in error_rows],
+    )
 
 
 @router.delete("/{project_id}", response_model=schemas.MessageResponse)

@@ -136,4 +136,37 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("usage_purpose", "용도", example="운행기록 수집"),
         ),
     ),
+    # ── 사업 참여 차량 (Phase 2) — 프로젝트 스코프. project_id는 URL에서 주입(행 컬럼 아님).
+    #    total_reduction은 서버 파생. 예상지급액은 산식 확정 전 임시 입력.
+    "project_vehicles": ImportSpec(
+        entity="project_vehicles",
+        label="사업 참여 차량",
+        schema_cls=schemas.ProjectVehicleIn,
+        filename="사업참여차량_일괄등록_양식.xlsx",
+        columns=(
+            ImportColumn("vehicle_no", "차량번호", example="제주79자7011"),
+            ImportColumn(
+                "client_id", "운수사", resolver="client_by_name", example="한빛운수",
+            ),
+            ImportColumn(
+                "introduction_type", "도입구분",
+                code_category="VEHICLE_INTRO", example="신규도입",
+            ),
+            ImportColumn("region", "지역", code_category="REGION", example="제주"),
+            ImportColumn("registered_at", "차량등록일", example="2023-08-14"),
+            ImportColumn("reduction_y1", "1차 감축량", example="10.5"),
+            ImportColumn("reduction_y2", "2차 감축량", example="10.5"),
+            ImportColumn("reduction_y3", "3차 감축량", example="10.5"),
+            ImportColumn("reduction_y4", "4차 감축량", example="10.5"),
+            ImportColumn("reduction_y5", "5차 감축량", example="10.5"),
+            ImportColumn("reduction_y6", "6차 감축량", example="10.5"),
+            ImportColumn("reduction_y7", "7차 감축량", example="10.5"),
+            ImportColumn("reduction_y8", "8차 감축량", example="10.5"),
+            ImportColumn("reduction_y9", "9차 감축량", example="10.5"),
+            ImportColumn("reduction_y10", "10차 감축량", example="10.5"),
+            ImportColumn("private_invest_ratio", "민간투자비율", example="80"),
+            ImportColumn("expected_payout", "예상지급액", example="800000"),
+            ImportColumn("memo", "비고", example=""),
+        ),
+    ),
 }
