@@ -551,6 +551,75 @@ def project_stage_delays(
     return schemas.ProjectStageAlertsOut(delayed=delayed, imminent=imminent)
 
 
+# 파생값 정합 감사(DBA P1.4)에서 비교할 저장 파생 필드 — before/after 키 정본
+_DERIVED_FIELDS = ("total_reduction", "effective_reduction", "remaining_age", "expected_payout")
+
+
+def _to_float(v) -> Optional[float]:
+    """Numeric/None → float/None (None은 '미정'으로 그대로 유지)."""
+    return None if v is None else float(v)
+
+
+@router.get("/integrity/vehicles", response_model=schemas.VehicleIntegrityReport)
+def audit_vehicle_integrity(
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """차량 파생값 정합 감사(DBA P1.4) — 저장된 파생값이 재계산과 어긋나는(stale) 차량을 탐지만.
+
+    읽기전용 진단: DB 트리거가 없어 파라미터 변경 경로가 재계산을 빠뜨리면 stale이 생긴다.
+    저장은 절대 하지 않는다 — 재계산은 in-memory mutation이므로 autoflush로 우발 persist되지
+    않도록 (1) 차량을 전부 선조회(루프 내 추가 쿼리 금지), (2) db.no_autoflush 블록에서 계산,
+    (3) 마지막에 반드시 db.rollback()으로 변경을 폐기한다.
+    (경로가 /{project_id}보다 먼저 매칭되도록 목록/알림 뒤에 정의)
+    """
+    projects = {p.project_id: p for p in db.query(Project).all()}
+    vehicles = db.query(ProjectVehicle).all()  # 전부 선조회 — 루프 내 쿼리는 autoflush 유발
+
+    checked = 0
+    stale = 0
+    samples: List[dict] = []
+    with db.no_autoflush:  # 재계산 mutation이 flush로 persist되지 않도록
+        for v in vehicles:
+            project = projects.get(v.project_id)
+            if project is None:
+                continue  # 고아 차량(정상 경로엔 없음) — 감사 대상 아님
+            checked += 1
+            before = {f: _to_float(getattr(v, f)) for f in _DERIVED_FIELDS}
+            try:
+                _derive_vehicle(project, v)  # in-memory 재계산(저장 안 함, 아래 rollback)
+            except HTTPException as exc:
+                # _expected_payout 상한 초과 등 개별 차량 실패 — 중단 없이 stale로 집계
+                stale += 1
+                if len(samples) < 20:
+                    samples.append({
+                        "vehicle_id": v.vehicle_id,
+                        "project_id": v.project_id,
+                        "error": getattr(exc, "detail", str(exc)),
+                    })
+                continue
+            after = {f: _to_float(getattr(v, f)) for f in _DERIVED_FIELDS}
+            diffs = {}
+            for f in _DERIVED_FIELDS:
+                b, a = before[f], after[f]
+                if b is None or a is None:
+                    mismatch = b is not a  # None은 정확히 일치해야 함(양쪽 None만 OK)
+                else:
+                    mismatch = abs(b - a) > 1e-3  # 허용오차 절대 1e-3
+                if mismatch:
+                    diffs[f] = {"before": b, "after": a}
+            if diffs:
+                stale += 1
+                if len(samples) < 20:
+                    samples.append({
+                        "vehicle_id": v.vehicle_id,
+                        "project_id": v.project_id,
+                        **diffs,
+                    })
+    db.rollback()  # 계산상 변경 전부 폐기 — 감사는 절대 저장하지 않음
+    return schemas.VehicleIntegrityReport(checked=checked, stale=stale, samples=samples)
+
+
 @router.post("", response_model=schemas.ProjectDetailOut, status_code=201)
 def create_project(
     payload: schemas.ProjectCreate,

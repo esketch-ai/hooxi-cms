@@ -757,11 +757,17 @@ def ensure_schema():
                 continue
             cols = {c["name"] for c in insp.get_columns(table)}
             if column not in cols:
+                # PostgreSQL은 IF NOT EXISTS로 다중 인스턴스 동시 배포 TOCTOU 경합 창 제거
+                # (inspector 확인 후 ALTER 사이 다른 인스턴스가 먼저 추가해도 안전).
+                # SQLite는 IF NOT EXISTS ADD COLUMN 미지원 → 위 inspector 사전확인만 의존.
+                add_kw = "ADD COLUMN IF NOT EXISTS" if engine.dialect.name == "postgresql" else "ADD COLUMN"
                 with engine.begin() as conn:
-                    conn.execute(_text("ALTER TABLE {0} ADD COLUMN {1} {2}".format(table, column, ddl)))
+                    conn.execute(_text("ALTER TABLE {0} {1} {2} {3}".format(table, add_kw, column, ddl)))
                 print("✓ Added missing column {0}.{1}".format(table, column))
     except Exception as exc:
-        print("⚠ ensure_schema skipped: {0}".format(exc))
+        # 컬럼 보강 실패는 부분 스키마를 방치할 수 있어(누락 컬럼 → 조회 500) 명확히 경고.
+        # 부팅은 유지(크래시 방지)하되 로그에서 반드시 눈에 띄게 남긴다.
+        print("‼ ensure_schema COLUMN 보강 실패 — 스키마 부분적용 가능, 즉시 확인 필요: {0}".format(exc))
 
     # 배포된 테이블에 유니크 인덱스 보강 (P0-B) — create_all은 기존 테이블에 제약을
     # 추가하지 않음. 신규 DB는 __table_args__의 UniqueConstraint로 생성되므로 동일

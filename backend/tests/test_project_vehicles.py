@@ -266,3 +266,20 @@ def test_operator_rollup_unassigned_drilldown(client, staff_headers):
     none_v = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"client_id": "__none__"}).json()
     assert none_v["total"] == 2
     assert all(v["client_id"] is None for v in none_v["items"])
+
+
+def test_vehicle_integrity_audit(client, staff_headers):
+    """파생값 정합 감사 — 정상 데이터는 stale 0, 감사가 DB를 바꾸지 않음(읽기전용)."""
+    pid = _mk_project(client, staff_headers, "정합감사검증")
+    client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers,
+                json={"registered_at": "2016-01-01", "reduction_y1": 10})
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    r = client.get(f"{PROJECTS}/integrity/vehicles", headers=staff_headers)
+    assert r.status_code == 200, r.text  # /{project_id}에 흡수되지 않음
+    body = r.json()
+    assert body["checked"] >= 1
+    assert body["stale"] == 0  # 방금 파생 저장된 데이터 → 정합
+    # 감사가 예상지급액을 바꾸지 않았는지(읽기전용)
+    v = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()["items"][0]
+    assert v["expected_payout"] is not None

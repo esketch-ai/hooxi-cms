@@ -713,6 +713,18 @@ class ProjectStageAlertsOut(BaseModel):
     imminent: List[ProjectStageAlert] = []  # 예정 임박(D-7 이내) & 미도달
 
 
+class VehicleIntegrityReport(BaseModel):
+    """차량 파생값 정합 감사(DBA P1.4) — 저장값 vs 재계산 불일치(stale) 진단.
+
+    읽기전용: 감사 중 계산상 변경은 전부 rollback(저장 안 함).
+    samples는 최대 20건, 필드별 before/after(및 실패 사유)를 dict로 담는다.
+    """
+
+    checked: int  # 감사한 총 차량 수
+    stale: int  # 저장값과 재계산이 어긋난 차량 수
+    samples: List[dict] = []  # 불일치 표본(최대 20건): vehicle_id·project_id·필드별 before/after
+
+
 # 사업 참여 차량 (Phase 2 — 감축량·예상지급액 ingest, 부록 F.2/G) -----------------
 _REDUCTION_YEARS = tuple("reduction_y{0}".format(i) for i in range(1, 11))
 
