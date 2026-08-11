@@ -7,6 +7,7 @@
 """
 
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import case
@@ -24,9 +25,20 @@ from models import (
     get_db,
 )
 from routers import common
-from routers.settlements import _period_of  # 정산 기준월 정의 재사용 (SCR-07과 동일)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def _period_of(m: ProjectClientMap, project: Optional[Project]) -> Optional[str]:
+    """정산 기준월 — 청구 시각(billed_at) 우선, 미청구(STANDBY)는 예상 발급월.
+
+    (레거시 정산 라우터 제거로 dashboard에 인라인. 기준월 정의는 종전과 동일.)
+    """
+    if m.billed_at:
+        return m.billed_at.strftime("%Y-%m")
+    if project and project.expected_issue_date:
+        return project.expected_issue_date.strftime("%Y-%m")
+    return None
 
 
 @router.get("/stats", response_model=schemas.DashboardStats)

@@ -14,7 +14,7 @@ import os
 os.environ["ASSET_ENC_KEY"] = base64.b64encode(b"p2-smoke-test-32byte-key-0123456").decode()
 
 import models  # noqa: E402
-from models import AuditLog, Asset, SettlementSnapshot  # noqa: E402
+from models import AuditLog, Asset  # noqa: E402
 from services import crypto  # noqa: E402
 
 API = "/api/v1"
@@ -34,7 +34,6 @@ def test_p2_auth_required(client):
     """P2 전 엔드포인트 인증 필수 — 미인증 401."""
     assert client.get(API + "/assets").status_code == 401
     assert client.get(API + "/projects").status_code == 401
-    assert client.get(API + "/settlements").status_code == 401
     assert client.post(API + "/assets", json={}).status_code == 401
 
 
@@ -424,109 +423,24 @@ def test_update_project_recalculates_amounts(client, staff_headers):
 
 
 # ---------------------------------------------------------------------------
-# 정산 (SCR-07)
+# 정산 (SCR-07) — 레거시 정산 라우터 제거됨. 후속 삭제 테스트가 필요로 하는
+# COMPLETED 상태만 DB로 직접 세팅한다(상태 전이 검증은 증분 5 이후 재설계).
 # ---------------------------------------------------------------------------
-def test_list_settlements(client, staff_headers):
-    """정산 목록 — 고객사·사업명·지분율·보수율·예상 정산액·정산 상태."""
-    resp = client.get(API + "/settlements", headers=staff_headers)
-    assert resp.status_code == 200
-    row = next(i for i in resp.json()["items"] if i["map_id"] == S["map_id"])
-    assert row["project_name"] == "P2 전기버스 전환 사업"
-    assert row["client_name"] == "P2운수"
-    assert row["allocation_ratio"] == 40
-    assert row["success_fee_rate"] == 10
-    assert row["expected_amount"] == 1600000
-    assert row["settlement_status"] == "STANDBY"
+def test_mark_mapping_completed_state():
+    """매핑을 정산 완료(COMPLETED) 상태로 세팅 — 이후 해제/삭제 제약 검증용."""
+    from datetime import datetime
 
-    resp = client.get(
-        API + "/settlements",
-        params={"settlement_status": "STANDBY", "project_id": S["project_id"]},
-        headers=staff_headers,
-    )
-    assert resp.json()["total"] == 2
-
-    # 정산 기준월 — STANDBY는 예상 발급월 기준
-    resp = client.get(API + "/settlements", params={"period": "2026-12"}, headers=staff_headers)
-    assert any(i["map_id"] == S["map_id"] for i in resp.json()["items"])
-    resp = client.get(API + "/settlements", params={"period": "1999-01"}, headers=staff_headers)
-    assert resp.json()["total"] == 0
-
-    resp = client.get(API + "/settlements", params={"period": "bad"}, headers=staff_headers)
-    assert resp.status_code == 422
-
-
-def test_settlement_change_staff_403(client, staff_headers):
-    """정산 상태 변경은 MANAGER 이상(§10.1) — STAFF 403."""
-    resp = client.put(
-        API + "/settlements/" + S["map_id"] + "/status",
-        headers=staff_headers,
-        json={"settlement_status": "BILLED"},
-    )
-    assert resp.status_code == 403
-
-
-def test_settlement_skip_transition_409(client, admin_headers):
-    """STANDBY→COMPLETED 건너뛰기 금지 — 409."""
-    resp = client.put(
-        API + "/settlements/" + S["map_id"] + "/status",
-        headers=admin_headers,
-        json={"settlement_status": "COMPLETED"},
-    )
-    assert resp.status_code == 409
-
-
-def test_settlement_transitions(client, admin_headers):
-    """STANDBY→BILLED→COMPLETED 전이 — 전이 시각 기록 + 서버 계산 금액."""
-    resp = client.put(
-        API + "/settlements/" + S["map_id"] + "/status",
-        headers=admin_headers,
-        json={"settlement_status": "BILLED"},
-    )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["settlement_status"] == "BILLED"
-    assert body["billed_at"] is not None
-    assert body["expected_amount"] == 1600000  # 항상 서버 계산 값
-
-    resp = client.put(
-        API + "/settlements/" + S["map_id"] + "/status",
-        headers=admin_headers,
-        json={"settlement_status": "COMPLETED", "paid_amount": 1600000, "payment_type": "FULL"},
-    )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["settlement_status"] == "COMPLETED"
-    assert body["completed_at"] is not None
-    assert body["paid_amount"] == 1600000
-
-    # 회차 스냅샷(R3-1) 2건 + 감사 로그(SETTLEMENT_CHANGE) 적재
     db = _db()
     try:
-        snaps = (
-            db.query(SettlementSnapshot)
-            .filter(SettlementSnapshot.map_id == S["map_id"])
-            .order_by(SettlementSnapshot.seq.asc())
-            .all()
-        )
-        assert [s.action for s in snaps] == ["BILLED", "COMPLETED"]
-        logs = (
-            db.query(AuditLog)
-            .filter(AuditLog.action == "SETTLEMENT_CHANGE", AuditLog.target_id == S["map_id"])
-            .all()
-        )
-        assert len(logs) == 2
+        m = db.query(models.ProjectClientMap).filter_by(map_id=S["map_id"]).one()
+        m.settlement_status = "COMPLETED"
+        m.billed_at = datetime.utcnow()
+        m.completed_at = datetime.utcnow()
+        m.paid_amount = 1600000
+        m.payment_type = "FULL"
+        db.commit()
     finally:
         db.close()
-
-
-def test_settlement_reverse_409(client, admin_headers):
-    """역행 금지 — COMPLETED→BILLED 409."""
-    resp = client.put(
-        API + "/settlements/" + S["map_id"] + "/status",
-        headers=admin_headers,
-        json={"settlement_status": "BILLED"},
-    )
-    assert resp.status_code == 409
 
 
 def test_settled_mapping_cannot_be_deleted(client, staff_headers):

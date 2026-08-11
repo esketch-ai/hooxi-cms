@@ -168,19 +168,6 @@ def test_audit_logs(token, user_id):
         print(f"❌ 감사 로그 조회 실패: {resp.text}")
         return None
 
-def test_settlements_list(token, user_id):
-    """[P0] 정산 관리: 목록 조회"""
-    print("\n=== [P0] Settlements List ===")
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = client.get("/api/v1/settlements", headers=headers)
-    if resp.status_code == 200:
-        data = resp.json()
-        print(f"✅ 정산 목록 조회 성공 (총 {data['total']}개)")
-        return user_id
-    else:
-        print(f"❌ 정산 목록 조회 실패: {resp.text}")
-        return None
-
 def test_documents_list(token, user_id):
     """[P0] 문서 관리: 목록 조회"""
     print("\n=== [P0] Documents List ===")
@@ -245,7 +232,6 @@ def main():
         ("Schedules List", lambda: test_schedules_list(auth_token, user_id)),
         ("Dashboard Stats", lambda: test_dashboard_stats(auth_token, user_id)),
         ("Audit Logs", lambda: test_audit_logs(auth_token, user_id)),
-        ("Settlements List", lambda: test_settlements_list(auth_token, user_id)),
         ("Documents List", lambda: test_documents_list(auth_token, user_id)),
         ("Config List", lambda: test_config_list(auth_token, user_id)),
         ("Backups List", lambda: test_backups_list(auth_token, user_id)),
