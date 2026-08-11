@@ -160,6 +160,9 @@ def seed_codes():
         ("PROJECT_STATUS", "모니터링", "모니터링", "blue", None, 30),
         ("PROJECT_STATUS", "검증", "검증", "purple", None, 40),
         ("PROJECT_STATUS", "발급완료", "발급완료", "emerald", None, 50),
+        # 사업 승인상태 — 회계 원장층 미착품 전환 스위치(부록 L). 한글 코드값(VEHICLE_INTRO 방식).
+        ("APPROVAL_STATUS", "미승인", "미승인", "gray", None, 10),
+        ("APPROVAL_STATUS", "승인", "승인", "emerald", None, 20),
         # 정산 상태 (상태전이 머신 — 전 값 로직 참조)
         ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", None, 10),
         ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", None, 20),

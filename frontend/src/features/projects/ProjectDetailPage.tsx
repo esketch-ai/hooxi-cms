@@ -27,17 +27,26 @@ import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { useDebounced } from '../../lib/useDebounced'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
-import type { Project, ProjectClientMap, ProjectSale, ProjectVehicle } from '../../types'
+import type {
+  Project,
+  ProjectClientMap,
+  ProjectSale,
+  ProjectVehicle,
+  PurchaseInvoice,
+} from '../../types'
 import {
   downloadVehicleTemplate,
   isIssueImminent,
   useDeleteMapping,
   useDeleteProject,
+  useDeletePurchaseInvoice,
   useDeleteSale,
   useDeleteVehicle,
   useImportVehicles,
   useProject,
   useProjectVehicles,
+  usePurchaseInvoices,
+  useUpdateApprovalStatus,
   useUpdatePayoutParams,
   useUpdateStages,
   useUpdateUnitPrice,
@@ -46,6 +55,7 @@ import { ProjectFormModal } from './ProjectFormModal'
 import { MappingFormModal } from './MappingFormModal'
 import { VehicleFormModal } from './VehicleFormModal'
 import { SaleFormModal } from './SaleFormModal'
+import { PurchaseInvoiceFormModal } from './PurchaseInvoiceFormModal'
 
 function OverviewItem({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -259,6 +269,70 @@ function ApprovedAtEditor({ projectId, approvedAt }: { projectId: string; approv
         className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
         title="승인일 수기 입력"
         aria-label="승인일"
+      >
+        <PencilSimple size={14} />
+      </button>
+    </div>
+  )
+}
+
+/** 승인상태 인라인 편집 — useCodes('APPROVAL_STATUS') 드롭다운, PUT /projects/{id}. 미입력 시 "미승인" 취급 */
+function ApprovalStatusEditor({
+  projectId,
+  approvalStatus,
+}: {
+  projectId: string
+  approvalStatus?: string | null
+}) {
+  const { showToast } = useToast()
+  const { options, labelOf } = useCodes('APPROVAL_STATUS')
+  const update = useUpdateApprovalStatus(projectId)
+  const [editing, setEditing] = useState(false)
+
+  const onChange = async (value: string) => {
+    try {
+      await update.mutateAsync(value || null)
+      showToast('승인상태가 저장되었습니다.', 'success')
+      setEditing(false)
+    } catch {
+      showToast('승인상태 저장에 실패했습니다.', 'danger')
+    }
+  }
+
+  if (editing) {
+    return (
+      <select
+        value={approvalStatus ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        disabled={update.isPending}
+        autoFocus
+        className="h-8 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none disabled:opacity-60"
+        aria-label="승인상태"
+      >
+        <option value="">미승인</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {approvalStatus ? (
+        <span className="text-bone">{labelOf(approvalStatus)}</span>
+      ) : (
+        <span className="font-medium text-amber-400">미승인</span>
+      )}
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
+        title="승인상태 변경"
+        aria-label="승인상태"
       >
         <PencilSimple size={14} />
       </button>
@@ -601,6 +675,12 @@ export function ProjectDetailPage() {
           <OverviewItem label="승인일">
             <ApprovedAtEditor projectId={project.project_id} approvedAt={project.approved_at} />
           </OverviewItem>
+          <OverviewItem label="승인상태">
+            <ApprovalStatusEditor
+              projectId={project.project_id}
+              approvalStatus={project.approval_status}
+            />
+          </OverviewItem>
         </div>
         {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}
         <p className="mt-4 border-t border-hairline pt-3 text-xs text-slatey">
@@ -685,7 +765,10 @@ export function ProjectDetailPage() {
       {/* 참여 차량 (Phase 2) */}
       <VehiclesSection projectId={project.project_id} />
 
-      {/* 거래계약 (매수자별 선물 판매단가) + 내부 차액 수익 요약 */}
+      {/* 매입세금계산서 (P·B 회계 원장층 — 총매입=제품 산출) */}
+      <PurchaseInvoicesSection projectId={project.project_id} />
+
+      {/* 거래계약 (매수자별 선물 판매단가) + 회계 요약 */}
       <SalesSection project={project} />
 
       <ProjectFormModal open={editOpen} onClose={() => setEditOpen(false)} project={project} />
@@ -1110,44 +1193,182 @@ function VehiclesSection({ projectId }: { projectId: string }) {
   )
 }
 
-// 내부 차액 수익 요약 — 매출 − 지급 = 차액(마진). 내부 전용, 서버 파생값이 있을 때만 표시.
+// 회계 요약 (P·B 회계 원장층) — 예상지급액·제품(매입)·미착품·부채·재고자산·지급률·매출인식·매출이익·이익률.
+// 내부 전용, 서버 파생값(단가·파라미터 게이트). null이면 "산출 대기". 금액은 SensitiveData로 마스킹.
 function MarginSummary({ project }: { project: Project }) {
   const has =
     project.sale_amount != null ||
     project.payout_amount != null ||
-    project.margin_amount != null
+    project.margin_amount != null ||
+    project.product != null ||
+    project.sale_recognized != null
   const money = (v?: number | null) =>
     v != null ? (
       <SensitiveData type="money" value={fmtMoney(Number(v))} />
     ) : (
       <span className="text-xs font-medium text-amber-400">산출 대기</span>
     )
+  // 지급률·이익률은 0~1 비율 → % 표기, SensitiveData rate 마스킹
+  const ratePct = (v?: number | null) =>
+    v != null ? (
+      <SensitiveData type="rate" value={`${(Number(v) * 100).toFixed(1)} %`} />
+    ) : (
+      <span className="text-xs font-medium text-amber-400">산출 대기</span>
+    )
   return (
     <div className="rounded-3xl border border-hairline bg-graphite p-4">
       <div className="mb-3 flex items-center gap-2">
-        <h3 className="text-sm font-bold text-bone">내부 차액 수익 요약</h3>
+        <h3 className="text-sm font-bold text-bone">회계 요약</h3>
         <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
           내부 전용
         </span>
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
-        <OverviewItem label="매출 (판매)">{money(project.sale_amount)}</OverviewItem>
-        <OverviewItem label="지급 (원가)">{money(project.payout_amount)}</OverviewItem>
-        <OverviewItem label="차액 (마진)">{money(project.margin_amount)}</OverviewItem>
-        <OverviewItem label="마진율">
-          {project.margin_ratio != null ? (
-            <SensitiveData type="rate" value={`${Number(project.margin_ratio)} %`} />
-          ) : (
-            <span className="text-xs font-medium text-amber-400">산출 대기</span>
-          )}
-        </OverviewItem>
+        <OverviewItem label="예상지급액">{money(project.expected_payment)}</OverviewItem>
+        <OverviewItem label="제품 (총매입)">{money(project.product)}</OverviewItem>
+        <OverviewItem label="미착품1">{money(project.wip1)}</OverviewItem>
+        <OverviewItem label="미착품2">{money(project.wip2)}</OverviewItem>
+        <OverviewItem label="부채">{money(project.liability)}</OverviewItem>
+        <OverviewItem label="재고자산">{money(project.inventory)}</OverviewItem>
+        <OverviewItem label="지급률">{ratePct(project.payout_rate)}</OverviewItem>
+        <OverviewItem label="매출인식">{money(project.sale_recognized)}</OverviewItem>
+        <OverviewItem label="매출이익">{money(project.gross_profit)}</OverviewItem>
+        <OverviewItem label="이익률">{ratePct(project.profit_rate)}</OverviewItem>
       </div>
       {!has && (
         <p className="mt-3 text-xs text-slatey">
-          거래계약(선물 판매단가)과 원가 단가가 입력되면 차액이 자동 산출됩니다.
+          매입세금계산서·거래계약(매출세금계산서)·단가·지급 파라미터가 입력되면 회계 항목이 자동
+          산출됩니다.
         </p>
       )}
     </div>
+  )
+}
+
+// 매입세금계산서 (P·B 회계 원장층) — 운수사·발행일·금액 목록 + 총액. 등록/수정/삭제(페이지네이션 없음).
+function PurchaseInvoicesSection({ projectId }: { projectId: string }) {
+  const { data } = usePurchaseInvoices(projectId)
+  const del = useDeletePurchaseInvoice(projectId)
+  const { showToast } = useToast()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<PurchaseInvoice | null>(null)
+  const [deleting, setDeleting] = useState<PurchaseInvoice | null>(null)
+  const invoices = data?.items ?? []
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (i: PurchaseInvoice) => {
+    setEditing(i)
+    setFormOpen(true)
+  }
+  const confirmDelete = async () => {
+    if (!deleting) return
+    try {
+      await del.mutateAsync(deleting.invoice_id)
+      showToast('매입세금계산서가 삭제되었습니다.', 'success')
+      setDeleting(null)
+    } catch {
+      showToast('삭제에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-base font-bold text-bone">매입세금계산서</h2>
+          {data && (
+            <span className="text-xs text-slatey">
+              {invoices.length.toLocaleString()}건 · 총매입{' '}
+              <SensitiveData type="money" value={fmtMoney(Number(data.total_amount))} />
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="flex items-center gap-1.5 self-start rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
+        >
+          <Plus size={15} weight="bold" /> 매입세금계산서 추가
+        </button>
+      </div>
+
+      {invoices.length === 0 ? (
+        <EmptyState
+          icon={<Plus size={28} />}
+          title="매입세금계산서가 없습니다"
+          description="[매입세금계산서 추가]로 운수사·발행일·금액을 입력하세요."
+          className="py-8"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs text-slatey">
+                <th className="px-3 py-2.5 text-left font-semibold">운수사</th>
+                <th className="px-3 py-2.5 text-left font-semibold">지역</th>
+                <th className="px-3 py-2.5 text-left font-semibold">발행일</th>
+                <th className="px-3 py-2.5 text-right font-semibold">금액</th>
+                <th className="px-3 py-2.5 text-right font-semibold">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((i) => (
+                <tr key={i.invoice_id} className="border-b border-hairline/60 last:border-b-0">
+                  <td className="px-3 py-2.5 font-medium text-bone">
+                    {i.operator_name ?? i.client_name ?? '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-ash">{i.region ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{i.issue_date ? fmtDate(i.issue_date) : '—'}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <SensitiveData type="money" value={fmtMoney(Number(i.amount))} />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(i)}
+                        className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+                        aria-label="매입세금계산서 수정"
+                      >
+                        <PencilSimple size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleting(i)}
+                        className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-rose-400"
+                        aria-label="매입세금계산서 삭제"
+                      >
+                        <Trash size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <PurchaseInvoiceFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        projectId={projectId}
+        invoice={editing}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        title="매입세금계산서 삭제"
+        message={`${deleting?.operator_name ?? '해당'} 매입세금계산서를 삭제합니다.`}
+        confirmLabel="삭제"
+        danger
+        loading={del.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
+    </section>
   )
 }
 
@@ -1208,7 +1429,7 @@ function SalesSection({ project }: { project: Project }) {
         />
       ) : (
         <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="border-b border-hairline text-xs text-slatey">
                 <th className="px-3 py-2.5 text-left font-semibold">매수자</th>
@@ -1216,6 +1437,9 @@ function SalesSection({ project }: { project: Project }) {
                 <th className="px-3 py-2.5 text-right font-semibold">선물단가</th>
                 <th className="px-3 py-2.5 text-right font-semibold">수량(tCO₂)</th>
                 <th className="px-3 py-2.5 text-right font-semibold">금액</th>
+                <th className="px-3 py-2.5 text-right font-semibold">실발행액</th>
+                <th className="px-3 py-2.5 text-right font-semibold">소유권비율</th>
+                <th className="px-3 py-2.5 text-center font-semibold">후시보유</th>
                 <th className="px-3 py-2.5 text-left font-semibold">계약일</th>
                 <th className="px-3 py-2.5 text-right font-semibold">관리</th>
               </tr>
@@ -1245,6 +1469,25 @@ function SalesSection({ project }: { project: Project }) {
                     <td className="px-3 py-2.5 text-right">
                       {amount != null ? (
                         <SensitiveData type="money" value={fmtMoney(amount)} />
+                      ) : (
+                        <span className="text-slatey">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {s.sale_invoice_amount != null ? (
+                        <SensitiveData type="money" value={fmtMoney(Number(s.sale_invoice_amount))} />
+                      ) : (
+                        <span className="text-slatey">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-ash">
+                      {s.ownership_pct != null ? `${Number(s.ownership_pct)} %` : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      {s.is_hold === 'Y' ? (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                          후시보유
+                        </span>
                       ) : (
                         <span className="text-slatey">—</span>
                       )}

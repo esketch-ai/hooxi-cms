@@ -179,6 +179,7 @@ class Project(Base):
     base_reduction = Column(Numeric(10, 3))  # 기준감축량(기본 240)
     base_vehicle_age = Column(Numeric(5, 2))  # 기준차령(기본 8)
     approved_at = Column(Date)  # 승인일(승인=NOT NULL). 지급 파라미터 입력 시 자동 세팅
+    approval_status = Column(String(20))  # APPROVAL_STATUS: 미승인/승인 — 미착품 전환 스위치(부록 L)
     price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
     issued_at = Column(Date)
@@ -287,9 +288,35 @@ class ProjectSale(Base):
     project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
     buyer_name = Column(String(100), nullable=False)  # 매수자(증권/투자/금융)
     buyer_type = Column(String(20))  # SALE_BUYER_TYPE 공통코드(증권사/투자사/금융사/기타)
-    sale_unit_price = Column(Numeric(15, 2))  # 선물 판매 톤당 단가
-    quantity = Column(Numeric(14, 3))  # 판매 수량(tCO2)
+    sale_unit_price = Column(Numeric(15, 2))  # 선물 판매 톤당 단가(정보성 유지)
+    quantity = Column(Numeric(14, 3))  # 판매 수량(tCO2, 정보성 유지)
+    # 회계 원장층(부록 L.3) — 매출인식 기준: 실발행액 × 지급률
+    ownership_pct = Column(Numeric(5, 2))  # 소유권비율(%)
+    sale_invoice_amount = Column(Numeric(15, 2))  # 매출세금계산서 실발행액 — 매출인식 기준
+    sale_invoice_date = Column(Date)  # 매출세금계산서 발행일
+    is_hold = Column(String(1), default="N")  # 후시보유 여부(Y/N)
     contract_date = Column(Date)
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class PurchaseInvoice(Base):
+    """매입세금계산서(운수사 실지급=제품) — 회계 원장층(부록 L.3)의 제품(총매입) 원천.
+
+    프로젝트×운수사 분할 다건 허용. 제품(총매입) = Σ amount는 저장하지 않고 상세에서 파생한다.
+    operator_name은 엑셀 일괄 등록용 운수사 표기(client_id 매핑과 병용).
+    """
+
+    __tablename__ = "tb_purchase_invoice"
+
+    invoice_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사
+    operator_name = Column(String(100))  # 운수사 표기(엑셀 import용)
+    region = Column(String(20))
+    issue_date = Column(Date)  # 발행일
+    amount = Column(Numeric(15, 2))  # 금액
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -674,9 +701,15 @@ def ensure_schema():
         ("tb_project", "base_reduction", "NUMERIC(10,3)"),
         ("tb_project", "base_vehicle_age", "NUMERIC(5,2)"),
         ("tb_project", "approved_at", "DATE"),
+        ("tb_project", "approval_status", "VARCHAR(20)"),
         ("tb_project_vehicle", "expire_at", "DATE"),
         ("tb_project_vehicle", "remaining_age", "NUMERIC(6,3)"),
         ("tb_project_vehicle", "effective_reduction", "NUMERIC(14,3)"),
+        # 회계 원장층(부록 L.3) — 거래계약 매출인식 확장 필드
+        ("tb_project_sale", "ownership_pct", "NUMERIC(5,2)"),
+        ("tb_project_sale", "sale_invoice_amount", "NUMERIC(15,2)"),
+        ("tb_project_sale", "sale_invoice_date", "DATE"),
+        ("tb_project_sale", "is_hold", "VARCHAR(1)"),
     ]
     try:
         insp = _inspect(engine)

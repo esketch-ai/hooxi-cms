@@ -17,6 +17,9 @@ import type {
   ProjectVehicle,
   ProjectVehicleList,
   ProjectVehiclePayload,
+  PurchaseInvoice,
+  PurchaseInvoiceList,
+  PurchaseInvoicePayload,
 } from '../../types'
 
 export interface ProjectFilters {
@@ -261,6 +264,73 @@ export function useDeleteSale(projectId: string | undefined) {
   return useMutation({
     mutationFn: async (saleId: string) => {
       await api.delete(`/projects/${projectId}/sales/${saleId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 매입세금계산서 목록 (P·B 회계 원장층) — 운수사·발행일·금액 + 총액 */
+export function usePurchaseInvoices(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['projects', projectId, 'purchase-invoices'],
+    queryFn: async () => {
+      const { data } = await api.get<PurchaseInvoiceList>(
+        `/projects/${projectId}/purchase-invoices`,
+      )
+      return data
+    },
+    enabled: !!projectId,
+  })
+}
+
+/** 매입세금계산서 등록/수정 — invoiceId 있으면 PUT, 없으면 POST */
+export function useSavePurchaseInvoice(projectId: string | undefined, invoiceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: PurchaseInvoicePayload) => {
+      const { data } = invoiceId
+        ? await api.put<PurchaseInvoice>(
+            `/projects/${projectId}/purchase-invoices/${invoiceId}`,
+            payload,
+          )
+        : await api.post<PurchaseInvoice>(`/projects/${projectId}/purchase-invoices`, payload)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'purchase-invoices'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 매입세금계산서 삭제 */
+export function useDeletePurchaseInvoice(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (invoiceId: string) => {
+      await api.delete(`/projects/${projectId}/purchase-invoices/${invoiceId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'purchase-invoices'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 승인상태 변경 (APPROVAL_STATUS: 미승인/승인) — PUT /projects/{id} 부분 전송 */
+export function useUpdateApprovalStatus(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (approvalStatus: string | null) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}`, {
+        approval_status: approvalStatus,
+      })
+      return data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects', projectId] })

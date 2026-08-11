@@ -168,4 +168,19 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("memo", "비고", example=""),
         ),
     ),
+    # ── 매입세금계산서(운수사 실지급=제품) — 회계 원장층(부록 L.3). 프로젝트 스코프.
+    #    project_id는 URL에서 주입(행 컬럼 아님). operator_name은 운수사 표기(평문, 매핑 없이 저장).
+    "purchase_invoices": ImportSpec(
+        entity="purchase_invoices",
+        label="매입세금계산서",
+        schema_cls=schemas.PurchaseInvoiceIn,
+        filename="매입세금계산서_일괄등록_양식.xlsx",
+        columns=(
+            ImportColumn("operator_name", "운수사", example="한빛운수"),
+            ImportColumn("region", "지역", code_category="REGION", example="제주"),
+            ImportColumn("issue_date", "발행일", example="2026-01-15"),
+            ImportColumn("amount", "금액", required=True, example="1000000"),
+            ImportColumn("memo", "비고", example=""),
+        ),
+    ),
 }

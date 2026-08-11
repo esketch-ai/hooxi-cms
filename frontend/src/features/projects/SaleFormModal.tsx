@@ -109,6 +109,46 @@ export function SaleFormModal({ open, onClose, projectId, sale }: Props) {
               className={inputCls}
             />
           </Field>
+          {/* ── P·B 회계 원장층 확장 — 매출인식·소유권·후시보유 ── */}
+          <Field label="매출세금계산서 실발행액 (원)">
+            <input
+              type="number"
+              min={0}
+              value={form.sale_invoice_amount ?? ''}
+              onChange={(e) => set('sale_invoice_amount', numOrNull(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="매출세금계산서 발행일">
+            <input
+              type="date"
+              value={form.sale_invoice_date ?? ''}
+              onChange={(e) => set('sale_invoice_date', e.target.value || null)}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="소유권비율 (%)">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={form.ownership_pct ?? ''}
+              onChange={(e) => set('ownership_pct', numOrNull(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="후시보유">
+            <label className="flex h-10 items-center gap-2 text-sm text-bone">
+              <input
+                type="checkbox"
+                checked={form.is_hold === 'Y'}
+                onChange={(e) => set('is_hold', e.target.checked ? 'Y' : 'N')}
+                className="h-4 w-4 rounded border-hairline bg-graphite accent-primary"
+              />
+              후시보유 대상
+            </label>
+          </Field>
           <Field label="비고">
             <input
               value={form.memo ?? ''}

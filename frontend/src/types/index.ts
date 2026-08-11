@@ -496,6 +496,19 @@ export interface Project {
   payout_amount?: number | null // 운수사 지급 합계
   margin_amount?: number | null // 차액 (매출 − 지급)
   margin_ratio?: number | null // 마진율 (%)
+  // ── P·B 회계 원장층 (상세 응답, 전부 nullable — 단가/파라미터 게이트 시 None) ──
+  approval_status?: string | null // APPROVAL_STATUS: 미승인/승인 (미입력 시 "미승인" 취급)
+  product?: number | null // 제품 = 총매입 (매입세금계산서 합)
+  expected_payment?: number | null // 예상지급액
+  wip1?: number | null // 미착품1
+  wip2?: number | null // 미착품2
+  liability?: number | null // 부채
+  inventory?: number | null // 재고자산
+  payout_rate?: number | null // 지급률 (0~1)
+  sale_recognized?: number | null // 매출인식 (매출세금계산서 실발행액 기준)
+  gross_profit?: number | null // 매출이익
+  profit_rate?: number | null // 이익률 (0~1)
+  ownership_total?: number | null // 소유권 합계 (%)
 }
 
 // tb_project_sale — 매수자별 선물 판매단가 거래계약 (내부 차액 수익 산출)
@@ -506,6 +519,11 @@ export interface ProjectSalePayload {
   quantity?: number | null // 수량 (tCO₂)
   contract_date?: string | null
   memo?: string | null
+  // ── P·B 회계 원장층 확장 ──
+  ownership_pct?: number | null // 소유권비율 (%)
+  sale_invoice_amount?: number | null // 매출세금계산서 실발행액 — 매출인식 기준
+  sale_invoice_date?: string | null // 매출세금계산서 발행일
+  is_hold?: string | null // 후시보유 'Y'/'N'
 }
 
 export interface ProjectSale extends ProjectSalePayload {
@@ -518,6 +536,29 @@ export interface ProjectSaleList {
   items: ProjectSale[]
   total: number
   total_sale_amount?: number | null
+}
+
+// tb_project_purchase_invoice — 매입세금계산서 (P·B 회계 원장층, 총매입=제품 산출)
+export interface PurchaseInvoicePayload {
+  operator_name?: string | null // 운수사명
+  client_id?: string | null
+  region?: string | null
+  issue_date?: string | null // 발행일
+  amount: number // 금액 (필수)
+  memo?: string | null
+}
+
+export interface PurchaseInvoice extends PurchaseInvoicePayload {
+  invoice_id: string
+  project_id: string
+  client_name?: string | null // 조인 보강
+  created_at?: string
+}
+
+export interface PurchaseInvoiceList {
+  items: PurchaseInvoice[]
+  total: number
+  total_amount: number | null
 }
 
 // tb_project_vehicle — 사업 참여 차량 (Phase 2, 감축량·예상지급액 ingest)

@@ -535,6 +535,7 @@ class ProjectCreate(BlankFKToNoneModel):
     reg_code: Optional[str] = Field(default=None, max_length=50)  # 예: R-2024-KR-03-000528
     # project_status는 공통 코드 마스터(PROJECT_STATUS)로 관리 → 라우터에서 검증
     project_status: str = Field(default="기획", min_length=1, max_length=20)
+    approval_status: Optional[str] = Field(default=None, max_length=20)  # APPROVAL_STATUS(미승인/승인)
     reg_date: Optional[date] = None
     credit_start_date: Optional[date] = None
     credit_end_date: Optional[date] = None
@@ -571,6 +572,8 @@ class ProjectUpdate(BlankFKToNoneModel):
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
     manager_id: Optional[str] = Field(default=None, max_length=50)
+    # 사업 승인상태(APPROVAL_STATUS: 미승인/승인) — 라우터에서 validate_active_code 검증. 미착품 전환 스위치(부록 L)
+    approval_status: Optional[str] = Field(default=None, min_length=1, max_length=20)
 
 
 class ProjectOut(BaseModel):
@@ -595,6 +598,7 @@ class ProjectOut(BaseModel):
     base_reduction: Optional[float] = None  # 기준감축량(기본 240)
     base_vehicle_age: Optional[float] = None  # 기준차령(기본 8)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
+    approval_status: Optional[str] = None  # 사업 승인상태(미승인/승인) — 미착품 전환 스위치(부록 L)
     price_source: Optional[str] = None
     issued_credits: Optional[float] = None
     issued_at: Optional[date] = None
@@ -757,8 +761,13 @@ class ProjectSaleIn(BaseModel):
 
     buyer_name: str = Field(min_length=1, max_length=100)  # 매수자(증권/투자/금융)
     buyer_type: Optional[str] = Field(default=None, max_length=20)  # SALE_BUYER_TYPE
-    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 선물 판매 단가
-    quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)  # 판매 수량(tCO2)
+    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 선물 판매 단가(정보성)
+    quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)  # 판매 수량(tCO2, 정보성)
+    # 회계 원장층(부록 L.3) — 매출인식 확장 필드
+    ownership_pct: Optional[float] = Field(default=None, ge=0, le=100)  # 소유권비율(%)
+    sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출세금계산서 실발행액
+    sale_invoice_date: Optional[date] = None  # 매출세금계산서 발행일
+    is_hold: str = Field(default="N", pattern="^[YN]$")  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
 
@@ -770,6 +779,10 @@ class ProjectSaleUpdate(BaseModel):
     buyer_type: Optional[str] = Field(default=None, max_length=20)
     sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
+    ownership_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    sale_invoice_date: Optional[date] = None
+    is_hold: Optional[str] = Field(default=None, pattern="^[YN]$")
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
 
@@ -783,6 +796,10 @@ class ProjectSaleOut(BaseModel):
     buyer_type: Optional[str] = None
     sale_unit_price: Optional[float] = None  # 🔒
     quantity: Optional[float] = None
+    ownership_pct: Optional[float] = None  # 소유권비율(%)
+    sale_invoice_amount: Optional[float] = None  # 🔒 매출세금계산서 실발행액(매출인식 기준)
+    sale_invoice_date: Optional[date] = None
+    is_hold: Optional[str] = None  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -793,6 +810,51 @@ class ProjectSaleListResponse(BaseModel):
     items: List[ProjectSaleOut]
     total: int
     total_sale_amount: Optional[float] = None  # Σ(단가×수량, 둘 다 입력된 계약만) — 없으면 None
+
+
+# 매입세금계산서(운수사 실지급=제품) — 회계 원장층(부록 L.3) 제품 원천 ------------
+class PurchaseInvoiceIn(BlankFKToNoneModel):
+    """매입세금계산서 등록 — 금액 필수(ge=0). operator_name은 엑셀 import용 운수사 표기."""
+
+    client_id: Optional[str] = Field(default=None, max_length=50)  # 운수사
+    operator_name: Optional[str] = Field(default=None, max_length=100)  # 운수사 표기(엑셀 import용)
+    region: Optional[str] = Field(default=None, max_length=20)
+    issue_date: Optional[date] = None  # 발행일
+    amount: float = Field(ge=0, le=_UNIT_PRICE_MAX)  # 금액(필수)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class PurchaseInvoiceUpdate(BlankFKToNoneModel):
+    """매입세금계산서 부분 수정 — 전달된 필드만 반영(전 필드 optional)."""
+
+    client_id: Optional[str] = Field(default=None, max_length=50)
+    operator_name: Optional[str] = Field(default=None, max_length=100)
+    region: Optional[str] = Field(default=None, max_length=20)
+    issue_date: Optional[date] = None
+    amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class PurchaseInvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    invoice_id: str
+    project_id: str
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None  # 운수사명(조인)
+    operator_name: Optional[str] = None
+    region: Optional[str] = None
+    issue_date: Optional[date] = None
+    amount: Optional[float] = None  # 🔒
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class PurchaseInvoiceListResponse(BaseModel):
+    items: List[PurchaseInvoiceOut]
+    total: int
+    total_amount: Optional[float] = None  # Σ amount(제품=총매입) — 없으면 None
 
 
 class ProjectDetailOut(ProjectOut):
@@ -810,6 +872,18 @@ class ProjectDetailOut(ProjectOut):
     payout_amount: Optional[float] = None  # 지급 Σ(차량 expected_payout, None 제외)
     margin_amount: Optional[float] = None  # 차액 = sale_amount − payout_amount(둘 다 있을 때만)
     margin_ratio: Optional[float] = None  # margin_amount/sale_amount × 100(%)
+    # 회계 원장층 파생(부록 L.3) — 매입세금계산서·실발행액 기반 회계 체인(내부 표시용)
+    product: Optional[float] = None  # 제품(총매입) = Σ 매입세금계산서 금액
+    expected_payment: Optional[float] = None  # 예상지급액 = Σ 차량 expected_payout(전건 None이면 None)
+    wip1: Optional[float] = None  # 미착품1(미승인 시 예상지급액)
+    wip2: Optional[float] = None  # 미착품2(승인 시 trunc(예상지급액 − 제품))
+    liability: Optional[float] = None  # 부채 = wip1 + wip2
+    inventory: Optional[float] = None  # 재고자산 = 부채 + 제품
+    payout_rate: Optional[float] = None  # 지급률 = round(제품/예상지급액, 3)
+    sale_recognized: Optional[float] = None  # 매출인식 = trunc(Σ trunc(실발행액 × 지급률))
+    gross_profit: Optional[float] = None  # 매출이익 = trunc(매출인식 − 제품)
+    profit_rate: Optional[float] = None  # 이익률 = round(매출이익/매출인식, 3)
+    ownership_total: Optional[float] = None  # 소유권비율 합(%)
 
 
 # ---------------------------------------------------------------------------

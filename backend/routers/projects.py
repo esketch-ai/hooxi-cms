@@ -31,11 +31,13 @@ from models import (
     ProjectSale,
     ProjectStage,
     ProjectVehicle,
+    PurchaseInvoice,
     User,
     get_db,
 )
 from routers import common
 from routers.codes import validate_active_code
+from services import accounting
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -45,7 +47,7 @@ _PROJECT_FIELDS = [
     "reg_date", "credit_start_date", "credit_end_date", "credit_period_type",
     "mon_start_date", "mon_end_date", "mon_cycle",
     "expected_issue_date", "expected_credits", "unit_price",
-    "issued_credits", "issued_at", "manager_id",
+    "issued_credits", "issued_at", "manager_id", "approval_status",
 ]  # 지급 파라미터(max_payment·approved_at 등)는 payout-params 전용 경로만(차량 재계산 동반)
 
 
@@ -130,7 +132,11 @@ def _vehicle_rollup(db: Session, project_id: str):
 
 
 # ── 거래계약(매수자별 선물 판매) + 내부 차액 수익 파생 ─────────────────────
-_SALE_FIELDS = ("buyer_name", "buyer_type", "sale_unit_price", "quantity", "contract_date", "memo")
+_SALE_FIELDS = (
+    "buyer_name", "buyer_type", "sale_unit_price", "quantity",
+    "ownership_pct", "sale_invoice_amount", "sale_invoice_date", "is_hold",
+    "contract_date", "memo",
+)
 
 
 def _sale_out(s: ProjectSale) -> schemas.ProjectSaleOut:
@@ -165,6 +171,36 @@ def _payout_amount(db: Session, project_id: str) -> Optional[float]:
         .scalar()
     )
     return round(float(total), 2) if total is not None else None
+
+
+def _product_amount(db: Session, project_id: str) -> float:
+    """제품(총매입) Σ(매입세금계산서 금액, None 제외) — 없으면 0(부록 L.3)."""
+    total = (
+        db.query(func.sum(PurchaseInvoice.amount))
+        .filter(PurchaseInvoice.project_id == project_id)
+        .scalar()
+    )
+    return round(float(total), 2) if total is not None else 0.0
+
+
+def _validate_ownership_total(db: Session, project_id: str, new_pct: Optional[float],
+                              exclude_sale_id: Optional[str] = None):
+    """Σ 소유권비율 > 100.01 시 422 — 후시보유 포함 100% 초과 방지(부록 L.3)."""
+    if new_pct is None:
+        return
+    query = db.query(func.coalesce(func.sum(ProjectSale.ownership_pct), 0)).filter(
+        ProjectSale.project_id == project_id
+    )
+    if exclude_sale_id:
+        query = query.filter(ProjectSale.sale_id != exclude_sale_id)
+    current_total = float(query.scalar() or 0)
+    if current_total + float(new_pct) > 100.01:
+        raise HTTPException(
+            status_code=422,
+            detail="소유권비율 합계가 100%를 초과합니다 (현재 {0:g}% + 신규 {1:g}%)".format(
+                current_total, float(new_pct)
+            ),
+        )
 
 
 def _recalc_expected_amounts(db: Session, project: Project):
@@ -348,6 +384,13 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         if margin_amount is not None and sale_amount is not None and sale_amount > 0
         else None
     )
+    # 회계 원장층 파생(부록 L.3) — 제품(총매입)·예상지급액(payout_amount 재사용)·거래계약 실발행액
+    acct = accounting.compute_accounting(
+        approval_status=project.approval_status,
+        product=_product_amount(db, project.project_id),
+        expected_payment=payout_amount,
+        sales=sales,
+    )
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -365,6 +408,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "payout_amount": payout_amount,
             "margin_amount": margin_amount,
             "margin_ratio": margin_ratio,
+            **acct,
         }
     )
 
@@ -499,6 +543,8 @@ def create_project(
 ):
     """사업 등록 (SCR-06) — 단가는 수기 입력(price_source=MANUAL, §10.3)."""
     validate_active_code(db, "PROJECT_STATUS", payload.project_status)
+    if payload.approval_status:
+        validate_active_code(db, "APPROVAL_STATUS", payload.approval_status)
     if payload.client_id:
         common.get_or_404(db, Client, payload.client_id, "고객사")
     if payload.manager_id:
@@ -549,6 +595,8 @@ def update_project(
     data = payload.model_dump(exclude_unset=True)
     if "project_status" in data:
         validate_active_code(db, "PROJECT_STATUS", data["project_status"])
+    if data.get("approval_status"):
+        validate_active_code(db, "APPROVAL_STATUS", data["approval_status"])
     if data.get("client_id"):
         common.get_or_404(db, Client, data["client_id"], "고객사")
     if data.get("manager_id"):
@@ -920,6 +968,7 @@ def create_project_sale(
     common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.buyer_type:
         validate_active_code(db, "SALE_BUYER_TYPE", payload.buyer_type)
+    _validate_ownership_total(db, project_id, payload.ownership_pct)  # 소유권비율 합 100% 초과 방지
     sale = ProjectSale(
         project_id=project_id, **{f: getattr(payload, f) for f in _SALE_FIELDS}
     )
@@ -962,6 +1011,8 @@ def update_project_sale(
     data = payload.model_dump(exclude_unset=True)
     if data.get("buyer_type"):
         validate_active_code(db, "SALE_BUYER_TYPE", data["buyer_type"])
+    if "ownership_pct" in data:
+        _validate_ownership_total(db, project_id, data["ownership_pct"], exclude_sale_id=sale_id)
     for field in _SALE_FIELDS:
         if field in data:
             setattr(sale, field, data[field])
@@ -1009,6 +1060,235 @@ def delete_project_sale(
     return schemas.MessageResponse(message="거래계약이 삭제되었습니다")
 
 
+# ── 매입세금계산서(운수사 실지급=제품) CRUD — 회계 원장층 제품 원천(부록 L.3) ──
+_INVOICE_FIELDS = ("client_id", "operator_name", "region", "issue_date", "amount", "memo")
+_INVOICE_IMPORT_ENTITY = "purchase_invoices"
+
+
+def _invoice_out(inv: PurchaseInvoice, client_names: dict) -> schemas.PurchaseInvoiceOut:
+    out = schemas.PurchaseInvoiceOut.model_validate(inv, from_attributes=True)
+    return out.model_copy(update={"client_name": client_names.get(inv.client_id)})
+
+
+def _project_invoices(db: Session, project_id: str):
+    """매입세금계산서 목록 — 등록순(created_at asc, invoice_id 타이브레이커)."""
+    return (
+        db.query(PurchaseInvoice)
+        .filter(PurchaseInvoice.project_id == project_id)
+        .order_by(PurchaseInvoice.created_at.asc(), PurchaseInvoice.invoice_id.asc())
+        .all()
+    )
+
+
+@router.get(
+    "/{project_id}/purchase-invoices",
+    response_model=schemas.PurchaseInvoiceListResponse,
+)
+def list_purchase_invoices(
+    project_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 목록(등록순) + 제품(총매입) 합계(Σ 금액)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    invoices = _project_invoices(db, project_id)
+    cnames = _client_names(db, [i.client_id for i in invoices])
+    total_amount = (
+        round(sum(float(i.amount) for i in invoices if i.amount is not None), 2)
+        if any(i.amount is not None for i in invoices)
+        else None
+    )
+    return schemas.PurchaseInvoiceListResponse(
+        items=[_invoice_out(i, cnames) for i in invoices],
+        total=len(invoices),
+        total_amount=total_amount,
+    )
+
+
+@router.post(
+    "/{project_id}/purchase-invoices",
+    response_model=schemas.PurchaseInvoiceOut,
+    status_code=201,
+)
+def create_purchase_invoice(
+    project_id: str,
+    payload: schemas.PurchaseInvoiceIn,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 등록 — 운수사·지역 검증, 금액 필수(제품=Σ 금액, 부록 L.3)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    if payload.region:
+        validate_active_code(db, "REGION", payload.region)
+    if payload.client_id:
+        common.get_or_404(db, Client, payload.client_id, "운수사")
+    invoice = PurchaseInvoice(
+        project_id=project_id, **{f: getattr(payload, f) for f in _INVOICE_FIELDS}
+    )
+    db.add(invoice)
+    db.flush()  # PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PURCHASE_INVOICE_CREATE",
+        target_type="PURCHASE_INVOICE",
+        target_id=invoice.invoice_id,
+    )
+    db.commit()
+    db.refresh(invoice)
+    return _invoice_out(invoice, _client_names(db, [invoice.client_id]))
+
+
+@router.put(
+    "/{project_id}/purchase-invoices/{invoice_id}",
+    response_model=schemas.PurchaseInvoiceOut,
+)
+def update_purchase_invoice(
+    project_id: str,
+    invoice_id: str,
+    payload: schemas.PurchaseInvoiceUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 수정 — 전달된 필드만 반영."""
+    invoice = (
+        db.query(PurchaseInvoice)
+        .filter(
+            PurchaseInvoice.project_id == project_id,
+            PurchaseInvoice.invoice_id == invoice_id,
+        )
+        .first()
+    )
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="매입세금계산서를 찾을 수 없습니다")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("region"):
+        validate_active_code(db, "REGION", data["region"])
+    if data.get("client_id"):
+        common.get_or_404(db, Client, data["client_id"], "운수사")
+    for field in _INVOICE_FIELDS:
+        if field in data:
+            setattr(invoice, field, data[field])
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PURCHASE_INVOICE_UPDATE",
+        target_type="PURCHASE_INVOICE",
+        target_id=invoice.invoice_id,
+    )
+    db.commit()
+    db.refresh(invoice)
+    return _invoice_out(invoice, _client_names(db, [invoice.client_id]))
+
+
+@router.delete(
+    "/{project_id}/purchase-invoices/{invoice_id}",
+    response_model=schemas.MessageResponse,
+)
+def delete_purchase_invoice(
+    project_id: str,
+    invoice_id: str,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 삭제."""
+    invoice = (
+        db.query(PurchaseInvoice)
+        .filter(
+            PurchaseInvoice.project_id == project_id,
+            PurchaseInvoice.invoice_id == invoice_id,
+        )
+        .first()
+    )
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="매입세금계산서를 찾을 수 없습니다")
+    db.delete(invoice)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PURCHASE_INVOICE_DELETE",
+        target_type="PURCHASE_INVOICE",
+        target_id=invoice_id,
+    )
+    db.commit()
+    return schemas.MessageResponse(message="매입세금계산서가 삭제되었습니다")
+
+
+@router.get("/{project_id}/purchase-invoices/template")
+def download_purchase_invoice_template(
+    project_id: str,
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 일괄등록 양식(.xlsx) — 헤더+예시 1행(지역은 현재 라벨)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    spec = excel_import.get_spec(_INVOICE_IMPORT_ENTITY)
+    content = excel_import.build_template(db, _INVOICE_IMPORT_ENTITY)
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA,
+        headers={
+            "Content-Disposition": "attachment; filename*=UTF-8''{0}".format(
+                quote(spec.filename)
+            )
+        },
+    )
+
+
+@router.post(
+    "/{project_id}/purchase-invoices/commit",
+    response_model=schemas.ImportCommitOut,
+)
+async def commit_purchase_invoice_import(
+    project_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """매입세금계산서 엑셀 일괄 등록 — 유효 행만 project_id로 삽입.
+
+    오류 행은 건너뛰고(errors 안내) 감사 로그에 건수만 남긴다(R2-E6)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="파일 크기가 25MB를 초과합니다")
+    result = excel_import.parse_and_validate(db, _INVOICE_IMPORT_ENTITY, content)
+    created = 0
+    for parsed in result.valid_rows:
+        fields = {f: getattr(parsed.payload, f) for f in _INVOICE_FIELDS}
+        invoice = PurchaseInvoice(project_id=project_id, **fields)
+        db.add(invoice)
+        created += 1
+    error_rows = [r for r in result.rows if r.errors]
+    skipped = len(error_rows)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "EXCEL_IMPORT",
+        target_type="PURCHASE_INVOICE",
+        target_id=project_id,
+        new_value="매입세금계산서 일괄 등록 — 생성 {0}건 / 건너뜀 {1}건 (총 {2}행)".format(
+            created, skipped, len(result.rows)
+        ),
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 검증~반영 사이 참조(운수사 등) 삭제 경합 — 배치 무산, 재시도 안내
+        raise HTTPException(
+            status_code=409,
+            detail="참조 데이터가 변경되어 반영하지 못했습니다. 다시 시도해 주세요.",
+        )
+    return schemas.ImportCommitOut(
+        entity=_INVOICE_IMPORT_ENTITY,
+        created=created,
+        skipped=skipped,
+        errors=[excel_import.row_result(r) for r in error_rows],
+    )
+
+
 @router.delete("/{project_id}", response_model=schemas.MessageResponse)
 def delete_project(
     project_id: str,
@@ -1038,6 +1318,10 @@ def delete_project(
     # 거래계약 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패
     db.query(ProjectSale).filter(
         ProjectSale.project_id == project_id
+    ).delete(synchronize_session=False)
+    # 매입세금계산서 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패(회계 원장층)
+    db.query(PurchaseInvoice).filter(
+        PurchaseInvoice.project_id == project_id
     ).delete(synchronize_session=False)
     db.delete(project)
 
