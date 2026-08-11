@@ -820,6 +820,17 @@ def ensure_schema():
         ("ix_audit_actor", "tb_audit_log", ["actor_id"]),
         # 4) 보고서 — 월별 목록·배치의 period+status 스캔
         ("ix_report_period_status", "tb_report_delivery", ["period", "status"]),
+        # 5) 원가/fleet 축(~5,200행) — 사업상세·고객사목록·보유차량탭 집계 (DBA P0)
+        ("ix_pv_project", "tb_project_vehicle", ["project_id"]),
+        ("ix_pv_client", "tb_project_vehicle", ["client_id"]),
+        ("ix_pv_cvid", "tb_project_vehicle", ["client_vehicle_id"]),
+        ("ix_pv_vehicle_no", "tb_project_vehicle", ["vehicle_no"]),
+        ("ix_cv_client", "tb_client_vehicle", ["client_id"]),
+        ("ix_cv_vehicle_no", "tb_client_vehicle", ["vehicle_no"]),
+        # 6) 원장/정산 축 — client_id 선행 group·project_id 필터 (DBA P1)
+        ("ix_pcm_client", "tb_project_client_map", ["client_id"]),
+        ("ix_sale_project", "tb_project_sale", ["project_id"]),
+        ("ix_pinv_project", "tb_purchase_invoice", ["project_id"]),
     ]
     try:
         insp = _inspect(engine)
