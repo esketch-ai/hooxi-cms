@@ -1,4 +1,4 @@
-// SCR-06 사업 상세 — 개요(단가 수기 입력) + 참여 고객사 매핑 + 배분율 합계 게이지
+// SCR-06 사업 상세 — 개요 + 진행 단계 + 참여 운수사·차량 + 회계 원장층
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -13,13 +13,11 @@ import {
   Plus,
   Trash,
   UploadSimple,
-  Warning,
   X,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
-import { DataTable, type Column } from '../../components/DataTable'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
@@ -29,7 +27,6 @@ import { useDebounced } from '../../lib/useDebounced'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type {
   Project,
-  ProjectClientMap,
   ProjectOperator,
   ProjectSale,
   ProjectVehicle,
@@ -38,7 +35,6 @@ import type {
 import {
   downloadVehicleTemplate,
   isIssueImminent,
-  useDeleteMapping,
   useDeleteProject,
   useDeletePurchaseInvoice,
   useDeleteSale,
@@ -51,10 +47,8 @@ import {
   useUpdateApprovalStatus,
   useUpdatePayoutParams,
   useUpdateStages,
-  useUpdateUnitPrice,
 } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
-import { MappingFormModal } from './MappingFormModal'
 import { VehicleFormModal } from './VehicleFormModal'
 import { SaleFormModal } from './SaleFormModal'
 import { PurchaseInvoiceFormModal } from './PurchaseInvoiceFormModal'
@@ -163,20 +157,6 @@ function InlinePriceEditor({
         <PencilSimple size={14} />
       </button>
     </div>
-  )
-}
-
-/** 배출권 단가 인라인 편집 — PUT /projects/{id}/unit-price, 미입력 "미정" (§10.3) */
-function UnitPriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
-  const update = useUpdateUnitPrice(projectId)
-  return (
-    <InlinePriceEditor
-      value={unitPrice}
-      pending={update.isPending}
-      onSubmit={(v) => update.mutateAsync(v)}
-      successMsg="배출권 단가가 저장되었습니다. 예상 정산액이 재계산됩니다."
-      ariaLabel="배출권 단가"
-    />
   )
 }
 
@@ -342,58 +322,17 @@ function ApprovalStatusEditor({
   )
 }
 
-/** 배분율 합계 게이지 — 100% 초과 시 빨강 경고 (SCR-06 §4.2) */
-function AllocationGauge({ sum }: { sum: number }) {
-  const over = sum > 100
-  return (
-    <div className="flex-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-ash">배분율 합계</span>
-        <span className={`font-bold ${over ? 'text-rose-400' : 'text-bone'}`}>
-          {sum.toFixed(1)}% / 100%
-        </span>
-      </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-elevate">
-        <div
-          className={`h-full rounded-full transition-all ${over ? 'bg-rose-500' : 'bg-primary'}`}
-          style={{ width: `${Math.min(sum, 100)}%` }}
-        />
-      </div>
-      {over && (
-        <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-rose-400">
-          <Warning size={13} weight="fill" />
-          배분율 합계가 100%를 초과했습니다. 매핑을 조정해 주세요.
-        </p>
-      )}
-    </div>
-  )
-}
-
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { showToast } = useToast()
 
   const { data: project, isLoading, isError } = useProject(projectId)
-  // 매핑은 상세 응답(ProjectDetailOut.clients)에 포함 — routers/projects.py
-  const mappings = useMemo(() => project?.clients ?? [], [project])
   const { data: clientOptions = [] } = useClientOptions()
-  const deleteMapping = useDeleteMapping(projectId)
   const deleteProject = useDeleteProject()
   const navigate = useNavigate()
 
   const [editOpen, setEditOpen] = useState(false)
-  const [mappingOpen, setMappingOpen] = useState(false)
-  const [editingMapping, setEditingMapping] = useState<ProjectClientMap | null>(null)
-  const [deleting, setDeleting] = useState<ProjectClientMap | null>(null)
   const [deleteProjectOpen, setDeleteProjectOpen] = useState(false)
-
-  // 배분율 합계 — 서버 집계(allocation_total) 우선, 없으면 클라이언트 합산
-  const allocationSum = useMemo(
-    () =>
-      project?.allocation_total ??
-      mappings.reduce((acc, m) => acc + (Number(m.allocation_ratio) || 0), 0),
-    [project, mappings],
-  )
 
   // 대표 고객사명 — ProjectOut에 client_name 미포함 → 옵션 목록에서 조회
   const primaryClientName = useMemo(
@@ -403,134 +342,6 @@ export function ProjectDetailPage() {
 
   const dd = dday(project?.expected_issue_date)
   const imminent = isIssueImminent(dd)
-
-  const handleDelete = async () => {
-    if (!deleting) return
-    try {
-      await deleteMapping.mutateAsync(deleting.map_id)
-      showToast('참여 고객사 매핑이 제거되었습니다.', 'success')
-      setDeleting(null)
-    } catch {
-      showToast('제거에 실패했습니다. 정산 진행 건은 제거할 수 없습니다.', 'danger')
-    }
-  }
-
-  // 대표자 = tb_project.client_id 일치 (SCR-06 §9-1 단일 소스 규칙)
-  const isPrimary = (m: ProjectClientMap) =>
-    project?.client_id != null && m.client_id === project.client_id
-
-  const mappingColumns: Column<ProjectClientMap>[] = [
-    {
-      key: 'client',
-      header: '고객사 (역할)',
-      render: (m) => (
-        <div className="flex items-center gap-1.5">
-          <Link
-            to={`/clients/${m.client_id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="font-semibold text-bone hover:underline"
-          >
-            {m.client_name ?? '—'}
-          </Link>
-          <span
-            className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
-              isPrimary(m)
-                ? 'border-blue-400/25 bg-blue-500/15 text-blue-700 dark:text-blue-300'
-                : 'border-hairline bg-elevate-strong text-ash'
-            }`}
-          >
-            {isPrimary(m) ? '대표자' : '참여자'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'asset',
-      header: '연결 자산',
-      render: (m) =>
-        m.asset_id ? (
-          <span className="text-xs text-ash">{m.asset_summary ?? m.asset_id}</span>
-        ) : (
-          <span className="text-xs text-smoke">—</span>
-        ),
-    },
-    {
-      key: 'ratio',
-      header: '배분율',
-      render: (m) => (
-        <span className="text-sm font-semibold text-bone">
-          {m.allocation_ratio != null ? `${Number(m.allocation_ratio)} %` : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'fee',
-      header: '보수율',
-      render: (m) =>
-        m.success_fee_rate != null ? (
-          <SensitiveData type="rate" value={`${Number(m.success_fee_rate)} %`} />
-        ) : (
-          <span className="text-smoke">—</span>
-        ),
-    },
-    {
-      key: 'amount',
-      header: '예상 정산액',
-      render: (m) =>
-        m.expected_amount != null ? (
-          <SensitiveData type="money" value={fmtMoney(Number(m.expected_amount))} />
-        ) : (
-          /* 단가 미입력 → 서버 계산 불가 (§10.3) */
-          <span className="text-xs font-medium text-amber-400">미정</span>
-        ),
-    },
-    {
-      key: 'settlement',
-      header: '정산 상태',
-      render: (m) => (
-        /* 배지 클릭 → 정산 관리(SCR-07)로 직행 — 막다른 상태값 방지 */
-        <Link
-          to="/settlements"
-          title="정산 관리에서 이 사업의 정산 현황 보기"
-          className="inline-flex items-center gap-1 text-ash underline-offset-2 hover:underline"
-        >
-          <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />
-          <span className="text-xs font-medium">→</span>
-        </Link>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '관리',
-      className: 'text-right',
-      render: (m) => (
-        <div className="flex items-center justify-end gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setEditingMapping(m)
-              setMappingOpen(true)
-            }}
-            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-            title="매핑 수정"
-            aria-label={`${m.client_name ?? ''} 매핑 수정`}
-          >
-            <PencilSimple size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleting(m)}
-            disabled={(m.settlement_status ?? 'STANDBY') !== 'STANDBY'}
-            className="rounded-md p-1.5 text-smoke hover:bg-rose-500/15 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
-            title={m.settlement_status !== 'STANDBY' ? '정산 진행 건은 제거 불가' : '매핑 제거'}
-            aria-label={`${m.client_name ?? ''} 매핑 제거`}
-          >
-            <Trash size={15} />
-          </button>
-        </div>
-      ),
-    },
-  ]
 
   if (isLoading) {
     return (
@@ -607,7 +418,6 @@ export function ProjectDetailPage() {
               {project.reg_code}
             </span>
           )}
-          <span className="text-xs text-slatey">참여 {mappings.length}개사</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <OverviewItem label="대표 고객사">
@@ -668,9 +478,6 @@ export function ProjectDetailPage() {
               )}
             </OverviewItem>
           )}
-          <OverviewItem label="배출권 단가 (수기 입력)">
-            <UnitPriceEditor projectId={project.project_id} unitPrice={project.unit_price} />
-          </OverviewItem>
           <OverviewItem label="최대지급액 (차량당 상한)">
             <MaxPaymentEditor projectId={project.project_id} unitPrice={project.max_payment} />
           </OverviewItem>
@@ -694,76 +501,6 @@ export function ProjectDetailPage() {
       {/* 진행 단계 타임라인 (Phase 1) */}
       <StageTimeline project={project} />
 
-      {/* 참여 고객사 매핑 */}
-      <section className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-base font-bold text-bone">참여 고객사 매핑</h2>
-            {/* ClientDetailPage ProjectsTab 관용구 재사용 — 정산 관리(SCR-07) 직행 */}
-            <Link
-              to="/settlements"
-              className="text-xs font-medium text-ash underline-offset-2 hover:underline"
-            >
-              정산 현황 전체 보기 →
-            </Link>
-          </div>
-          {/* 매핑 편집 — 모바일 숨김 (§7.1) */}
-          <button
-            type="button"
-            onClick={() => {
-              setEditingMapping(null)
-              setMappingOpen(true)
-            }}
-            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-semibold text-on-primary hover:opacity-90 sm:flex"
-          >
-            <Plus size={15} weight="bold" />
-            참여 고객사 추가
-          </button>
-        </div>
-
-        {mappings.length > 0 && (
-          <div className="rounded-3xl border border-hairline bg-graphite px-4 py-3">
-            <AllocationGauge sum={allocationSum} />
-          </div>
-        )}
-
-        <DataTable
-          columns={mappingColumns}
-          rows={mappings}
-          rowKey={(m) => m.map_id}
-          isLoading={isLoading}
-          emptyTitle="참여 고객사가 없습니다"
-          emptyDescription="[참여 고객사 추가]로 배분율·보수율을 매핑해 보세요."
-          renderCard={(m) => (
-            /* 모바일 카드 — 열람 전용 (§7) */
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="font-semibold text-bone">{m.client_name ?? '—'}</p>
-                  <span className="text-[10px] font-semibold text-slatey">
-                    {isPrimary(m) ? '대표자' : '참여자'}
-                  </span>
-                </div>
-                <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />
-              </div>
-              <div className="flex items-center justify-between border-t border-hairline pt-2 text-sm">
-                <span className="text-ash">
-                  배분율{' '}
-                  <b className="text-bone">
-                    {m.allocation_ratio != null ? `${Number(m.allocation_ratio)} %` : '—'}
-                  </b>
-                </span>
-                {m.expected_amount != null ? (
-                  <SensitiveData type="money" value={fmtMoney(Number(m.expected_amount))} />
-                ) : (
-                  <span className="text-xs font-medium text-amber-400">미정</span>
-                )}
-              </div>
-            </div>
-          )}
-        />
-      </section>
-
       {/* 참여 운수사 롤업 (운수사별 집계 + 행 펼침 차량 목록) */}
       <OperatorsSection projectId={project.project_id} />
 
@@ -777,30 +514,6 @@ export function ProjectDetailPage() {
       <SalesSection project={project} />
 
       <ProjectFormModal open={editOpen} onClose={() => setEditOpen(false)} project={project} />
-      {projectId && (
-        <MappingFormModal
-          open={mappingOpen}
-          onClose={() => setMappingOpen(false)}
-          projectId={projectId}
-          mapping={editingMapping}
-          mappings={mappings}
-        />
-      )}
-      <ConfirmDialog
-        open={!!deleting}
-        title="참여 고객사 매핑 제거"
-        message={
-          <>
-            <b>{deleting?.client_name ?? ''}</b>의 매핑을 제거합니다. 배분율 합계가 변경되며, 이
-            작업은 되돌릴 수 없습니다.
-          </>
-        }
-        confirmLabel="제거"
-        danger
-        loading={deleteMapping.isPending}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleting(null)}
-      />
       <ConfirmDialog
         open={deleteProjectOpen}
         title="사업 삭제"

@@ -1,14 +1,11 @@
 // SCR-06 감축 사업 API 훅 — backend/routers/projects.py 계약 준수
-// (상세 GET /projects/{id}가 clients 매핑·allocation_total을 함께 반환)
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
 import type {
   ImportCommitResult,
-  MappingPayload,
   Paginated,
   Project,
-  ProjectClientMap,
   ProjectOperatorList,
   ProjectPayload,
   ProjectSale,
@@ -50,7 +47,7 @@ export function useProjects(filters: ProjectFilters) {
   })
 }
 
-/** 셀렉트 옵션·대표사 판정용 전체 사업 목록 (SCR-07 필터 공용) */
+/** 셀렉트 옵션·대표사 판정용 전체 사업 목록 */
 export function useProjectOptions() {
   return useQuery({
     queryKey: ['projects', 'options'],
@@ -64,7 +61,7 @@ export function useProjectOptions() {
   })
 }
 
-/** 사업 상세 (ProjectDetailOut) — 개요 + clients 매핑 + allocation_total */
+/** 사업 상세 (ProjectDetailOut) — 개요 + 진행 단계 + 참여 차량·거래계약·회계 */
 export function useProject(projectId: string | undefined) {
   return useQuery({
     queryKey: ['projects', projectId],
@@ -218,24 +215,6 @@ export function useSaveProject(projectId?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['settlements'] })
-    },
-  })
-}
-
-/** 배출권 단가 수기 입력 (§10.3) — 서버가 매핑 expected_amount 전체 재계산 */
-export function useUpdateUnitPrice(projectId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (unitPrice: number | null) => {
-      const { data } = await api.put<Project>(`/projects/${projectId}/unit-price`, {
-        unit_price: unitPrice,
-      })
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['settlements'] })
     },
   })
 }
@@ -357,34 +336,6 @@ export function useUpdateApprovalStatus(projectId: string | undefined) {
   })
 }
 
-/** 참여 고객사 매핑 등록/수정 — POST upsert(동일 고객사 갱신). 합계 100% 초과 시 서버 422 */
-export function useSaveMapping(projectId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (payload: MappingPayload) => {
-      const { data } = await api.post<ProjectClientMap>(`/projects/${projectId}/clients`, payload)
-      return data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['settlements'] })
-    },
-  })
-}
-
-export function useDeleteMapping(projectId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (mapId: string) => {
-      await api.delete(`/projects/${projectId}/clients/${mapId}`)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['settlements'] })
-    },
-  })
-}
-
 /** 사업 본체 삭제 — 정산 진행(BILLED/COMPLETED) 사업은 백엔드가 409로 막는다. */
 export function useDeleteProject() {
   const queryClient = useQueryClient()
@@ -394,7 +345,6 @@ export function useDeleteProject() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['settlements'] })
     },
   })
 }

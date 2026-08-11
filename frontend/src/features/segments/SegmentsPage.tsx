@@ -57,7 +57,6 @@ const AXIS_LABELS: Record<AxisKey, string> = {
   contract_status: '계약 상태',
   project_id: '감축 사업',
   asset_group: '자산 대분류',
-  settlement_status: '정산 상태',
 }
 
 // 세그먼트용 기본 메일 문구 — 월간 템플릿의 {보고서유형}은 세그먼트 발송에서
@@ -82,7 +81,6 @@ export function SegmentsPage() {
   const clientType = useCodes('CLIENT_TYPE')
   const contractStatus = useCodes('CONTRACT_STATUS')
   const assetGroup = useCodes('ASSET_GROUP')
-  const settlementStatus = useCodes('SETTLEMENT_STATUS')
   const clientFolderCodes = useCodes('CLIENT_FOLDER') // mail-merge 구분폴더 선택지
 
   const projectNameOf = useMemo(() => {
@@ -114,11 +112,6 @@ export function SegmentsPage() {
       labelOf: projectNameOf,
     },
     { key: 'asset_group', options: assetGroup.options, labelOf: assetGroup.labelOf },
-    {
-      key: 'settlement_status',
-      options: settlementStatus.options,
-      labelOf: settlementStatus.labelOf,
-    },
   ]
 
   const hasCriteria = useMemo(

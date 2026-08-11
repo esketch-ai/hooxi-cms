@@ -96,7 +96,6 @@ export interface Client {
   updated_at?: string
   // 목록 응답 보강 필드 (routers/clients.py ClientListItem)
   manager_name?: string | null
-  success_fee_rate?: number | null
   last_activity_at?: string | null
   /** 이번 달 보고서 상태 미니 배지 (STANDBY/WRITING/…) */
   report_status_this_month?: string | null
@@ -467,8 +466,6 @@ export interface Project {
   mon_cycle?: string | null
   expected_issue_date?: string | null
   expected_credits?: number | null
-  unit_price?: number | null // 수기 단가 (§10.3) — 미입력 시 "미정"
-  price_source?: string | null
   max_payment?: number | null // 최대지급액(차량당 상한) — 예상지급액 파생 기준
   base_reduction?: number | null // 기준감축량(기본 240)
   base_vehicle_age?: number | null // 기준차령(기본 8)
@@ -482,10 +479,6 @@ export interface Project {
   manager_name?: string | null
   /** 참여 고객사 수 (목록 응답) */
   client_count?: number
-  /** 상세 응답 — 참여 고객사 매핑 목록 */
-  clients?: ProjectClientMap[]
-  /** 상세 응답 — 배분율 합계 (100% 검증 UI용) */
-  allocation_total?: number
   /** 진행 단계 타임라인 (Phase 1, 상세 응답) */
   stages?: ProjectStage[]
   /** 지연 단계 수 (목록·상세 응답) */
@@ -713,69 +706,9 @@ export interface ProjectPayload {
   mon_cycle?: string | null
   expected_issue_date?: string | null
   expected_credits?: number | null
-  unit_price?: number | null
   issued_credits?: number | null
   issued_at?: string | null
   manager_id?: string | null
-}
-
-// ---------------------------------------------------------------------------
-// tb_project_client_map — 참여 고객사 매핑·정산 (SCR-06 상세 / SCR-07)
-// ---------------------------------------------------------------------------
-export type SettlementStatus = 'STANDBY' | 'BILLED' | 'COMPLETED'
-
-export interface ProjectClientMap {
-  map_id: string
-  project_id: string
-  client_id: string
-  asset_id?: string | null
-  allocation_ratio?: number | null // 배분 비율(%)
-  success_fee_rate?: number | null // 성공 보수율(%) 🔒
-  expected_amount?: number | null // 서버 계산 (§10.3) 🔒 — 단가 미입력 시 null="미정"
-  settlement_status?: SettlementStatus | string | null
-  billed_at?: string | null
-  completed_at?: string | null
-  paid_amount?: number | null
-  payment_type?: string | null
-  snapshot_count?: number // 회차 스냅샷 수 — >0이면 이력 존재(청구 취소 후 STANDBY 포함)
-  created_at?: string
-  updated_at?: string
-  // 조인 보강 (schemas.ProjectMapOut / SettlementRow / ClientProjectRow)
-  client_name?: string | null
-  /** 연결 자산 요약 (분류·제원) */
-  asset_summary?: string | null
-  project_name?: string | null
-  /** 사업 진행 상태 (고객사 상세 '참여 사업·정산' 탭 — schemas.ClientProjectRow) */
-  project_status?: string | null
-  unit_price?: number | null
-  expected_credits?: number | null
-}
-
-/** 정산 회차 스냅샷 (schemas.SettlementSnapshotOut, R3-1 append-only) — 청구/입금 시점 동결 금액의 정본 */
-export interface SettlementSnapshot {
-  snapshot_id: string
-  seq: number
-  /** 회차 액션 — BILLED/REBILLED/REVERTED/COMPLETED */
-  action: string
-  issued_credits?: number | null
-  /** 회차 확정 금액 🔒 — 청구 시점 동결, 이후 단가 변경에 영향받지 않음 */
-  amount?: number | null
-  unit_price?: number | null // 🔒
-  allocation_ratio?: number | null // 배분율(%)
-  success_fee_rate?: number | null // 보수율(%) 🔒
-  paid_amount?: number | null
-  reason?: string | null
-  created_by?: string | null
-  created_by_name?: string | null
-  created_at?: string | null
-}
-
-/** 매핑 등록/수정 payload (schemas.ProjectMapIn) — 동일 고객사는 upsert */
-export interface MappingPayload {
-  client_id: string
-  asset_id?: string | null
-  allocation_ratio: number
-  success_fee_rate: number
 }
 
 // ---------------------------------------------------------------------------
@@ -788,7 +721,6 @@ export interface DashboardKpi {
   report_sent: number
   urgent_open_issues: number
   contract_hold_clients: number
-  expected_billing_amount?: number | null
 }
 
 export interface DashboardStats {
@@ -900,7 +832,6 @@ export interface SegmentCriteria {
   contract_status?: string[]
   project_id?: string[]
   asset_group?: string[]
-  settlement_status?: string[]
 }
 
 export interface Segment {

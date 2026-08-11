@@ -40,7 +40,6 @@ interface FormState {
   mon_cycle: string
   expected_issue_date: string
   expected_credits: string
-  unit_price: string
   issued_credits: string
   issued_at: string
   manager_id: string
@@ -62,7 +61,6 @@ function initForm(project?: Project | null): FormState {
     mon_cycle: project?.mon_cycle ?? '',
     expected_issue_date: toDate(project?.expected_issue_date),
     expected_credits: project?.expected_credits != null ? String(project.expected_credits) : '',
-    unit_price: project?.unit_price != null ? String(project.unit_price) : '',
     issued_credits: project?.issued_credits != null ? String(project.issued_credits) : '',
     issued_at: toDate(project?.issued_at),
     manager_id: project?.manager_id ?? '',
@@ -130,7 +128,6 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
       mon_cycle: form.mon_cycle || null,
       expected_issue_date: form.expected_issue_date || null,
       expected_credits: num(form.expected_credits),
-      unit_price: num(form.unit_price),
       issued_credits: form.project_status === '발급완료' ? num(form.issued_credits) : null,
       issued_at: form.project_status === '발급완료' ? form.issued_at || null : null,
       manager_id: form.manager_id,
@@ -293,10 +290,10 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
           </div>
         </div>
 
-        {/* 발급·단가 */}
+        {/* 발급·담당 */}
         <div className="border-t border-hairline pt-3">
           <p className="mb-2 text-xs font-semibold tracking-wider text-slatey uppercase">
-            배출권 발급·단가
+            배출권 발급·담당
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="예상 발급일">
@@ -316,16 +313,6 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
                 onChange={(e) => set('expected_credits', e.target.value)}
                 className={inputCls}
                 placeholder="예: 1500"
-              />
-            </Field>
-            <Field label="배출권 단가 (원/tCO₂ — 미입력 시 정산액 미정)">
-              <input
-                type="number"
-                min={0}
-                value={form.unit_price}
-                onChange={(e) => set('unit_price', e.target.value)}
-                className={inputCls}
-                placeholder="수기 입력 (§10.3)"
               />
             </Field>
             <Field label="담당 PM" required>

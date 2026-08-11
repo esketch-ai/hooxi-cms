@@ -1,11 +1,10 @@
-// SCR-01 통합 현황판 — 오늘의 액션 + KPI 5카드 + 이달 보고서 진행 + 최근 활동
+// SCR-01 통합 현황판 — 오늘의 액션 + KPI 카드 + 이달 보고서 진행 + 최근 활동
 // 데이터: GET /dashboard/stats (routers/dashboard.py — 일괄 조회)
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Buildings,
-  CurrencyKrw,
   FileText,
   Fire,
   Handshake,
@@ -15,13 +14,12 @@ import {
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { KpiCard } from '../../components/KpiCard'
-import { SensitiveData } from '../../components/SensitiveData'
 import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonKpi, SkeletonTableRows } from '../../components/Skeleton'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
-import { dday, fmtDate, fmtMoney, fmtMonth, fmtTime } from '../../lib/format'
+import { dday, fmtDate, fmtMonth, fmtTime } from '../../lib/format'
 import type {
   DashboardStats,
   Paginated,
@@ -380,20 +378,6 @@ export function DashboardPage() {
             sub="계약 상태 HOLD"
             icon={<Handshake size={18} />}
             to="/clients"
-            compact
-          />
-          <KpiCard
-            title="당월 예상 청구액"
-            value={
-              kpi?.expected_billing_amount != null ? (
-                <SensitiveData type="money" value={fmtMoney(kpi.expected_billing_amount)} />
-              ) : (
-                '미정'
-              )
-            }
-            variant="dark"
-            icon={<CurrencyKrw size={18} />}
-            to="/settlements"
             compact
           />
         </div>

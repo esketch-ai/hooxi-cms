@@ -18,7 +18,6 @@ import { AssetsPage } from '../features/assets/AssetsPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
-import { SettlementsPage } from '../features/settlements/SettlementsPage'
 import { ChatPage } from '../features/chat/ChatPage'
 import { MapPage } from '../features/map/MapPage'
 
@@ -65,7 +64,6 @@ export const router = createBrowserRouter([
       { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
       { path: '/projects', element: <ProjectsPage /> }, // SCR-06
       { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
-      { path: '/settlements', element: <SettlementsPage /> }, // SCR-07
       // ── P3 구현 화면 ──────────────────────────────────────────────
       { path: '/chat', element: <ChatPage /> }, // SCR-08
       { path: '/map', element: <MapPage /> }, // SCR-09

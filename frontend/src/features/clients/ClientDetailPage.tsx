@@ -15,7 +15,6 @@ import {
   Phone,
   Plus,
   Trash,
-  TreeStructure,
   UploadSimple,
 } from '@phosphor-icons/react'
 import { StatusBadge } from '../../components/StatusBadge'
@@ -42,7 +41,6 @@ import {
   useClientAssets,
   useClientDocuments,
   useClientHistories,
-  useClientProjects,
   useClientRecipients,
   useClientReports,
   useClientVehicles,
@@ -53,7 +51,7 @@ import {
 import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
 
-type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'projects' | 'chat'
+type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'chat'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '개요' },
@@ -61,7 +59,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'reports', label: '보고서·문서' },
   { key: 'assets', label: '자산 및 연동' },
   { key: 'vehicles', label: '보유 차량' },
-  { key: 'projects', label: '참여 사업·정산' },
   { key: 'chat', label: '상담' },
 ]
 
@@ -177,18 +174,6 @@ export function ClientDetailPage() {
                 </span>
               </a>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-slatey">성공 보수율</p>
-              {client.success_fee_rate != null ? (
-                <SensitiveData
-                  type="rate"
-                  value={`${client.success_fee_rate} %`}
-                  className="text-sm font-semibold"
-                />
-              ) : (
-                <span className="text-sm text-slatey">—</span>
-              )}
-            </div>
             <button
               type="button"
               onClick={() => setEditOpen(true)}
@@ -234,7 +219,6 @@ export function ClientDetailPage() {
       {tab === 'reports' && <ReportsDocsTab clientId={client.client_id} />}
       {tab === 'assets' && <AssetsTab clientId={client.client_id} />}
       {tab === 'vehicles' && <VehiclesTab clientId={client.client_id} />}
-      {tab === 'projects' && <ProjectsTab clientId={client.client_id} />}
       {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
       <ClientFormModal open={editOpen} onClose={() => setEditOpen(false)} client={client} />
@@ -739,97 +723,6 @@ function ChatTab({ clientId }: { clientId: string }) {
 }
 
 // ── 참여 사업·정산 탭 (SCR-06/07 축약형) ────────────────────────────
-function ProjectsTab({ clientId }: { clientId: string }) {
-  const { data: rows = [], isLoading } = useClientProjects(clientId)
-  const navigate = useNavigate()
-
-  return (
-    <section className="rounded-3xl border border-hairline bg-graphite p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-bone">참여 감축 사업·정산</h2>
-        <Link
-          to="/settlements"
-          className="text-xs font-medium text-ash underline-offset-2 hover:underline"
-        >
-          정산 현황 전체 보기 →
-        </Link>
-      </div>
-      {isLoading ? (
-        <SkeletonTableRows rows={3} />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          icon={<TreeStructure size={36} />}
-          title="참여 중인 감축 사업이 없습니다"
-          description="감축 사업 상세 화면에서 참여 고객사로 매핑하면 여기에 표시됩니다."
-        />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-max text-left text-sm">
-            <thead>
-              <tr className="border-b border-hairline text-xs font-semibold text-ash">
-                <th className="px-3 py-2">사업명</th>
-                <th className="px-3 py-2">진행 상태</th>
-                <th className="px-3 py-2">배분율</th>
-                <th className="px-3 py-2">보수율</th>
-                <th className="px-3 py-2">예상 정산액</th>
-                <th className="px-3 py-2">정산 상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((m) => (
-                <tr
-                  key={m.map_id}
-                  onClick={() => navigate(`/projects/${m.project_id}`)}
-                  className="cursor-pointer border-b border-hairline last:border-b-0 hover:bg-elevate"
-                >
-                  <td className="px-3 py-2.5">
-                    <Link
-                      to={`/projects/${m.project_id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-medium text-bone hover:underline"
-                    >
-                      {m.project_name ?? '—'}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {m.project_status ? (
-                      <StatusBadge domain="project" value={m.project_status} />
-                    ) : (
-                      <span className="text-slatey">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 font-semibold text-bone">
-                    {m.allocation_ratio != null ? `${Number(m.allocation_ratio)} %` : '—'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {m.success_fee_rate != null ? (
-                      <SensitiveData type="rate" value={`${Number(m.success_fee_rate)} %`} />
-                    ) : (
-                      <span className="text-slatey">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {m.expected_amount != null ? (
-                      <SensitiveData type="money" value={fmtMoney(Number(m.expected_amount))} />
-                    ) : (
-                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                        미정
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StatusBadge domain="settlement" value={m.settlement_status ?? 'STANDBY'} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  )
-}
-
 // ── 자산 및 연동 탭 (SCR-04 축약형) ─────────────────────────────────
 function AssetsTab({ clientId }: { clientId: string }) {
   const { data: assets = [], isLoading } = useClientAssets(clientId)

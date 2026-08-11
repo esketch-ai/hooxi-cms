@@ -131,16 +131,6 @@ export function ClientsPage() {
         ),
     },
     {
-      key: 'fee',
-      header: '성공 보수율',
-      render: (c) =>
-        c.success_fee_rate != null ? (
-          <SensitiveData type="rate" value={`${c.success_fee_rate} %`} />
-        ) : (
-          <span className="text-slatey">—</span>
-        ),
-    },
-    {
       key: 'lastActivity',
       header: '최근 활동',
       render: (c) => (

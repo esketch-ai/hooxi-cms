@@ -1,7 +1,7 @@
 // SCR-06 감축 사업 관리 목록 — "돈이 언제 들어오는가" 즉답 화면
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CaretRight, Plus, Receipt, TreeEvergreen } from '@phosphor-icons/react'
+import { CaretRight, Plus, TreeEvergreen } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -152,42 +152,19 @@ export function ProjectsPage() {
       key: 'actions',
       header: '관리',
       className: 'text-right',
-      render: (p) => {
-        const planning = p.project_status === '기획'
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <Link
-              to={`/projects/${p.project_id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-              title="상세"
-              aria-label={`${p.project_name} 상세`}
-            >
-              <CaretRight size={16} />
-            </Link>
-            {planning ? (
-              /* 기획 단계는 정산 매핑 비활성 (SCR-06 §6) */
-              <span
-                className="cursor-not-allowed rounded-md p-1.5 text-slatey"
-                title="등록 완료 후 매핑 가능"
-                aria-disabled="true"
-              >
-                <Receipt size={16} />
-              </span>
-            ) : (
-              <Link
-                to={`/settlements?project_id=${p.project_id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
-                title="정산 매핑"
-                aria-label={`${p.project_name} 정산 매핑`}
-              >
-                <Receipt size={16} />
-              </Link>
-            )}
-          </div>
-        )
-      },
+      render: (p) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            to={`/projects/${p.project_id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+            title="상세"
+            aria-label={`${p.project_name} 상세`}
+          >
+            <CaretRight size={16} />
+          </Link>
+        </div>
+      ),
     },
   ]
 
