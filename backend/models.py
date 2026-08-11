@@ -697,6 +697,8 @@ def ensure_schema():
         ("uq_settlement_snapshot_map_seq", "tb_settlement_snapshot", ["map_id", "seq"]),
         # 같은 (사업, 고객사) 매핑 중복 방지 — 이중 청구 예방 (DB 정밀검사 F2)
         ("uq_project_client_map_slot", "tb_project_client_map", ["project_id", "client_id"]),
+        # 같은 (사업, 단계코드) 중복 시드 방지 — 배포형 DB 단계 중복행 예방 (정교화 P0)
+        ("uq_project_stage_slot", "tb_project_stage", ["project_id", "stage_code"]),
     ]
     try:
         insp = _inspect(engine)
