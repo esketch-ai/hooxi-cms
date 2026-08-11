@@ -222,7 +222,11 @@ class ProjectStage(Base):
     __tablename__ = "tb_project_stage"
 
     stage_id = Column(String(50), primary_key=True, default=gen_uuid)
-    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     stage_code = Column(String(20), nullable=False)  # PROJECT_STATUS 코드값(한글)
     planned_date = Column(Date)  # 예정일(수기)
     actual_date = Column(Date)  # 실제 도달일(상태 전이 시 자동 or 수기 소급)
@@ -246,9 +250,17 @@ class ProjectVehicle(Base):
     __tablename__ = "tb_project_vehicle"
 
     vehicle_id = Column(String(50), primary_key=True, default=gen_uuid)
-    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
-    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사
-    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"))  # 선택적 자산 연결
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )  # 운수사
+    asset_id = Column(
+        String(50), ForeignKey("tb_asset.asset_id", ondelete="SET NULL")
+    )  # 선택적 자산 연결
     vehicle_no = Column(String(30))  # 차량번호
     region = Column(String(20))
     introduction_type = Column(String(20))  # 공통코드 VEHICLE_INTRO: 신규도입/대체도입
@@ -270,7 +282,10 @@ class ProjectVehicle(Base):
     remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(MIN(기준차령,(만료-승인)/365), 부록 L)
     effective_reduction = Column(Numeric(14, 3))  # 파생: 잔여반영감축량(MIN(기준감축량, 가중합), 부록 L)
     expected_payout = Column(Numeric(15, 2))  # 파생: 예상지급액(부록 L 정본 산식, 단가 미사용)
-    client_vehicle_id = Column(String(50), ForeignKey("tb_client_vehicle.vehicle_id"))  # fleet 마스터 링크(참여 구분)
+    client_vehicle_id = Column(
+        String(50),
+        ForeignKey("tb_client_vehicle.vehicle_id", ondelete="SET NULL"),
+    )  # fleet 마스터 링크(참여 구분)
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -290,7 +305,9 @@ class ClientVehicle(Base):
     __table_args__ = (UniqueConstraint("chassis_no", name="uq_client_vehicle_chassis"),)
 
     vehicle_id = Column(String(50), primary_key=True, default=gen_uuid)
-    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사(업체명 매칭, nullable)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )  # 운수사(업체명 매칭, nullable)
     operator_name = Column(String(100))  # 업체명 원문
     vehicle_no = Column(String(30))  # 차량번호(유일 아님 — 내연/전기 공존 가능)
     region = Column(String(20))  # 차량번호 앞2 파생
@@ -306,7 +323,9 @@ class ClientVehicle(Base):
     seating_capacity = Column(Integer)  # 승차정원
     fuel = Column(String(20))  # 연료
     status = Column(String(20))  # 공통코드 VEHICLE_STATUS: 운행/폐차 (기본 운행은 라우터/기본값)
-    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"))  # 선택 관제 연결
+    asset_id = Column(
+        String(50), ForeignKey("tb_asset.asset_id", ondelete="SET NULL")
+    )  # 선택 관제 연결
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -322,7 +341,11 @@ class ProjectSale(Base):
     __tablename__ = "tb_project_sale"
 
     sale_id = Column(String(50), primary_key=True, default=gen_uuid)
-    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     buyer_name = Column(String(100), nullable=False)  # 매수자(증권/투자/금융)
     buyer_type = Column(String(20))  # SALE_BUYER_TYPE 공통코드(증권사/투자사/금융사/기타)
     sale_unit_price = Column(Numeric(15, 2))  # 선물 판매 톤당 단가(정보성 유지)
@@ -348,8 +371,14 @@ class PurchaseInvoice(Base):
     __tablename__ = "tb_purchase_invoice"
 
     invoice_id = Column(String(50), primary_key=True, default=gen_uuid)
-    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
-    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )  # 운수사
     operator_name = Column(String(100))  # 운수사 표기(엑셀 import용)
     region = Column(String(20))
     issue_date = Column(Date)  # 발행일
