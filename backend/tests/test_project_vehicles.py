@@ -215,3 +215,54 @@ def test_vehicle_rejects_unknown_asset(client, staff_headers):
         json={"vehicle_no": "X", "asset_id": "없는자산id"},
     )
     assert r.status_code == 404, r.text  # 존재하지 않는 자산 참조 거부
+
+
+def test_operator_rollup_and_client_filter(client, staff_headers):
+    """참여 운수사 롤업 — client_id별 차량수 집계·차량수 desc 정렬·client_id 필터."""
+    pid = _mk_project(client, staff_headers, "운수사롤업검증")
+    ca = client.post(
+        API + "/clients", headers=staff_headers,
+        json={"client_type": "TRANSPORT", "company_name": "롤업운수갑"},
+    ).json()["client_id"]
+    cb = client.post(
+        API + "/clients", headers=staff_headers,
+        json={"client_type": "TRANSPORT", "company_name": "롤업운수을"},
+    ).json()["client_id"]
+    for _ in range(2):
+        client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"client_id": ca, "reduction_y1": 10})
+    client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"client_id": cb, "reduction_y1": 5})
+
+    r = client.get(f"{PROJECTS}/{pid}/operators", headers=staff_headers).json()
+    assert r["total"] == 2
+    assert r["items"][0]["client_name"] == "롤업운수갑"  # 차량수 desc
+    assert r["items"][0]["vehicle_count"] == 2
+    assert r["items"][1]["vehicle_count"] == 1
+
+    # client_id 필터 — 을 운수사 차량만
+    v = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"client_id": cb}).json()
+    assert v["total"] == 1
+    assert v["items"][0]["client_id"] == cb
+
+
+def test_operator_rollup_unassigned_drilldown(client, staff_headers):
+    """미지정(client_id NULL) 그룹 드릴다운 — client_id=__none__ 센티널로 미지정 차량만."""
+    pid = _mk_project(client, staff_headers, "미지정드릴다운검증")
+    ca = client.post(
+        API + "/clients", headers=staff_headers,
+        json={"client_type": "TRANSPORT", "company_name": "배정운수"},
+    ).json()["client_id"]
+    # 미지정 2대 + 배정 3대
+    for _ in range(2):
+        client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"reduction_y1": 1})
+    for _ in range(3):
+        client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"client_id": ca, "reduction_y1": 1})
+
+    ops = client.get(f"{PROJECTS}/{pid}/operators", headers=staff_headers).json()
+    names = {o["client_name"]: o["vehicle_count"] for o in ops["items"]}
+    assert names["배정운수"] == 3
+    assert names["미지정"] == 2
+
+    # 센티널 __none__ → 미지정 2대만(전체 5대 아님)
+    none_v = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"client_id": "__none__"}).json()
+    assert none_v["total"] == 2
+    assert all(v["client_id"] is None for v in none_v["items"])

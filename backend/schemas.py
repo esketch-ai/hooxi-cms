@@ -755,6 +755,20 @@ class ProjectVehicleListResponse(BaseModel):
     total_expected_payout: Optional[float] = None  # 예상지급액 입력분 합(있을 때만)
 
 
+# 참여 운수사 롤업(사업 참여 차량을 운수사별 집계) --------------------------------
+class ProjectOperatorRollup(BaseModel):
+    client_id: Optional[str] = None  # 운수사(미지정이면 None)
+    client_name: Optional[str] = None  # 운수사명(조인, 미지정은 "미지정")
+    vehicle_count: int  # 참여 차량 수
+    total_reduction: Optional[float] = None  # 잔여반영감축량 합(coalesce 0)
+    total_expected_payout: Optional[float] = None  # 예상지급액 합(전건 None이면 None)
+
+
+class ProjectOperatorListResponse(BaseModel):
+    items: List[ProjectOperatorRollup]
+    total: int  # 운수사 수
+
+
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
 class ProjectSaleIn(BaseModel):
     """거래계약 등록/수정 — buyer_type은 SALE_BUYER_TYPE 공통코드(라우터 검증)."""

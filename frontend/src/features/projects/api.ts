@@ -9,6 +9,7 @@ import type {
   Paginated,
   Project,
   ProjectClientMap,
+  ProjectOperatorList,
   ProjectPayload,
   ProjectSale,
   ProjectSalePayload,
@@ -75,22 +76,39 @@ export function useProject(projectId: string | undefined) {
   })
 }
 
-/** 사업 참여 차량 목록 (Phase 2) — 페이지·검색(차량번호·운수사) */
+/** 사업 참여 차량 목록 (Phase 2) — 페이지·검색(차량번호·운수사)·운수사 필터 */
 export function useProjectVehicles(
   projectId: string | undefined,
-  params?: { page?: number; pageSize?: number; search?: string },
+  params?: { page?: number; pageSize?: number; search?: string; clientId?: string },
 ) {
-  const { page = 1, pageSize = 50, search = '' } = params ?? {}
+  const { page = 1, pageSize = 50, search = '', clientId } = params ?? {}
   return useQuery({
-    queryKey: ['projects', projectId, 'vehicles', page, pageSize, search],
+    queryKey: ['projects', projectId, 'vehicles', page, pageSize, search, clientId],
     queryFn: async () => {
       const { data } = await api.get<ProjectVehicleList>(`/projects/${projectId}/vehicles`, {
-        params: { page, page_size: pageSize, search: search || undefined },
+        params: {
+          page,
+          page_size: pageSize,
+          search: search || undefined,
+          client_id: clientId || undefined,
+        },
       })
       return data
     },
     enabled: !!projectId,
     placeholderData: (prev) => prev, // 페이지 전환 시 이전 결과 유지(깜빡임 방지)
+  })
+}
+
+/** 참여 운수사 롤업 (운수사별 차량수·잔여반영감축량·예상지급액 집계) */
+export function useProjectOperators(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['projects', projectId, 'operators'],
+    queryFn: async () => {
+      const { data } = await api.get<ProjectOperatorList>(`/projects/${projectId}/operators`)
+      return data
+    },
+    enabled: !!projectId,
   })
 }
 

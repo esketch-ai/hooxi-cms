@@ -601,6 +601,20 @@ export interface ProjectVehicleList {
   total_expected_payout?: number | null
 }
 
+// 참여 운수사 롤업 — 운수사별 차량수·잔여반영감축량·예상지급액 집계 (GET /projects/{id}/operators)
+export interface ProjectOperator {
+  client_id?: string | null // null이면 미지정
+  client_name?: string | null
+  vehicle_count: number
+  total_reduction?: number | null // 잔여반영감축량 합
+  total_expected_payout?: number | null // 예상지급액 합
+}
+
+export interface ProjectOperatorList {
+  items: ProjectOperator[]
+  total: number
+}
+
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
 export interface ProjectStage {
   stage_code: string

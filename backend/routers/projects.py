@@ -714,10 +714,48 @@ def _client_names(db: Session, ids) -> dict:
     }
 
 
+@router.get(
+    "/{project_id}/operators", response_model=schemas.ProjectOperatorListResponse
+)
+def list_project_operators(
+    project_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """참여 운수사 롤업 — 참여 차량을 운수사(client_id)별 (차량수·잔여반영감축량 합·예상지급액 합)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    rows = (
+        db.query(
+            ProjectVehicle.client_id,
+            func.count(ProjectVehicle.vehicle_id),
+            func.coalesce(func.sum(ProjectVehicle.effective_reduction), 0),
+            func.sum(ProjectVehicle.expected_payout),
+        )
+        .filter(ProjectVehicle.project_id == project_id)
+        .group_by(ProjectVehicle.client_id)
+        .all()
+    )
+    cnames = _client_names(db, [r[0] for r in rows])
+    items = [
+        schemas.ProjectOperatorRollup(
+            client_id=cid,
+            client_name=cnames.get(cid) if cid else "미지정",
+            vehicle_count=count,
+            total_reduction=round(float(reduction or 0), 3),
+            total_expected_payout=round(float(payout), 2) if payout is not None else None,
+        )
+        for cid, count, reduction, payout in rows
+    ]
+    # 차량수 desc, 그다음 운수사명(오름차순) — 미지정은 client_name "미지정"으로 정렬 참여
+    items.sort(key=lambda i: (-i.vehicle_count, i.client_name or ""))
+    return schemas.ProjectOperatorListResponse(items=items, total=len(items))
+
+
 @router.get("/{project_id}/vehicles", response_model=schemas.ProjectVehicleListResponse)
 def list_project_vehicles(
     project_id: str,
     search: Optional[str] = Query(None, description="차량번호·운수사명 검색"),
+    client_id: Optional[str] = Query(None, description="운수사 필터(롤업 펼침용)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _: User = Depends(get_current_user),
@@ -726,6 +764,10 @@ def list_project_vehicles(
     """사업 참여 차량 목록(페이지·검색) + 총감축량·예상지급액 합계(필터 기준)."""
     common.get_or_404(db, Project, project_id, "감축 사업")
     base = db.query(ProjectVehicle).filter(ProjectVehicle.project_id == project_id)
+    if client_id == "__none__":
+        base = base.filter(ProjectVehicle.client_id.is_(None))  # 미지정 운수사 드릴다운
+    elif client_id:
+        base = base.filter(ProjectVehicle.client_id == client_id)
     if search and search.strip():
         kw = "%{0}%".format(common.escape_like(search.strip()))
         client_ids = [

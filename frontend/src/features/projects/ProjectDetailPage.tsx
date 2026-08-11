@@ -1,5 +1,5 @@
 // SCR-06 사업 상세 — 개요(단가 수기 입력) + 참여 고객사 매핑 + 배분율 합계 게이지
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -30,6 +30,7 @@ import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type {
   Project,
   ProjectClientMap,
+  ProjectOperator,
   ProjectSale,
   ProjectVehicle,
   PurchaseInvoice,
@@ -44,6 +45,7 @@ import {
   useDeleteVehicle,
   useImportVehicles,
   useProject,
+  useProjectOperators,
   useProjectVehicles,
   usePurchaseInvoices,
   useUpdateApprovalStatus,
@@ -762,6 +764,9 @@ export function ProjectDetailPage() {
         />
       </section>
 
+      {/* 참여 운수사 롤업 (운수사별 집계 + 행 펼침 차량 목록) */}
+      <OperatorsSection projectId={project.project_id} />
+
       {/* 참여 차량 (Phase 2) */}
       <VehiclesSection projectId={project.project_id} />
 
@@ -926,6 +931,144 @@ function StageTimeline({ project }: { project: Project }) {
 
 // 참여 차량 (Phase 2) — 감축량·예상지급액 ingest. 목록 + 등록/수정/삭제
 const VEHICLE_PAGE_SIZE = 50
+
+// 참여 운수사 롤업 — 운수사별 집계 표, 행 펼침 시 해당 운수사 차량 인라인
+function OperatorsSection({ projectId }: { projectId: string }) {
+  const { data } = useProjectOperators(projectId)
+  // 펼친 운수사 키(client_id, null은 '미지정' 키로 대체)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const operators = data?.items ?? []
+
+  const keyOf = (o: ProjectOperator) => o.client_id ?? '__none__'
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline gap-3">
+        <h2 className="text-base font-bold text-bone">참여 운수사</h2>
+        {data && <span className="text-xs text-slatey">{data.total.toLocaleString()}곳</span>}
+      </div>
+
+      {operators.length === 0 ? (
+        <EmptyState
+          icon={<Plus size={28} />}
+          title="참여 운수사가 없습니다"
+          description="참여 차량을 등록하면 운수사별 집계가 표시됩니다."
+          className="py-8"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs text-slatey">
+                <th className="px-3 py-2.5 text-left font-semibold">운수사명</th>
+                <th className="px-3 py-2.5 text-right font-semibold">차량수</th>
+                <th className="px-3 py-2.5 text-right font-semibold">잔여반영감축량(tCO₂)</th>
+                <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+              </tr>
+            </thead>
+            <tbody>
+              {operators.map((o) => {
+                const key = keyOf(o)
+                const isOpen = expanded === key
+                return (
+                  <Fragment key={key}>
+                    <tr
+                      onClick={() => setExpanded(isOpen ? null : key)}
+                      className="cursor-pointer border-b border-hairline/60 last:border-b-0 hover:bg-elevate"
+                    >
+                      <td className="px-3 py-2.5 font-medium text-bone">
+                        <span className="flex items-center gap-1.5">
+                          <CaretRight
+                            size={13}
+                            weight="bold"
+                            className={`text-slatey transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                          />
+                          {o.client_name ?? '미지정'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-ash">
+                        {o.vehicle_count.toLocaleString()}대
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-ash">
+                        {o.total_reduction != null ? o.total_reduction.toLocaleString() : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {o.total_expected_payout != null ? (
+                          <SensitiveData type="money" value={fmtMoney(o.total_expected_payout)} />
+                        ) : (
+                          <span className="text-slatey">미정</span>
+                        )}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={4} className="bg-elevate/50 px-3 py-2">
+                          <OperatorVehicles
+                            projectId={projectId}
+                            clientId={o.client_id ?? '__none__'}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// 펼친 운수사의 차량 목록 — 펼쳐질 때만 조회(최대 50대), 초과분은 안내
+function OperatorVehicles({ projectId, clientId }: { projectId: string; clientId?: string }) {
+  const { data, isLoading } = useProjectVehicles(projectId, { clientId, pageSize: 50 })
+  const vehicles = data?.items ?? []
+
+  if (isLoading) return <p className="py-2 text-xs text-slatey">불러오는 중…</p>
+  if (vehicles.length === 0) return <p className="py-2 text-xs text-slatey">차량이 없습니다.</p>
+
+  const overflow = (data?.total ?? 0) - vehicles.length
+
+  return (
+    <div className="space-y-1.5">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-slatey">
+            <th className="px-2 py-1 text-left font-semibold">차량번호</th>
+            <th className="px-2 py-1 text-left font-semibold">지역</th>
+            <th className="px-2 py-1 text-right font-semibold">잔여반영감축량(tCO₂)</th>
+            <th className="px-2 py-1 text-right font-semibold">예상지급액</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vehicles.map((v) => (
+            <tr key={v.vehicle_id} className="border-t border-hairline/40">
+              <td className="px-2 py-1 font-medium text-bone">{v.vehicle_no ?? '—'}</td>
+              <td className="px-2 py-1 text-ash">{v.region ?? '—'}</td>
+              <td className="px-2 py-1 text-right text-ash">
+                {v.effective_reduction != null ? v.effective_reduction.toLocaleString() : '—'}
+              </td>
+              <td className="px-2 py-1 text-right">
+                {v.expected_payout != null ? (
+                  <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
+                ) : (
+                  <span className="text-slatey">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {overflow > 0 && (
+        <p className="px-2 text-[11px] text-slatey">
+          외 {overflow.toLocaleString()}대 — 참여 차량 섹션에서 전체 보기
+        </p>
+      )}
+    </div>
+  )
+}
 
 function VehiclesSection({ projectId }: { projectId: string }) {
   const [search, setSearch] = useState('')
