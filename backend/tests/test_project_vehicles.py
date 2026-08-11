@@ -94,6 +94,24 @@ def test_delete_project_removes_vehicles(client, staff_headers, manager_headers)
     assert r.status_code == 200, r.text  # 차량 자식 있어도 삭제 성공(FK)
 
 
+def test_vehicle_list_pagination_and_search(client, staff_headers):
+    pid = _mk_project(client, staff_headers, "차량페이지검증")
+    for i in range(3):
+        client.post(
+            f"{PROJECTS}/{pid}/vehicles",
+            headers=staff_headers,
+            json={"vehicle_no": f"페이지차량{i}", "reduction_y1": 1},
+        )
+    # page_size=2 → 1페이지 2건, total=3
+    p1 = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"page_size": 2, "page": 1}).json()
+    assert p1["total"] == 3 and len(p1["items"]) == 2
+    p2 = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"page_size": 2, "page": 2}).json()
+    assert len(p2["items"]) == 1
+    # 검색(차량번호)
+    s = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, params={"search": "페이지차량1"}).json()
+    assert s["total"] == 1 and s["items"][0]["vehicle_no"] == "페이지차량1"
+
+
 def test_vehicle_template_download(client, staff_headers):
     pid = _mk_project(client, staff_headers, "차량양식검증")
     r = client.get(f"{PROJECTS}/{pid}/vehicles/template", headers=staff_headers)

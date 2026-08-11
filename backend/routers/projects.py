@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -514,27 +514,47 @@ def _client_names(db: Session, ids) -> dict:
 @router.get("/{project_id}/vehicles", response_model=schemas.ProjectVehicleListResponse)
 def list_project_vehicles(
     project_id: str,
+    search: Optional[str] = Query(None, description="차량번호·운수사명 검색"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """사업 참여 차량 목록 + 총감축량·예상지급액 합계."""
+    """사업 참여 차량 목록(페이지·검색) + 총감축량·예상지급액 합계(필터 기준)."""
     common.get_or_404(db, Project, project_id, "감축 사업")
+    base = db.query(ProjectVehicle).filter(ProjectVehicle.project_id == project_id)
+    if search and search.strip():
+        kw = "%{0}%".format(common.escape_like(search.strip()))
+        client_ids = [
+            c[0]
+            for c in db.query(Client.client_id).filter(
+                Client.company_name.ilike(kw, escape="\\")
+            )
+        ]
+        conds = [ProjectVehicle.vehicle_no.ilike(kw, escape="\\")]
+        if client_ids:
+            conds.append(ProjectVehicle.client_id.in_(client_ids))
+        base = base.filter(or_(*conds))
+
+    total = base.count()
+    agg = base.with_entities(
+        func.coalesce(func.sum(ProjectVehicle.total_reduction), 0),
+        func.sum(ProjectVehicle.expected_payout),
+    ).one()
     rows = (
-        db.query(ProjectVehicle)
-        .filter(ProjectVehicle.project_id == project_id)
-        .order_by(ProjectVehicle.created_at.asc())
+        # created_at 동률(대량 엑셀 등록 시 동일 타임스탬프) 대비 vehicle_id 타이브레이커 —
+        # 페이지 경계에서 행 누락/중복 방지
+        base.order_by(ProjectVehicle.created_at.asc(), ProjectVehicle.vehicle_id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
     cnames = _client_names(db, [v.client_id for v in rows])
-    total_reduction = round(
-        sum(float(v.total_reduction) for v in rows if v.total_reduction is not None), 3
-    )
-    payouts = [float(v.expected_payout) for v in rows if v.expected_payout is not None]
     return schemas.ProjectVehicleListResponse(
         items=[_vehicle_out(v, cnames) for v in rows],
-        total=len(rows),
-        total_reduction=total_reduction,
-        total_expected_payout=round(sum(payouts), 2) if payouts else None,
+        total=total,
+        total_reduction=round(float(agg[0] or 0), 3),
+        total_expected_payout=round(float(agg[1]), 2) if agg[1] is not None else None,
     )
 
 

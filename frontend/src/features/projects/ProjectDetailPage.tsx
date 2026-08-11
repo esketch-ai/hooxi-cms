@@ -3,9 +3,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  CaretLeft,
+  CaretRight,
   Check,
   CircleNotch,
   DownloadSimple,
+  MagnifyingGlass,
   PencilSimple,
   Plus,
   Trash,
@@ -22,6 +25,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
+import { useDebounced } from '../../lib/useDebounced'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type { Project, ProjectClientMap, ProjectVehicle } from '../../types'
 import {
@@ -711,8 +715,25 @@ function StageTimeline({ project }: { project: Project }) {
 }
 
 // 참여 차량 (Phase 2) — 감축량·예상지급액 ingest. 목록 + 등록/수정/삭제
+const VEHICLE_PAGE_SIZE = 50
+
 function VehiclesSection({ projectId }: { projectId: string }) {
-  const { data } = useProjectVehicles(projectId)
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [page, setPage] = useState(1)
+  useEffect(() => {
+    setPage(1) // 검색어 변경 시 첫 페이지로
+  }, [debouncedSearch])
+  const { data } = useProjectVehicles(projectId, {
+    page,
+    pageSize: VEHICLE_PAGE_SIZE,
+    search: debouncedSearch,
+  })
+  // 삭제 등으로 총건수가 줄어 현재 페이지가 범위를 벗어나면 마지막 페이지로 클램프
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((data?.total ?? 0) / VEHICLE_PAGE_SIZE))
+    if (page > maxPage) setPage(maxPage)
+  }, [data?.total, page])
   const { labelOf } = useCodes('VEHICLE_INTRO')
   const del = useDeleteVehicle(projectId)
   const importVehicles = useImportVehicles(projectId)
@@ -777,7 +798,8 @@ function VehiclesSection({ projectId }: { projectId: string }) {
           <h2 className="text-base font-bold text-bone">참여 차량</h2>
           {data && (
             <span className="text-xs text-slatey">
-              {data.total}대 · 총감축량 {data.total_reduction.toLocaleString()} tCO₂
+              {debouncedSearch ? '검색 ' : ''}
+              {data.total.toLocaleString()}대 · 총감축량 {data.total_reduction.toLocaleString()} tCO₂
             </span>
           )}
         </div>
@@ -819,11 +841,31 @@ function VehiclesSection({ projectId }: { projectId: string }) {
         </div>
       </div>
 
+      {/* 검색(차량번호·운수사) */}
+      <div className="relative w-full sm:max-w-xs">
+        <MagnifyingGlass
+          size={15}
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slatey"
+        />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="차량번호·운수사 검색…"
+          className="w-full rounded-md border border-hairline bg-graphite py-2 pr-3 pl-9 text-sm text-bone outline-none placeholder:text-slatey focus:border-white/30"
+          aria-label="차량 검색"
+        />
+      </div>
+
       {vehicles.length === 0 ? (
         <EmptyState
           icon={<Plus size={28} />}
-          title="참여 차량이 없습니다"
-          description="[차량 등록]으로 도입구분·연차 감축량을 입력하세요. (엑셀 일괄 업로드는 후속 예정)"
+          title={debouncedSearch ? '검색 결과가 없습니다' : '참여 차량이 없습니다'}
+          description={
+            debouncedSearch
+              ? '다른 검색어로 다시 시도해 보세요.'
+              : '[차량 등록] 또는 [엑셀 업로드]로 도입구분·연차 감축량을 입력하세요.'
+          }
           className="py-8"
         />
       ) : (
@@ -881,6 +923,39 @@ function VehiclesSection({ projectId }: { projectId: string }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {(data?.total ?? 0) > VEHICLE_PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-slatey">
+          <span>
+            {(page - 1) * VEHICLE_PAGE_SIZE + 1}–{(page - 1) * VEHICLE_PAGE_SIZE + vehicles.length} /
+            총 {data?.total.toLocaleString()}대
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-md border border-hairline p-1.5 text-bone hover:bg-elevate disabled:opacity-40"
+              aria-label="이전 페이지"
+            >
+              <CaretLeft size={14} />
+            </button>
+            <span className="px-1">
+              {page} / {Math.max(1, Math.ceil((data?.total ?? 0) / VEHICLE_PAGE_SIZE))}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page >= Math.ceil((data?.total ?? 0) / VEHICLE_PAGE_SIZE)}
+              className="rounded-md border border-hairline p-1.5 text-bone hover:bg-elevate disabled:opacity-40"
+              aria-label="다음 페이지"
+            >
+              <CaretRight size={14} />
+            </button>
+          </div>
         </div>
       )}
 

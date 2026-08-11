@@ -70,15 +70,22 @@ export function useProject(projectId: string | undefined) {
   })
 }
 
-/** 사업 참여 차량 목록 (Phase 2) */
-export function useProjectVehicles(projectId: string | undefined) {
+/** 사업 참여 차량 목록 (Phase 2) — 페이지·검색(차량번호·운수사) */
+export function useProjectVehicles(
+  projectId: string | undefined,
+  params?: { page?: number; pageSize?: number; search?: string },
+) {
+  const { page = 1, pageSize = 50, search = '' } = params ?? {}
   return useQuery({
-    queryKey: ['projects', projectId, 'vehicles'],
+    queryKey: ['projects', projectId, 'vehicles', page, pageSize, search],
     queryFn: async () => {
-      const { data } = await api.get<ProjectVehicleList>(`/projects/${projectId}/vehicles`)
+      const { data } = await api.get<ProjectVehicleList>(`/projects/${projectId}/vehicles`, {
+        params: { page, page_size: pageSize, search: search || undefined },
+      })
       return data
     },
     enabled: !!projectId,
+    placeholderData: (prev) => prev, // 페이지 전환 시 이전 결과 유지(깜빡임 방지)
   })
 }
 
