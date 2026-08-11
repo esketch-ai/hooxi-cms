@@ -973,6 +973,7 @@ class FleetImportResult(BaseModel):
     updated: int = 0
     client_matched: int = 0  # 업체명→운수사 매칭 성공 행
     linked_participation: int = 0  # ProjectVehicle.client_vehicle_id 세팅 건수
+    introduction_derived: int = 0  # 도입구분 자동 판별 설정 건수(내연 fleet 대조)
     skipped: int = 0  # vehicle_no 없는 행 등
 
 

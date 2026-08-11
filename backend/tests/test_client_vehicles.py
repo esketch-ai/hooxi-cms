@@ -32,19 +32,28 @@ def test_fleet_crud_and_region_derive(client, staff_headers):
     cid = _mk_client(client, staff_headers, "보유차량운수")
     r = client.post(
         f"{API}/clients/{cid}/vehicles", headers=staff_headers,
-        json={"vehicle_no": "서울70사1234", "model_name": "BS106", "model_year": 2016},
+        json={"vehicle_no": "서울70사1234", "chassis_no": "VINCRUD1", "model_name": "BS106", "model_year": 2016},
     )
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["region"] == "서울"  # 차량번호 앞 2글자 파생
     assert body["status"] == "운행"  # 기본값
-    # 중복 차량번호 → 409
-    dup = client.post(f"{API}/clients/{cid}/vehicles", headers=staff_headers, json={"vehicle_no": "서울70사1234"})
+    # 중복 차대번호 → 409 (식별키는 차대번호)
+    dup = client.post(
+        f"{API}/clients/{cid}/vehicles", headers=staff_headers,
+        json={"vehicle_no": "서울70사9999", "chassis_no": "VINCRUD1"},
+    )
     assert dup.status_code == 409, dup.text
+    # 차량번호만 같고 차대번호 다르면 허용(내연/전기 공존)
+    ok = client.post(
+        f"{API}/clients/{cid}/vehicles", headers=staff_headers,
+        json={"vehicle_no": "서울70사1234", "chassis_no": "VINCRUD2"},
+    )
+    assert ok.status_code == 201, ok.text
     lr = client.get(f"{API}/clients/{cid}/vehicles", headers=staff_headers).json()
-    assert lr["total"] == 1
+    assert lr["total"] == 2
     assert lr["participating_count"] == 0
-    assert lr["unassigned_count"] == 1
+    assert lr["unassigned_count"] == 2
     assert lr["items"][0]["participation"] is False
 
 
@@ -125,7 +134,7 @@ def test_fleet_reimport_preserves_status(client, staff_headers):
     cid = _mk_client(client, staff_headers, "재업로드보존운수")
     v = client.post(
         f"{API}/clients/{cid}/vehicles", headers=staff_headers,
-        json={"vehicle_no": "대전75자9999", "status": "폐차"},
+        json={"vehicle_no": "대전75자9999", "chassis_no": "VINX", "status": "폐차"},
     ).json()
     assert v["status"] == "폐차"
     # 같은 차량번호로 재업로드(파일엔 status 컬럼 없음) → 폐차 보존, 스펙은 갱신
@@ -141,6 +150,43 @@ def test_fleet_reimport_preserves_status(client, staff_headers):
     item = lr["items"][0]
     assert item["status"] == "폐차"  # 수기 폐차 보존
     assert item["model_name"] == "BS110"  # 스펙은 파일로 갱신
+
+
+def test_fleet_import_derives_introduction(client, staff_headers):
+    """도입구분 자동 판별 — 참여차량 차량번호가 내연 fleet에 있으면 대체도입, 없으면 신규도입.
+
+    introduction_type이 비어있는(None) 참여차량만 자동설정, 수기값은 보존.
+    """
+    pid = _mk_project(client, staff_headers, "도입판별사업")
+    # 참여차량 3대: intro 미지정 2대 + 수기 '신규도입' 1대(내연 fleet에 있어도 불변)
+    client.post(
+        f"{API}/projects/{pid}/vehicles", headers=staff_headers,
+        json={"vehicle_no": "서울70사0001", "reduction_y1": 5},  # intro 미지정 → 대체도입 기대
+    )
+    client.post(
+        f"{API}/projects/{pid}/vehicles", headers=staff_headers,
+        json={"vehicle_no": "부산99바0002", "reduction_y1": 5},  # intro 미지정, fleet 없음 → 신규도입
+    )
+    client.post(
+        f"{API}/projects/{pid}/vehicles", headers=staff_headers,
+        json={"vehicle_no": "인천88가0003", "introduction_type": "신규도입", "reduction_y1": 5},  # 수기 → 불변
+    )
+    # 내연 fleet 임포트(전부 경유) — "서울70사0001", "인천88가0003"
+    buf = _fleet_xlsx([
+        ["서울70사0001", "판별운수", "VINICE", "BS110", 2017, "2017-01-01", "대형 승합", 1, 1, 1, 1, 40, "경유"],
+        ["인천88가0003", "판별운수", "VINICE2", "BS110", 2017, "2017-01-01", "대형 승합", 1, 1, 1, 1, 40, "경유"],
+    ])
+    r = client.post(
+        f"{API}/fleet/import", headers=staff_headers,
+        files={"file": ("bus.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    ).json()
+    assert r["introduction_derived"] == 2  # intro None인 2대만 자동설정
+
+    lr = client.get(f"{API}/projects/{pid}/vehicles", headers=staff_headers).json()
+    intro = {v["vehicle_no"]: v["introduction_type"] for v in lr["items"]}
+    assert intro["서울70사0001"] == "대체도입"  # 내연 fleet에 있음
+    assert intro["부산99바0002"] == "신규도입"  # fleet에 없음
+    assert intro["인천88가0003"] == "신규도입"  # 수기값 보존(자동판별 미적용)
 
 
 def test_create_client_vehicle_backlinks_participation(client, staff_headers):

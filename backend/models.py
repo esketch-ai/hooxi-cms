@@ -279,19 +279,20 @@ class ProjectVehicle(Base):
 class ClientVehicle(Base):
     """운수사 보유 차량(fleet) 마스터 — 부록 M. 운수사가 보유한 버스 전량의 원장.
 
-    Docs/BUS_Info_list.xlsx(BUS_LIST_ALL) 컬럼을 반영한다. 차량번호(vehicle_no)는 전국
-    유일이라 UniqueConstraint로 중복을 막는다. 업체명(operator_name)은 엑셀 원문 표기이고
+    Docs/BUS_Info_list.xlsx(BUS_LIST_ALL) 컬럼을 반영한다. 식별키는 차대번호(chassis_no)로,
+    있으면 UniqueConstraint로 중복을 막는다(nullable → 다중 null 허용). 차량번호(vehicle_no)는
+    더는 유일이 아니다(내연+전기 동일번호 공존 가능). 업체명(operator_name)은 엑셀 원문 표기이고
     client_id는 운수사 매칭 결과(미매칭 nullable). 특정 감축사업 참여는 ProjectVehicle이
     client_vehicle_id로 이 마스터를 가리켜 표현한다(참여 구분).
     """
 
     __tablename__ = "tb_client_vehicle"
-    __table_args__ = (UniqueConstraint("vehicle_no", name="uq_client_vehicle_no"),)
+    __table_args__ = (UniqueConstraint("chassis_no", name="uq_client_vehicle_chassis"),)
 
     vehicle_id = Column(String(50), primary_key=True, default=gen_uuid)
     client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사(업체명 매칭, nullable)
     operator_name = Column(String(100))  # 업체명 원문
-    vehicle_no = Column(String(30))  # 차량번호(전국 유일)
+    vehicle_no = Column(String(30))  # 차량번호(유일 아님 — 내연/전기 공존 가능)
     region = Column(String(20))  # 차량번호 앞2 파생
     chassis_no = Column(String(50))  # 차대번호
     model_name = Column(String(50))  # 차명
@@ -775,8 +776,8 @@ def ensure_schema():
         ("uq_project_client_map_slot", "tb_project_client_map", ["project_id", "client_id"]),
         # 같은 (사업, 단계코드) 중복 시드 방지 — 배포형 DB 단계 중복행 예방 (정교화 P0)
         ("uq_project_stage_slot", "tb_project_stage", ["project_id", "stage_code"]),
-        # 운수사 보유 차량 마스터 — 차량번호 전국 유일(부록 M)
-        ("uq_client_vehicle_no", "tb_client_vehicle", ["vehicle_no"]),
+        # 운수사 보유 차량 마스터 — 식별키 차대번호 유일(부록 M, nullable 다중 null 허용)
+        ("uq_client_vehicle_chassis", "tb_client_vehicle", ["chassis_no"]),
     ]
     try:
         insp = _inspect(engine)
@@ -839,6 +840,17 @@ def ensure_schema():
                 print("✓ Added index {0}".format(index_name))
     except Exception as exc:
         print("⚠ ensure_schema plain index skipped: {0}".format(exc))
+
+    # 구(舊) 차량번호 유니크 제약 제거 — 식별키가 차대번호로 바뀌면서 vehicle_no 유일성
+    # 폐기(내연+전기 동일번호 공존). PostgreSQL 배포형 DB에 남은 제약을 떨어뜨린다.
+    # SQLite/방언차·미존재는 무시(try/except) — DROP CONSTRAINT IF EXISTS는 PG 전용 구문.
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                _text("ALTER TABLE tb_client_vehicle DROP CONSTRAINT IF EXISTS uq_client_vehicle_no")
+            )
+    except Exception as exc:
+        print("⚠ ensure_schema drop legacy constraint skipped: {0}".format(exc))
 
 
 def init_db():

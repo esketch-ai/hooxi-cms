@@ -83,12 +83,15 @@ async def import_fleet(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """운수사 보유 차량 전량 엑셀 업로드(BUS_LIST_ALL) — 차량번호 upsert + 참여 링크 갱신.
+    """운수사 보유 차량 전량 엑셀 업로드(BUS_LIST_ALL) — 차대번호 upsert + 참여 링크 갱신.
 
     - 업체명(operator_name) == 운수사(Client.company_name, TRANSPORT)면 client_id 매칭(미매칭 None).
     - region = 차량번호 앞 2글자, status 기본 '운행'.
-    - 차량번호(uq_client_vehicle_no) 기준 upsert. 5,668행 규모 — 선조회 dict로 N+1 방지, 커밋 1회.
+    - 식별키 = 차대번호(chassis_no) 있으면 chassis 기준, 없으면 차량번호 기준 upsert.
+      5,668행 규모 — 선조회 dict로 N+1 방지, 커밋 1회.
     - 업로드 후 ProjectVehicle.client_vehicle_id를 차량번호 일치로 세팅(참여 구분 신선도).
+    - 도입구분 자동 판별: 참여차량 차량번호가 내연 fleet에 있으면 대체도입, 없으면 신규도입.
+      introduction_type이 비어있는(None) 참여차량만 자동설정(기존 수기값 보존).
     """
     content = await file.read()
     if not content:
@@ -119,8 +122,10 @@ async def import_fleet(
             status_code=422, detail="필수 컬럼이 없습니다: 차량번호 — 헤더를 확인하세요"
         )
 
-    # 선조회: 차량번호→기존 마스터, 업체명→운수사 client_id (N+1 방지)
-    existing = {cv.vehicle_no: cv for cv in db.query(ClientVehicle).all()}
+    # 선조회: 차대번호/차량번호→기존 마스터, 업체명→운수사 client_id (N+1 방지)
+    fleet = db.query(ClientVehicle).all()
+    by_chassis = {cv.chassis_no: cv for cv in fleet if cv.chassis_no}
+    by_vehicle_no = {cv.vehicle_no: cv for cv in fleet if cv.vehicle_no}
     client_by_name = {}
     _dup_names = set()
     for cid, name in db.query(Client.client_id, Client.company_name).filter(
@@ -149,8 +154,10 @@ async def import_fleet(
         if matched_client_id:
             client_matched += 1
         parsed["region"] = vehicle_no[:2]
+        chassis_no = parsed.get("chassis_no")
 
-        cv = existing.get(vehicle_no)
+        # 식별키: 차대번호 있으면 chassis 기준, 없으면 vehicle_no 기준 upsert
+        cv = by_chassis.get(chassis_no) if chassis_no else by_vehicle_no.get(vehicle_no)
         if cv is None:
             cv = ClientVehicle(vehicle_no=vehicle_no)
             for k, v in parsed.items():
@@ -158,7 +165,10 @@ async def import_fleet(
             cv.client_id = matched_client_id
             cv.status = "운행"  # 신규 기본값
             db.add(cv)
-            existing[vehicle_no] = cv
+            if chassis_no:
+                by_chassis[chassis_no] = cv
+            by_vehicle_no[vehicle_no] = cv
+            fleet.append(cv)  # 도입구분 판별용 내연 집합 최신화
             created += 1
         else:
             # 재업로드 upsert: 파일에 있는 스펙 필드만 갱신. status(수기 폐차)는 파일에
@@ -173,7 +183,8 @@ async def import_fleet(
     db.flush()  # vehicle_id(gen_uuid) 확보 — 참여 링크 매핑용
 
     # 참여 링크 갱신: 차량번호 일치 ProjectVehicle에 client_vehicle_id 세팅(신선도)
-    no_to_id = {cv.vehicle_no: cv.vehicle_id for cv in existing.values() if cv.vehicle_no}
+    # (참여 EV는 fleet에 없을 수 있으나 링크는 vehicle_no 기준으로 유지)
+    no_to_id = {cv.vehicle_no: cv.vehicle_id for cv in fleet if cv.vehicle_no}
     linked = 0
     pvs = (
         db.query(ProjectVehicle)
@@ -186,13 +197,31 @@ async def import_fleet(
             pv.client_vehicle_id = target
             linked += 1
 
+    # 도입구분 자동 판별: 참여차량 차량번호가 내연 fleet에 있으면 대체도입, 없으면 신규도입.
+    # introduction_type이 비어있는(None) 참여차량만 자동설정(기존 수기값 보존).
+    ice_novs = {
+        cv.vehicle_no
+        for cv in fleet
+        if cv.vehicle_no and (not cv.fuel or "전기" not in str(cv.fuel))
+    }
+    introduction_derived = 0
+    for pv in db.query(ProjectVehicle).filter(
+        ProjectVehicle.vehicle_no.isnot(None),
+        ProjectVehicle.introduction_type.is_(None),
+    ):
+        pv.introduction_type = "대체도입" if pv.vehicle_no in ice_novs else "신규도입"
+        introduction_derived += 1
+
     AuditLogger.log_action(
         db,
         user.user_id,
         "FLEET_IMPORT",
         target_type="CLIENT_VEHICLE",
-        new_value="보유 차량 업로드 — 생성 {0} / 갱신 {1} / 매칭 {2} / 참여링크 {3} / 건너뜀 {4}".format(
-            created, updated, client_matched, linked, skipped
+        new_value=(
+            "보유 차량 업로드 — 생성 {0} / 갱신 {1} / 매칭 {2} / 참여링크 {3} / "
+            "도입구분 {4} / 건너뜀 {5}".format(
+                created, updated, client_matched, linked, introduction_derived, skipped
+            )
         ),
     )
     try:
@@ -208,6 +237,7 @@ async def import_fleet(
         updated=updated,
         client_matched=client_matched,
         linked_participation=linked,
+        introduction_derived=introduction_derived,
         skipped=skipped,
     )
 
@@ -327,15 +357,20 @@ def create_client_vehicle(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """보유 차량 수기 등록 — region 앞2 파생, status 기본 '운행', 차량번호 중복 시 409."""
+    """보유 차량 수기 등록 — region 앞2 파생, status 기본 '운행', 차대번호 중복 시 409.
+
+    식별키는 차대번호(chassis_no). 차량번호(vehicle_no) 중복은 허용(내연/전기 공존).
+    """
     common.get_or_404(db, Client, client_id, "고객사")
     if payload.asset_id:
         common.get_or_404(db, Asset, payload.asset_id, "자산")
     status = payload.status or "운행"
     validate_active_code(db, "VEHICLE_STATUS", status)
-    if db.query(ClientVehicle).filter(ClientVehicle.vehicle_no == payload.vehicle_no).first():
+    if payload.chassis_no and db.query(ClientVehicle).filter(
+        ClientVehicle.chassis_no == payload.chassis_no
+    ).first():
         raise HTTPException(
-            status_code=409, detail="이미 등록된 차량번호입니다: {0}".format(payload.vehicle_no)
+            status_code=409, detail="이미 등록된 차대번호입니다: {0}".format(payload.chassis_no)
         )
     cv = ClientVehicle(
         client_id=client_id,
@@ -350,7 +385,7 @@ def create_client_vehicle(
     except IntegrityError:
         db.rollback()
         raise HTTPException(
-            status_code=409, detail="이미 등록된 차량번호입니다: {0}".format(payload.vehicle_no)
+            status_code=409, detail="이미 등록된 차대번호입니다: {0}".format(payload.chassis_no)
         )
     # 참여 링크 신선도 — 같은 차량번호의 기존 미링크 ProjectVehicle에 역링크(수기 후생성 대비)
     if cv.vehicle_no:
@@ -393,16 +428,18 @@ def update_client_vehicle(
         validate_active_code(db, "VEHICLE_STATUS", data["status"])
     if data.get("asset_id"):
         common.get_or_404(db, Asset, data["asset_id"], "자산")
-    if "vehicle_no" in data and data["vehicle_no"] and data["vehicle_no"] != cv.vehicle_no:
+    # 식별키 = 차대번호: chassis_no 변경 시에만 중복 409. 차량번호 중복은 허용(내연/전기 공존).
+    if "chassis_no" in data and data["chassis_no"] and data["chassis_no"] != cv.chassis_no:
         dup = (
             db.query(ClientVehicle)
-            .filter(ClientVehicle.vehicle_no == data["vehicle_no"])
+            .filter(ClientVehicle.chassis_no == data["chassis_no"])
             .first()
         )
         if dup is not None:
             raise HTTPException(
-                status_code=409, detail="이미 등록된 차량번호입니다: {0}".format(data["vehicle_no"])
+                status_code=409, detail="이미 등록된 차대번호입니다: {0}".format(data["chassis_no"])
             )
+    if "vehicle_no" in data and data["vehicle_no"] and data["vehicle_no"] != cv.vehicle_no:
         cv.region = data["vehicle_no"][:2] or None
     for field in ("vehicle_no", "client_id", *_FLEET_FIELDS):
         if field in data:
@@ -415,7 +452,7 @@ def update_client_vehicle(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="차량번호가 중복되어 저장하지 못했습니다")
+        raise HTTPException(status_code=409, detail="차대번호가 중복되어 저장하지 못했습니다")
     db.refresh(cv)
     return schemas.ClientVehicleOut.model_validate(cv, from_attributes=True)
 
