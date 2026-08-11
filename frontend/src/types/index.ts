@@ -100,6 +100,11 @@ export interface Client {
   last_activity_at?: string | null
   /** 이번 달 보고서 상태 미니 배지 (STANDBY/WRITING/…) */
   report_status_this_month?: string | null
+  /** 고객사별 참여 집계 — ProjectVehicle 파생 (목록·상세 공통, 미참여는 0/null) */
+  participating_vehicle_count?: number | null
+  participating_project_count?: number | null
+  total_reduction?: number | null
+  total_expected_payout?: number | null
   /** 상세 응답 — 월간 보고서 구독 설정 (ClientDetailOut) */
   subscriptions?: ReportSubscription[]
 }

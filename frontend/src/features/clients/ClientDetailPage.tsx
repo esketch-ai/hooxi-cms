@@ -336,6 +336,41 @@ function OverviewTab({ client }: { client: Client }) {
   const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      {/* 참여 규모 요약 — ProjectVehicle(참여 차량) 집계 (목록·개요 공통) */}
+      <section className="rounded-3xl border border-hairline bg-graphite p-5 lg:col-span-2">
+        <h2 className="mb-3 text-sm font-semibold text-bone">참여 규모</h2>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <dt className="text-xs text-slatey">참여 사업</dt>
+            <dd className="mt-1 text-lg font-semibold text-bone">
+              {(client.participating_project_count ?? 0).toLocaleString()}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slatey">참여 차량</dt>
+            <dd className="mt-1 text-lg font-semibold text-bone">
+              {(client.participating_vehicle_count ?? 0).toLocaleString()}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slatey">총감축량 (tCO₂)</dt>
+            <dd className="mt-1 text-lg font-semibold text-bone">
+              {(client.total_reduction ?? 0).toLocaleString()}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slatey">예상지급액</dt>
+            <dd className="mt-1 text-lg font-semibold text-bone">
+              {client.total_expected_payout != null ? (
+                <SensitiveData type="money" value={fmtMoney(client.total_expected_payout)} />
+              ) : (
+                '—'
+              )}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <section className="rounded-3xl border border-hairline bg-graphite p-5">
         <h2 className="mb-2 text-sm font-semibold text-bone">기본 정보</h2>
         <dl>

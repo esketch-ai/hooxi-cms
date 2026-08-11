@@ -11,7 +11,7 @@ import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
 import { useCodes, useUserOptions } from '../../lib/api/queries'
-import { fmtDate, telHref } from '../../lib/format'
+import { fmtDate, fmtMoney, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { useClients } from './api'
 import { ClientFormModal } from './ClientFormModal'
@@ -105,6 +105,30 @@ export function ClientsPage() {
           <p className="text-xs text-slatey">{c.main_contact_phone ?? ''}</p>
         </div>
       ),
+    },
+    {
+      key: 'participation',
+      header: '참여 규모',
+      render: (c) => (
+        <div className="text-xs">
+          <p className="text-bone">
+            사업 {c.participating_project_count ?? 0} · 차량 {c.participating_vehicle_count ?? 0}
+          </p>
+          <p className="text-slatey">
+            {(c.total_reduction ?? 0).toLocaleString()} tCO₂
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'payout',
+      header: '예상지급액',
+      render: (c) =>
+        c.total_expected_payout != null ? (
+          <SensitiveData type="money" value={fmtMoney(c.total_expected_payout)} />
+        ) : (
+          <span className="text-slatey">—</span>
+        ),
     },
     {
       key: 'fee',
@@ -270,6 +294,13 @@ export function ClientsPage() {
                   </div>
                   <StatusBadge domain="contract" value={c.contract_status} />
                 </div>
+                {(c.participating_vehicle_count ?? 0) > 0 && (
+                  <p className="mt-2 text-xs text-slatey">
+                    참여 사업 {c.participating_project_count ?? 0} · 차량{' '}
+                    {c.participating_vehicle_count ?? 0} ·{' '}
+                    {(c.total_reduction ?? 0).toLocaleString()} tCO₂
+                  </p>
+                )}
                 <div className="mt-3 flex gap-2">
                   {c.main_contact_phone && (
                     <a

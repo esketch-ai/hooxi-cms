@@ -342,6 +342,11 @@ class ClientOut(BaseModel):
     lng: Optional[float] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # 고객사별 참여 집계 — ProjectVehicle(참여 차량, v19.3 정본) group_by 파생(목록·상세 공통)
+    participating_vehicle_count: Optional[int] = None
+    participating_project_count: Optional[int] = None
+    total_reduction: Optional[float] = None
+    total_expected_payout: Optional[float] = None
 
 
 class ClientListItem(ClientOut):

@@ -9,7 +9,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import distinct, func, or_
 from sqlalchemy.orm import Session
 
 import schemas
@@ -138,6 +138,37 @@ def _upsert_subscription(db: Session, client: Client, sub_in: schemas.ReportSubs
         client.report_yn = "Y"
 
 
+def _participation_map(db: Session, ids: List[str]) -> dict:
+    """고객사별 참여 집계 — ProjectVehicle(참여 차량, v19.3 정본)를 client_id로 group_by.
+
+    (last_map/fee_map 관용구) ids 대상 1회 조회로 N+1 방지. 각 값은 4필드 dict:
+    참여 차량수·참여 사업수(distinct)·총감축량(coalesce 0)·예상지급액(전건 None이면 None).
+    """
+    if not ids:
+        return {}
+    veh_rows = (
+        db.query(
+            ProjectVehicle.client_id,
+            func.count(ProjectVehicle.vehicle_id),
+            func.count(distinct(ProjectVehicle.project_id)),
+            func.coalesce(func.sum(ProjectVehicle.effective_reduction), 0),
+            func.sum(ProjectVehicle.expected_payout),
+        )
+        .filter(ProjectVehicle.client_id.in_(ids))
+        .group_by(ProjectVehicle.client_id)
+        .all()
+    )
+    return {
+        cid: {
+            "participating_vehicle_count": int(vcnt or 0),
+            "participating_project_count": int(pcnt or 0),
+            "total_reduction": float(red) if red is not None else 0.0,
+            "total_expected_payout": float(payout) if payout is not None else None,
+        }
+        for cid, vcnt, pcnt, red, payout in veh_rows
+    }
+
+
 def _client_detail(db: Session, client: Client) -> schemas.ClientDetailOut:
     unames = common.user_name_map(db, [client.manager_id])
     subs = (
@@ -145,6 +176,15 @@ def _client_detail(db: Session, client: Client) -> schemas.ClientDetailOut:
         .filter(ReportSubscription.client_id == client.client_id)
         .order_by(ReportSubscription.created_at.asc())
         .all()
+    )
+    part = _participation_map(db, [client.client_id]).get(
+        client.client_id,
+        {
+            "participating_vehicle_count": 0,
+            "participating_project_count": 0,
+            "total_reduction": 0.0,
+            "total_expected_payout": None,
+        },
     )
     out = schemas.ClientDetailOut.model_validate(client, from_attributes=True)
     return out.model_copy(
@@ -154,6 +194,7 @@ def _client_detail(db: Session, client: Client) -> schemas.ClientDetailOut:
                 schemas.ReportSubscriptionOut.model_validate(s, from_attributes=True)
                 for s in subs
             ],
+            **part,
         }
     )
 
@@ -232,6 +273,15 @@ def list_clients(
         )
         fee_map = {cid: (float(v) if v is not None else None) for cid, v in fee_rows}
 
+    # 고객사별 참여 집계 (ProjectVehicle) — 목록 표기용, 미참여는 0/None으로 표시
+    part_map = _participation_map(db, ids)
+    _part_default = {
+        "participating_vehicle_count": 0,
+        "participating_project_count": 0,
+        "total_reduction": 0.0,
+        "total_expected_payout": None,
+    }
+
     items = []
     for c in rows:
         out = schemas.ClientListItem.model_validate(c, from_attributes=True)
@@ -242,6 +292,7 @@ def list_clients(
                     "last_activity_at": last_map.get(c.client_id),
                     "report_status_this_month": report_map.get(c.client_id),
                     "success_fee_rate": fee_map.get(c.client_id),
+                    **part_map.get(c.client_id, _part_default),
                 }
             )
         )
