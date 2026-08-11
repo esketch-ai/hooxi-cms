@@ -270,6 +270,42 @@ class ProjectVehicle(Base):
     remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(MIN(기준차령,(만료-승인)/365), 부록 L)
     effective_reduction = Column(Numeric(14, 3))  # 파생: 잔여반영감축량(MIN(기준감축량, 가중합), 부록 L)
     expected_payout = Column(Numeric(15, 2))  # 파생: 예상지급액(부록 L 정본 산식, 단가 미사용)
+    client_vehicle_id = Column(String(50), ForeignKey("tb_client_vehicle.vehicle_id"))  # fleet 마스터 링크(참여 구분)
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ClientVehicle(Base):
+    """운수사 보유 차량(fleet) 마스터 — 부록 M. 운수사가 보유한 버스 전량의 원장.
+
+    Docs/BUS_Info_list.xlsx(BUS_LIST_ALL) 컬럼을 반영한다. 차량번호(vehicle_no)는 전국
+    유일이라 UniqueConstraint로 중복을 막는다. 업체명(operator_name)은 엑셀 원문 표기이고
+    client_id는 운수사 매칭 결과(미매칭 nullable). 특정 감축사업 참여는 ProjectVehicle이
+    client_vehicle_id로 이 마스터를 가리켜 표현한다(참여 구분).
+    """
+
+    __tablename__ = "tb_client_vehicle"
+    __table_args__ = (UniqueConstraint("vehicle_no", name="uq_client_vehicle_no"),)
+
+    vehicle_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"))  # 운수사(업체명 매칭, nullable)
+    operator_name = Column(String(100))  # 업체명 원문
+    vehicle_no = Column(String(30))  # 차량번호(전국 유일)
+    region = Column(String(20))  # 차량번호 앞2 파생
+    chassis_no = Column(String(50))  # 차대번호
+    model_name = Column(String(50))  # 차명
+    model_year = Column(Integer)  # 연식
+    registered_at = Column(Date)  # 차량등록일
+    vehicle_class = Column(String(50))  # 차종
+    length_mm = Column(Integer)  # 길이(mm)
+    width_mm = Column(Integer)  # 너비(mm)
+    height_mm = Column(Integer)  # 높이(mm)
+    gross_weight_kg = Column(Integer)  # 총중량(kg)
+    seating_capacity = Column(Integer)  # 승차정원
+    fuel = Column(String(20))  # 연료
+    status = Column(String(20))  # 공통코드 VEHICLE_STATUS: 운행/폐차 (기본 운행은 라우터/기본값)
+    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"))  # 선택 관제 연결
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -705,6 +741,7 @@ def ensure_schema():
         ("tb_project_vehicle", "expire_at", "DATE"),
         ("tb_project_vehicle", "remaining_age", "NUMERIC(6,3)"),
         ("tb_project_vehicle", "effective_reduction", "NUMERIC(14,3)"),
+        ("tb_project_vehicle", "client_vehicle_id", "VARCHAR(50)"),  # fleet 마스터 링크(부록 M)
         # 회계 원장층(부록 L.3) — 거래계약 매출인식 확장 필드
         ("tb_project_sale", "ownership_pct", "NUMERIC(5,2)"),
         ("tb_project_sale", "sale_invoice_amount", "NUMERIC(15,2)"),
@@ -738,6 +775,8 @@ def ensure_schema():
         ("uq_project_client_map_slot", "tb_project_client_map", ["project_id", "client_id"]),
         # 같은 (사업, 단계코드) 중복 시드 방지 — 배포형 DB 단계 중복행 예방 (정교화 P0)
         ("uq_project_stage_slot", "tb_project_stage", ["project_id", "stage_code"]),
+        # 운수사 보유 차량 마스터 — 차량번호 전국 유일(부록 M)
+        ("uq_client_vehicle_no", "tb_client_vehicle", ["vehicle_no"]),
     ]
     try:
         insp = _inspect(engine)

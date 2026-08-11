@@ -615,6 +615,63 @@ export interface ProjectOperatorList {
   total: number
 }
 
+// tb_client_vehicle — 고객사(운수사) 보유 차량 마스터 (부록 M)
+export interface ClientVehiclePayload {
+  vehicle_no: string // 차량번호(필수·전국 유일)
+  client_id?: string | null // 운수사(업체명 매칭)
+  operator_name?: string | null // 업체명 원문
+  chassis_no?: string | null // 차대번호
+  model_name?: string | null // 차명
+  model_year?: number | null // 연식
+  registered_at?: string | null // 차량등록일
+  vehicle_class?: string | null // 차종
+  length_mm?: number | null
+  width_mm?: number | null
+  height_mm?: number | null
+  gross_weight_kg?: number | null
+  seating_capacity?: number | null // 승차정원
+  fuel?: string | null // 연료
+  status?: string | null // VEHICLE_STATUS
+  asset_id?: string | null // 선택 관제 연결
+  memo?: string | null
+}
+
+export interface ClientVehicle extends ClientVehiclePayload {
+  vehicle_id: string
+  client_id?: string | null
+  client_name?: string | null // 운수사명(조인)
+  region?: string | null
+  created_at?: string | null
+}
+
+// 고객사 상세 보유 차량 목록 항목 — 마스터 + 감축사업 참여 구분(서버 파생)
+export interface ClientVehicleListItem extends ClientVehicle {
+  participation?: boolean
+  project_id?: string | null
+  project_name?: string | null
+  introduction_type?: string | null // VEHICLE_INTRO
+  effective_reduction?: number | null // 잔여반영감축량
+  expected_payout?: number | null // 예상지급액
+}
+
+export interface ClientVehicleList {
+  items: ClientVehicleListItem[]
+  total: number
+  page: number
+  page_size: number
+  participating_count: number
+  unassigned_count: number
+}
+
+// 전역 fleet 엑셀 업로드 결과 요약 (부록 M)
+export interface FleetImportResult {
+  created: number
+  updated: number
+  client_matched: number // 업체명→운수사 매칭 성공 행
+  linked_participation: number // ProjectVehicle 참여 연결 건수
+  skipped: number // vehicle_no 없는 행 등
+}
+
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
 export interface ProjectStage {
   stage_code: string

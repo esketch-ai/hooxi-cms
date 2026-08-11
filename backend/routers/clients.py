@@ -20,6 +20,7 @@ from models import (
     ChatMessage,
     ChatThread,
     Client,
+    ClientVehicle,
     Document,
     IssueComment,
     KakaoContact,
@@ -380,6 +381,7 @@ _CLIENT_DEP_CHECKS = [
     ("사업", Project),
     ("사업-고객사 매핑", ProjectClientMap),
     ("사업 참여 차량", ProjectVehicle),
+    ("보유 차량", ClientVehicle),
     ("자산", Asset),
     ("일정", Schedule),
     ("보고서 발송", ReportDelivery),
@@ -475,8 +477,15 @@ def _cascade_delete_client(db: Session, client_id: str):
     q(ProjectVehicle).filter(ProjectVehicle.client_id == client_id).update(
         {"client_id": None}, synchronize_session=False
     )
+    # 보유 차량(fleet) — 운수사 참조만 끊어 마스터는 보존(부록 M, 참여 링크는 유지)
+    q(ClientVehicle).filter(ClientVehicle.client_id == client_id).update(
+        {"client_id": None}, synchronize_session=False
+    )
     if asset_ids:
         q(ProjectVehicle).filter(ProjectVehicle.asset_id.in_(asset_ids)).update(
+            {"asset_id": None}, synchronize_session=False
+        )
+        q(ClientVehicle).filter(ClientVehicle.asset_id.in_(asset_ids)).update(
             {"asset_id": None}, synchronize_session=False
         )
     dele(Asset, Asset.client_id == client_id)

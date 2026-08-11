@@ -7,7 +7,11 @@ import type {
   Asset,
   Client,
   ClientPayload,
+  ClientVehicle,
+  ClientVehicleList,
+  ClientVehiclePayload,
   Document,
+  FleetImportResult,
   Paginated,
   ProjectClientMap,
   ReportDelivery,
@@ -196,5 +200,73 @@ export function useClientAssets(clientId: string | undefined) {
       return unwrapList(data).items
     },
     enabled: !!clientId,
+  })
+}
+
+// ── 보유 차량 (tb_client_vehicle, 부록 M) ───────────────────────────
+export function useClientVehicles(
+  clientId: string | undefined,
+  params?: { page?: number; pageSize?: number; q?: string; participation?: string },
+) {
+  const { page = 1, pageSize = 50, q = '', participation = 'all' } = params ?? {}
+  return useQuery({
+    queryKey: ['clients', clientId, 'vehicles', page, pageSize, q, participation],
+    queryFn: async () => {
+      const { data } = await api.get<ClientVehicleList>(`/clients/${clientId}/vehicles`, {
+        params: {
+          page,
+          page_size: pageSize,
+          q: q || undefined,
+          participation: participation || undefined,
+        },
+      })
+      return data
+    },
+    enabled: !!clientId,
+    placeholderData: (prev) => prev, // 페이지 전환 시 이전 결과 유지(깜빡임 방지)
+  })
+}
+
+/** 전국 버스 명부(fleet) 엑셀 일괄 업로드 — 전역 마스터라 clients 전체를 넓게 무효화 */
+export function useImportFleet(clientId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post<FleetImportResult>('/fleet/import', fd)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      if (clientId) queryClient.invalidateQueries({ queryKey: ['clients', clientId] })
+    },
+  })
+}
+
+export function useSaveClientVehicle(clientId: string | undefined, vehicleId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: ClientVehiclePayload) => {
+      const { data } = vehicleId
+        ? await api.put<ClientVehicle>(`/clients/${clientId}/vehicles/${vehicleId}`, payload)
+        : await api.post<ClientVehicle>(`/clients/${clientId}/vehicles`, payload)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', clientId, 'vehicles'] })
+    },
+  })
+}
+
+export function useDeleteClientVehicle(clientId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (vehicleId: string) => {
+      await api.delete(`/clients/${clientId}/vehicles/${vehicleId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients', clientId, 'vehicles'] })
+    },
   })
 }

@@ -25,6 +25,7 @@ from services import excel_import
 from models import (
     Asset,
     Client,
+    ClientVehicle,
     Code,
     Project,
     ProjectClientMap,
@@ -115,6 +116,21 @@ def _sum_reductions(obj) -> Optional[float]:
     """연차(1~10) 감축량 합 — 값이 하나도 없으면 None(미입력)."""
     nums = [float(getattr(obj, f)) for f in _REDUCTION_YEARS if getattr(obj, f) is not None]
     return round(sum(nums), 3) if nums else None
+
+
+def _link_client_vehicle(db: Session, vehicle: ProjectVehicle) -> None:
+    """참여 차량의 fleet 마스터 링크 신선도 — vehicle_no 일치 ClientVehicle을 찾아 세팅(부록 M).
+
+    client_vehicle_id가 이미 있으면 손대지 않고, vehicle_no가 없거나 마스터가 없으면 미지정 유지."""
+    if not vehicle.vehicle_no:
+        vehicle.client_vehicle_id = None
+        return
+    cv = (
+        db.query(ClientVehicle.vehicle_id)
+        .filter(ClientVehicle.vehicle_no == vehicle.vehicle_no)
+        .first()
+    )
+    vehicle.client_vehicle_id = cv[0] if cv else None
 
 
 def _vehicle_out(v: ProjectVehicle, client_names: dict) -> schemas.ProjectVehicleOut:
@@ -826,6 +842,7 @@ def create_project_vehicle(
         project_id=project_id, **{f: getattr(payload, f) for f in _VEHICLE_FIELDS}
     )
     _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
+    _link_client_vehicle(db, vehicle)  # fleet 마스터 링크(참여 구분, 부록 M)
     db.add(vehicle)
     db.commit()
     db.refresh(vehicle)
@@ -867,6 +884,8 @@ def update_project_vehicle(
             setattr(vehicle, field, data[field])
     project = common.get_or_404(db, Project, project_id, "감축 사업")
     _derive_vehicle(project, vehicle)  # 파생값 일괄 재계산(부록 L)
+    if "vehicle_no" in data:  # 차량번호 변경 시 fleet 마스터 링크 재설정(부록 M)
+        _link_client_vehicle(db, vehicle)
     db.commit()
     db.refresh(vehicle)
     return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
@@ -940,6 +959,12 @@ async def commit_vehicle_import(
     if len(content) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="파일 크기가 25MB를 초과합니다")
     result = excel_import.parse_and_validate(db, _VEHICLE_IMPORT_ENTITY, content)
+    # fleet 마스터 링크용 선조회(차량번호→마스터 id, 부록 M) — 대량 대비 1회 로드
+    fleet_by_no = {
+        no: vid
+        for vid, no in db.query(ClientVehicle.vehicle_id, ClientVehicle.vehicle_no)
+        if no
+    }
     created, empty = 0, 0
     for parsed in result.valid_rows:
         fields = {f: getattr(parsed.payload, f) for f in _VEHICLE_FIELDS}
@@ -950,6 +975,8 @@ async def commit_vehicle_import(
             continue
         vehicle = ProjectVehicle(project_id=project_id, **fields)
         _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
+        if vehicle.vehicle_no:  # fleet 마스터 링크(참여 구분, 부록 M)
+            vehicle.client_vehicle_id = fleet_by_no.get(vehicle.vehicle_no)
         db.add(vehicle)
         created += 1
     error_rows = [r for r in result.rows if r.errors]

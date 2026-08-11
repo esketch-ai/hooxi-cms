@@ -871,6 +871,111 @@ class PurchaseInvoiceListResponse(BaseModel):
     total_amount: Optional[float] = None  # Σ amount(제품=총매입) — 없으면 None
 
 
+# 운수사 보유 차량(fleet) 마스터 — 부록 M. BUS_Info_list.xlsx 컬럼 반영 --------------
+class ClientVehicleIn(BlankFKToNoneModel):
+    """차량 마스터 등록 — vehicle_no 필수(전국 유일). operator_name은 업체명 원문(운수사 매칭)."""
+
+    vehicle_no: str = Field(min_length=1, max_length=30)  # 차량번호(필수)
+    client_id: Optional[str] = Field(default=None, max_length=50)  # 운수사(업체명 매칭)
+    operator_name: Optional[str] = Field(default=None, max_length=100)  # 업체명 원문
+    chassis_no: Optional[str] = Field(default=None, max_length=50)  # 차대번호
+    model_name: Optional[str] = Field(default=None, max_length=50)  # 차명
+    model_year: Optional[int] = Field(default=None, ge=0)  # 연식
+    registered_at: Optional[date] = None  # 차량등록일
+    vehicle_class: Optional[str] = Field(default=None, max_length=50)  # 차종
+    length_mm: Optional[int] = Field(default=None, ge=0)  # 길이(mm)
+    width_mm: Optional[int] = Field(default=None, ge=0)  # 너비(mm)
+    height_mm: Optional[int] = Field(default=None, ge=0)  # 높이(mm)
+    gross_weight_kg: Optional[int] = Field(default=None, ge=0)  # 총중량(kg)
+    seating_capacity: Optional[int] = Field(default=None, ge=0)  # 승차정원
+    fuel: Optional[str] = Field(default=None, max_length=20)  # 연료
+    status: Optional[str] = Field(default=None, max_length=20)  # VEHICLE_STATUS
+    asset_id: Optional[str] = Field(default=None, max_length=50)  # 선택 관제 연결
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class ClientVehicleUpdate(BlankFKToNoneModel):
+    """차량 마스터 부분 수정 — 전달된 필드만 반영(전 필드 optional)."""
+
+    vehicle_no: Optional[str] = Field(default=None, min_length=1, max_length=30)
+    client_id: Optional[str] = Field(default=None, max_length=50)
+    operator_name: Optional[str] = Field(default=None, max_length=100)
+    chassis_no: Optional[str] = Field(default=None, max_length=50)
+    model_name: Optional[str] = Field(default=None, max_length=50)
+    model_year: Optional[int] = Field(default=None, ge=0)
+    registered_at: Optional[date] = None
+    vehicle_class: Optional[str] = Field(default=None, max_length=50)
+    length_mm: Optional[int] = Field(default=None, ge=0)
+    width_mm: Optional[int] = Field(default=None, ge=0)
+    height_mm: Optional[int] = Field(default=None, ge=0)
+    gross_weight_kg: Optional[int] = Field(default=None, ge=0)
+    seating_capacity: Optional[int] = Field(default=None, ge=0)
+    fuel: Optional[str] = Field(default=None, max_length=20)
+    status: Optional[str] = Field(default=None, max_length=20)
+    asset_id: Optional[str] = Field(default=None, max_length=50)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class ClientVehicleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    vehicle_id: str
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None  # 운수사명(조인)
+    operator_name: Optional[str] = None
+    vehicle_no: Optional[str] = None
+    region: Optional[str] = None
+    chassis_no: Optional[str] = None
+    model_name: Optional[str] = None
+    model_year: Optional[int] = None
+    registered_at: Optional[date] = None
+    vehicle_class: Optional[str] = None
+    length_mm: Optional[int] = None
+    width_mm: Optional[int] = None
+    height_mm: Optional[int] = None
+    gross_weight_kg: Optional[int] = None
+    seating_capacity: Optional[int] = None
+    fuel: Optional[str] = None
+    status: Optional[str] = None
+    asset_id: Optional[str] = None
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ClientVehicleListItem(ClientVehicleOut):
+    """고객사 상세 보유 차량 목록 항목 — 마스터 필드 + 감축사업 참여 구분(부록 M).
+
+    participation은 ProjectVehicle이 이 마스터(client_vehicle_id)를 가리키는지 여부.
+    참여 시 대표 1건의 사업·도입구분·잔여반영감축량·예상지급액을 함께 노출(전부 optional)."""
+
+    participation: bool = False
+    project_id: Optional[str] = None
+    project_name: Optional[str] = None
+    introduction_type: Optional[str] = None
+    effective_reduction: Optional[float] = None
+    expected_payout: Optional[float] = None
+
+
+class ClientVehicleListResponse(BaseModel):
+    items: List[ClientVehicleListItem]
+    total: int
+    page: int
+    page_size: int
+    participating_count: int  # 해당 고객사 전체 기준(필터 무관)
+    unassigned_count: int  # 해당 고객사 전체 기준(필터 무관)
+
+
+class FleetImportResult(BaseModel):
+    """전역 fleet 엑셀 업로드 결과 요약(부록 M)."""
+
+    created: int = 0
+    updated: int = 0
+    client_matched: int = 0  # 업체명→운수사 매칭 성공 행
+    linked_participation: int = 0  # ProjectVehicle.client_vehicle_id 세팅 건수
+    skipped: int = 0  # vehicle_no 없는 행 등
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계 + 진행 단계."""
 

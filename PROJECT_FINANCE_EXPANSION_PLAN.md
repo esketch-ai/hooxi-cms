@@ -540,3 +540,40 @@ H.6 원가/매출 분리를 아래 단위로 확정·구현했다(운수사·투
 - 예상지급액 = 엑셀 정본(단가 미사용), 원가단가→max_payment 전환.
 - 승인상태 공통코드로 미착품 전환.
 - 48대 비례식 일괄. 매출세금계산서 수동입력. TRUNC/ROUND 구분 준수.
+
+---
+
+# 부록 M — 운수사 보유 차량(fleet) 등록 & 참여 구분 설계 (2026-08-12, 구현 보류)
+
+**목적**: 고객사(운수사) 상세에서 그 운수사 **보유 버스 전체(참여+미참여)** 를 참여 구분과 함께 조회. 현재 버스는 `ProjectVehicle`(프로젝트 참여 단위)로만 존재 → 미참여 버스는 데이터 부재. fleet 마스터를 신설한다.
+
+## M.1 데이터 모델 (필드 소스: `Docs/BUS_Info_list.xlsx` BUS_LIST_ALL — 전국 버스 등록부)
+- **신규 `tb_client_vehicle`(운수사 차량 마스터 = fleet, 차량번호 단위)**. 엑셀 컬럼 매핑:
+  `vehicle_id`(PK)·`client_id`(FK 운수사, **nullable** — 업체명 매칭, 미매칭 시 null)·`operator_name`(업체명 원문)·`vehicle_no`(차량번호, **UniqueConstraint** 전국 유일)·`region`(차량번호 앞2 파생)·`chassis_no`(차대번호)·`model_name`(차명)·`model_year`(연식 Int)·`registered_at`(차량등록일 Date)·`vehicle_class`(차종)·`length_mm`/`width_mm`/`height_mm`(Int)·`gross_weight_kg`(Int)·`seating_capacity`(승차정원 Int)·`fuel`(연료)·`status`(VEHICLE_STATUS 공통코드: 운행/폐차, 기본 운행)·`asset_id`(선택 관제 연결)·`memo`·timestamps.
+- **`ProjectVehicle`에 `client_vehicle_id`(FK tb_client_vehicle, nullable) 추가** — 참여 = fleet 차량↔프로젝트 참여 링크. 감축량·예상지급액은 참여 단위(ProjectVehicle)에 그대로 유지.
+- **트레이드오프**: 집계형 `tb_asset`(quantity·main_spec)은 per-버스와 성격이 달라 재사용 부적합 → 전용 fleet 테이블. 관제가 필요한 버스는 `asset_id`로 Asset과 선택 연결.
+
+## M.2 참여 구분(도출, 저장 아님)
+- **미참여**: fleet 차량에 연결된 ProjectVehicle 없음.
+- **참여**: 연결된 ProjectVehicle 있음 → 프로젝트명·도입구분·승인상태·잔여반영감축량·예상지급액 표시.
+- 규칙: 원칙 1버스=최대 1참여(재도입은 이력). 초기엔 최신 참여 1건 표시.
+
+## M.3 업로드/등록
+- **fleet 명부 엑셀 업로드**(고객사 상세): 차량번호·차종·등록일(지역은 차량번호에서 자동) → `tb_client_vehicle` upsert(client_id+vehicle_no).
+- **기존 프로젝트 참여차량 업로드**(ProjectVehicle): vehicle_no로 fleet 매칭 → 없으면 fleet 자동 생성 후 연결(참여 등록 시 fleet에도 존재 보장).
+
+## M.4 마이그레이션(1회성)
+- 기존 ProjectVehicle의 (client_id, vehicle_no) distinct → `tb_client_vehicle` 백필 생성 → `ProjectVehicle.client_vehicle_id` 연결. 멱등. (Dev 시드 5,220대 대상; 운영 0건.)
+
+## M.5 UI (고객사 상세)
+- 신규 탭 **"보유 차량"**: fleet 목록(차량번호·지역·차종·등록일·**참여 배지**[참여 프로젝트/미참여]·감축량·예상지급액), **참여/미참여 필터**·검색·페이지네이션. 상단 요약(총 N대 · 참여 X / 미참여 Y). 참여 배지 클릭 → 해당 프로젝트 이동.
+
+## M.6 정합 규칙
+- `vehicle_no` 정규화(공백·표기), (client_id, vehicle_no) 유니크. 지역=앞2글자 규칙 재사용. 폐차/이관 status(VEHICLE_STATUS 공통코드).
+
+## M.7 증분 순서(구현 시)
+1. `tb_client_vehicle` 모델·ensure_schema·`ProjectVehicle.client_vehicle_id`·마이그레이션(ProjectVehicle→fleet 백필).
+2. fleet CRUD + 엑셀 업로드 + 참여차량 업로드 시 fleet upsert·연결.
+3. 고객사별 fleet+참여상태 조회 엔드포인트(참여/미참여 필터).
+4. 고객사 상세 "보유 차량" 탭 UI.
+- 검증: 참여/미참여 분류 정확성·vehicle_no 매칭·마이그레이션 멱등·유니크 충돌.

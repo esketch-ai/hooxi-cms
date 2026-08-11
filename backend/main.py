@@ -38,6 +38,7 @@ from routers import audit as audit_router
 from routers import batch as batch_router
 from routers import backups as backups_router
 from routers import chat as chat_router
+from routers import client_vehicles as client_vehicles_router
 from routers import clients as clients_router
 from routers import codes as codes_router
 from routers import config as config_router
@@ -135,6 +136,9 @@ def seed_codes():
         ("SALE_BUYER_TYPE", "투자사", "투자사", "purple", None, 20),
         ("SALE_BUYER_TYPE", "금융사", "금융사", "teal", None, 30),
         ("SALE_BUYER_TYPE", "기타", "기타", "gray", None, 40),
+        # 차량 상태 — 운수사 보유 차량(fleet) 마스터 운행 여부(부록 M). 한글 코드값.
+        ("VEHICLE_STATUS", "운행", "운행", "emerald", None, 10),
+        ("VEHICLE_STATUS", "폐차", "폐차", "gray", None, 20),
         # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
         ("ACTIVITY_TYPE", "CALL", "전화", "emerald", None, 10),
         ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", None, 20),
@@ -308,6 +312,7 @@ API_V1_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_V1_PREFIX)
 app.include_router(users_router.router, prefix=API_V1_PREFIX)
 app.include_router(clients_router.router, prefix=API_V1_PREFIX)
+app.include_router(client_vehicles_router.router, prefix=API_V1_PREFIX)
 app.include_router(codes_router.router, prefix=API_V1_PREFIX)
 app.include_router(histories_router.router, prefix=API_V1_PREFIX)
 app.include_router(schedules_router.router, prefix=API_V1_PREFIX)

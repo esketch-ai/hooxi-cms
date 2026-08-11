@@ -1,16 +1,22 @@
 // SCR-03D 고객사 상세 360° 뷰 — 상담 전화 응대를 이 화면 하나로 완결
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Buildings,
+  CaretLeft,
+  CaretRight,
+  Car,
   ChatCircleDots,
+  CircleNotch,
   DownloadSimple,
+  MagnifyingGlass,
   PencilSimple,
   Phone,
   Plus,
   Trash,
   TreeStructure,
+  UploadSimple,
 } from '@phosphor-icons/react'
 import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
@@ -25,6 +31,7 @@ import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { useCodes } from '../../lib/api/queries'
 import { fmtDate, fmtMoney, fmtServerDate, fmtServerDateTime, telHref } from '../../lib/format'
+import { useDebounced } from '../../lib/useDebounced'
 import type { Client, Document } from '../../types'
 import { ActivityForm } from '../histories/ActivityForm'
 import { useClientThreads } from '../chat/api'
@@ -38,19 +45,22 @@ import {
   useClientProjects,
   useClientRecipients,
   useClientReports,
+  useClientVehicles,
   useDeleteClient,
+  useImportFleet,
   useRemoveRecipient,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
 
-type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'projects' | 'chat'
+type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'projects' | 'chat'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '개요' },
   { key: 'histories', label: '활동 이력' },
   { key: 'reports', label: '보고서·문서' },
   { key: 'assets', label: '자산 및 연동' },
+  { key: 'vehicles', label: '보유 차량' },
   { key: 'projects', label: '참여 사업·정산' },
   { key: 'chat', label: '상담' },
 ]
@@ -223,6 +233,7 @@ export function ClientDetailPage() {
       )}
       {tab === 'reports' && <ReportsDocsTab clientId={client.client_id} />}
       {tab === 'assets' && <AssetsTab clientId={client.client_id} />}
+      {tab === 'vehicles' && <VehiclesTab clientId={client.client_id} />}
       {tab === 'projects' && <ProjectsTab clientId={client.client_id} />}
       {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
@@ -846,6 +857,248 @@ function AssetsTab({ clientId }: { clientId: string }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ── 보유 차량 탭 (tb_client_vehicle, 부록 M) ────────────────────────
+// 운수사 보유 차량 마스터 + 감축사업 참여 구분. 명부 업로드는 전국 단위(전역 fleet).
+const CLIENT_VEHICLE_PAGE_SIZE = 50
+const PARTICIPATION_TABS: { key: string; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'participating', label: '참여' },
+  { key: 'unassigned', label: '미참여' },
+]
+
+function VehiclesTab({ clientId }: { clientId: string }) {
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [participation, setParticipation] = useState('all')
+  const [page, setPage] = useState(1)
+  useEffect(() => {
+    setPage(1) // 검색어·필터 변경 시 첫 페이지로
+  }, [debouncedSearch, participation])
+  const { data } = useClientVehicles(clientId, {
+    page,
+    pageSize: CLIENT_VEHICLE_PAGE_SIZE,
+    q: debouncedSearch,
+    participation,
+  })
+  // 총건수가 줄어 현재 페이지가 범위를 벗어나면 마지막 페이지로 클램프
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((data?.total ?? 0) / CLIENT_VEHICLE_PAGE_SIZE))
+    if (page > maxPage) setPage(maxPage)
+  }, [data?.total, page])
+  const { labelOf: introLabel } = useCodes('VEHICLE_INTRO')
+  const importFleet = useImportFleet(clientId)
+  const { showToast } = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const vehicles = data?.items ?? []
+
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (fileRef.current) fileRef.current.value = '' // 같은 파일 재선택 허용
+    if (!file) return
+    try {
+      const r = await importFleet.mutateAsync(file)
+      const tail = r.skipped > 0 ? ` · 건너뜀 ${r.skipped}건` : ''
+      showToast(
+        r.created + r.updated > 0
+          ? `신규 ${r.created} · 갱신 ${r.updated}대 · 운수사매칭 ${r.client_matched} · 참여연결 ${r.linked_participation}${tail}.`
+          : `반영된 차량이 없습니다${tail}. 양식·값을 확인해 주세요.`,
+        r.created + r.updated > 0 ? 'success' : 'info',
+      )
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail || '명부 업로드에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold text-bone">보유 차량</h2>
+          {data && (
+            <span className="text-xs text-slatey">
+              총 {data.total.toLocaleString()}대 · 참여{' '}
+              {data.participating_count.toLocaleString()} / 미참여{' '}
+              {data.unassigned_count.toLocaleString()}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={importFleet.isPending}
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+          >
+            {importFleet.isPending ? (
+              <CircleNotch size={15} className="animate-spin" />
+            ) : (
+              <UploadSimple size={15} />
+            )}
+            전국 버스 명부 업로드
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx" onChange={onUpload} className="hidden" />
+        </div>
+      </div>
+
+      {/* 필터 세그먼트 + 검색(차량번호) */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1 rounded-full border border-hairline p-0.5">
+          {PARTICIPATION_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setParticipation(t.key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                participation === t.key
+                  ? 'bg-elevate text-bone'
+                  : 'text-slatey hover:text-ash'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full sm:max-w-xs">
+          <MagnifyingGlass
+            size={15}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slatey"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="차량번호 검색…"
+            className="w-full rounded-md border border-hairline bg-graphite py-2 pr-3 pl-9 text-sm text-bone outline-none placeholder:text-slatey focus:border-white/30"
+            aria-label="차량 검색"
+          />
+        </div>
+      </div>
+
+      {vehicles.length === 0 ? (
+        <EmptyState
+          icon={<Car size={36} />}
+          title={
+            debouncedSearch || participation !== 'all'
+              ? '조건에 맞는 차량이 없습니다'
+              : '등록된 보유 차량이 없습니다'
+          }
+          description={
+            debouncedSearch || participation !== 'all'
+              ? '다른 검색어·필터로 다시 시도해 보세요.'
+              : '[전국 버스 명부 업로드]로 차량 명부를 반영하면 여기에 표시됩니다.'
+          }
+          className="py-8"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[880px] text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs text-slatey">
+                <th className="px-3 py-2.5 text-left font-semibold">차량번호</th>
+                <th className="px-3 py-2.5 text-left font-semibold">지역</th>
+                <th className="px-3 py-2.5 text-left font-semibold">차명</th>
+                <th className="px-3 py-2.5 text-left font-semibold">차종</th>
+                <th className="px-3 py-2.5 text-right font-semibold">연식</th>
+                <th className="px-3 py-2.5 text-left font-semibold">등록일</th>
+                <th className="px-3 py-2.5 text-left font-semibold">연료</th>
+                <th className="px-3 py-2.5 text-right font-semibold">승차정원</th>
+                <th className="px-3 py-2.5 text-left font-semibold">참여</th>
+                <th className="px-3 py-2.5 text-right font-semibold">잔여반영감축량</th>
+                <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((v) => (
+                <tr key={v.vehicle_id} className="border-b border-hairline/60 last:border-b-0">
+                  <td className="px-3 py-2.5 font-medium text-bone">{v.vehicle_no ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{v.region ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{v.model_name ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{v.vehicle_class ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-right text-ash">{v.model_year ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-ash">{fmtServerDate(v.registered_at)}</td>
+                  <td className="px-3 py-2.5 text-ash">{v.fuel ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-right text-ash">
+                    {v.seating_capacity ?? '—'}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {v.participation ? (
+                      v.project_id ? (
+                        <Link
+                          to={`/projects/${v.project_id}`}
+                          className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                        >
+                          {v.project_name ?? '참여'}
+                          {v.introduction_type ? ` · ${introLabel(v.introduction_type)}` : ''}
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          참여
+                        </span>
+                      )
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-elevate-strong px-2 py-0.5 text-xs font-medium text-slatey">
+                        미참여
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-ash">
+                    {v.effective_reduction != null
+                      ? v.effective_reduction.toLocaleString()
+                      : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    {v.expected_payout != null ? (
+                      <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
+                    ) : (
+                      <span className="text-slatey">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {(data?.total ?? 0) > CLIENT_VEHICLE_PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-slatey">
+          <span>
+            {(page - 1) * CLIENT_VEHICLE_PAGE_SIZE + 1}–
+            {(page - 1) * CLIENT_VEHICLE_PAGE_SIZE + vehicles.length} / 총{' '}
+            {data?.total.toLocaleString()}대
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-md border border-hairline p-1.5 text-bone hover:bg-elevate disabled:opacity-40"
+              aria-label="이전 페이지"
+            >
+              <CaretLeft size={14} />
+            </button>
+            <span className="px-1">
+              {page} / {Math.max(1, Math.ceil((data?.total ?? 0) / CLIENT_VEHICLE_PAGE_SIZE))}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page >= Math.ceil((data?.total ?? 0) / CLIENT_VEHICLE_PAGE_SIZE)}
+              className="rounded-md border border-hairline p-1.5 text-bone hover:bg-elevate disabled:opacity-40"
+              aria-label="다음 페이지"
+            >
+              <CaretRight size={14} />
+            </button>
+          </div>
         </div>
       )}
     </section>
