@@ -67,35 +67,44 @@ def test_vehicle_list_totals(client, staff_headers):
     assert lr["total_expected_payout"] is None
 
 
-def test_payout_price_derives_expected_payout(client, staff_headers):
-    """원가 톤당 단가 입력 시 전 차량 예상지급액=총감축량×단가 순수 파생 (H.4 일원화)."""
+def test_payout_params_derive_expected_payout(client, staff_headers):
+    """지급 파라미터(최대지급액·승인일) 입력 시 예상지급액 = 엑셀 정본 비례식 (부록 L).
+
+    expected_payout = TRUNC(max_payment × 잔여반영/기준감축량 × 잔여차령/기준차령). 단가 미사용.
+    잔여차령이 기준차령(8)으로 캡되는 노후차 케이스로 결정적 검증.
+    """
     pid = _mk_project(client, staff_headers, "예상지급액파생검증")
-    for y in (5, 15):
-        client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"reduction_y1": y})
-    # 원가단가 10000 입력 → 승인일 자동 세팅 + 전 차량 파생
-    r = client.put(f"{PROJECTS}/{pid}/payout-price", headers=staff_headers, json={"unit_price": 10000})
+    # 등록일 2016-01-01 → 차령만료 2024-12-31. 승인일 2016-02-01 → 잔여차령 8 캡.
+    # 연차 y1..y8=10(잔여차령 8이라 전액), y9·y10=5(가중치 0). 잔여반영=MIN(240, 80)=80.
+    payload = {"registered_at": "2016-01-01", "reduction_y9": 5, "reduction_y10": 5}
+    for i in range(1, 9):
+        payload[f"reduction_y{i}"] = 10
+    v = client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json=payload).json()
+    assert v["total_reduction"] == 90  # 연차 단순합(10×8 + 5 + 5)
+    assert v["expected_payout"] is None  # 파라미터 미입력 → 파생 불가
+
+    # 최대지급액 200만 + 승인일 입력 → 전 차량 비례식 파생(기준감축량 240·기준차령 8 기본)
+    r = client.put(
+        f"{PROJECTS}/{pid}/payout-params",
+        headers=staff_headers,
+        json={"max_payment": 2000000, "approved_at": "2016-02-01"},
+    )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["payout_unit_price"] == 10000
-    assert body["approved_at"]  # 미전달 → 오늘로 자동
+    assert body["max_payment"] == 2000000
+    assert body["approved_at"] == "2016-02-01"
+
     lr = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()
-    payouts = sorted(v["expected_payout"] for v in lr["items"])
-    assert payouts == [50000, 150000]  # 5×10000, 15×10000
-    assert lr["total_expected_payout"] == 200000
-    # 신규 차량도 현재 단가로 자동 파생
-    v = client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"reduction_y1": 2}).json()
-    assert v["expected_payout"] == 20000
-    # 요청 바디의 예상지급액 수기값은 무시(스키마에서 제거 → 파생만)
-    v2 = client.post(
-        f"{PROJECTS}/{pid}/vehicles",
-        headers=staff_headers,
-        json={"reduction_y1": 1, "expected_payout": 999999},
-    ).json()
-    assert v2["expected_payout"] == 10000  # 1×10000 (수기 999999 무시)
-    # 단가 해제(null) → 전 차량 예상지급액 null
-    client.put(f"{PROJECTS}/{pid}/payout-price", headers=staff_headers, json={"unit_price": None})
+    item = lr["items"][0]
+    assert item["remaining_age"] == 8.0  # (2024-12-31 − 2016-02-01)/365 > 8 → 캡
+    assert item["effective_reduction"] == 80.0  # MIN(240, y1..y8 전액 80; y9·y10 가중 0)
+    assert item["expected_payout"] == 666666  # TRUNC(2,000,000 × 80/240 × 8/8)
+    assert lr["total_expected_payout"] == 666666
+
+    # 최대지급액 해제(null) → 예상지급액 null
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers, json={"max_payment": None})
     lr2 = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()
-    assert all(v["expected_payout"] is None for v in lr2["items"])
+    assert lr2["items"][0]["expected_payout"] is None
     assert lr2["total_expected_payout"] is None
 
 

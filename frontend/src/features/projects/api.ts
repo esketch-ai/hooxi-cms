@@ -219,14 +219,17 @@ export function useUpdateUnitPrice(projectId: string | undefined) {
   })
 }
 
-/** 원가 톤당 단가 입력 (운수사 지급 기준) — 서버가 전 차량 예상지급액 재계산 + 승인일 자동 세팅 */
-export function useUpdatePayoutPrice(projectId: string | undefined) {
+/** 지급 파라미터 입력 (최대지급액·기준감축량·기준차령·승인일) — 서버가 전 차량 예상지급액 재계산 */
+export function useUpdatePayoutParams(projectId: string | undefined) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (unitPrice: number | null) => {
-      const { data } = await api.put<Project>(`/projects/${projectId}/payout-price`, {
-        unit_price: unitPrice,
-      })
+    mutationFn: async (params: {
+      max_payment?: number | null
+      base_reduction?: number | null
+      base_vehicle_age?: number | null
+      approved_at?: string | null
+    }) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}/payout-params`, params)
       return data
     },
     onSuccess: () => {

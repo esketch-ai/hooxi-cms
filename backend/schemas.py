@@ -522,6 +522,11 @@ _PROJECT_STATUS_PATTERN = "^(기획|등록완료|모니터링|검증|발급완�
 _CREDITS_MAX = 99_999_999.99
 # 단가 상한 — 상식적 상한(#6 P2). Numeric(15,2) 최대(<1e13)보다 보수적으로 잡는다
 _UNIT_PRICE_MAX = 1e12
+# 지급 파라미터 상한(부록 L). max_payment=차량당 상한(Numeric(15,2)), base_reduction=기준감축량
+# (Numeric(10,3) → <1e7), base_vehicle_age=기준차령(Numeric(5,2) → <1000)
+_MAX_PAYMENT_MAX = 1e12
+_BASE_REDUCTION_MAX = 9_999_999.999
+_BASE_AGE_MAX = 999.99
 
 
 class ProjectCreate(BlankFKToNoneModel):
@@ -540,7 +545,8 @@ class ProjectCreate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # §10.3 수기 단가
-    approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
+    # 지급 파라미터(max_payment·base_reduction·base_vehicle_age·approved_at)는 여기서 받지 않는다 —
+    # PayoutParamsUpdate 전용 엔드포인트만 정본(차량 파생 재계산 동반, 부록 L). 단일 쓰기 경로.
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -561,7 +567,7 @@ class ProjectUpdate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
-    approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
+    # 지급 파라미터는 PayoutParamsUpdate 전용 엔드포인트만 정본(차량 재계산 동반) — 단일 쓰기 경로.
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -585,7 +591,9 @@ class ProjectOut(BaseModel):
     expected_issue_date: Optional[date] = None  # D-day 계산용 (SCR-06)
     expected_credits: Optional[float] = None  # 🔒 프론트 마스킹
     unit_price: Optional[float] = None  # 🔒
-    payout_unit_price: Optional[float] = None  # 🔒 원가 단가 — expected_payout 파생 기준
+    max_payment: Optional[float] = None  # 🔒 최대지급액(차량당 상한) — expected_payout 파생 기준(부록 L)
+    base_reduction: Optional[float] = None  # 기준감축량(기본 240)
+    base_vehicle_age: Optional[float] = None  # 기준차령(기본 8)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     price_source: Optional[str] = None
     issued_credits: Optional[float] = None
@@ -614,13 +622,16 @@ class UnitPriceUpdate(BaseModel):
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
 
 
-class PayoutPriceUpdate(BaseModel):
-    """원가 톤당 단가 수기 입력(운수사 지급) — expected_payout 파생 기준.
+class PayoutParamsUpdate(BaseModel):
+    """지급 파라미터 수기 입력(부록 L) — expected_payout 파생 기준. 전부 optional.
 
+    max_payment 세팅 시 base_reduction/base_vehicle_age 미전달이면 라우터가 240/8로 초기화.
     approved_at 미전달 & 프로젝트 미승인 시 라우터가 오늘로 자동 세팅.
     """
 
-    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    max_payment: Optional[float] = Field(default=None, ge=0, le=_MAX_PAYMENT_MAX)
+    base_reduction: Optional[float] = Field(default=None, gt=0, le=_BASE_REDUCTION_MAX)  # 예상지급액 분모 — 0 금지
+    base_vehicle_age: Optional[float] = Field(default=None, gt=0, le=_BASE_AGE_MAX)  # 예상지급액 분모 — 0 금지
     approved_at: Optional[date] = None
 
 
@@ -726,8 +737,11 @@ class ProjectVehicleOut(ProjectVehicleIn):
     vehicle_id: str
     project_id: str
     client_name: Optional[str] = None  # 운수사명(조인)
-    total_reduction: Optional[float] = None  # 서버 파생(연차 합)
-    expected_payout: Optional[float] = None  # 서버 파생(총감축량 × 원가단가) — 수기 없음(H.4)
+    total_reduction: Optional[float] = None  # 서버 파생(연차 단순합)
+    expire_at: Optional[date] = None  # 서버 파생(차령만료일, 부록 L)
+    remaining_age: Optional[float] = None  # 서버 파생(잔여차령, 부록 L)
+    effective_reduction: Optional[float] = None  # 서버 파생(잔여반영감축량, 부록 L)
+    expected_payout: Optional[float] = None  # 서버 파생(예상지급액, 부록 L 정본 산식)
 
 
 class ProjectVehicleListResponse(BaseModel):

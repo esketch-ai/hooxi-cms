@@ -38,7 +38,7 @@ import {
   useImportVehicles,
   useProject,
   useProjectVehicles,
-  useUpdatePayoutPrice,
+  useUpdatePayoutParams,
   useUpdateStages,
   useUpdateUnitPrice,
 } from './api'
@@ -63,12 +63,14 @@ function InlinePriceEditor({
   onSubmit,
   successMsg,
   ariaLabel,
+  placeholder = '원/tCO₂',
 }: {
   value?: number | string | null
   pending: boolean
   onSubmit: (v: number | null) => Promise<unknown>
   successMsg: string
   ariaLabel: string
+  placeholder?: string
 }) {
   const { showToast } = useToast()
   const [editing, setEditing] = useState(false)
@@ -106,7 +108,7 @@ function InlinePriceEditor({
           }}
           autoFocus
           className="h-8 w-32 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
-          placeholder="원/tCO₂"
+          placeholder={placeholder}
           aria-label={ariaLabel}
         />
         <button
@@ -166,17 +168,101 @@ function UnitPriceEditor({ projectId, unitPrice }: { projectId: string; unitPric
   )
 }
 
-/** 원가 톤당 단가 — PUT /projects/{id}/payout-price, 저장 시 전 차량 예상지급액 재계산 + 승인일 자동 */
-function PayoutPriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
-  const update = useUpdatePayoutPrice(projectId)
+/** 최대지급액(차량당 상한) — PUT /projects/{id}/payout-params, 저장 시 전 차량 예상지급액 재계산 + 승인일 자동 */
+function MaxPaymentEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
+  const update = useUpdatePayoutParams(projectId)
   return (
     <InlinePriceEditor
       value={unitPrice}
       pending={update.isPending}
-      onSubmit={(v) => update.mutateAsync(v)}
-      successMsg="원가 단가가 저장되었습니다. 참여 차량 예상지급액이 재계산됩니다."
-      ariaLabel="원가 톤당 단가"
+      onSubmit={(v) => update.mutateAsync({ max_payment: v })}
+      successMsg="최대지급액이 저장되었습니다. 참여 차량 예상지급액이 재계산됩니다."
+      ariaLabel="최대지급액"
+      placeholder="원"
     />
+  )
+}
+
+/** 승인일 인라인 편집 — PUT /projects/{id}/payout-params(approved_at), 잔여차령 산정 기준. 미승인 시 "미승인" 표기 */
+function ApprovedAtEditor({ projectId, approvedAt }: { projectId: string; approvedAt?: string | null }) {
+  const { showToast } = useToast()
+  const update = useUpdatePayoutParams(projectId)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+
+  const startEdit = () => {
+    setValue(approvedAt ? approvedAt.slice(0, 10) : '')
+    setEditing(true)
+  }
+
+  const submit = async () => {
+    try {
+      await update.mutateAsync({ approved_at: value === '' ? null : value })
+      showToast('승인일이 저장되었습니다. 참여 차량 예상지급액이 재계산됩니다.', 'success')
+      setEditing(false)
+    } catch {
+      showToast('승인일 저장에 실패했습니다.', 'danger')
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          autoFocus
+          className="h-8 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone focus:border-white/30 focus:outline-none"
+          aria-label="승인일"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={update.isPending}
+          className="rounded-md bg-primary p-1.5 text-on-primary hover:opacity-90 disabled:opacity-60"
+          title="저장"
+          aria-label="승인일 저장"
+        >
+          {update.isPending ? <CircleNotch size={14} className="animate-spin" /> : <Check size={14} weight="bold" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="rounded-md border border-hairline p-1.5 text-ash hover:bg-elevate"
+          title="취소"
+          aria-label="편집 취소"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {approvedAt ? (
+        <span className="text-bone">{fmtDate(approvedAt)}</span>
+      ) : (
+        <span className="font-medium text-amber-400">미승인</span>
+      )}
+      <button
+        type="button"
+        onClick={startEdit}
+        className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
+        title="승인일 수기 입력"
+        aria-label="승인일"
+      >
+        <PencilSimple size={14} />
+      </button>
+    </div>
   )
 }
 
@@ -509,15 +595,11 @@ export function ProjectDetailPage() {
           <OverviewItem label="배출권 단가 (수기 입력)">
             <UnitPriceEditor projectId={project.project_id} unitPrice={project.unit_price} />
           </OverviewItem>
-          <OverviewItem label="원가 톤당 단가 (운수사 지급)">
-            <PayoutPriceEditor projectId={project.project_id} unitPrice={project.payout_unit_price} />
+          <OverviewItem label="최대지급액 (차량당 상한)">
+            <MaxPaymentEditor projectId={project.project_id} unitPrice={project.max_payment} />
           </OverviewItem>
           <OverviewItem label="승인일">
-            {project.approved_at ? (
-              <span className="text-bone">{fmtDate(project.approved_at)}</span>
-            ) : (
-              <span className="font-medium text-amber-400">미승인</span>
-            )}
+            <ApprovedAtEditor projectId={project.project_id} approvedAt={project.approved_at} />
           </OverviewItem>
         </div>
         {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}
@@ -922,6 +1004,7 @@ function VehiclesSection({ projectId }: { projectId: string }) {
                 <th className="px-3 py-2.5 text-left font-semibold">운수사</th>
                 <th className="px-3 py-2.5 text-left font-semibold">도입구분</th>
                 <th className="px-3 py-2.5 text-right font-semibold">총감축량(tCO₂)</th>
+                <th className="px-3 py-2.5 text-right font-semibold">잔여반영감축량(tCO₂)</th>
                 <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
                 <th className="px-3 py-2.5 text-right font-semibold">관리</th>
               </tr>
@@ -936,6 +1019,9 @@ function VehiclesSection({ projectId }: { projectId: string }) {
                   </td>
                   <td className="px-3 py-2.5 text-right text-ash">
                     {v.total_reduction != null ? v.total_reduction.toLocaleString() : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-ash">
+                    {v.effective_reduction != null ? v.effective_reduction.toLocaleString() : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     {v.expected_payout != null ? (

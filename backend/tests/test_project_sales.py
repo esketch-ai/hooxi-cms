@@ -47,24 +47,37 @@ def test_invalid_buyer_type_422(client, staff_headers):
     assert r.status_code == 422, r.text
 
 
+def _capped_vehicle(reduction_per_year):
+    """잔여차령 8 캡 노후차 페이로드 — y1..y8 동일값(y9·y10 가중 0). 등록 2016-01-01."""
+    p = {"registered_at": "2016-01-01"}
+    for i in range(1, 9):
+        p[f"reduction_y{i}"] = reduction_per_year
+    return p
+
+
 def test_margin_derivation_in_detail(client, staff_headers):
-    """차액 = 매출(Σ 판매단가×수량) − 지급(Σ 차량 expected_payout). 상세에 파생 표시."""
+    """차액 = 매출(Σ 판매단가×수량) − 지급(Σ 차량 예상지급액 정본). 상세에 파생 표시."""
     pid = _mk_project(client, staff_headers, "차액파생검증")
-    # 차량 2대 + 원가단가 → 지급(payout_amount) 파생
-    for y in (100, 200):  # 총감축량 300
-        client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json={"reduction_y1": y})
-    client.put(f"{PROJECTS}/{pid}/payout-price", headers=staff_headers, json={"unit_price": 12000})
-    # 매출: 판매단가×수량
+    # 차량 2대(잔여차령 8 캡): y1..y8=30→eff 240, y1..y8=15→eff 120
+    client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json=_capped_vehicle(30))
+    client.post(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers, json=_capped_vehicle(15))
+    # 최대지급액 120만·승인일 → expected: 1,200,000 / 600,000 → payout 1,800,000
+    client.put(
+        f"{PROJECTS}/{pid}/payout-params",
+        headers=staff_headers,
+        json={"max_payment": 1200000, "approved_at": "2016-02-01"},
+    )
+    # 매출: 판매단가×수량 = 8000 × 300 = 2,400,000
     client.post(
         f"{PROJECTS}/{pid}/sales",
         headers=staff_headers,
-        json={"buyer_name": "증권X", "sale_unit_price": 15000, "quantity": 300},
+        json={"buyer_name": "증권X", "sale_unit_price": 8000, "quantity": 300},
     )
     d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
-    assert d["payout_amount"] == 3600000  # 300 × 12000
-    assert d["sale_amount"] == 4500000  # 300 × 15000
-    assert d["margin_amount"] == 900000  # 4500000 − 3600000
-    assert d["margin_ratio"] == 20.0  # 900000 / 4500000 × 100
+    assert d["payout_amount"] == 1800000  # 1,200,000 + 600,000 (정본 비례식, 캡)
+    assert d["sale_amount"] == 2400000  # 8000 × 300
+    assert d["margin_amount"] == 600000  # 2,400,000 − 1,800,000
+    assert d["margin_ratio"] == 25.0  # 600000 / 2400000 × 100
     assert len(d["sales"]) == 1
 
 

@@ -175,8 +175,10 @@ class Project(Base):
     expected_issue_date = Column(Date)
     expected_credits = Column(Numeric(10, 2))
     unit_price = Column(Numeric(15, 2))  # 수기 단가 (§10.3)
-    payout_unit_price = Column(Numeric(15, 2))  # 원가 톤당 단가(운수사 지급) — expected_payout 파생 기준
-    approved_at = Column(Date)  # 승인일(승인=NOT NULL). 원가단가 입력 시 자동 세팅
+    max_payment = Column(Numeric(15, 2))  # 최대지급액(차량당 상한) — expected_payout 파생 기준(부록 L)
+    base_reduction = Column(Numeric(10, 3))  # 기준감축량(기본 240)
+    base_vehicle_age = Column(Numeric(5, 2))  # 기준차령(기본 8)
+    approved_at = Column(Date)  # 승인일(승인=NOT NULL). 지급 파라미터 입력 시 자동 세팅
     price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
     issued_at = Column(Date)
@@ -236,7 +238,8 @@ class ProjectVehicle(Base):
 
     감축량 방법론(신규/대체, 부록 G)은 전문 스프레드시트가 산정하고, CMS는 그 결과인
     연차(1~10) 감축량·도입구분·민간투자비율을 ingest한다(Option A). total_reduction은 서버 파생.
-    expected_payout(운수사 예상지급액)은 순수 파생값(총감축량 × 원가 톤당 단가, H.4) — 수기 입력 없음.
+    expected_payout(운수사 예상지급액)은 순수 파생값(부록 L 정본 산식) — 수기 입력 없음.
+    차령만료일·잔여차령·잔여반영감축량도 서버 파생값(부록 L).
     """
 
     __tablename__ = "tb_project_vehicle"
@@ -260,9 +263,12 @@ class ProjectVehicle(Base):
     reduction_y8 = Column(Numeric(12, 3))
     reduction_y9 = Column(Numeric(12, 3))
     reduction_y10 = Column(Numeric(12, 3))
-    total_reduction = Column(Numeric(14, 3))  # 파생: 연차 합(서버 계산·저장)
+    total_reduction = Column(Numeric(14, 3))  # 파생: 연차 단순합(서버 계산·저장)
     private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
-    expected_payout = Column(Numeric(15, 2))  # 파생: 총감축량 × 원가 톤당 단가(서버 계산·저장, H.4)
+    expire_at = Column(Date)  # 파생: 차령만료일(EDATE(등록일,108)-1, 부록 L)
+    remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(MIN(기준차령,(만료-승인)/365), 부록 L)
+    effective_reduction = Column(Numeric(14, 3))  # 파생: 잔여반영감축량(MIN(기준감축량, 가중합), 부록 L)
+    expected_payout = Column(Numeric(15, 2))  # 파생: 예상지급액(부록 L 정본 산식, 단가 미사용)
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -270,7 +276,7 @@ class ProjectVehicle(Base):
 
 class ProjectSale(Base):
     """거래계약(매수자별 선물 판매) — 프로젝트당 매수자 여럿(증권/투자/금융). 판매 단가는
-    프로젝트 단일이 아니라 계약 단위로 관리한다(원가 payout_unit_price와 별개 축).
+    프로젝트 단일이 아니라 계약 단위로 관리한다(지급 max_payment와 별개 축).
 
     차액 수익 = Σ(판매단가 × 수량) − Σ(차량 expected_payout)은 저장하지 않고 상세에서 파생.
     """
@@ -664,8 +670,13 @@ def ensure_schema():
         ("tb_report_subscription", "mail_body", "TEXT"),
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
         ("tb_segment_send", "merge_rule", "TEXT"),
-        ("tb_project", "payout_unit_price", "NUMERIC(15,2)"),
+        ("tb_project", "max_payment", "NUMERIC(15,2)"),
+        ("tb_project", "base_reduction", "NUMERIC(10,3)"),
+        ("tb_project", "base_vehicle_age", "NUMERIC(5,2)"),
         ("tb_project", "approved_at", "DATE"),
+        ("tb_project_vehicle", "expire_at", "DATE"),
+        ("tb_project_vehicle", "remaining_age", "NUMERIC(6,3)"),
+        ("tb_project_vehicle", "effective_reduction", "NUMERIC(14,3)"),
     ]
     try:
         insp = _inspect(engine)
@@ -677,11 +688,6 @@ def ensure_schema():
             if column not in cols:
                 with engine.begin() as conn:
                     conn.execute(_text("ALTER TABLE {0} ADD COLUMN {1} {2}".format(table, column, ddl)))
-                    # payout_unit_price 최초 도입 시 1회 백필 — 컬럼이 갓 생겨 전 프로젝트
-                    # 원가단가가 null이므로, 순수 파생(H.4) 불변식상 차량 예상지급액도 전건
-                    # null이어야 한다. 과거 수기 입력값이 남았다면 여기서 정리(멱등, 1회성).
-                    if table == "tb_project" and column == "payout_unit_price":
-                        conn.execute(_text("UPDATE tb_project_vehicle SET expected_payout = NULL"))
                 print("✓ Added missing column {0}.{1}".format(table, column))
     except Exception as exc:
         print("⚠ ensure_schema skipped: {0}".format(exc))

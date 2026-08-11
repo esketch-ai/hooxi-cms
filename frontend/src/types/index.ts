@@ -464,8 +464,10 @@ export interface Project {
   expected_credits?: number | null
   unit_price?: number | null // 수기 단가 (§10.3) — 미입력 시 "미정"
   price_source?: string | null
-  payout_unit_price?: number | null // 원가 톤당 단가(운수사 지급) — 예상지급액 파생 기준
-  approved_at?: string | null // 승인일(승인=존재). 원가단가 입력 시 자동 세팅
+  max_payment?: number | null // 최대지급액(차량당 상한) — 예상지급액 파생 기준
+  base_reduction?: number | null // 기준감축량(기본 240)
+  base_vehicle_age?: number | null // 기준차령(기본 8)
+  approved_at?: string | null // 승인일(승인=존재). 최대지급액 입력 시 자동 세팅
   issued_credits?: number | null // 확정 발급량 (R2-A1)
   issued_at?: string | null
   manager_id?: string | null
@@ -545,7 +547,10 @@ export interface ProjectVehicle extends ProjectVehiclePayload {
   project_id: string
   client_name?: string | null
   total_reduction?: number | null // 서버 파생(연차 합)
-  expected_payout?: number | null // 서버 파생(총감축량×원가단가, H.4) — 수기 입력 불가
+  expire_at?: string | null // 서버 파생(차령만료일)
+  remaining_age?: number | null // 서버 파생(잔여차령)
+  effective_reduction?: number | null // 서버 파생(잔여반영감축량 — 실제 지급 기준)
+  expected_payout?: number | null // 서버 파생(최대지급액×잔여반영감축량/기준감축량×잔여차령/기준차령) — 수기 입력 불가
 }
 
 export interface ProjectVehicleList {

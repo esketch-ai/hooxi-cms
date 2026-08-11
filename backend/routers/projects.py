@@ -7,7 +7,9 @@
 - 배분율 합계 100% 초과 시 422 (서버 검증)
 """
 
-from datetime import date
+import calendar
+import math
+from datetime import date, timedelta
 from typing import List, Optional
 from urllib.parse import quote
 
@@ -43,9 +45,8 @@ _PROJECT_FIELDS = [
     "reg_date", "credit_start_date", "credit_end_date", "credit_period_type",
     "mon_start_date", "mon_end_date", "mon_cycle",
     "expected_issue_date", "expected_credits", "unit_price",
-    "approved_at",
     "issued_credits", "issued_at", "manager_id",
-]
+]  # 지급 파라미터(max_payment·approved_at 등)는 payout-params 전용 경로만(차량 재계산 동반)
 
 
 def _project_status_codes(db: Session):
@@ -189,28 +190,91 @@ def _recalc_expected_amounts(db: Session, project: Project):
         )
 
 
-def _derive_payout(project: Project, total_reduction) -> Optional[float]:
-    """단일 차량 예상지급액 파생(H.4 순수 파생) — 총감축량 × 원가 톤당 단가(round 2).
+# ── 차량 파생값 정본 산식(부록 L) — 단가 미사용 ──────────────────────────────
+# 엑셀 v19.3 정본과 1:1 일치가 목표. 예상지급액은 최대지급액(차량당 상한) × 감축량비 ×
+# 잔여차령비로 산출한다(원가 톤당 단가 미사용).
+DEFAULT_BASE_REDUCTION = 240.0  # 기준감축량 기본값
+DEFAULT_BASE_VEHICLE_AGE = 8.0  # 기준차령 기본값
 
-    구성 요소(원가 단가·총감축량)가 하나라도 없으면 None(미정). 결과가 Numeric(15,2)에
-    못 들어가면 422 — DB 오류(500) 사전 차단(common.EXPECTED_AMOUNT_LIMIT 준용).
-    """
-    if project.payout_unit_price is None or total_reduction is None:
+
+def _add_months(d: date, months: int) -> date:
+    """월 단위 가감(엑셀 EDATE 상당) — 말일 오버플로는 해당 월 말일로 절사."""
+    m = d.month - 1 + months
+    y = d.year + m // 12
+    m = m % 12 + 1
+    return date(y, m, min(d.day, calendar.monthrange(y, m)[1]))
+
+
+def _expire_at(registered_at) -> Optional[date]:
+    """차령만료일 — EDATE(등록일, 12*9) - 1일. 등록일 없으면 None."""
+    if registered_at is None:
         return None
-    amount = round(float(total_reduction) * float(project.payout_unit_price), 2)
+    return _add_months(registered_at, 108) - timedelta(days=1)
+
+
+def _remaining_age(expire_at, approved_at, base_age: float) -> Optional[float]:
+    """잔여차령 — MIN(기준차령, (만료일-승인일)/365). 만료일·승인일 없으면 None."""
+    if expire_at is None or approved_at is None:
+        return None
+    return min(base_age, (expire_at - approved_at).days / 365.0)
+
+
+def _effective_reduction(reductions, remaining_age, base_reduction: float) -> Optional[float]:
+    """잔여반영감축량 — MIN(기준감축량, Σ 연차감축량×clamp(잔여차령-k, 0, 1)).
+
+    reductions: [y1..y10](None은 0 취급). remaining_age None이면 None.
+    """
+    if remaining_age is None:
+        return None
+    weighted = 0.0
+    for k in range(10):
+        y = reductions[k]
+        if y is None:
+            continue
+        w = min(1.0, max(0.0, remaining_age - k))  # clamp(잔여차령-k, 0, 1)
+        weighted += float(y) * w
+    return min(base_reduction, weighted)
+
+
+def _expected_payout(max_payment, effective_reduction, remaining_age,
+                     base_reduction: float, base_vehicle_age: float) -> Optional[float]:
+    """예상지급액 — 최대지급액 × (잔여반영감축량/기준감축량) × (잔여차령/기준차령), 원 단위 절사(TRUNC).
+
+    구성 요소가 하나라도 없으면 None(미정). Numeric(15,2)를 초과하면 422 — DB 오류(500) 사전 차단.
+    """
+    if max_payment is None or effective_reduction is None or remaining_age is None:
+        return None
+    val = float(max_payment) * (effective_reduction / base_reduction) * (remaining_age / base_vehicle_age)
+    amount = float(math.trunc(val))  # 원 단위 절사(TRUNC)
     if abs(amount) >= common.EXPECTED_AMOUNT_LIMIT:
         raise HTTPException(
             status_code=422,
-            detail="예상 지급액이 허용 범위를 초과합니다 — 단가·감축량 단위를 확인하세요",
+            detail="예상 지급액이 허용 범위를 초과합니다 — 최대지급액·감축량 단위를 확인하세요",
         )
     return amount
 
 
-def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
-    """H.4 — 사업 전체 차량의 expected_payout를 서버 파생값으로 재적재(수기 입력 없음).
+def _derive_vehicle(project: Project, vehicle: ProjectVehicle) -> None:
+    """단일 차량 전체 파생값 재계산(부록 L 정본) — total_reduction·만료일·잔여차령·
+    잔여반영감축량·예상지급액을 순수 파생값으로 채운다(수기 입력 없음).
+    """
+    base_r = float(project.base_reduction) if project.base_reduction else DEFAULT_BASE_REDUCTION  # 0/None → 기본(0 나눗셈 방어)
+    base_a = float(project.base_vehicle_age) if project.base_vehicle_age else DEFAULT_BASE_VEHICLE_AGE
+    reductions = [getattr(vehicle, f) for f in _REDUCTION_YEARS]
+    vehicle.total_reduction = _sum_reductions(vehicle)  # 연차 단순합(유지)
+    vehicle.expire_at = _expire_at(vehicle.registered_at)
+    vehicle.remaining_age = _remaining_age(vehicle.expire_at, project.approved_at, base_a)
+    vehicle.effective_reduction = _effective_reduction(reductions, vehicle.remaining_age, base_r)
+    vehicle.expected_payout = _expected_payout(
+        project.max_payment, vehicle.effective_reduction, vehicle.remaining_age, base_r, base_a
+    )
 
-    원가 톤당 단가(payout_unit_price) 변경 등 파생 경로에서 공통 적용. 단가·감축량
-    미입력 시 해당 차량은 None(미정).
+
+def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
+    """부록 L — 사업 전체 차량의 파생값을 재적재(수기 입력 없음).
+
+    지급 파라미터(최대지급액·기준감축량·기준차령)·승인일 변경 등 파생 경로에서 공통 적용.
+    구성 요소 미입력 시 해당 차량 파생값은 None(미정).
     """
     vehicles = (
         db.query(ProjectVehicle)
@@ -218,7 +282,7 @@ def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
         .all()
     )
     for v in vehicles:
-        v.expected_payout = _derive_payout(project, v.total_reduction)
+        _derive_vehicle(project, v)
 
 
 def _validate_allocation_total(db: Session, project_id: str, new_ratio: float,
@@ -658,7 +722,7 @@ def create_project_vehicle(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """차량 등록 — 도입구분 검증, 연차 합(total_reduction) 서버 계산."""
+    """차량 등록 — 도입구분 검증, 파생값(연차 합·만료일·잔여차령·예상지급액) 서버 계산(부록 L)."""
     project = common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.introduction_type:
         validate_active_code(db, "VEHICLE_INTRO", payload.introduction_type)
@@ -671,8 +735,7 @@ def create_project_vehicle(
     vehicle = ProjectVehicle(
         project_id=project_id, **{f: getattr(payload, f) for f in _VEHICLE_FIELDS}
     )
-    vehicle.total_reduction = _sum_reductions(payload)
-    vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
+    _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
     db.add(vehicle)
     db.commit()
     db.refresh(vehicle)
@@ -689,7 +752,7 @@ def update_project_vehicle(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """차량 수정 — 전달된 필드만 반영, total_reduction 재계산."""
+    """차량 수정 — 전달된 필드만 반영, 파생값 재계산(부록 L)."""
     vehicle = (
         db.query(ProjectVehicle)
         .filter(
@@ -712,9 +775,8 @@ def update_project_vehicle(
     for field in _VEHICLE_FIELDS:
         if field in data:
             setattr(vehicle, field, data[field])
-    vehicle.total_reduction = _sum_reductions(vehicle)
     project = common.get_or_404(db, Project, project_id, "감축 사업")
-    vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
+    _derive_vehicle(project, vehicle)  # 파생값 일괄 재계산(부록 L)
     db.commit()
     db.refresh(vehicle)
     return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
@@ -778,7 +840,7 @@ async def commit_vehicle_import(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """차량 엑셀 일괄 등록 — 유효 행만 project_id로 삽입(total_reduction 서버 계산).
+    """차량 엑셀 일괄 등록 — 유효 행만 project_id로 삽입(파생값 서버 계산, 부록 L).
 
     오류 행은 건너뛰고(errors 안내) 감사 로그에 건수만 남긴다(R2-E6)."""
     project = common.get_or_404(db, Project, project_id, "감축 사업")
@@ -797,8 +859,7 @@ async def commit_vehicle_import(
             empty += 1
             continue
         vehicle = ProjectVehicle(project_id=project_id, **fields)
-        vehicle.total_reduction = _sum_reductions(vehicle)
-        vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
+        _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
         db.add(vehicle)
         created += 1
     error_rows = [r for r in result.rows if r.errors]
@@ -1028,40 +1089,49 @@ def update_unit_price(
     return _project_detail(db, project)
 
 
-@router.put("/{project_id}/payout-price", response_model=schemas.ProjectDetailOut)
-def update_payout_price(
+@router.put("/{project_id}/payout-params", response_model=schemas.ProjectDetailOut)
+def update_payout_params(
     project_id: str,
-    payload: schemas.PayoutPriceUpdate,
+    payload: schemas.PayoutParamsUpdate,
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """원가 톤당 단가 수기 입력(운수사 지급, H.4) — expected_payout 파생 기준.
+    """지급 파라미터 수기 입력(부록 L) — expected_payout 파생 기준(단가 미사용).
 
-    단가 변경 시 해당 사업 전체 차량의 expected_payout를 재계산해 적재한다(순수 파생).
-    승인일(approved_at) 미전달 & 미승인 상태면 승인 시점으로 간주해 오늘로 자동 세팅.
-    null 단가 전달 시 원가 미정 — 차량 expected_payout도 null.
+    최대지급액·기준감축량·기준차령·승인일 중 전달된 것만 반영한다. 최대지급액을 세팅할 때
+    기준감축량·기준차령이 아직 미설정(None)이면 각각 240·8로 초기화한다. 승인일 미전달 &
+    미승인 상태면 승인 시점으로 간주해 오늘로 자동 세팅한다. 파라미터 변경 시 해당 사업 전체
+    차량의 파생값(예상지급액 등)을 재계산해 적재한다(순수 파생). null 전달 시 미정.
     """
     project = common.get_or_404(db, Project, project_id, "감축 사업")
-    old_price = project.payout_unit_price
-    project.payout_unit_price = payload.unit_price
+    data = payload.model_dump(exclude_unset=True)
+    old_max = project.max_payment
+    if "max_payment" in data:
+        project.max_payment = data["max_payment"]
+        # 최대지급액 세팅 시 기준값 미설정이면 정본 기본값(240/8)으로 초기화
+        if project.base_reduction is None:
+            project.base_reduction = DEFAULT_BASE_REDUCTION
+        if project.base_vehicle_age is None:
+            project.base_vehicle_age = DEFAULT_BASE_VEHICLE_AGE
+    if "base_reduction" in data:
+        project.base_reduction = data["base_reduction"]
+    if "base_vehicle_age" in data:
+        project.base_vehicle_age = data["base_vehicle_age"]
     if payload.approved_at is not None:
         project.approved_at = payload.approved_at
     elif project.approved_at is None:
-        project.approved_at = date.today()  # 원가단가 입력 = 승인 시점(미설정 시)
+        project.approved_at = date.today()  # 지급 파라미터 입력 = 승인 시점(미설정 시)
     _recalc_vehicle_payouts(db, project)
-    # 감사 로그 — 원가 단가만 old→new 기록(매출단가 동반 기록 금지, R2-E6/H.6)
+    # 감사 로그 — 최대지급액만 old→new 기록(다른 파라미터 병기 금지, R2-E6/H.6)
+    new_max = data.get("max_payment") if "max_payment" in data else old_max
     AuditLogger.log_action(
         db,
         user.user_id,
-        "PROJECT_PAYOUT_PRICE",
+        "PROJECT_PAYOUT_PARAMS",
         target_type="PROJECT",
         target_id=project.project_id,
-        old_value="{0:g}".format(float(old_price)) if old_price is not None else None,
-        new_value=(
-            "{0:g}".format(float(payload.unit_price))
-            if payload.unit_price is not None
-            else None
-        ),
+        old_value="{0:g}".format(float(old_max)) if old_max is not None else None,
+        new_value="{0:g}".format(float(new_max)) if new_max is not None else None,
     )
     db.commit()
     db.refresh(project)
