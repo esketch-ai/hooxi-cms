@@ -176,7 +176,6 @@ class Project(Base):
     expected_credits = Column(Numeric(10, 2))
     unit_price = Column(Numeric(15, 2))  # 수기 단가 (§10.3)
     payout_unit_price = Column(Numeric(15, 2))  # 원가 톤당 단가(운수사 지급) — expected_payout 파생 기준
-    sale_unit_price = Column(Numeric(15, 2))  # 매출 톤당 단가(투자/금융 판매) — 저장·표시(산식 미연동)
     approved_at = Column(Date)  # 승인일(승인=NOT NULL). 원가단가 입력 시 자동 세팅
     price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
@@ -264,6 +263,27 @@ class ProjectVehicle(Base):
     total_reduction = Column(Numeric(14, 3))  # 파생: 연차 합(서버 계산·저장)
     private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
     expected_payout = Column(Numeric(15, 2))  # 파생: 총감축량 × 원가 톤당 단가(서버 계산·저장, H.4)
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class ProjectSale(Base):
+    """거래계약(매수자별 선물 판매) — 프로젝트당 매수자 여럿(증권/투자/금융). 판매 단가는
+    프로젝트 단일이 아니라 계약 단위로 관리한다(원가 payout_unit_price와 별개 축).
+
+    차액 수익 = Σ(판매단가 × 수량) − Σ(차량 expected_payout)은 저장하지 않고 상세에서 파생.
+    """
+
+    __tablename__ = "tb_project_sale"
+
+    sale_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    buyer_name = Column(String(100), nullable=False)  # 매수자(증권/투자/금융)
+    buyer_type = Column(String(20))  # SALE_BUYER_TYPE 공통코드(증권사/투자사/금융사/기타)
+    sale_unit_price = Column(Numeric(15, 2))  # 선물 판매 톤당 단가
+    quantity = Column(Numeric(14, 3))  # 판매 수량(tCO2)
+    contract_date = Column(Date)
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -645,7 +665,6 @@ def ensure_schema():
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
         ("tb_segment_send", "merge_rule", "TEXT"),
         ("tb_project", "payout_unit_price", "NUMERIC(15,2)"),
-        ("tb_project", "sale_unit_price", "NUMERIC(15,2)"),
         ("tb_project", "approved_at", "DATE"),
     ]
     try:

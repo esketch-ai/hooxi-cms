@@ -26,6 +26,7 @@ from models import (
     Code,
     Project,
     ProjectClientMap,
+    ProjectSale,
     ProjectStage,
     ProjectVehicle,
     User,
@@ -42,7 +43,7 @@ _PROJECT_FIELDS = [
     "reg_date", "credit_start_date", "credit_end_date", "credit_period_type",
     "mon_start_date", "mon_end_date", "mon_cycle",
     "expected_issue_date", "expected_credits", "unit_price",
-    "sale_unit_price", "approved_at",
+    "approved_at",
     "issued_credits", "issued_at", "manager_id",
 ]
 
@@ -125,6 +126,44 @@ def _vehicle_rollup(db: Session, project_id: str):
     ).all()
     total = round(sum(float(r[0]) for r in rows if r[0] is not None), 3)
     return len(rows), total
+
+
+# ── 거래계약(매수자별 선물 판매) + 내부 차액 수익 파생 ─────────────────────
+_SALE_FIELDS = ("buyer_name", "buyer_type", "sale_unit_price", "quantity", "contract_date", "memo")
+
+
+def _sale_out(s: ProjectSale) -> schemas.ProjectSaleOut:
+    return schemas.ProjectSaleOut.model_validate(s, from_attributes=True)
+
+
+def _project_sales(db: Session, project_id: str):
+    """사업 거래계약 목록 — 등록순(created_at asc)."""
+    return (
+        db.query(ProjectSale)
+        .filter(ProjectSale.project_id == project_id)
+        .order_by(ProjectSale.created_at.asc(), ProjectSale.sale_id.asc())
+        .all()
+    )
+
+
+def _sale_amount(sales) -> Optional[float]:
+    """매출 Σ(판매단가 × 수량) — 단가·수량 둘 다 입력된 계약만. 계산가능분 없으면 None."""
+    parts = [
+        float(s.sale_unit_price) * float(s.quantity)
+        for s in sales
+        if s.sale_unit_price is not None and s.quantity is not None
+    ]
+    return round(sum(parts), 2) if parts else None
+
+
+def _payout_amount(db: Session, project_id: str) -> Optional[float]:
+    """지급 Σ(차량 expected_payout, None 제외) — 전건 None이면 None."""
+    total = (
+        db.query(func.sum(ProjectVehicle.expected_payout))
+        .filter(ProjectVehicle.project_id == project_id)
+        .scalar()
+    )
+    return round(float(total), 2) if total is not None else None
 
 
 def _recalc_expected_amounts(db: Session, project: Project):
@@ -231,6 +270,20 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
     )
     stages, delayed_count = _stage_outs(db, project)
     vehicle_count, total_reduction = _vehicle_rollup(db, project.project_id)
+    # 거래계약 + 내부 차액 수익 파생 — 매출Σ(판매단가×수량) − 지급Σ(차량 expected_payout)
+    sales = _project_sales(db, project.project_id)
+    sale_amount = _sale_amount(sales)
+    payout_amount = _payout_amount(db, project.project_id)
+    margin_amount = (
+        round(sale_amount - payout_amount, 2)
+        if sale_amount is not None and payout_amount is not None
+        else None
+    )
+    margin_ratio = (
+        round(margin_amount / sale_amount * 100, 2)
+        if margin_amount is not None and sale_amount is not None and sale_amount > 0
+        else None
+    )
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -243,6 +296,11 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "delayed_stage_count": delayed_count,
             "vehicle_count": vehicle_count,
             "total_reduction": total_reduction,
+            "sales": [_sale_out(s) for s in sales],
+            "sale_amount": sale_amount,
+            "payout_amount": payout_amount,
+            "margin_amount": margin_amount,
+            "margin_ratio": margin_ratio,
         }
     )
 
@@ -771,6 +829,125 @@ async def commit_vehicle_import(
     )
 
 
+# ── 거래계약(매수자별 선물 판매) CRUD ─────────────────────────────────────
+@router.get("/{project_id}/sales", response_model=schemas.ProjectSaleListResponse)
+def list_project_sales(
+    project_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """거래계약 목록(등록순) + 매출 합계(Σ 판매단가×수량, 둘 다 입력된 계약만)."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    sales = _project_sales(db, project_id)
+    return schemas.ProjectSaleListResponse(
+        items=[_sale_out(s) for s in sales],
+        total=len(sales),
+        total_sale_amount=_sale_amount(sales),
+    )
+
+
+@router.post(
+    "/{project_id}/sales", response_model=schemas.ProjectSaleOut, status_code=201
+)
+def create_project_sale(
+    project_id: str,
+    payload: schemas.ProjectSaleIn,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """거래계약 등록 — buyer_type은 SALE_BUYER_TYPE 공통코드 검증."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    if payload.buyer_type:
+        validate_active_code(db, "SALE_BUYER_TYPE", payload.buyer_type)
+    sale = ProjectSale(
+        project_id=project_id, **{f: getattr(payload, f) for f in _SALE_FIELDS}
+    )
+    db.add(sale)
+    db.flush()  # PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
+    # 감사 로그 — 매수자·단가는 매출 축(원가단가와 한 레코드 병기 금지, H.6)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_SALE_CREATE",
+        target_type="PROJECT_SALE",
+        target_id=sale.sale_id,
+    )
+    db.commit()
+    db.refresh(sale)
+    return _sale_out(sale)
+
+
+@router.put(
+    "/{project_id}/sales/{sale_id}", response_model=schemas.ProjectSaleOut
+)
+def update_project_sale(
+    project_id: str,
+    sale_id: str,
+    payload: schemas.ProjectSaleUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """거래계약 수정 — 전달된 필드만 반영."""
+    sale = (
+        db.query(ProjectSale)
+        .filter(
+            ProjectSale.project_id == project_id,
+            ProjectSale.sale_id == sale_id,
+        )
+        .first()
+    )
+    if sale is None:
+        raise HTTPException(status_code=404, detail="거래계약을 찾을 수 없습니다")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("buyer_type"):
+        validate_active_code(db, "SALE_BUYER_TYPE", data["buyer_type"])
+    for field in _SALE_FIELDS:
+        if field in data:
+            setattr(sale, field, data[field])
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_SALE_UPDATE",
+        target_type="PROJECT_SALE",
+        target_id=sale.sale_id,
+    )
+    db.commit()
+    db.refresh(sale)
+    return _sale_out(sale)
+
+
+@router.delete(
+    "/{project_id}/sales/{sale_id}", response_model=schemas.MessageResponse
+)
+def delete_project_sale(
+    project_id: str,
+    sale_id: str,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """거래계약 삭제."""
+    sale = (
+        db.query(ProjectSale)
+        .filter(
+            ProjectSale.project_id == project_id,
+            ProjectSale.sale_id == sale_id,
+        )
+        .first()
+    )
+    if sale is None:
+        raise HTTPException(status_code=404, detail="거래계약을 찾을 수 없습니다")
+    db.delete(sale)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_SALE_DELETE",
+        target_type="PROJECT_SALE",
+        target_id=sale_id,
+    )
+    db.commit()
+    return schemas.MessageResponse(message="거래계약이 삭제되었습니다")
+
+
 @router.delete("/{project_id}", response_model=schemas.MessageResponse)
 def delete_project(
     project_id: str,
@@ -796,6 +973,10 @@ def delete_project(
     ).delete(synchronize_session=False)
     db.query(ProjectVehicle).filter(
         ProjectVehicle.project_id == project_id
+    ).delete(synchronize_session=False)
+    # 거래계약 자식 행 정리 — 없으면 Postgres FK 위반으로 삭제 실패
+    db.query(ProjectSale).filter(
+        ProjectSale.project_id == project_id
     ).delete(synchronize_session=False)
     db.delete(project)
 

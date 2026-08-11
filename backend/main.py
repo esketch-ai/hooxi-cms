@@ -130,6 +130,11 @@ def seed_codes():
         # 차량 도입구분 — 감축량 산정 방법론 분기(부록 G): 신규도입/대체도입. 한글 코드값.
         ("VEHICLE_INTRO", "신규도입", "신규도입", "blue", None, 10),
         ("VEHICLE_INTRO", "대체도입", "대체도입", "teal", None, 20),
+        # 거래 매수자 구분 — 거래계약(매수자별 선물 판매) 상대방 유형. 한글 코드값.
+        ("SALE_BUYER_TYPE", "증권사", "증권사", "blue", None, 10),
+        ("SALE_BUYER_TYPE", "투자사", "투자사", "purple", None, 20),
+        ("SALE_BUYER_TYPE", "금융사", "금융사", "teal", None, 30),
+        ("SALE_BUYER_TYPE", "기타", "기타", "gray", None, 40),
         # 영업활동 유형 (전 값 로직 참조 — 타 모듈이 생성 시 값 사용)
         ("ACTIVITY_TYPE", "CALL", "전화", "emerald", None, 10),
         ("ACTIVITY_TYPE", "MEETING", "미팅", "blue", None, 20),

@@ -10,6 +10,8 @@ import type {
   Project,
   ProjectClientMap,
   ProjectPayload,
+  ProjectSale,
+  ProjectSalePayload,
   ProjectStage,
   ProjectStageAlerts,
   ProjectVehicle,
@@ -233,17 +235,32 @@ export function useUpdatePayoutPrice(projectId: string | undefined) {
   })
 }
 
-/** 매출 톤당 단가 입력 (투자/금융 판매 기준) — 부분 수정으로 저장(산식 미연동, 표시용) */
-export function useUpdateSalePrice(projectId: string | undefined) {
+/** 거래계약 등록/수정 (매수자별 선물 판매단가) — saleId 있으면 PUT, 없으면 POST */
+export function useSaveSale(projectId: string | undefined, saleId?: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (salePrice: number | null) => {
-      const { data } = await api.put<Project>(`/projects/${projectId}`, {
-        sale_unit_price: salePrice,
-      })
+    mutationFn: async (payload: ProjectSalePayload) => {
+      const { data } = saleId
+        ? await api.put<ProjectSale>(`/projects/${projectId}/sales/${saleId}`, payload)
+        : await api.post<ProjectSale>(`/projects/${projectId}/sales`, payload)
       return data
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 거래계약 삭제 */
+export function useDeleteSale(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (saleId: string) => {
+      await api.delete(`/projects/${projectId}/sales/${saleId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
   })

@@ -540,7 +540,6 @@ class ProjectCreate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # §10.3 수기 단가
-    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출 단가 — 저장·표시(산식 미연동)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
@@ -562,7 +561,6 @@ class ProjectUpdate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
-    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출 단가 — 저장·표시(산식 미연동)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
@@ -588,7 +586,6 @@ class ProjectOut(BaseModel):
     expected_credits: Optional[float] = None  # 🔒 프론트 마스킹
     unit_price: Optional[float] = None  # 🔒
     payout_unit_price: Optional[float] = None  # 🔒 원가 단가 — expected_payout 파생 기준
-    sale_unit_price: Optional[float] = None  # 🔒 매출 단가 — 저장·표시(산식 미연동)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     price_source: Optional[str] = None
     issued_credits: Optional[float] = None
@@ -740,6 +737,50 @@ class ProjectVehicleListResponse(BaseModel):
     total_expected_payout: Optional[float] = None  # 예상지급액 입력분 합(있을 때만)
 
 
+# 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
+class ProjectSaleIn(BaseModel):
+    """거래계약 등록/수정 — buyer_type은 SALE_BUYER_TYPE 공통코드(라우터 검증)."""
+
+    buyer_name: str = Field(min_length=1, max_length=100)  # 매수자(증권/투자/금융)
+    buyer_type: Optional[str] = Field(default=None, max_length=20)  # SALE_BUYER_TYPE
+    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 선물 판매 단가
+    quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)  # 판매 수량(tCO2)
+    contract_date: Optional[date] = None
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class ProjectSaleUpdate(BaseModel):
+    """거래계약 부분 수정 — 전달된 필드만 반영(buyer_name 포함 전 필드 optional)."""
+
+    buyer_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    buyer_type: Optional[str] = Field(default=None, max_length=20)
+    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
+    contract_date: Optional[date] = None
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class ProjectSaleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sale_id: str
+    project_id: str
+    buyer_name: str
+    buyer_type: Optional[str] = None
+    sale_unit_price: Optional[float] = None  # 🔒
+    quantity: Optional[float] = None
+    contract_date: Optional[date] = None
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ProjectSaleListResponse(BaseModel):
+    items: List[ProjectSaleOut]
+    total: int
+    total_sale_amount: Optional[float] = None  # Σ(단가×수량, 둘 다 입력된 계약만) — 없으면 None
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계 + 진행 단계."""
 
@@ -749,6 +790,12 @@ class ProjectDetailOut(ProjectOut):
     delayed_stage_count: int = 0  # 지연 단계 수(관찰용)
     vehicle_count: int = 0  # 참여 차량 수(Phase 2)
     total_reduction: float = 0  # 총 감축량(차량 연차 합의 합, Phase 2)
+    # 거래계약 + 내부 차액 수익 파생(저장 없이 상세에서 계산, 내부 표시용)
+    sales: List[ProjectSaleOut] = []  # 거래계약(매수자별 선물 판매) 목록
+    sale_amount: Optional[float] = None  # 매출 Σ(판매단가×수량, 둘 다 입력된 계약만)
+    payout_amount: Optional[float] = None  # 지급 Σ(차량 expected_payout, None 제외)
+    margin_amount: Optional[float] = None  # 차액 = sale_amount − payout_amount(둘 다 있을 때만)
+    margin_ratio: Optional[float] = None  # margin_amount/sale_amount × 100(%)
 
 
 # ---------------------------------------------------------------------------

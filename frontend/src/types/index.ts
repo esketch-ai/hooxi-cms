@@ -465,7 +465,6 @@ export interface Project {
   unit_price?: number | null // 수기 단가 (§10.3) — 미입력 시 "미정"
   price_source?: string | null
   payout_unit_price?: number | null // 원가 톤당 단가(운수사 지급) — 예상지급액 파생 기준
-  sale_unit_price?: number | null // 매출 톤당 단가(투자/금융 판매) — 저장·표시(산식 미연동)
   approved_at?: string | null // 승인일(승인=존재). 원가단가 입력 시 자동 세팅
   issued_credits?: number | null // 확정 발급량 (R2-A1)
   issued_at?: string | null
@@ -488,6 +487,35 @@ export interface Project {
   vehicle_count?: number
   /** 총 감축량 (차량 연차 합의 합, Phase 2) */
   total_reduction?: number
+  /** 매수자별 거래계약 목록 (상세 응답) */
+  sales?: ProjectSale[]
+  /** 내부 차액 수익 요약 (상세 응답, 전부 nullable) */
+  sale_amount?: number | null // 매출 합계 (거래계약 단가×수량 합)
+  payout_amount?: number | null // 운수사 지급 합계
+  margin_amount?: number | null // 차액 (매출 − 지급)
+  margin_ratio?: number | null // 마진율 (%)
+}
+
+// tb_project_sale — 매수자별 선물 판매단가 거래계약 (내부 차액 수익 산출)
+export interface ProjectSalePayload {
+  buyer_name: string
+  buyer_type?: string | null // SALE_BUYER_TYPE: 증권사/투자사/금융사/기타
+  sale_unit_price?: number | null // 선물 단가 (원/tCO₂)
+  quantity?: number | null // 수량 (tCO₂)
+  contract_date?: string | null
+  memo?: string | null
+}
+
+export interface ProjectSale extends ProjectSalePayload {
+  sale_id: string
+  project_id: string
+  created_at?: string
+}
+
+export interface ProjectSaleList {
+  items: ProjectSale[]
+  total: number
+  total_sale_amount?: number | null
 }
 
 // tb_project_vehicle — 사업 참여 차량 (Phase 2, 감축량·예상지급액 ingest)

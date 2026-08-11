@@ -27,24 +27,25 @@ import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
 import { useDebounced } from '../../lib/useDebounced'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
-import type { Project, ProjectClientMap, ProjectVehicle } from '../../types'
+import type { Project, ProjectClientMap, ProjectSale, ProjectVehicle } from '../../types'
 import {
   downloadVehicleTemplate,
   isIssueImminent,
   useDeleteMapping,
   useDeleteProject,
+  useDeleteSale,
   useDeleteVehicle,
   useImportVehicles,
   useProject,
   useProjectVehicles,
   useUpdatePayoutPrice,
-  useUpdateSalePrice,
   useUpdateStages,
   useUpdateUnitPrice,
 } from './api'
 import { ProjectFormModal } from './ProjectFormModal'
 import { MappingFormModal } from './MappingFormModal'
 import { VehicleFormModal } from './VehicleFormModal'
+import { SaleFormModal } from './SaleFormModal'
 
 function OverviewItem({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -175,20 +176,6 @@ function PayoutPriceEditor({ projectId, unitPrice }: { projectId: string; unitPr
       onSubmit={(v) => update.mutateAsync(v)}
       successMsg="원가 단가가 저장되었습니다. 참여 차량 예상지급액이 재계산됩니다."
       ariaLabel="원가 톤당 단가"
-    />
-  )
-}
-
-/** 매출 톤당 단가 — 부분 수정으로 저장(투자/금융 판매 기준, 산식 미연동) */
-function SalePriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
-  const update = useUpdateSalePrice(projectId)
-  return (
-    <InlinePriceEditor
-      value={unitPrice}
-      pending={update.isPending}
-      onSubmit={(v) => update.mutateAsync(v)}
-      successMsg="매출 단가가 저장되었습니다."
-      ariaLabel="매출 톤당 단가"
     />
   )
 }
@@ -525,9 +512,6 @@ export function ProjectDetailPage() {
           <OverviewItem label="원가 톤당 단가 (운수사 지급)">
             <PayoutPriceEditor projectId={project.project_id} unitPrice={project.payout_unit_price} />
           </OverviewItem>
-          <OverviewItem label="매출 톤당 단가 (투자·금융)">
-            <SalePriceEditor projectId={project.project_id} unitPrice={project.sale_unit_price} />
-          </OverviewItem>
           <OverviewItem label="승인일">
             {project.approved_at ? (
               <span className="text-bone">{fmtDate(project.approved_at)}</span>
@@ -618,6 +602,9 @@ export function ProjectDetailPage() {
 
       {/* 참여 차량 (Phase 2) */}
       <VehiclesSection projectId={project.project_id} />
+
+      {/* 거래계약 (매수자별 선물 판매단가) + 내부 차액 수익 요약 */}
+      <SalesSection project={project} />
 
       <ProjectFormModal open={editOpen} onClose={() => setEditOpen(false)} project={project} />
       {projectId && (
@@ -1027,6 +1014,196 @@ function VehiclesSection({ projectId }: { projectId: string }) {
         open={!!deleting}
         title="차량 삭제"
         message={`${deleting?.vehicle_no ?? '해당 차량'}을(를) 삭제합니다.`}
+        confirmLabel="삭제"
+        danger
+        loading={del.isPending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
+    </section>
+  )
+}
+
+// 내부 차액 수익 요약 — 매출 − 지급 = 차액(마진). 내부 전용, 서버 파생값이 있을 때만 표시.
+function MarginSummary({ project }: { project: Project }) {
+  const has =
+    project.sale_amount != null ||
+    project.payout_amount != null ||
+    project.margin_amount != null
+  const money = (v?: number | null) =>
+    v != null ? (
+      <SensitiveData type="money" value={fmtMoney(Number(v))} />
+    ) : (
+      <span className="text-xs font-medium text-amber-400">산출 대기</span>
+    )
+  return (
+    <div className="rounded-3xl border border-hairline bg-graphite p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-bone">내부 차액 수익 요약</h3>
+        <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+          내부 전용
+        </span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-4">
+        <OverviewItem label="매출 (판매)">{money(project.sale_amount)}</OverviewItem>
+        <OverviewItem label="지급 (원가)">{money(project.payout_amount)}</OverviewItem>
+        <OverviewItem label="차액 (마진)">{money(project.margin_amount)}</OverviewItem>
+        <OverviewItem label="마진율">
+          {project.margin_ratio != null ? (
+            <SensitiveData type="rate" value={`${Number(project.margin_ratio)} %`} />
+          ) : (
+            <span className="text-xs font-medium text-amber-400">산출 대기</span>
+          )}
+        </OverviewItem>
+      </div>
+      {!has && (
+        <p className="mt-3 text-xs text-slatey">
+          거래계약(선물 판매단가)과 원가 단가가 입력되면 차액이 자동 산출됩니다.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// 거래계약 (매수자별 선물 판매단가) — 목록 + 등록/수정/삭제. 상세 응답 project.sales 사용(페이지네이션 없음).
+function SalesSection({ project }: { project: Project }) {
+  const projectId = project.project_id
+  const { labelOf } = useCodes('SALE_BUYER_TYPE')
+  const del = useDeleteSale(projectId)
+  const { showToast } = useToast()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<ProjectSale | null>(null)
+  const [deleting, setDeleting] = useState<ProjectSale | null>(null)
+  const sales = project.sales ?? []
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (s: ProjectSale) => {
+    setEditing(s)
+    setFormOpen(true)
+  }
+  const confirmDelete = async () => {
+    if (!deleting) return
+    try {
+      await del.mutateAsync(deleting.sale_id)
+      showToast('거래계약이 삭제되었습니다.', 'success')
+      setDeleting(null)
+    } catch {
+      showToast('삭제에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-base font-bold text-bone">거래계약 (매수자별 선물 판매단가)</h2>
+          <span className="text-xs text-slatey">{sales.length.toLocaleString()}건</span>
+        </div>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="flex items-center gap-1.5 self-start rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
+        >
+          <Plus size={15} weight="bold" /> 거래계약 추가
+        </button>
+      </div>
+
+      <MarginSummary project={project} />
+
+      {sales.length === 0 ? (
+        <EmptyState
+          icon={<Plus size={28} />}
+          title="거래계약이 없습니다"
+          description="[거래계약 추가]로 매수자별 선물 판매단가를 입력하세요."
+          className="py-8"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-hairline text-xs text-slatey">
+                <th className="px-3 py-2.5 text-left font-semibold">매수자</th>
+                <th className="px-3 py-2.5 text-left font-semibold">구분</th>
+                <th className="px-3 py-2.5 text-right font-semibold">선물단가</th>
+                <th className="px-3 py-2.5 text-right font-semibold">수량(tCO₂)</th>
+                <th className="px-3 py-2.5 text-right font-semibold">금액</th>
+                <th className="px-3 py-2.5 text-left font-semibold">계약일</th>
+                <th className="px-3 py-2.5 text-right font-semibold">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((s) => {
+                const amount =
+                  s.sale_unit_price != null && s.quantity != null
+                    ? Number(s.sale_unit_price) * Number(s.quantity)
+                    : null
+                return (
+                  <tr key={s.sale_id} className="border-b border-hairline/60 last:border-b-0">
+                    <td className="px-3 py-2.5 font-medium text-bone">{s.buyer_name}</td>
+                    <td className="px-3 py-2.5 text-ash">
+                      {s.buyer_type ? labelOf(s.buyer_type) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {s.sale_unit_price != null ? (
+                        <SensitiveData type="money" value={fmtMoney(Number(s.sale_unit_price))} />
+                      ) : (
+                        <span className="text-slatey">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-ash">
+                      {s.quantity != null ? Number(s.quantity).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {amount != null ? (
+                        <SensitiveData type="money" value={fmtMoney(amount)} />
+                      ) : (
+                        <span className="text-slatey">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-ash">
+                      {s.contract_date ? fmtDate(s.contract_date) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(s)}
+                          className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-bone"
+                          aria-label="거래계약 수정"
+                        >
+                          <PencilSimple size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleting(s)}
+                          className="rounded-md p-1.5 text-smoke hover:bg-elevate hover:text-rose-400"
+                          aria-label="거래계약 삭제"
+                        >
+                          <Trash size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <SaleFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        projectId={projectId}
+        sale={editing}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        title="거래계약 삭제"
+        message={`${deleting?.buyer_name ?? '해당'} 거래계약을 삭제합니다.`}
         confirmLabel="삭제"
         danger
         loading={del.isPending}
