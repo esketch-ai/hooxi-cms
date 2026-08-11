@@ -37,6 +37,8 @@ import {
   useImportVehicles,
   useProject,
   useProjectVehicles,
+  useUpdatePayoutPrice,
+  useUpdateSalePrice,
   useUpdateStages,
   useUpdateUnitPrice,
 } from './api'
@@ -53,28 +55,33 @@ function OverviewItem({ label, children }: { label: string; children: ReactNode 
   )
 }
 
-/** 배출권 단가 인라인 편집 — PUT /projects/{id}/unit-price, 미입력 "미정" (§10.3) */
-function UnitPriceEditor({
-  projectId,
-  unitPrice,
+/** 톤당 단가 인라인 편집 공용 — 미입력 "미정", 저장 시 successMsg 토스트 */
+function InlinePriceEditor({
+  value: current,
+  pending,
+  onSubmit,
+  successMsg,
+  ariaLabel,
 }: {
-  projectId: string
-  unitPrice?: number | string | null
+  value?: number | string | null
+  pending: boolean
+  onSubmit: (v: number | null) => Promise<unknown>
+  successMsg: string
+  ariaLabel: string
 }) {
   const { showToast } = useToast()
-  const update = useUpdateUnitPrice(projectId)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
 
   const startEdit = () => {
-    setValue(unitPrice != null ? String(unitPrice) : '')
+    setValue(current != null ? String(current) : '')
     setEditing(true)
   }
 
   const submit = async () => {
     try {
-      await update.mutateAsync(value === '' ? null : Number(value))
-      showToast('배출권 단가가 저장되었습니다. 예상 정산액이 재계산됩니다.', 'success')
+      await onSubmit(value === '' ? null : Number(value))
+      showToast(successMsg, 'success')
       setEditing(false)
     } catch {
       showToast('단가 저장에 실패했습니다.', 'danger')
@@ -99,21 +106,17 @@ function UnitPriceEditor({
           autoFocus
           className="h-8 w-32 rounded-lg border border-hairline bg-graphite px-2 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
           placeholder="원/tCO₂"
-          aria-label="배출권 단가"
+          aria-label={ariaLabel}
         />
         <button
           type="button"
           onClick={submit}
-          disabled={update.isPending}
+          disabled={pending}
           className="rounded-md bg-primary p-1.5 text-on-primary hover:opacity-90 disabled:opacity-60"
           title="저장"
           aria-label="단가 저장"
         >
-          {update.isPending ? (
-            <CircleNotch size={14} className="animate-spin" />
-          ) : (
-            <Check size={14} weight="bold" />
-          )}
+          {pending ? <CircleNotch size={14} className="animate-spin" /> : <Check size={14} weight="bold" />}
         </button>
         <button
           type="button"
@@ -130,8 +133,8 @@ function UnitPriceEditor({
 
   return (
     <div className="flex items-center gap-1.5">
-      {unitPrice != null ? (
-        <SensitiveData type="money" value={fmtMoney(Number(unitPrice))} />
+      {current != null ? (
+        <SensitiveData type="money" value={fmtMoney(Number(current))} />
       ) : (
         <span className="font-medium text-amber-400">미정</span>
       )}
@@ -140,11 +143,53 @@ function UnitPriceEditor({
         onClick={startEdit}
         className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone"
         title="단가 수기 입력"
-        aria-label="단가 수기 입력"
+        aria-label={ariaLabel}
       >
         <PencilSimple size={14} />
       </button>
     </div>
+  )
+}
+
+/** 배출권 단가 인라인 편집 — PUT /projects/{id}/unit-price, 미입력 "미정" (§10.3) */
+function UnitPriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
+  const update = useUpdateUnitPrice(projectId)
+  return (
+    <InlinePriceEditor
+      value={unitPrice}
+      pending={update.isPending}
+      onSubmit={(v) => update.mutateAsync(v)}
+      successMsg="배출권 단가가 저장되었습니다. 예상 정산액이 재계산됩니다."
+      ariaLabel="배출권 단가"
+    />
+  )
+}
+
+/** 원가 톤당 단가 — PUT /projects/{id}/payout-price, 저장 시 전 차량 예상지급액 재계산 + 승인일 자동 */
+function PayoutPriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
+  const update = useUpdatePayoutPrice(projectId)
+  return (
+    <InlinePriceEditor
+      value={unitPrice}
+      pending={update.isPending}
+      onSubmit={(v) => update.mutateAsync(v)}
+      successMsg="원가 단가가 저장되었습니다. 참여 차량 예상지급액이 재계산됩니다."
+      ariaLabel="원가 톤당 단가"
+    />
+  )
+}
+
+/** 매출 톤당 단가 — 부분 수정으로 저장(투자/금융 판매 기준, 산식 미연동) */
+function SalePriceEditor({ projectId, unitPrice }: { projectId: string; unitPrice?: number | string | null }) {
+  const update = useUpdateSalePrice(projectId)
+  return (
+    <InlinePriceEditor
+      value={unitPrice}
+      pending={update.isPending}
+      onSubmit={(v) => update.mutateAsync(v)}
+      successMsg="매출 단가가 저장되었습니다."
+      ariaLabel="매출 톤당 단가"
+    />
   )
 }
 
@@ -476,6 +521,19 @@ export function ProjectDetailPage() {
           )}
           <OverviewItem label="배출권 단가 (수기 입력)">
             <UnitPriceEditor projectId={project.project_id} unitPrice={project.unit_price} />
+          </OverviewItem>
+          <OverviewItem label="원가 톤당 단가 (운수사 지급)">
+            <PayoutPriceEditor projectId={project.project_id} unitPrice={project.payout_unit_price} />
+          </OverviewItem>
+          <OverviewItem label="매출 톤당 단가 (투자·금융)">
+            <SalePriceEditor projectId={project.project_id} unitPrice={project.sale_unit_price} />
+          </OverviewItem>
+          <OverviewItem label="승인일">
+            {project.approved_at ? (
+              <span className="text-bone">{fmtDate(project.approved_at)}</span>
+            ) : (
+              <span className="font-medium text-amber-400">미승인</span>
+            )}
           </OverviewItem>
         </div>
         {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}

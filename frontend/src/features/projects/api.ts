@@ -217,6 +217,38 @@ export function useUpdateUnitPrice(projectId: string | undefined) {
   })
 }
 
+/** 원가 톤당 단가 입력 (운수사 지급 기준) — 서버가 전 차량 예상지급액 재계산 + 승인일 자동 세팅 */
+export function useUpdatePayoutPrice(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (unitPrice: number | null) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}/payout-price`, {
+        unit_price: unitPrice,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+/** 매출 톤당 단가 입력 (투자/금융 판매 기준) — 부분 수정으로 저장(산식 미연동, 표시용) */
+export function useUpdateSalePrice(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (salePrice: number | null) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}`, {
+        sale_unit_price: salePrice,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
 /** 참여 고객사 매핑 등록/수정 — POST upsert(동일 고객사 갱신). 합계 100% 초과 시 서버 422 */
 export function useSaveMapping(projectId: string | undefined) {
   const queryClient = useQueryClient()

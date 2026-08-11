@@ -42,6 +42,7 @@ _PROJECT_FIELDS = [
     "reg_date", "credit_start_date", "credit_end_date", "credit_period_type",
     "mon_start_date", "mon_end_date", "mon_cycle",
     "expected_issue_date", "expected_credits", "unit_price",
+    "sale_unit_price", "approved_at",
     "issued_credits", "issued_at", "manager_id",
 ]
 
@@ -102,7 +103,7 @@ def _stage_outs(db: Session, project: Project):
 _REDUCTION_YEARS = tuple("reduction_y{0}".format(i) for i in range(1, 11))
 _VEHICLE_FIELDS = (
     "client_id", "asset_id", "vehicle_no", "region", "introduction_type",
-    "registered_at", *_REDUCTION_YEARS, "private_invest_ratio", "expected_payout", "memo",
+    "registered_at", *_REDUCTION_YEARS, "private_invest_ratio", "memo",
 )
 
 
@@ -147,6 +148,38 @@ def _recalc_expected_amounts(db: Session, project: Project):
                 project.unit_price, m.success_fee_rate,
             )
         )
+
+
+def _derive_payout(project: Project, total_reduction) -> Optional[float]:
+    """단일 차량 예상지급액 파생(H.4 순수 파생) — 총감축량 × 원가 톤당 단가(round 2).
+
+    구성 요소(원가 단가·총감축량)가 하나라도 없으면 None(미정). 결과가 Numeric(15,2)에
+    못 들어가면 422 — DB 오류(500) 사전 차단(common.EXPECTED_AMOUNT_LIMIT 준용).
+    """
+    if project.payout_unit_price is None or total_reduction is None:
+        return None
+    amount = round(float(total_reduction) * float(project.payout_unit_price), 2)
+    if abs(amount) >= common.EXPECTED_AMOUNT_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail="예상 지급액이 허용 범위를 초과합니다 — 단가·감축량 단위를 확인하세요",
+        )
+    return amount
+
+
+def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
+    """H.4 — 사업 전체 차량의 expected_payout를 서버 파생값으로 재적재(수기 입력 없음).
+
+    원가 톤당 단가(payout_unit_price) 변경 등 파생 경로에서 공통 적용. 단가·감축량
+    미입력 시 해당 차량은 None(미정).
+    """
+    vehicles = (
+        db.query(ProjectVehicle)
+        .filter(ProjectVehicle.project_id == project.project_id)
+        .all()
+    )
+    for v in vehicles:
+        v.expected_payout = _derive_payout(project, v.total_reduction)
 
 
 def _validate_allocation_total(db: Session, project_id: str, new_ratio: float,
@@ -568,7 +601,7 @@ def create_project_vehicle(
     db: Session = Depends(get_db),
 ):
     """차량 등록 — 도입구분 검증, 연차 합(total_reduction) 서버 계산."""
-    common.get_or_404(db, Project, project_id, "감축 사업")
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.introduction_type:
         validate_active_code(db, "VEHICLE_INTRO", payload.introduction_type)
     if payload.region:
@@ -581,6 +614,7 @@ def create_project_vehicle(
         project_id=project_id, **{f: getattr(payload, f) for f in _VEHICLE_FIELDS}
     )
     vehicle.total_reduction = _sum_reductions(payload)
+    vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
     db.add(vehicle)
     db.commit()
     db.refresh(vehicle)
@@ -621,6 +655,8 @@ def update_project_vehicle(
         if field in data:
             setattr(vehicle, field, data[field])
     vehicle.total_reduction = _sum_reductions(vehicle)
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
     db.commit()
     db.refresh(vehicle)
     return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
@@ -687,7 +723,7 @@ async def commit_vehicle_import(
     """차량 엑셀 일괄 등록 — 유효 행만 project_id로 삽입(total_reduction 서버 계산).
 
     오류 행은 건너뛰고(errors 안내) 감사 로그에 건수만 남긴다(R2-E6)."""
-    common.get_or_404(db, Project, project_id, "감축 사업")
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
     content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
@@ -704,6 +740,7 @@ async def commit_vehicle_import(
             continue
         vehicle = ProjectVehicle(project_id=project_id, **fields)
         vehicle.total_reduction = _sum_reductions(vehicle)
+        vehicle.expected_payout = _derive_payout(project, vehicle.total_reduction)  # H.4 순수 파생
         db.add(vehicle)
         created += 1
     error_rows = [r for r in result.rows if r.errors]
@@ -796,6 +833,46 @@ def update_unit_price(
         db,
         user.user_id,
         "PROJECT_UNIT_PRICE",
+        target_type="PROJECT",
+        target_id=project.project_id,
+        old_value="{0:g}".format(float(old_price)) if old_price is not None else None,
+        new_value=(
+            "{0:g}".format(float(payload.unit_price))
+            if payload.unit_price is not None
+            else None
+        ),
+    )
+    db.commit()
+    db.refresh(project)
+    return _project_detail(db, project)
+
+
+@router.put("/{project_id}/payout-price", response_model=schemas.ProjectDetailOut)
+def update_payout_price(
+    project_id: str,
+    payload: schemas.PayoutPriceUpdate,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """원가 톤당 단가 수기 입력(운수사 지급, H.4) — expected_payout 파생 기준.
+
+    단가 변경 시 해당 사업 전체 차량의 expected_payout를 재계산해 적재한다(순수 파생).
+    승인일(approved_at) 미전달 & 미승인 상태면 승인 시점으로 간주해 오늘로 자동 세팅.
+    null 단가 전달 시 원가 미정 — 차량 expected_payout도 null.
+    """
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    old_price = project.payout_unit_price
+    project.payout_unit_price = payload.unit_price
+    if payload.approved_at is not None:
+        project.approved_at = payload.approved_at
+    elif project.approved_at is None:
+        project.approved_at = date.today()  # 원가단가 입력 = 승인 시점(미설정 시)
+    _recalc_vehicle_payouts(db, project)
+    # 감사 로그 — 원가 단가만 old→new 기록(매출단가 동반 기록 금지, R2-E6/H.6)
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "PROJECT_PAYOUT_PRICE",
         target_type="PROJECT",
         target_id=project.project_id,
         old_value="{0:g}".format(float(old_price)) if old_price is not None else None,

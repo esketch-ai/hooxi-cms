@@ -137,7 +137,7 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
         ),
     ),
     # ── 사업 참여 차량 (Phase 2) — 프로젝트 스코프. project_id는 URL에서 주입(행 컬럼 아님).
-    #    total_reduction은 서버 파생. 예상지급액은 산식 확정 전 임시 입력.
+    #    total_reduction·expected_payout은 서버 파생(원가단가 × 총감축량, H.4) — 엑셀 수기 유입 없음.
     "project_vehicles": ImportSpec(
         entity="project_vehicles",
         label="사업 참여 차량",
@@ -165,7 +165,6 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("reduction_y9", "9차 감축량", example="10.5"),
             ImportColumn("reduction_y10", "10차 감축량", example="10.5"),
             ImportColumn("private_invest_ratio", "민간투자비율", example="80"),
-            ImportColumn("expected_payout", "예상지급액", example="800000"),
             ImportColumn("memo", "비고", example=""),
         ),
     ),

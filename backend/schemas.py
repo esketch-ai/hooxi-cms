@@ -540,6 +540,8 @@ class ProjectCreate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # §10.3 수기 단가
+    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출 단가 — 저장·표시(산식 미연동)
+    approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -560,6 +562,8 @@ class ProjectUpdate(BlankFKToNoneModel):
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출 단가 — 저장·표시(산식 미연동)
+    approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
     manager_id: Optional[str] = Field(default=None, max_length=50)
@@ -583,6 +587,9 @@ class ProjectOut(BaseModel):
     expected_issue_date: Optional[date] = None  # D-day 계산용 (SCR-06)
     expected_credits: Optional[float] = None  # 🔒 프론트 마스킹
     unit_price: Optional[float] = None  # 🔒
+    payout_unit_price: Optional[float] = None  # 🔒 원가 단가 — expected_payout 파생 기준
+    sale_unit_price: Optional[float] = None  # 🔒 매출 단가 — 저장·표시(산식 미연동)
+    approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     price_source: Optional[str] = None
     issued_credits: Optional[float] = None
     issued_at: Optional[date] = None
@@ -608,6 +615,16 @@ class UnitPriceUpdate(BaseModel):
     """배출권 단가 수기 입력 (§10.3) — null 전달 시 '미정'으로 초기화."""
 
     unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+
+
+class PayoutPriceUpdate(BaseModel):
+    """원가 톤당 단가 수기 입력(운수사 지급) — expected_payout 파생 기준.
+
+    approved_at 미전달 & 프로젝트 미승인 시 라우터가 오늘로 자동 세팅.
+    """
+
+    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    approved_at: Optional[date] = None
 
 
 class ProjectMapIn(BlankFKToNoneModel):
@@ -703,7 +720,6 @@ class ProjectVehicleIn(BlankFKToNoneModel):
     reduction_y9: Optional[float] = Field(default=None, ge=0)
     reduction_y10: Optional[float] = Field(default=None, ge=0)
     private_invest_ratio: Optional[float] = Field(default=None, ge=0, le=100)
-    expected_payout: Optional[float] = Field(default=None, ge=0)  # 산식 확정 전 입력(보류)
     memo: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -714,6 +730,7 @@ class ProjectVehicleOut(ProjectVehicleIn):
     project_id: str
     client_name: Optional[str] = None  # 운수사명(조인)
     total_reduction: Optional[float] = None  # 서버 파생(연차 합)
+    expected_payout: Optional[float] = None  # 서버 파생(총감축량 × 원가단가) — 수기 없음(H.4)
 
 
 class ProjectVehicleListResponse(BaseModel):

@@ -1,5 +1,5 @@
 // SCR-06 상세 — 사업 참여 차량 등록/수정 (Phase 2). 연차(1~10) 감축량·도입구분·민간투자비율 ingest.
-// 예상지급액은 지급단가·상하한 산식 확정 전이라 임시 입력값(보류).
+// 예상지급액은 원가 톤당 단가×총감축량 서버 파생(H.4) — 폼에서 수기 입력하지 않는다.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
@@ -159,19 +159,7 @@ export function VehicleFormModal({ open, onClose, projectId, vehicle }: Props) {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="예상지급액 (원) — 임시 입력">
-            <input
-              type="number"
-              min={0}
-              value={form.expected_payout ?? ''}
-              onChange={(e) => set('expected_payout', numOrNull(e.target.value))}
-              className={inputCls}
-            />
-            <p className="mt-1 text-[11px] text-amber-500">
-              지급단가·상한 산식 확정 전이라 임시 입력입니다(자동계산 보류).
-            </p>
-          </Field>
+        <div className="grid gap-3">
           <Field label="비고">
             <input
               value={form.memo ?? ''}

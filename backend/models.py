@@ -175,6 +175,9 @@ class Project(Base):
     expected_issue_date = Column(Date)
     expected_credits = Column(Numeric(10, 2))
     unit_price = Column(Numeric(15, 2))  # 수기 단가 (§10.3)
+    payout_unit_price = Column(Numeric(15, 2))  # 원가 톤당 단가(운수사 지급) — expected_payout 파생 기준
+    sale_unit_price = Column(Numeric(15, 2))  # 매출 톤당 단가(투자/금융 판매) — 저장·표시(산식 미연동)
+    approved_at = Column(Date)  # 승인일(승인=NOT NULL). 원가단가 입력 시 자동 세팅
     price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
     issued_at = Column(Date)
@@ -234,7 +237,7 @@ class ProjectVehicle(Base):
 
     감축량 방법론(신규/대체, 부록 G)은 전문 스프레드시트가 산정하고, CMS는 그 결과인
     연차(1~10) 감축량·도입구분·민간투자비율을 ingest한다(Option A). total_reduction은 서버 파생.
-    expected_payout(운수사 예상지급액)은 지급단가·상하한 규칙 확정 전이라 입력값(nullable)으로 보류.
+    expected_payout(운수사 예상지급액)은 순수 파생값(총감축량 × 원가 톤당 단가, H.4) — 수기 입력 없음.
     """
 
     __tablename__ = "tb_project_vehicle"
@@ -260,7 +263,7 @@ class ProjectVehicle(Base):
     reduction_y10 = Column(Numeric(12, 3))
     total_reduction = Column(Numeric(14, 3))  # 파생: 연차 합(서버 계산·저장)
     private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
-    expected_payout = Column(Numeric(15, 2))  # 예상지급액 — 산식 확정 전 입력값(보류)
+    expected_payout = Column(Numeric(15, 2))  # 파생: 총감축량 × 원가 톤당 단가(서버 계산·저장, H.4)
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -641,6 +644,9 @@ def ensure_schema():
         ("tb_report_subscription", "mail_body", "TEXT"),
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
         ("tb_segment_send", "merge_rule", "TEXT"),
+        ("tb_project", "payout_unit_price", "NUMERIC(15,2)"),
+        ("tb_project", "sale_unit_price", "NUMERIC(15,2)"),
+        ("tb_project", "approved_at", "DATE"),
     ]
     try:
         insp = _inspect(engine)
@@ -652,6 +658,11 @@ def ensure_schema():
             if column not in cols:
                 with engine.begin() as conn:
                     conn.execute(_text("ALTER TABLE {0} ADD COLUMN {1} {2}".format(table, column, ddl)))
+                    # payout_unit_price 최초 도입 시 1회 백필 — 컬럼이 갓 생겨 전 프로젝트
+                    # 원가단가가 null이므로, 순수 파생(H.4) 불변식상 차량 예상지급액도 전건
+                    # null이어야 한다. 과거 수기 입력값이 남았다면 여기서 정리(멱등, 1회성).
+                    if table == "tb_project" and column == "payout_unit_price":
+                        conn.execute(_text("UPDATE tb_project_vehicle SET expected_payout = NULL"))
                 print("✓ Added missing column {0}.{1}".format(table, column))
     except Exception as exc:
         print("⚠ ensure_schema skipped: {0}".format(exc))
