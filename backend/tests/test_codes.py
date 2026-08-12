@@ -205,7 +205,8 @@ def test_phase3_4_categories_seeded_and_locked(client, admin_headers):
 
     settlement = rows("SETTLEMENT_STATUS")
     assert settlement["BILLED"]["label"] == "청구"
-    assert all(settlement[c]["is_locked"] for c in ("STANDBY", "BILLED", "COMPLETED"))
+    # 레거시 정산 은퇴 — 상태전이 로직이 사라져 더는 잠금 아님(tb_code 행만 방치)
+    assert all(not settlement[c]["is_locked"] for c in ("STANDBY", "BILLED", "COMPLETED"))
 
     issue = rows("ISSUE_STATUS")
     # 칸반 컬럼·집계가 4종 전부 참조 → 전부 잠금

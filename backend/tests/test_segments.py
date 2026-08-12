@@ -1,10 +1,9 @@
 """세그먼트 보고서 발송 B1~B5 — 모델·쿼리 빌더·preview·facets·CRUD·발송·이력.
 
 검증 포인트:
-- 축별 단독 필터 6종 (region/client_type/contract_status/project_id/asset_group/settlement_status)
+- 축별 단독 필터 (region/client_type/contract_status/asset_group)
+  ※ 참여사업(project_id)·정산 축은 레거시 정산 은퇴로 제거(후속 재구현 예정)
 - 축 간 AND 결합
-- 사업×정산 same-row 회귀: 사업 A 참여 + 사업 B에서만 BILLED인 회사는
-  (project_id=[A] AND settlement_status=[BILLED])에 잡히면 안 된다
 - preview can_receive: 공통 수신자(sub_id IS NULL, TO 후보) 존재 or main_contact_email
   보유 — CC 전용 수신자만 있으면 False(실제 발송 TO 0건 판정과 일치)
 - facets: region distinct(빈 값 제외·정렬)
@@ -161,28 +160,14 @@ def test_axis_contract_status(client, staff_headers, seg_data):
     assert seg_data["c1"] not in ids and seg_data["c2"] not in ids
 
 
-def test_axis_project_id(client, staff_headers, seg_data):
-    ids = _preview_ids(client, staff_headers, {"project_id": [seg_data["project_a"]]})
-    assert {seg_data["c1"], seg_data["c2"], seg_data["c3"]} <= ids
-    ids_b = _preview_ids(client, staff_headers, {"project_id": [seg_data["project_b"]]})
-    assert seg_data["c2"] in ids_b
-    assert seg_data["c1"] not in ids_b and seg_data["c3"] not in ids_b
-
-
 def test_axis_asset_group(client, staff_headers, seg_data):
     ids = _preview_ids(client, staff_headers, {"asset_group": ["MOBILITY"]})
     assert seg_data["c1"] in ids
     assert seg_data["c2"] not in ids and seg_data["c3"] not in ids
 
 
-def test_axis_settlement_status(client, staff_headers, seg_data):
-    ids = _preview_ids(client, staff_headers, {"settlement_status": ["BILLED"]})
-    assert seg_data["c2"] in ids and seg_data["c3"] in ids
-    assert seg_data["c1"] not in ids
-
-
 # ---------------------------------------------------------------------------
-# 축 간 AND + 사업×정산 same-row 회귀
+# 축 간 AND
 # ---------------------------------------------------------------------------
 def test_composite_and(client, staff_headers, seg_data):
     """축 간 AND — region 축이 모듈 전용 값이라 정확 일치 검증 가능."""
@@ -191,26 +176,6 @@ def test_composite_and(client, staff_headers, seg_data):
         {"region": [REGION_A], "client_type": ["TRANSPORT"], "contract_status": ["ACTIVE"]},
     )
     assert ids == {seg_data["c1"]}
-
-
-def test_project_settlement_same_row(client, staff_headers, seg_data):
-    """핵심 회귀 — 사업A 참여 + 사업B에서만 BILLED인 c2는 (A AND BILLED)에 제외.
-
-    EXISTS를 축별로 분리하면 c2가 잘못 포함된다(같은 map 행 평가 보장 검증).
-    """
-    ids = _preview_ids(
-        client, staff_headers,
-        {"project_id": [seg_data["project_a"]], "settlement_status": ["BILLED"]},
-    )
-    assert seg_data["c3"] in ids           # 사업A에서 BILLED — 포함
-    assert seg_data["c2"] not in ids       # 사업B에서만 BILLED — 제외 (same-row)
-    assert seg_data["c1"] not in ids       # 사업A STANDBY — 제외
-
-    ids_b = _preview_ids(
-        client, staff_headers,
-        {"project_id": [seg_data["project_b"]], "settlement_status": ["BILLED"]},
-    )
-    assert seg_data["c2"] in ids_b and seg_data["c3"] not in ids_b
 
 
 # ---------------------------------------------------------------------------
@@ -273,26 +238,26 @@ def test_create_segment_and_audit(client, staff_headers, seg_data):
         SEG,
         headers=staff_headers,
         json={
-            "name": "서울 청구 세그먼트",
-            "description": "서울 지역 청구 고객",
-            "criteria": {"region": [REGION_A], "settlement_status": ["BILLED"]},
+            "name": "서울 종료 세그먼트",
+            "description": "서울 지역 계약종료 고객",
+            "criteria": {"region": [REGION_A], "contract_status": ["END"]},
             "mail_subject": "[Hooxi] {고객사명} 안내",
         },
     )
     assert resp.status_code == 201, resp.text
     body = resp.json()
     S["segment_id"] = body["segment_id"]
-    assert body["name"] == "서울 청구 세그먼트"
+    assert body["name"] == "서울 종료 세그먼트"
     assert body["active"] == "Y"
     # criteria가 JSON 문자열이 아닌 객체로 왕복되는지
     assert body["criteria"]["region"] == [REGION_A]
-    assert body["criteria"]["settlement_status"] == ["BILLED"]
+    assert body["criteria"]["contract_status"] == ["END"]
 
     db = models.SessionLocal()
     try:
         logs = _audit_logs(db, "SEGMENT_CREATE", S["segment_id"])
         assert len(logs) == 1
-        assert "settlement_status=BILLED" in logs[0].new_value
+        assert "contract_status=END" in logs[0].new_value
     finally:
         db.close()
 
@@ -315,14 +280,14 @@ def test_update_segment_and_audit(client, staff_headers):
     assert body["criteria"] == {
         "region": [REGION_A], "client_type": ["TRANSPORT"],
         "contract_status": None, "project_id": None,
-        "asset_group": None, "settlement_status": None,
+        "asset_group": None,
     }
 
     db = models.SessionLocal()
     try:
         logs = _audit_logs(db, "SEGMENT_UPDATE", S["segment_id"])
         assert len(logs) == 1
-        assert "settlement_status=BILLED" in logs[0].old_value
+        assert "contract_status=END" in logs[0].old_value
         assert "client_type=TRANSPORT" in logs[0].new_value
     finally:
         db.close()

@@ -1,13 +1,12 @@
 """통합 현황판 — SCR-01 (P1).
 
-- KPI 5: 관리 고객사(+증감) / 당월 보고서 발송 n/m / 미처리 긴급 이슈 /
-  계약 검토·협의 중(HOLD) / 당월 예상 청구액 🔒
+- KPI: 관리 고객사(+증감) / 당월 보고서 발송 n/m / 미처리 긴급 이슈 /
+  계약 검토·협의 중(HOLD)
 - 최근 활동 타임라인 20건 + 미처리 이슈 목록
 - 이달 보고서 진행 위젯은 GET /reports 의 summary 를 프론트에서 재사용 (별도 집계 없음)
 """
 
 from datetime import timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import case
@@ -18,8 +17,6 @@ from auth import get_current_user
 from models import (
     ActivityHistory,
     Client,
-    Project,
-    ProjectClientMap,
     ReportDelivery,
     User,
     get_db,
@@ -27,18 +24,6 @@ from models import (
 from routers import common
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
-
-def _period_of(m: ProjectClientMap, project: Optional[Project]) -> Optional[str]:
-    """정산 기준월 — 청구 시각(billed_at) 우선, 미청구(STANDBY)는 예상 발급월.
-
-    (레거시 정산 라우터 제거로 dashboard에 인라인. 기준월 정의는 종전과 동일.)
-    """
-    if m.billed_at:
-        return m.billed_at.strftime("%Y-%m")
-    if project and project.expected_issue_date:
-        return project.expected_issue_date.strftime("%Y-%m")
-    return None
 
 
 @router.get("/stats", response_model=schemas.DashboardStats)
@@ -84,28 +69,6 @@ def dashboard_stats(
     )
     contract_hold_clients = db.query(Client).filter(Client.contract_status == "HOLD").count()
 
-    # 당월 예상 청구액 🔒 — 미완료(대기·청구) 정산 매핑 중 **당월분만** 합산.
-    # 기준월 정의는 정산 화면(SCR-07)과 동일: _period_of(billed_at 우선, 미청구는 예상 발급월)
-    # → 정산 화면의 당월 필터 합계와 항상 일치. 당월 산출분 없으면 None(미정).
-    billing_maps = (
-        db.query(ProjectClientMap)
-        .filter(ProjectClientMap.settlement_status.in_(["STANDBY", "BILLED"]))
-        .all()
-    )
-    billing_projects = {
-        p.project_id: p
-        for p in db.query(Project)
-        .filter(Project.project_id.in_({m.project_id for m in billing_maps}))
-        .all()
-    } if billing_maps else {}
-    monthly_amounts = [
-        float(m.expected_amount)
-        for m in billing_maps
-        if m.expected_amount is not None
-        and _period_of(m, billing_projects.get(m.project_id)) == period
-    ]
-    expected_billing_amount = sum(monthly_amounts) if monthly_amounts else None
-
     # --- 최근 활동 타임라인 20건 (전사, 작성자 표기) ---
     recent = (
         db.query(ActivityHistory)
@@ -138,7 +101,6 @@ def dashboard_stats(
             report_sent=report_sent,
             urgent_open_issues=urgent_open_issues,
             contract_hold_clients=contract_hold_clients,
-            expected_billing_amount=expected_billing_amount,
         ),
         recent_activities=common.build_history_outs(db, recent),
         open_issues=common.build_history_outs(db, open_issues),

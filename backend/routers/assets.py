@@ -19,7 +19,6 @@ from models import (
     Asset,
     Client,
     Document,
-    ProjectClientMap,
     ProjectVehicle,
     User,
     get_db,
@@ -277,16 +276,8 @@ def delete_asset(
     user: User = Depends(require_role("MANAGER")),
     db: Session = Depends(get_db),
 ):
-    """자산 삭제 — MANAGER 이상(§10.1). 사업 매핑에 연결된 자산은 삭제 불가."""
+    """자산 삭제 — MANAGER 이상(§10.1). 참여 차량의 자산 연결은 해제 후 삭제."""
     asset = common.get_or_404(db, Asset, asset_id, "자산")
-    referenced = (
-        db.query(ProjectClientMap).filter(ProjectClientMap.asset_id == asset_id).count()
-    )
-    if referenced:
-        raise HTTPException(
-            status_code=409,
-            detail="감축 사업 매핑에 연결된 자산은 삭제할 수 없습니다 — 매핑을 먼저 해제하세요",
-        )
     # 연결된 제원표 사진은 자산 참조만 해제 — 사진 자체는 고객사 문서함에 보존
     db.query(Document).filter(Document.asset_id == asset_id).update({"asset_id": None})
     # 사업 참여 차량의 선택적 자산 연결도 해제(차량 자체는 보존, Postgres FK 방지)

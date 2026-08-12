@@ -6,9 +6,8 @@
 - 발송 실행(B5): POST /segments/send(즉석)·/segments/{id}/send(저장 세그먼트) —
   tb_segment_send + 고객사별 tb_segment_send_log 적재, 건별 실패 격리.
 
-핵심 정합성: project_id·settlement_status는 '같은 ProjectClientMap 행'에서 함께
-평가하는 EXISTS 서브쿼리 1개로 처리한다 — 사업 A 참여 + 사업 B에서만 BILLED인
-회사가 (A참여 AND BILLED) 조건에 잘못 포함되는 것을 방지.
+참고: 레거시 정산(사업-고객사 매핑) 은퇴로 참여사업·정산 축은 제거됨. 참여사업
+세그먼트는 참여 차량(ProjectVehicle) 기반으로 후속 재구현 예정.
 """
 
 import json
@@ -27,7 +26,6 @@ from models import (
     Client,
     Document,
     Project,
-    ProjectClientMap,
     ReportRecipient,
     Segment,
     SegmentSend,
@@ -81,7 +79,6 @@ CRITERIA_CODE_CATEGORIES = {
     "client_type": "CLIENT_TYPE",
     "contract_status": "CONTRACT_STATUS",
     "asset_group": "ASSET_GROUP",
-    "settlement_status": "SETTLEMENT_STATUS",
 }
 
 # 세그먼트용 기본 메일 문구 — SegmentsPage.tsx DEFAULT_SUBJECT/BODY와 동일해야 함.
@@ -108,9 +105,8 @@ MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024
 def _segment_query(db: Session, criteria: schemas.SegmentCriteria):
     """조건 → Client 쿼리 (축 간 AND, 축 내 IN). 빈 축은 무시(전체).
 
-    project_id·settlement_status는 같은 ProjectClientMap 행에서 함께 평가하는
-    EXISTS 1개 — 축을 분리하면 '사업 A 참여' AND '아무 사업에서나 BILLED'가 되어
-    다른 사업에서만 청구된 회사가 잘못 포함된다.
+    참여사업(project_id)·정산 축은 레거시 정산(사업-고객사 매핑) 은퇴로 제거됨.
+    참여사업 세그먼트는 참여 차량(ProjectVehicle) 기반으로 후속 재구현 예정.
     """
     query = db.query(Client)
     if criteria.region:
@@ -119,17 +115,6 @@ def _segment_query(db: Session, criteria: schemas.SegmentCriteria):
         query = query.filter(Client.client_type.in_(criteria.client_type))
     if criteria.contract_status:
         query = query.filter(Client.contract_status.in_(criteria.contract_status))
-    if criteria.project_id or criteria.settlement_status:
-        map_sub = db.query(ProjectClientMap.map_id).filter(
-            ProjectClientMap.client_id == Client.client_id
-        )
-        if criteria.project_id:
-            map_sub = map_sub.filter(ProjectClientMap.project_id.in_(criteria.project_id))
-        if criteria.settlement_status:
-            map_sub = map_sub.filter(
-                ProjectClientMap.settlement_status.in_(criteria.settlement_status)
-            )
-        query = query.filter(map_sub.exists())
     if criteria.asset_group:
         asset_sub = db.query(Asset.asset_id).filter(
             Asset.client_id == Client.client_id,

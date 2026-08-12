@@ -1519,7 +1519,6 @@ class DashboardKpi(BaseModel):
     report_sent: int  # 당월 발송 완료 n (SENT+CONFIRMED)
     urgent_open_issues: int  # 미처리 긴급 이슈
     contract_hold_clients: int  # 계약 검토·협의 중 (HOLD)
-    expected_billing_amount: Optional[float] = None  # 당월 예상 청구액 🔒 — 단가 미입력 시 None
 
 
 class DashboardStats(BaseModel):
@@ -1807,18 +1806,24 @@ class SegmentCriteria(BaseModel):
     contract_status: Optional[List[str]] = None
     project_id: Optional[List[str]] = None
     asset_group: Optional[List[str]] = None
-    settlement_status: Optional[List[str]] = None
 
 
 def _parse_criteria_json(v):
-    """DB Text(JSON 문자열) → dict — from_attributes 직렬화용. 파싱 실패 시 빈 조건."""
+    """DB Text(JSON 문자열) → dict — from_attributes 직렬화용. 파싱 실패 시 빈 조건.
+
+    은퇴한 축(예: 레거시 settlement_status)이 저장분에 남아 있어도 로드가 깨지지
+    않도록 SegmentCriteria가 아는 키만 남긴다(extra=forbid 방어).
+    """
     if isinstance(v, str):
         try:
             parsed = json.loads(v) if v.strip() else {}
-            return parsed if isinstance(parsed, dict) else {}
         except ValueError:
             return {}
-    return v if v is not None else {}
+    else:
+        parsed = v if v is not None else {}
+    if isinstance(parsed, dict):
+        return {k: val for k, val in parsed.items() if k in SegmentCriteria.model_fields}
+    return {}
 
 
 class SegmentIn(BlankFKToNoneModel):

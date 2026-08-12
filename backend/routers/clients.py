@@ -25,7 +25,6 @@ from models import (
     IssueComment,
     KakaoContact,
     Project,
-    ProjectClientMap,
     ProjectVehicle,
     ReportDelivery,
     ReportRecipient,
@@ -262,17 +261,6 @@ def list_clients(
         for d in deliveries:
             report_map[d.client_id] = d.status
 
-    # 성공 보수율 🔒 — 참여 사업 map 중 최대값 (프론트 마스킹 대상)
-    fee_map = {}
-    if ids:
-        fee_rows = (
-            db.query(ProjectClientMap.client_id, func.max(ProjectClientMap.success_fee_rate))
-            .filter(ProjectClientMap.client_id.in_(ids))
-            .group_by(ProjectClientMap.client_id)
-            .all()
-        )
-        fee_map = {cid: (float(v) if v is not None else None) for cid, v in fee_rows}
-
     # 고객사별 참여 집계 (ProjectVehicle) — 목록 표기용, 미참여는 0/None으로 표시
     part_map = _participation_map(db, ids)
     _part_default = {
@@ -291,7 +279,6 @@ def list_clients(
                     "manager_name": unames.get(c.manager_id),
                     "last_activity_at": last_map.get(c.client_id),
                     "report_status_this_month": report_map.get(c.client_id),
-                    "success_fee_rate": fee_map.get(c.client_id),
                     **part_map.get(c.client_id, _part_default),
                 }
             )
@@ -430,7 +417,6 @@ def update_client(
 _CLIENT_DEP_CHECKS = [
     ("활동이력", ActivityHistory),
     ("사업", Project),
-    ("사업-고객사 매핑", ProjectClientMap),
     ("사업 참여 차량", ProjectVehicle),
     ("보유 차량", ClientVehicle),
     ("자산", Asset),
@@ -455,8 +441,8 @@ def _client_dependents(db: Session, client_id: str) -> List[str]:
 
 
 def _has_project_or_settlement(db: Session, client_id: str) -> bool:
-    """사업 참여(매핑)·대표사 지정 여부 — 강제 삭제여도 차단해 재무기록·공유 사업을 보호."""
-    if db.query(ProjectClientMap).filter(ProjectClientMap.client_id == client_id).first():
+    """사업 참여(참여 차량)·대표사 지정 여부 — 강제 삭제여도 차단해 공유 사업을 보호."""
+    if db.query(ProjectVehicle).filter(ProjectVehicle.client_id == client_id).first():
         return True
     if db.query(Project).filter(Project.client_id == client_id).first():
         return True
@@ -655,46 +641,6 @@ def client_documents(
         .all()
     )
     return common.build_document_outs(db, rows)
-
-
-@router.get("/{client_id}/projects", response_model=List[schemas.ClientProjectRow])
-def client_projects(
-    client_id: str,
-    _: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """참여 사업·정산 탭 — 매핑+사업 조인. 보수율·예상 정산액 🔒은 프론트 마스킹."""
-    common.get_or_404(db, Client, client_id, "고객사")
-    rows = (
-        db.query(ProjectClientMap)
-        .filter(ProjectClientMap.client_id == client_id)
-        .order_by(ProjectClientMap.created_at.asc())
-        .all()
-    )
-    projects = {
-        p.project_id: p
-        for p in db.query(Project)
-        .filter(Project.project_id.in_({m.project_id for m in rows}))
-        .all()
-    } if rows else {}
-    items = []
-    for m in rows:
-        p = projects.get(m.project_id)
-        items.append(
-            schemas.ClientProjectRow(
-                map_id=m.map_id,
-                project_id=m.project_id,
-                project_name=p.project_name if p else None,
-                project_status=p.project_status if p else None,
-                allocation_ratio=float(m.allocation_ratio) if m.allocation_ratio is not None else None,
-                success_fee_rate=float(m.success_fee_rate) if m.success_fee_rate is not None else None,
-                expected_amount=float(m.expected_amount) if m.expected_amount is not None else None,
-                settlement_status=m.settlement_status or "STANDBY",
-                billed_at=m.billed_at,
-                completed_at=m.completed_at,
-            )
-        )
-    return items
 
 
 @router.get("/{client_id}/assets", response_model=List[schemas.AssetOut])

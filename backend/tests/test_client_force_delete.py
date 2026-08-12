@@ -100,15 +100,15 @@ def test_force_delete_cascades_all_dependents(client, admin_headers):
 
 
 def test_force_delete_blocked_by_project_or_settlement(client, admin_headers):
-    """사업 참여(매핑)가 있으면 강제여도 409 — 재무기록·공유 사업 보호."""
+    """사업 참여(참여 차량)가 있으면 강제여도 409 — 공유 사업 보호."""
     db = models.SessionLocal()
     try:
         db.add(models.Client(client_id="fc-2", client_type="TRANSPORT",
                              company_name="사업참여고객", contract_status="ACTIVE"))
         db.add(models.Project(project_id="fc-p1", project_name="사업", project_status="모니터링"))
         db.flush()
-        db.add(models.ProjectClientMap(map_id="fc-mp1", project_id="fc-p1", client_id="fc-2",
-               allocation_ratio=50))
+        db.add(models.ProjectVehicle(vehicle_id="fc-pv1", project_id="fc-p1", client_id="fc-2",
+               vehicle_no="12가3456"))
         db.commit()
     finally:
         db.close()

@@ -25,7 +25,6 @@ from models import (
     ClientVehicle,
     Code,
     Project,
-    ProjectClientMap,
     ProjectSale,
     ProjectVehicle,
     ReportDelivery,
@@ -71,7 +70,6 @@ USAGE_REFS = {
     "ASSET_STATUS": (Asset, "status"),
     "PROJECT_STATUS": (Project, "project_status"),
     "APPROVAL_STATUS": (Project, "approval_status"),
-    "SETTLEMENT_STATUS": (ProjectClientMap, "settlement_status"),
     "REPORT_STATUS": (ReportDelivery, "status"),
     "ISSUE_STATUS": (ActivityHistory, "issue_status"),
     "AGENCY": (Asset, "agency_name"),
@@ -84,7 +82,6 @@ LOGIC_LOCKED_CODES = {
     # ACTIVE/HOLD: dashboard KPI·구독 리포트 대상, END: 계약 종료 전이(validate_active_code 통과 필요)
     "CONTRACT_STATUS": {"ACTIVE", "HOLD", "END"},
     "ACTIVITY_TYPE": {"CALL", "MEETING", "SITE_VISIT", "EMAIL", "ISSUE", "KAKAO"},
-    "SETTLEMENT_STATUS": {"STANDBY", "BILLED", "COMPLETED"},  # 상태전이 머신 고정
     # 보고서 상태전이 머신 고정 — reports.py 상태 검증·요약 집계·배치 자동 발송(APPROVED) 참조
     "REPORT_STATUS": {"STANDBY", "WRITING", "REVIEW", "APPROVED", "SENT", "CONFIRMED", "CANCELED"},
     "PROJECT_STATUS": {"기획", "발급완료"},  # 프론트 게이트(정산·발급 조건) 참조
