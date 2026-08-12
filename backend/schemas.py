@@ -103,11 +103,11 @@ class UserOut(BaseModel):
 class UserApproveRequest(BaseModel):
     """가입 승인 (PENDING→ACTIVE) — role 지정 (CR-1)."""
 
-    role: str = Field(default="STAFF", pattern="^(ADMIN|MANAGER|STAFF)$")
+    role: str = Field(default="STAFF", pattern="^(ADMIN|MANAGER|STAFF|OBSERVER)$")
 
 
 class UserRoleRequest(BaseModel):
-    role: str = Field(pattern="^(ADMIN|MANAGER|STAFF)$")
+    role: str = Field(pattern="^(ADMIN|MANAGER|STAFF|OBSERVER)$")
 
 
 class UserCreateRequest(BaseModel):
@@ -116,7 +116,7 @@ class UserCreateRequest(BaseModel):
     email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     name: Optional[str] = Field(default=None, max_length=50)
     position: Optional[str] = Field(default=None, max_length=50)
-    role: str = Field(default="STAFF", pattern="^(ADMIN|MANAGER|STAFF)$")
+    role: str = Field(default="STAFF", pattern="^(ADMIN|MANAGER|STAFF|OBSERVER)$")
 
 
 class UserUpdateRequest(BaseModel):
@@ -162,7 +162,7 @@ class PortalMe(BaseModel):
 class ExternalAccountIn(BaseModel):
     """외부 포털 계정 provision 요청 (INC-6, 부록 N.8 D3).
 
-    내부 users 관리(role 정규식 ^(ADMIN|MANAGER|STAFF)$)와 분리된 전용 입력 —
+    내부 users 관리(role 정규식 ^(ADMIN|MANAGER|STAFF|OBSERVER)$)와 분리된 전용 입력 —
     외부역할(PARTNER/INVESTOR)만 허용한다. client_id/buyer_id 필수 여부는 역할별로
     라우터에서 검증(PARTNER=client_id, INVESTOR=buyer_id).
     """

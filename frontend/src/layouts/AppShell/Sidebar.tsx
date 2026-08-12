@@ -4,6 +4,7 @@ import { useAuth } from '../../app/AuthProvider'
 import { useChatBadge } from '../../lib/api/queries'
 import { roleLabel } from '../../lib/roles'
 import { NAV_GROUPS } from './nav'
+import { isObserverAllowed } from './observerAccess'
 
 interface SidebarProps {
   /** 모바일 오버레이 열림 상태 */
@@ -16,13 +17,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { data: chatBadge } = useChatBadge()
   const waiting = chatBadge?.waiting ?? 0
 
+  // OBSERVER(경영 관찰)는 화이트리스트 경로 항목만 노출 — 기존 3역할 로직은 불변(회귀 0)
+  const isObserver = user?.role === 'OBSERVER'
   const groups = NAV_GROUPS.filter(
     (group) => !group.roles || (user && group.roles.includes(user.role)),
   )
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.roles || (user && item.roles.includes(user.role)),
+        (item) =>
+          (!item.roles || (user && item.roles.includes(user.role))) &&
+          (!isObserver || isObserverAllowed(item.path)),
       ),
     }))
     .filter((group) => group.items.length > 0)
@@ -91,8 +96,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-bone">
               <span className="truncate">{user?.name ?? '—'}</span>
-              {/* 내부 역할 배지(ADMIN/MANAGER/STAFF) — 외부 포털 역할은 표기하지 않음 */}
-              {user && (user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'STAFF') && (
+              {/* 내부 역할 배지(ADMIN/MANAGER/STAFF/OBSERVER) — 외부 포털 역할은 표기하지 않음 */}
+              {user && (user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'STAFF' || user.role === 'OBSERVER') && (
                 <span className="shrink-0 rounded-full border border-hairline bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-ash">
                   {roleLabel(user.role)}
                 </span>

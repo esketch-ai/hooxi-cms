@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: '관리자',
   MANAGER: '팀장',
   STAFF: '실무',
+  OBSERVER: '경영전략실',
   // 외부 포털 역할(Phase 4) — 내부 역할 드롭다운에는 노출하지 않고 라벨 해석용으로만 유지
   PARTNER: '운수사',
   INVESTOR: '투자·금융사',

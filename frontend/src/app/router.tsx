@@ -1,7 +1,8 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { CircleNotch } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { AppShell } from '../layouts/AppShell'
+import { isObserverAllowed, OBSERVER_HOME } from '../layouts/AppShell/observerAccess'
 import { PortalAuthProvider } from '../features/portal/PortalAuthProvider'
 import { RequirePortal } from '../features/portal/PortalShell'
 import { PortalLoginPage } from '../features/portal/PortalLoginPage'
@@ -29,10 +30,12 @@ import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { FinanceLedgerPage } from '../features/finance-ledger/FinanceLedgerPage'
 import { ChatPage } from '../features/chat/ChatPage'
 import { MapPage } from '../features/map/MapPage'
+import { ObservePage } from '../features/observe/ObservePage'
 
 /** 미인증(또는 PENDING·PIN 미설정) 접근 시 /login 리다이렉트 */
 function RequireAuth() {
-  const { isLoading, isAuthenticated, pinSet } = useAuth()
+  const { isLoading, isAuthenticated, pinSet, user } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return (
@@ -46,8 +49,20 @@ function RequireAuth() {
     return <Navigate to="/login" replace />
   }
 
+  // OBSERVER(경영 관찰) 격리 — 화이트리스트 밖 경로 접근 시 /observe로 리다이렉트.
+  // 기존 3역할·외부 역할은 이 분기를 타지 않아 라우팅 불변(회귀 0).
+  if (user?.role === 'OBSERVER' && !isObserverAllowed(location.pathname)) {
+    return <Navigate to={OBSERVER_HOME} replace />
+  }
+
   // AppShell 내부의 <Outlet />이 하위 라우트를 렌더링
   return <AppShell />
+}
+
+/** 역할별 홈 — OBSERVER는 /observe, 그 외 내부역할은 종전대로 /dashboard */
+function RoleHome() {
+  const { user } = useAuth()
+  return <Navigate to={user?.role === 'OBSERVER' ? OBSERVER_HOME : '/dashboard'} replace />
 }
 
 /** 외부 포털(Phase 4) 서브트리 — 내부 AuthProvider와 분리된 PortalAuthProvider로만 감싼다 */
@@ -78,9 +93,10 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
-      { path: '/', element: <Navigate to="/dashboard" replace /> },
+      { path: '/', element: <RoleHome /> },
       // ── P1 구현 화면 ──────────────────────────────────────────────
       { path: '/dashboard', element: <DashboardPage /> }, // SCR-01
+      { path: '/observe', element: <ObservePage /> }, // OB-4 경영 관찰(OBSERVER 랜딩, 읽기 전용)
       { path: '/issues', element: <IssuesPage /> }, // SCR-02
       { path: '/calendar', element: <CalendarPage /> }, // SCR-11
       { path: '/clients', element: <ClientsPage /> }, // SCR-03
@@ -105,5 +121,5 @@ export const router = createBrowserRouter([
       { path: '/map', element: <MapPage /> }, // SCR-09
     ],
   },
-  { path: '*', element: <Navigate to="/dashboard" replace /> },
+  { path: '*', element: <RoleHome /> },
 ])

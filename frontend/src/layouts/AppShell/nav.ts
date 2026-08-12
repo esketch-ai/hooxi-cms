@@ -8,6 +8,7 @@ import {
   CalendarDots,
   ChatCircleDots,
   ClockCounterClockwise,
+  Eye,
   FolderOpen, // v2에서 ph-folder-notch-open → FolderOpen으로 통합
   Gear,
   IdentificationCard,
@@ -41,7 +42,11 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'DASHBOARD',
-    items: [{ label: '통합 현황판', path: '/dashboard', icon: SquaresFour }],
+    items: [
+      { label: '통합 현황판', path: '/dashboard', icon: SquaresFour },
+      // 경영 관찰(읽기 전용) — 전 내부역할 노출. OBSERVER는 화이트리스트라 이 항목이 보임.
+      { label: '경영 관찰', path: '/observe', icon: Eye },
+    ],
   },
   {
     label: 'WORK',
@@ -60,7 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: '전기버스 자산',
         path: '/asset-vehicles',
         icon: Bus,
-        roles: ['ADMIN', 'MANAGER', 'STAFF'],
+        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
       },
       { label: '수집 계정 관리', path: '/accounts', icon: LockKey },
     ],
@@ -87,7 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: '재무 원장',
         path: '/finance-ledger',
         icon: Receipt,
-        roles: ['ADMIN', 'MANAGER', 'STAFF'],
+        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
       },
     ],
   },

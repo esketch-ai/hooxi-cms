@@ -1,7 +1,8 @@
 // 도메인 타입 — backend/models.py(tb_*) snake_case 필드명 그대로 (SCREEN_DESIGN_PLAN §6)
 
-// 내부 역할(ADMIN/MANAGER/STAFF) + 외부 포털 역할(PARTNER=운수사 / INVESTOR=투자·금융사, Phase 4)
-export type UserRole = 'ADMIN' | 'MANAGER' | 'STAFF' | 'PARTNER' | 'INVESTOR'
+// 내부 역할(ADMIN/MANAGER/STAFF/OBSERVER) + 외부 포털 역할(PARTNER=운수사 / INVESTOR=투자·금융사, Phase 4)
+// OBSERVER=내부 읽기전용(경영전략실)
+export type UserRole = 'ADMIN' | 'MANAGER' | 'STAFF' | 'OBSERVER' | 'PARTNER' | 'INVESTOR'
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE'
 
 export interface User {

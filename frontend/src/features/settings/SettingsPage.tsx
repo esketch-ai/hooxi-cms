@@ -472,7 +472,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
           onChange={(e) => setApproveRole(e.target.value as UserRole)}
           className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
         >
-          {(['STAFF', 'MANAGER', 'ADMIN'] as UserRole[]).map((r) => (
+          {(['STAFF', 'MANAGER', 'ADMIN', 'OBSERVER'] as UserRole[]).map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]} ({r})
             </option>
@@ -518,7 +518,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
           onChange={(e) => setNextRole(e.target.value as UserRole)}
           className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
         >
-          {(['STAFF', 'MANAGER', 'ADMIN'] as UserRole[]).map((r) => (
+          {(['STAFF', 'MANAGER', 'ADMIN', 'OBSERVER'] as UserRole[]).map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]} ({r})
             </option>
@@ -623,6 +623,7 @@ function AccountsTab({ isAdmin, meId }: { isAdmin: boolean; meId: string }) {
               <option value="STAFF">실무 (STAFF)</option>
               <option value="MANAGER">팀장 (MANAGER)</option>
               <option value="ADMIN">관리자 (ADMIN)</option>
+              <option value="OBSERVER">경영전략실 (OBSERVER)</option>
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-1">
