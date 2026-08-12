@@ -47,6 +47,7 @@ from routers import config as config_router
 from routers import dashboard as dashboard_router
 from routers import documents as documents_router
 from routers import external_accounts as external_accounts_router
+from routers import finance_ledger as finance_ledger_router
 from routers import histories as histories_router
 from routers import imports as imports_router
 from routers import integrations as integrations_router
@@ -326,6 +327,7 @@ app.include_router(imports_router.router, prefix=API_V1_PREFIX)
 app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
 app.include_router(assets_router.router, prefix=API_V1_PREFIX)
 app.include_router(asset_vehicles_router.router, prefix=API_V1_PREFIX)
+app.include_router(finance_ledger_router.router, prefix=API_V1_PREFIX)
 app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(buyers_router.router, prefix=API_V1_PREFIX)
 app.include_router(segments_router.router, prefix=API_V1_PREFIX)

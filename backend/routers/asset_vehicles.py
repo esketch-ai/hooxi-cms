@@ -22,12 +22,11 @@ from models import (
     Project,
     ProjectSale,
     ProjectVehicle,
-    PurchaseInvoice,
     User,
     get_db,
 )
 from routers import common
-from services import accounting
+from services import finance_query
 
 router = APIRouter(prefix="/asset-vehicles", tags=["asset-vehicles"])
 
@@ -46,56 +45,21 @@ def _sum_opt(values):
 
 
 def _project_accounting(db: Session, project_ids):
-    """distinct 사업별 회계 집계(compute_accounting 재사용) — 사업당 1회, N+1 회피.
+    """distinct 사업별 회계 집계 — 공용 배치 헬퍼(finance_query) 위에 차량 뷰 키만 매핑.
 
-    projects.py 상세 경로와 동일 입력(제품=Σ매입, 예상지급액=Σ차량 expected_payout,
-    거래계약 목록, 승인상태)을 **배치 조회**로 모아 사업별로 1회 계산한다.
+    산식·쿼리는 project_accounting_batch(단일 진실원)에 위임하고, 이 뷰가 쓰는
+    revenue/cost/profit 3키(sale_recognized·product·gross_profit)만 골라 반환한다.
     반환: {project_id: {"revenue": sale_recognized, "cost": product, "profit": gross_profit}}
     """
-    ids = list(project_ids)
-    if not ids:
-        return {}
-    # 제품(총매입) Σ — 사업별(부록 L.3, 없으면 0)
-    products = dict(
-        db.query(PurchaseInvoice.project_id, func.sum(PurchaseInvoice.amount))
-        .filter(PurchaseInvoice.project_id.in_(ids))
-        .group_by(PurchaseInvoice.project_id)
-        .all()
-    )
-    # 예상지급액 Σ(차량 expected_payout) — 사업 전체 차량 기준. 전건 None이면 SUM→None 전파
-    payouts = dict(
-        db.query(ProjectVehicle.project_id, func.sum(ProjectVehicle.expected_payout))
-        .filter(ProjectVehicle.project_id.in_(ids))
-        .group_by(ProjectVehicle.project_id)
-        .all()
-    )
-    # 승인상태 — 사업 마스터
-    approvals = dict(
-        db.query(Project.project_id, Project.approval_status)
-        .filter(Project.project_id.in_(ids))
-        .all()
-    )
-    # 거래계약 — 사업별 목록으로 묶기
-    sales_by_pid = {pid: [] for pid in ids}
-    for s in db.query(ProjectSale).filter(ProjectSale.project_id.in_(ids)).all():
-        sales_by_pid.setdefault(s.project_id, []).append(s)
-
-    result = {}
-    for pid in ids:
-        payout = payouts.get(pid)
-        product = products.get(pid)
-        acct = accounting.compute_accounting(
-            approval_status=approvals.get(pid),
-            product=round(float(product), 2) if product is not None else 0.0,
-            expected_payment=round(float(payout), 2) if payout is not None else None,
-            sales=sales_by_pid.get(pid, []),
-        )
-        result[pid] = {
+    acct_by_pid = finance_query.project_accounting_batch(db, project_ids)
+    return {
+        pid: {
             "revenue": acct["sale_recognized"],
             "cost": acct["product"],
             "profit": acct["gross_profit"],
         }
-    return result
+        for pid, acct in acct_by_pid.items()
+    }
 
 
 @router.get("", response_model=schemas.AssetVehicleListResponse)

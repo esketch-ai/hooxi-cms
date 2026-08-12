@@ -13,6 +13,7 @@ import {
   IdentificationCard,
   Kanban,
   LockKey,
+  Receipt,
   PaperPlaneTilt,
   SquaresFour,
   TreeStructure,
@@ -80,7 +81,15 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'PROJECT & FINANCE',
-    items: [{ label: '감축 사업 관리', path: '/projects', icon: TreeStructure }],
+    items: [
+      { label: '감축 사업 관리', path: '/projects', icon: TreeStructure },
+      {
+        label: '재무 원장',
+        path: '/finance-ledger',
+        icon: Receipt,
+        roles: ['ADMIN', 'MANAGER', 'STAFF'],
+      },
+    ],
   },
   {
     label: 'SYSTEM',

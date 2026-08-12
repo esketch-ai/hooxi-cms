@@ -862,6 +862,65 @@ class AssetVehicleListResponse(BaseModel):
     kpi: AssetVehicleKpi
 
 
+# 재무 원장(카본크레딧실 재무 전용, FL-1) — 사업(프로젝트) grain 1행 + 전사 총계 ------
+class FinanceLedgerRow(BaseModel):
+    """전 감축사업을 사업 grain 1행으로 나열 — Project 마스터 + 회계 원장층 12값(부록 L.3).
+
+    회계값은 compute_accounting 풀 dict를 그대로 표기한다(신규 산식 없음). 조회 전용.
+    """
+
+    project_id: str
+    project_name: str
+    reg_code: Optional[str] = None  # 사업번호(예: R-2020-KR-03-000528)
+    approval_status: Optional[str] = None  # 승인상태(미승인/승인)
+    approved_at: Optional[date] = None  # 승인일
+    # 회계 원장층 12값(compute_accounting)
+    product: Optional[float] = None  # 제품(총매입)
+    expected_payment: Optional[float] = None  # 예상지급액
+    wip1: Optional[float] = None  # 미착품1
+    wip2: Optional[float] = None  # 미착품2
+    liability: Optional[float] = None  # 지급채무
+    inventory: Optional[float] = None  # 재고자산
+    payout_rate: Optional[float] = None  # 지급률
+    sale_recognized: Optional[float] = None  # 매출인식
+    gross_profit: Optional[float] = None  # 매출이익
+    profit_rate: Optional[float] = None  # 매출이익률
+    ownership_total: Optional[float] = None  # Σ 소유권비율(%)
+    # 후시/계약 소유권 분할(FL-2, 조회 전용) — held+sold == ownership_total(None 아닐 때)
+    held_qty: Optional[float] = None  # 후시보유 수량 합(tCO2)
+    sold_qty: Optional[float] = None  # 판매 계약 수량 합(tCO2)
+    held_ownership: Optional[float] = None  # 후시보유 Σ 소유권비율(%)
+    sold_ownership: Optional[float] = None  # 판매 계약 Σ 소유권비율(%)
+    inventory_valuation: Optional[float] = None  # 재고평가(held_qty × 오늘 시세), None 안전
+
+
+class FinanceLedgerTotals(BaseModel):
+    """전사 총계 — 필터 전체(페이지 전) 사업 grain 단순 None-안전 합(이중계상 구조적 불가).
+
+    비율(payout_rate·profit_rate)은 합산 무의미이므로 총계에서 제외하고, 총이익률만
+    총계 gross_profit/sale_recognized로 파생한다.
+    """
+
+    product: Optional[float] = None
+    expected_payment: Optional[float] = None
+    wip1: Optional[float] = None
+    wip2: Optional[float] = None
+    liability: Optional[float] = None
+    inventory: Optional[float] = None
+    sale_recognized: Optional[float] = None
+    gross_profit: Optional[float] = None
+    profit_rate: Optional[float] = None  # 파생: 총 gross_profit / 총 sale_recognized
+    held_qty: Optional[float] = None  # 후시보유 수량 합(FL-2, Σ 행)
+    inventory_valuation: Optional[float] = None  # 재고평가 합(FL-2, None 안전)
+
+
+class FinanceLedgerResponse(BaseModel):
+    items: List[FinanceLedgerRow]  # page 슬라이스
+    total: int  # 필터 결과 총 사업 수
+    totals: FinanceLedgerTotals  # 필터 전체 총계
+    current_market_rate: Optional[float] = None  # 오늘 현재시세(FL-2, 재고평가 기준단가)
+
+
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
 # 매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(부록 N.8 D1) --------------
 class BuyerIn(BaseModel):
