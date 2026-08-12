@@ -29,9 +29,13 @@ JWT_SECRET = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL = timedelta(hours=8)
 REFRESH_TOKEN_TTL = timedelta(days=7)
-# 매직링크(INC-5): 포털 외부계정을 위한 1회성 로그인 링크 토큰 — 짧게(30분).
-# 링크 발급·전달(이메일 등)은 INC-6 온보딩. 여기선 토큰 생성 + verify만.
-MAGIC_TOKEN_TTL = timedelta(minutes=30)
+# 매직링크(INC-5/INC-10): 포털 외부계정 로그인 링크 토큰 — 24시간.
+# 담당자가 발급하는 초대 링크는 수신자가 즉시 클릭하지 못할 수 있어 초대 창을 넉넉히 둔다.
+# 주의: verify는 토큰을 소진(무효화)하지 않으므로 이 토큰은 만료(24h) 전까지 '재사용 가능'하다
+#   — 노출창은 링크 유효기간 24h 전체(재교환 포함). 초대 링크 맥락에선 수용 가능하나,
+#   메일 유출 시 24h 내 재로그인 여지가 있음. 1회성 소진이 필요하면 verify에서 token_version
+#   증가로 후속 강화 가능(현재는 UX·다중세션 고려로 미적용). 노출 데이터는 수신자 본인 스코프 한정.
+MAGIC_TOKEN_TTL = timedelta(hours=24)
 
 # --- 네이버웍스 OAuth (CR-1) ---
 # NW_CLIENT_ID / NW_CLIENT_SECRET / NW_REDIRECT_URI는 연동 설정(DB 우선 + env 폴백)

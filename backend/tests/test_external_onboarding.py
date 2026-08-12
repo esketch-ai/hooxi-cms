@@ -385,3 +385,134 @@ def test_send_portal_invite_no_template(monkeypatch):
 
     user = models.User(name="무템플릿", phone="010-2222-3333")
     assert ea._send_portal_invite(user, "https://app.example/x") == "NO_TEMPLATE"
+
+
+# ---------------------------------------------------------------------------
+# 6. 매직링크 이메일 자동발송 (INC-10) — 이메일 주 채널 + 카카오 폴백 정규화
+# ---------------------------------------------------------------------------
+def test_send_portal_invite_email_not_configured():
+    """이메일(Gmail) 미설정 → NOT_CONFIGURED(발송 시도 없음). 테스트 기본 환경."""
+    from routers import external_accounts as ea
+
+    user = models.User(name="갑담당", email="e@portal.example")
+    assert ea._send_portal_invite_email(user, "https://app.example/x") == "NOT_CONFIGURED"
+
+
+def test_send_portal_invite_email_sent(monkeypatch):
+    """이메일 설정 → send_mail을 user.email로 1회 호출·SENT. html=True + abs_link 포함."""
+    from routers import external_accounts as ea
+
+    sent = {}
+
+    def fake_send_mail(to, subject, body, html=False, **kwargs):
+        sent.update(to=to, subject=subject, body=body, html=html, calls=sent.get("calls", 0) + 1)
+        return {"sender": "s@hooxipartners.com", "recipients": to}
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea.email_service, "send_mail", fake_send_mail)
+
+    user = models.User(name="갑담당", email="invite@portal.example")
+    link = "https://app.example/portal/login?token=abc"
+    assert ea._send_portal_invite_email(user, link) == "SENT"
+    assert sent["to"] == ["invite@portal.example"]
+    assert sent["calls"] == 1
+    assert sent["html"] is True
+    assert link in sent["body"]
+
+
+def test_send_portal_invite_email_failed_is_swallowed(monkeypatch):
+    """발송 예외는 밖으로 새지 않고 FAILED로 흡수(계정 발급 보호)."""
+    from routers import external_accounts as ea
+
+    def boom(**kwargs):
+        raise ea.email_service.EmailConfigError("발송 실패")
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea.email_service, "send_mail", boom)
+
+    user = models.User(name="실패", email="fail@portal.example")
+    assert ea._send_portal_invite_email(user, "https://app.example/x") == "FAILED"
+
+
+def test_deliver_prefers_email_over_kakao(monkeypatch):
+    """이메일 성공하면 카카오는 시도하지 않는다(중복 발송 방지) → EMAIL_SENT."""
+    from routers import external_accounts as ea
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea.email_service, "send_mail", lambda **kw: {"recipients": kw["to"]})
+
+    def must_not_call(user, abs_link):  # pragma: no cover - 호출되면 실패
+        raise AssertionError("이메일 성공 시 카카오는 시도하지 않아야 한다")
+
+    monkeypatch.setattr(ea, "_send_portal_invite", must_not_call)
+
+    user = models.User(name="갑", email="pref@portal.example", phone="010-0000-0000")
+    assert ea._deliver_magic_link(user, "https://app.example/x") == "EMAIL_SENT"
+
+
+def test_deliver_falls_back_to_kakao(monkeypatch):
+    """이메일 미설정 + 카카오 SENT → KAKAO_SENT(폴백)."""
+    from routers import external_accounts as ea
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: False)
+    monkeypatch.setattr(ea, "_send_portal_invite", lambda user, abs_link: "SENT")
+
+    user = models.User(name="갑", email="fb@portal.example", phone="010-0000-0000")
+    assert ea._deliver_magic_link(user, "https://app.example/x") == "KAKAO_SENT"
+
+
+def test_deliver_email_failed_normalized(monkeypatch):
+    """이메일 FAILED + 카카오 발송 불가 → EMAIL_FAILED로 정규화."""
+    from routers import external_accounts as ea
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea, "_send_portal_invite_email", lambda user, abs_link: "FAILED")
+    monkeypatch.setattr(ea, "_send_portal_invite", lambda user, abs_link: "NOT_CONFIGURED")
+
+    user = models.User(name="갑", email="ef@portal.example")
+    assert ea._deliver_magic_link(user, "https://app.example/x") == "EMAIL_FAILED"
+
+
+def test_provision_delivery_email_sent(client, manager_headers, staff_headers, monkeypatch):
+    """엔드포인트 통합: 이메일 설정 → 발급 delivery EMAIL_SENT + send_mail이 user.email로 호출."""
+    from routers import external_accounts as ea
+
+    sent = {}
+
+    def fake_send_mail(to, subject, body, html=False, **kwargs):
+        sent.update(to=to, calls=sent.get("calls", 0) + 1)
+        return {"recipients": to}
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea.email_service, "send_mail", fake_send_mail)
+
+    ca = _mk_client(client, staff_headers, "이메일발송운수사")
+    r = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "email-sent@portal.example", "role": "PARTNER", "client_id": ca,
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["delivery"] == "EMAIL_SENT"
+    assert body["magic_link"] and "token=" in body["magic_link"]  # 폴백 문자열 유지
+    assert sent["to"] == ["email-sent@portal.example"]
+    assert sent["calls"] == 1
+
+
+def test_provision_delivery_email_failed_still_201(client, manager_headers, staff_headers, monkeypatch):
+    """엔드포인트 통합: send_mail 예외여도 계정 발급은 201·magic_link 유지 → delivery EMAIL_FAILED."""
+    from routers import external_accounts as ea
+
+    def boom(**kwargs):
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
+    monkeypatch.setattr(ea.email_service, "send_mail", boom)
+
+    ca = _mk_client(client, staff_headers, "이메일실패운수사")
+    r = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "email-failed@portal.example", "role": "PARTNER", "client_id": ca,
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["delivery"] == "EMAIL_FAILED"
+    assert body["magic_link"] and "token=" in body["magic_link"]

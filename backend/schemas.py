@@ -190,7 +190,8 @@ class ExternalAccountOut(BaseModel):
     status: str
     phone: Optional[str] = None
     magic_link: Optional[str] = None
-    # 알림톡 발송 결과(발급/재발급 응답에만): SENT/FAILED/NOT_CONFIGURED/NO_TEMPLATE/NO_PHONE. 목록은 None
+    # 매직링크 발송 결과(발급/재발급 응답에만, INC-10 정규화): EMAIL_SENT / EMAIL_FAILED /
+    # KAKAO_SENT / KAKAO_FAILED / NOT_CONFIGURED. 목록은 None
     delivery: Optional[str] = None
 
 

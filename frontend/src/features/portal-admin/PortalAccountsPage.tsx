@@ -53,26 +53,26 @@ const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
   INACTIVE: { label: '비활성', cls: 'bg-elevate-strong text-ash border-hairline' },
 }
 
-// 카카오 알림톡 발송 결과(delivery) → 화면 표시 문구·톤
+// 매직링크 발송 결과(delivery) → 화면 표시 문구·톤 (이메일 주채널 + 카카오 폴백)
 const DELIVERY_BADGES: Record<string, { label: string; cls: string }> = {
-  SENT: {
+  EMAIL_SENT: {
+    label: '이메일로 발송됨',
+    cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25',
+  },
+  KAKAO_SENT: {
     label: '카카오 알림톡 발송됨',
     cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25',
   },
-  FAILED: {
+  EMAIL_FAILED: {
+    label: '이메일 발송 실패 — 아래 링크를 직접 전달하세요',
+    cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25',
+  },
+  KAKAO_FAILED: {
     label: '카카오 발송 실패 — 아래 링크를 직접 전달하세요',
     cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25',
   },
   NOT_CONFIGURED: {
-    label: '카카오 미설정 — 아래 링크를 직접 전달하세요',
-    cls: 'bg-elevate-strong text-ash border-hairline',
-  },
-  NO_TEMPLATE: {
-    label: '알림톡 템플릿 미설정 — 아래 링크를 직접 전달하세요',
-    cls: 'bg-elevate-strong text-ash border-hairline',
-  },
-  NO_PHONE: {
-    label: '전화번호 없음 — 아래 링크를 직접 전달하세요',
+    label: '자동발송 미설정 — 아래 링크를 직접 전달하세요',
     cls: 'bg-elevate-strong text-ash border-hairline',
   },
 }

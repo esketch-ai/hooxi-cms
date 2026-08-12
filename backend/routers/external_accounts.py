@@ -5,12 +5,15 @@
 정규식으로 원천 차단되어 외부역할을 만들 수 없다(격리 D3 불변식).
 
 - 인가: 내부 MANAGER 이상(require_role은 get_current_user 기반 → 외부역할은 원천 403).
-- 매직링크: create_magic_token 재사용, FRONTEND 기준 링크 '문자열'만 반환(이메일 자동발송은
-  이번 범위 밖 — staff가 전달). 감사에는 발급 '사실'만 남기고 토큰 원문은 절대 기록하지 않는다(R2-E6).
+- 매직링크: create_magic_token 재사용, FRONTEND 기준 링크 '문자열'을 항상 반환(수동 복사 폴백).
+  발송은 INC-10 이메일(Gmail)을 주 채널로 best-effort 자동 전송하고, 카카오 알림톡은 설정 시
+  폴백으로만 시도한다(이메일 성공 시 중복 발송 안 함). 감사에는 발급 '사실'만 남기고
+  토큰 원문·링크는 절대 기록하지 않는다(R2-E6).
 - 카카오 브릿지(최소): kakao_contact_id가 주어지면 승인된 KakaoContact.client_id로 보강.
   kakao.py 승인 로직 자체는 건드리지 않는다(회귀 격리).
 """
 
+import html
 import logging
 from typing import List, Optional, Tuple
 
@@ -21,7 +24,7 @@ import schemas
 from auth import EXTERNAL_ROLES, FRONTEND_ORIGIN, create_magic_token, require_role
 from models import Buyer, Client, KakaoContact, User, get_db
 from routers import common
-from services import kakao_service
+from services import email_service, kakao_service
 from services.audit_logger import AuditLogger
 from services.integration_config import resolve as resolve_integration
 
@@ -76,6 +79,66 @@ def _send_portal_invite(user: User, abs_link: str) -> str:
         # R2-E6: 토큰·링크·수신번호가 새지 않도록 예외 '유형명'만 기록(메시지 본문 미기록)
         logger.warning("포털 초대 알림톡 발송 실패: %s", type(exc).__name__)
         return "FAILED"
+
+
+def _send_portal_invite_email(user: User, abs_link: str) -> str:
+    """포털 초대 이메일 best-effort 발송(Gmail) → 결과 문자열. 예외를 밖으로 던지지 않는다.
+
+    반환: SENT / FAILED / NOT_CONFIGURED. 수신자는 항상 존재하는 user.email.
+    발송 실패가 계정 발급을 깨지 않도록 모든 실패를 결과 문자열로만 흡수한다(R2-E6).
+    """
+    if not email_service.is_configured():
+        return "NOT_CONFIGURED"
+    name = html.escape(user.name or "고객님")  # HTML 본문 주입 방지(담당자 입력 이름 이스케이프)
+    subject = "[후시 파트너] 포털 접속 링크 안내"
+    body = (
+        "<div style=\"font-family:sans-serif;font-size:14px;line-height:1.7;color:#222\">"
+        "<p>{name}님, 안녕하세요.</p>"
+        "<p>후시 파트너 고객 포털 접속 링크를 안내드립니다. "
+        "아래 버튼을 눌러 로그인해 주세요.</p>"
+        "<p style=\"margin:24px 0\">"
+        "<a href=\"{link}\" style=\"display:inline-block;padding:12px 24px;"
+        "background:#2563eb;color:#fff;text-decoration:none;border-radius:6px\">"
+        "포털 접속하기</a></p>"
+        "<p style=\"font-size:12px;color:#666\">버튼이 열리지 않으면 아래 주소를 복사해 "
+        "브라우저에 붙여넣어 주세요.<br><a href=\"{link}\">{link}</a></p>"
+        "<p style=\"font-size:12px;color:#666\">본 링크는 발송 시점부터 <b>24시간</b> 동안 유효합니다.</p>"
+        "</div>"
+    ).format(name=name, link=abs_link)
+    try:
+        email_service.send_mail(to=[user.email], subject=subject, body=body, html=True)
+        return "SENT"
+    except Exception as exc:
+        # R2-E6: 토큰·링크·수신 주소가 새지 않도록 예외 '유형명'만 기록(본문 미로깅)
+        logger.warning("포털 초대 이메일 발송 실패: %s", type(exc).__name__)
+        return "FAILED"
+
+
+def _deliver_magic_link(user: User, abs_link: str) -> str:
+    """매직링크 발송 오케스트레이션 — 이메일(주) → 카카오(폴백). 정규화 결과 문자열.
+
+    반환: EMAIL_SENT / KAKAO_SENT / EMAIL_FAILED / KAKAO_FAILED / NOT_CONFIGURED.
+    이메일이 성공하면 카카오는 시도하지 않는다(중복 발송 방지). 어떤 채널도 설정/발송
+    불가하면 NOT_CONFIGURED — 이때도 magic_link 문자열 폴백으로 수동 전달이 가능하다.
+    전 과정을 try로 감싸 설정 조회(resolve) 예외까지 흡수한다(best-effort 완전 격리).
+    """
+    try:
+        # _send_portal_invite_email 자체가 미설정 시 NOT_CONFIGURED를 반환(is_configured 중복 제거)
+        email_status = _send_portal_invite_email(user, abs_link)  # SENT/FAILED/NOT_CONFIGURED
+        if email_status == "SENT":
+            return "EMAIL_SENT"
+        kakao_status = _send_portal_invite(user, abs_link)  # 기존 카카오 헬퍼(설정 시 발송)
+        if kakao_status == "SENT":
+            return "KAKAO_SENT"
+        if email_status == "FAILED":
+            return "EMAIL_FAILED"
+        if kakao_status == "FAILED":
+            return "KAKAO_FAILED"
+        return "NOT_CONFIGURED"  # 어떤 채널도 발송 불가 — magic_link 수동 전달 폴백
+    except Exception as exc:
+        # 설정 조회 등 예상 밖 오류도 발급을 깨지 않는다(토큰·링크 미로깅, 유형명만)
+        logger.warning("포털 초대 발송 오케스트레이션 오류: %s", type(exc).__name__)
+        return "NOT_CONFIGURED"
 
 
 def _account_out(
@@ -155,7 +218,7 @@ def create_external_account(
     db.commit()
     db.refresh(user)
     magic_link, abs_link = _issue_magic(user)  # 토큰 1회 발급(원문 미기록) → 표시·발송 공용
-    delivery = _send_portal_invite(user, abs_link)  # best-effort — 실패해도 발급은 성공
+    delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort
     return _account_out(user, magic_link, delivery)
 
 
@@ -176,7 +239,7 @@ def resend_magic_link(
     AuditLogger.external_account_resend(db, manager.user_id, user.user_id)
     db.commit()  # 감사 확정 후 발송 — 트랜잭션 밖에서 best-effort 재발송
     magic_link, abs_link = _issue_magic(user)
-    delivery = _send_portal_invite(user, abs_link)  # 저장된 user.phone으로 재발송(best-effort)
+    delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort 재발송
     return _account_out(user, magic_link, delivery)
 
 
