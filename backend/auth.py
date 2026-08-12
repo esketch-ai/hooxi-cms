@@ -41,7 +41,14 @@ ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "hooxipartners.com")
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "")
 
 # --- RBAC (§10.1) — 권한 매트릭스는 서버 상수로 관리해 차후 수정 용이하게 ---
+# 내부역할만 등록한다. 외부역할(PARTNER/INVESTOR)은 여기에 절대 넣지 않는다 —
+# require_role(ROLE_LEVEL.get(role,0)=0)·require_permission(매트릭스 미포함=거부)가
+# 미등록 역할을 원천 거부하므로, 외부역할은 내부 라우터에서 코드 변경 없이 전수 403이 된다(부록 N.8 D3 격리).
 ROLE_LEVEL = {"STAFF": 1, "MANAGER": 2, "ADMIN": 3}
+
+# 외부역할(포털 전용) — ROLE_LEVEL/PERMISSION_MATRIX와 완전히 분리된 별도 집합.
+# 내부 인가 상수에 섞이면 격리가 깨지므로 독립 상수로 둔다.
+EXTERNAL_ROLES = {"PARTNER", "INVESTOR"}
 
 PERMISSION_MATRIX = {
     # 기능 키: 허용 역할 목록
@@ -107,14 +114,30 @@ def _verify_user_from_payload(payload: dict, db: Session) -> User:
     return user
 
 
-def get_current_user(
+def get_external_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """인증만 수행(외부역할 허용) — 포털(/portal) 전용 베이스. 내부 라우터는 쓰지 않는다."""
     if credentials is None:
         raise HTTPException(status_code=401, detail="인증이 필요합니다")
     payload = decode_token(credentials.credentials, "access")
     return _verify_user_from_payload(payload, db)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """내부 인증 — 외부역할(PARTNER/INVESTOR)은 원천 거부(403). 모든 내부 라우터의
+    기반이므로, 이 한 지점이 외부 계정의 내부 시스템 접근(원가·매출 혼합 응답 포함)을
+    전면 차단한다. 외부 계정은 /portal 전용 경로만 사용한다(격리 불변식)."""
+    user = get_external_user(credentials, db)
+    if user.role in EXTERNAL_ROLES:
+        raise HTTPException(
+            status_code=403, detail="외부 계정은 내부 시스템에 접근할 수 없습니다 (포털을 이용하세요)"
+        )
+    return user
 
 
 def require_role(min_role: str):
@@ -135,6 +158,24 @@ def require_permission(permission_key: str):
 
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in allowed:
+            raise HTTPException(status_code=403, detail="권한이 없습니다")
+        return user
+
+    return dependency
+
+
+def require_external_role(*allowed: str):
+    """포털(/portal) 전용 외부역할 인가 — INC-5에서 외부 라우터가 사용.
+
+    내부 require_role/require_permission과 완전히 분리된 게이트. 반드시
+    EXTERNAL_ROLES에 속하면서 allowed에도 포함된 역할만 통과시켜, 내부역할이
+    실수로 포털을 통과하는 일이 없게 한다(격리 양방향).
+    """
+
+    allowed_set = set(allowed)
+
+    def dependency(user: User = Depends(get_external_user)) -> User:
+        if user.role not in allowed_set or user.role not in EXTERNAL_ROLES:
             raise HTTPException(status_code=403, detail="권한이 없습니다")
         return user
 

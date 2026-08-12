@@ -70,8 +70,15 @@ class User(Base):
     auth_provider = Column(String(20), default="NAVER_WORKS")
     name = Column(String(50))
     position = Column(String(50))
-    role = Column(String(20), nullable=False, default="STAFF")  # ADMIN/MANAGER/STAFF (§10.1)
+    role = Column(String(20), nullable=False, default="STAFF")  # 내부 ADMIN/MANAGER/STAFF (§10.1) / 외부 PARTNER·INVESTOR(부록 N.8 D3, 격리)
     status = Column(String(20), nullable=False, default="PENDING")  # PENDING/ACTIVE/INACTIVE
+    # 외부역할 연결(nullable) — PARTNER=운수사 계정, INVESTOR=매수자 계정 (온보딩 INC-6에서 세팅)
+    # tb_client.manager_id → tb_user 와 순환 FK가 되므로 use_alter로 사이클을 명시(생성/삭제 정렬 경고 회피).
+    client_id = Column(
+        String(50),
+        ForeignKey("tb_client.client_id", ondelete="SET NULL", use_alter=True, name="fk_user_client"),
+    )
+    buyer_id = Column(String(50), ForeignKey("tb_buyer.buyer_id", ondelete="SET NULL"))
     pin_hash = Column(String(255))  # 미팅 모드·reveal 게이트용 (R2-C11)
     token_version = Column(Integer, nullable=False, default=0)  # 즉시 무효화 (C2)
     created_at = Column(DateTime, default=utcnow)
@@ -779,6 +786,9 @@ def ensure_schema():
         ("tb_project_sale", "is_hold", "VARCHAR(1)"),
         # 매수자 마스터 링크(부록 N.8 D1) — 비파괴 additive(전환기)
         ("tb_project_sale", "buyer_id", "VARCHAR(50)"),
+        # 외부역할 계정 연결(부록 N.8 D3) — PARTNER=운수사, INVESTOR=매수자
+        ("tb_user", "client_id", "VARCHAR(50)"),
+        ("tb_user", "buyer_id", "VARCHAR(50)"),
     ]
     try:
         insp = _inspect(engine)
