@@ -173,6 +173,7 @@ class ExternalAccountIn(BaseModel):
     client_id: Optional[str] = None  # PARTNER 필수 — 운수사(TRANSPORT)
     buyer_id: Optional[str] = None  # INVESTOR 필수 — 매수자
     kakao_contact_id: Optional[str] = None  # 주어지면 KakaoContact.client_id로 보강(브릿지)
+    phone: Optional[str] = Field(default=None, max_length=20)  # 매직링크 알림톡 발송 대상(INC-9)
 
 
 class ExternalAccountOut(BaseModel):
@@ -187,7 +188,10 @@ class ExternalAccountOut(BaseModel):
     client_id: Optional[str] = None
     buyer_id: Optional[str] = None
     status: str
+    phone: Optional[str] = None
     magic_link: Optional[str] = None
+    # 알림톡 발송 결과(발급/재발급 응답에만): SENT/FAILED/NOT_CONFIGURED/NO_TEMPLATE/NO_PHONE. 목록은 None
+    delivery: Optional[str] = None
 
 
 class AuthorizeResponse(BaseModel):

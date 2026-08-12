@@ -15,7 +15,10 @@ export interface ExternalAccount {
   client_id?: string | null
   buyer_id?: string | null
   status: UserStatus
+  phone?: string | null
   magic_link?: string | null
+  /** 카카오 알림톡 발송 결과 (발급·재발급 응답에만 존재, 목록은 없음) */
+  delivery?: string | null
 }
 
 /** 계정 발급 payload (schemas.ExternalAccountIn) */
@@ -25,6 +28,7 @@ export interface ExternalAccountIn {
   role: ExternalRole
   client_id?: string | null // PARTNER 필수 (운수사)
   buyer_id?: string | null // INVESTOR 필수 (매수자)
+  phone?: string // 카카오 알림톡 발송용 (선택)
   kakao_contact_id?: string | null
 }
 

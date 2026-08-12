@@ -38,6 +38,31 @@ def _mk_project(client, headers, name):
     return r.json()["project_id"]
 
 
+def _mk_kakao_contact(client_id, phone, status="APPROVED"):
+    """승인 카카오 연락처 직접 적재(테스트용) — provision phone 보완 경로 검증."""
+    db = models.SessionLocal()
+    try:
+        contact = models.KakaoContact(
+            kakao_user_key="kuk-{0}".format(models.gen_uuid()),
+            client_id=client_id, name="연락처", phone=phone, status=status,
+        )
+        db.add(contact)
+        db.commit()
+        return contact.contact_id
+    finally:
+        db.close()
+
+
+def _user_phone(user_id):
+    """DB에 저장된 user.phone 조회(발급 후 영속 확인용)."""
+    db = models.SessionLocal()
+    try:
+        user = db.get(models.User, user_id)
+        return user.phone if user else None
+    finally:
+        db.close()
+
+
 def _capped_vehicle(client_id, per_year):
     """잔여차령 8 캡 노후차 — y1..y8 동일값(잔여반영=Σ). 등록 2016-01-01, 운수사 지정."""
     p = {"registered_at": "2016-01-01", "client_id": client_id}
@@ -252,3 +277,111 @@ def test_timeline_out_of_scope_404(client, manager_headers, staff_headers):
     access = _verify_access(client, partner["magic_link"])
     r = client.get(f"{PORTAL}/projects/{other}/timeline", headers=_bearer(access))
     assert r.status_code == 404, r.text
+
+
+# ---------------------------------------------------------------------------
+# 5. 매직링크 알림톡 자동발송 (INC-9) — phone 영속 + best-effort delivery
+# ---------------------------------------------------------------------------
+def test_provision_with_phone_persists(client, manager_headers, staff_headers):
+    """payload.phone → 응답 phone 세팅 + DB user.phone 저장. 알림톡 미설정 → delivery NOT_CONFIGURED(발급은 201)."""
+    ca = _mk_client(client, staff_headers, "폰저장운수사")
+    r = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "phone-partner@portal.example", "role": "PARTNER", "client_id": ca,
+        "phone": "010-9876-5432",
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["phone"] == "010-9876-5432"
+    assert body["delivery"] == "NOT_CONFIGURED"  # 테스트 환경 알림톡 미설정 — 발급은 성공
+    assert body["magic_link"] and "token=" in body["magic_link"]  # 수동 복사 폴백 유지
+    assert _user_phone(body["user_id"]) == "010-9876-5432"
+
+
+def test_provision_phone_from_kakao_contact(client, manager_headers, staff_headers):
+    """payload.phone 없고 kakao_contact_id(승인+phone) → 연락처 번호로 보완·저장."""
+    ca = _mk_client(client, staff_headers, "폰보완운수사")
+    contact_id = _mk_kakao_contact(ca, "010-1111-2222")
+    r = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "phone-bridge@portal.example", "role": "PARTNER",
+        "client_id": ca, "kakao_contact_id": contact_id,
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["phone"] == "010-1111-2222"
+    assert _user_phone(body["user_id"]) == "010-1111-2222"
+
+
+def test_list_delivery_is_none(client, manager_headers, staff_headers):
+    """목록 응답의 delivery는 항상 None(발급/재발급 응답 전용 필드)."""
+    ca = _mk_client(client, staff_headers, "딜리버리목록운수사")
+    client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "delivery-list@portal.example", "role": "PARTNER", "client_id": ca,
+    })
+    r = client.get(EXTERNAL, headers=manager_headers)
+    assert r.status_code == 200, r.text
+    assert all(x["delivery"] is None for x in r.json())
+
+
+def test_send_portal_invite_sent(monkeypatch):
+    """알림톡 설정+템플릿+phone 갖춤 → send_alimtalk 호출·SENT. WL 버튼은 절대 링크."""
+    from routers import external_accounts as ea
+
+    sent = {}
+
+    def fake_send(to, template_code, variables, buttons):
+        sent.update(to=to, template=template_code, variables=variables, buttons=buttons)
+        return {"ok": True}
+
+    monkeypatch.setattr(ea.kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(ea, "resolve_integration", lambda key: "TPL_INVITE")
+    monkeypatch.setattr(ea.kakao_service, "send_alimtalk", fake_send)
+
+    user = models.User(name="갑담당", phone="010-1234-5678")
+    result = ea._send_portal_invite(user, "https://app.example/portal/login?token=abc")
+    assert result == "SENT"
+    assert sent["to"] == "010-1234-5678"
+    assert sent["template"] == "TPL_INVITE"
+    assert sent["variables"] == {"이름": "갑담당"}
+    assert sent["buttons"][0]["buttonType"] == "WL"
+    assert sent["buttons"][0]["linkMo"].startswith("https://")
+
+
+def test_send_portal_invite_no_phone(monkeypatch):
+    """phone 없으면 발송 시도 없이 NO_PHONE."""
+    from routers import external_accounts as ea
+
+    def must_not_call(**kwargs):  # pragma: no cover - 호출되면 실패
+        raise AssertionError("phone 없으면 발송하지 않아야 한다")
+
+    monkeypatch.setattr(ea.kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(ea, "resolve_integration", lambda key: "TPL_INVITE")
+    monkeypatch.setattr(ea.kakao_service, "send_alimtalk", must_not_call)
+
+    user = models.User(name="무번호", phone=None)
+    assert ea._send_portal_invite(user, "https://app.example/x") == "NO_PHONE"
+
+
+def test_send_portal_invite_failed_is_swallowed(monkeypatch):
+    """발송 예외는 밖으로 새지 않고 FAILED로 흡수(계정 발급 보호)."""
+    from routers import external_accounts as ea
+
+    def boom(**kwargs):
+        raise ea.kakao_service.KakaoSendError("발송 실패")
+
+    monkeypatch.setattr(ea.kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(ea, "resolve_integration", lambda key: "TPL_INVITE")
+    monkeypatch.setattr(ea.kakao_service, "send_alimtalk", boom)
+
+    user = models.User(name="실패", phone="010-0000-0000")
+    assert ea._send_portal_invite(user, "https://app.example/x") == "FAILED"
+
+
+def test_send_portal_invite_no_template(monkeypatch):
+    """알림톡 설정됐어도 템플릿 코드 미설정이면 NO_TEMPLATE."""
+    from routers import external_accounts as ea
+
+    monkeypatch.setattr(ea.kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(ea, "resolve_integration", lambda key: None)
+
+    user = models.User(name="무템플릿", phone="010-2222-3333")
+    assert ea._send_portal_invite(user, "https://app.example/x") == "NO_TEMPLATE"

@@ -53,6 +53,30 @@ const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
   INACTIVE: { label: '비활성', cls: 'bg-elevate-strong text-ash border-hairline' },
 }
 
+// 카카오 알림톡 발송 결과(delivery) → 화면 표시 문구·톤
+const DELIVERY_BADGES: Record<string, { label: string; cls: string }> = {
+  SENT: {
+    label: '카카오 알림톡 발송됨',
+    cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25',
+  },
+  FAILED: {
+    label: '카카오 발송 실패 — 아래 링크를 직접 전달하세요',
+    cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25',
+  },
+  NOT_CONFIGURED: {
+    label: '카카오 미설정 — 아래 링크를 직접 전달하세요',
+    cls: 'bg-elevate-strong text-ash border-hairline',
+  },
+  NO_TEMPLATE: {
+    label: '알림톡 템플릿 미설정 — 아래 링크를 직접 전달하세요',
+    cls: 'bg-elevate-strong text-ash border-hairline',
+  },
+  NO_PHONE: {
+    label: '전화번호 없음 — 아래 링크를 직접 전달하세요',
+    cls: 'bg-elevate-strong text-ash border-hairline',
+  },
+}
+
 const inputCls =
   'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
 
@@ -60,6 +84,7 @@ interface IssueForm {
   role: ExternalRole
   email: string
   name: string
+  phone: string
   client_id: string
   buyer_id: string
 }
@@ -68,6 +93,7 @@ const EMPTY_FORM: IssueForm = {
   role: 'PARTNER',
   email: '',
   name: '',
+  phone: '',
   client_id: '',
   buyer_id: '',
 }
@@ -138,6 +164,7 @@ export function PortalAccountsPage() {
       role: form.role,
       client_id: form.role === 'PARTNER' ? form.client_id || null : null,
       buyer_id: form.role === 'INVESTOR' ? form.buyer_id || null : null,
+      phone: form.phone.trim() || undefined,
     }
     run(
       async () => {
@@ -419,6 +446,19 @@ export function PortalAccountsPage() {
               className={inputCls}
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ash">전화번호</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              placeholder="010-0000-0000"
+              className={inputCls}
+            />
+            <p className="mt-1 text-xs text-slatey">
+              입력 시 카카오 알림톡으로 매직링크가 자동 발송됩니다. (선택)
+            </p>
+          </div>
         </div>
       </Modal>
 
@@ -443,6 +483,13 @@ export function PortalAccountsPage() {
               <b className="text-bone">{linkResult.name ?? linkResult.email}</b> 님의 포털 로그인
               링크입니다. 아래 링크를 복사해 담당자에게 전달해 주세요.
             </p>
+            {linkResult.delivery && DELIVERY_BADGES[linkResult.delivery] && (
+              <span
+                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${DELIVERY_BADGES[linkResult.delivery].cls}`}
+              >
+                {DELIVERY_BADGES[linkResult.delivery].label}
+              </span>
+            )}
             <div className="flex items-center gap-2 rounded-lg border border-hairline bg-graphite px-3 py-2">
               <LinkSimple size={16} className="shrink-0 text-slatey" />
               <span className="min-w-0 flex-1 truncate text-xs text-bone">

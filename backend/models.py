@@ -79,6 +79,7 @@ class User(Base):
         ForeignKey("tb_client.client_id", ondelete="SET NULL", use_alter=True, name="fk_user_client"),
     )
     buyer_id = Column(String(50), ForeignKey("tb_buyer.buyer_id", ondelete="SET NULL"))
+    phone = Column(String(20))  # 외부 포털 매직링크 알림톡 발송 대상(INC-9) — 없으면 발송 스킵
     pin_hash = Column(String(255))  # 미팅 모드·reveal 게이트용 (R2-C11)
     token_version = Column(Integer, nullable=False, default=0)  # 즉시 무효화 (C2)
     created_at = Column(DateTime, default=utcnow)
@@ -837,6 +838,8 @@ def ensure_schema():
         # 외부역할 계정 연결(부록 N.8 D3) — PARTNER=운수사, INVESTOR=매수자
         ("tb_user", "client_id", "VARCHAR(50)"),
         ("tb_user", "buyer_id", "VARCHAR(50)"),
+        # 외부 포털 매직링크 알림톡 발송 대상(INC-9) — nullable, FK 없음
+        ("tb_user", "phone", "VARCHAR(20)"),
     ]
     try:
         insp = _inspect(engine)
