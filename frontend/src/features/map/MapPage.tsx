@@ -8,6 +8,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Buildings, CircleNotch, MapPin, MapPinLine, MapTrifold, WarningCircle } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
 import { Skeleton } from '../../components/Skeleton'
 import { useAuth } from '../../app/AuthProvider'
 import { useToast } from '../../components/Toast'
@@ -614,7 +615,10 @@ export function MapPage() {
               <p className="mb-2 text-xs text-slatey">
                 주소 지오코딩(lat/lng) 미등록으로 지도에 표시되지 않는 고객사입니다.
               </p>
-              {canGeocode && (
+              <RoleGate
+                allow={canGeocode}
+                reason="주소→좌표 자동 채우기는 팀장(MANAGER)·관리자만 가능합니다."
+              >
                 <button
                   type="button"
                   onClick={() => geocodeMutation.mutate()}
@@ -628,7 +632,7 @@ export function MapPage() {
                   )}
                   {geocodeMutation.isPending ? '좌표 채우는 중…' : '주소로 좌표 자동 채우기'}
                 </button>
-              )}
+              </RoleGate>
               <ul className="max-h-56 space-y-1 overflow-y-auto">
                 {noCoords.map((c) => (
                   <li key={c.client_id}>

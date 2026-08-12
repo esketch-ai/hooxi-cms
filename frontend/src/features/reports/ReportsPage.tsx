@@ -21,6 +21,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { DataTable, type Column } from '../../components/DataTable'
 import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { DropboxPicker } from '../../components/DropboxPicker'
@@ -402,7 +403,10 @@ export function ReportsPage() {
               <ListChecks size={16} />
               대상 생성
             </button>
-            {isAdmin && (
+            <RoleGate
+              allow={isAdmin}
+              reason="전월 승인분 일괄 발송은 관리자(ADMIN)만 실행할 수 있습니다."
+            >
               <button
                 type="button"
                 onClick={() => setBatchOpen(true)}
@@ -412,7 +416,7 @@ export function ReportsPage() {
                 <PaperPlaneTilt size={16} />
                 전월 승인분 일괄 발송
               </button>
-            )}
+            </RoleGate>
           </>
         }
       />

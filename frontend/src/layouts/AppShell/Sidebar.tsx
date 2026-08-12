@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { SignOut, X } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
 import { useChatBadge } from '../../lib/api/queries'
+import { roleLabel } from '../../lib/roles'
 import { NAV_GROUPS } from './nav'
 
 interface SidebarProps {
@@ -88,8 +89,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {initial}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-bone">
-              {user?.name ?? '—'}
+            <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-bone">
+              <span className="truncate">{user?.name ?? '—'}</span>
+              {/* 내부 역할 배지(ADMIN/MANAGER/STAFF) — 외부 포털 역할은 표기하지 않음 */}
+              {user && (user.role === 'ADMIN' || user.role === 'MANAGER' || user.role === 'STAFF') && (
+                <span className="shrink-0 rounded-full border border-hairline bg-elevate-strong px-1.5 py-0.5 text-[10px] font-medium text-ash">
+                  {roleLabel(user.role)}
+                </span>
+              )}
             </p>
             <p className="truncate text-xs text-slatey">
               {user?.position || user?.email || ''}

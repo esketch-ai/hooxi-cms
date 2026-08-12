@@ -4,6 +4,7 @@ import { UserCirclePlus } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
 import { useToast } from '../../components/Toast'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
 import { SkeletonTableRows } from '../../components/Skeleton'
 import { useClientOptions } from '../../lib/api/queries'
 import { fmtServerDateTime } from '../../lib/format'
@@ -100,7 +101,8 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
               {contact.phone ?? '연락처 미확인'}
               {contact.memo ? ` · ${contact.memo}` : ''}
             </p>
-            {canApprove && (
+            {/* 안내 사유는 상단 배너(:87)가 정본 → RoleGate reason 생략(이중 안내 방지) */}
+            <RoleGate allow={canApprove}>
               <div className="flex items-center gap-2">
                 <select
                   value={mapping[contact.contact_id] ?? ''}
@@ -135,7 +137,7 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
                   거절
                 </button>
               </div>
-            )}
+            </RoleGate>
           </div>
         )
       })}

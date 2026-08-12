@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  LockKey,
   LockKeyOpen,
   Prohibit,
   ShieldCheck,
@@ -10,6 +11,7 @@ import {
 import { PageHeader } from '../../components/PageHeader'
 import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
+import { PermissionNotice } from '../../components/PermissionNotice'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
@@ -17,6 +19,7 @@ import { useAuth } from '../../app/AuthProvider'
 import { api } from '../../lib/api/client'
 import { fmtServerDate } from '../../lib/format'
 import type { User, UserRole } from '../../types'
+import { ROLE_LABELS } from '../../lib/roles'
 import { SystemConfigTab } from './SystemConfigTab'
 import { AuditLogTab } from './AuditLogTab'
 import { BackupTab } from './BackupTab'
@@ -25,15 +28,6 @@ import { CodesTab } from './CodesTab'
 import { BaseParamsRatesTab } from './BaseParamsRatesTab'
 
 type TabKey = 'accounts' | 'codes' | 'params' | 'system' | 'integrations' | 'backup' | 'audit'
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  ADMIN: '관리자',
-  MANAGER: '팀장',
-  STAFF: '실무',
-  // 외부 포털 역할(Phase 4) — 내부 역할 드롭다운에는 노출하지 않고 라벨 해석용으로만 유지
-  PARTNER: '운수사',
-  INVESTOR: '투자·금융사',
-}
 
 const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
   PENDING: { label: '승인 대기', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
@@ -51,9 +45,10 @@ export function SettingsPage() {
     <div className="animate-fade-in space-y-4">
       <PageHeader title="환경 설정" subtitle="계정·권한·시스템 설정·감사 로그" />
 
-      {/* 탭 — 접근 가능한 탭만 노출(권한 없는 탭을 눌러 막히는 죽은 동선 방지).
-          계정 관리는 MANAGER도 조회 가능, 나머지는 ADMIN 전용. */}
-      <div className="flex gap-1 border-b border-hairline">
+      {/* 탭 — 전체 노출(권한 경계를 숨기지 않고 인지시킨다).
+          계정 관리는 MANAGER도 조회 가능, 나머지는 ADMIN 전용.
+          ADMIN 전용 탭은 비ADMIN에게 자물쇠+"관리자 전용"으로 잠긴 표시(클릭 시 콘텐츠에 안내). */}
+      <div className="flex flex-wrap gap-1 border-b border-hairline">
         {(
           [
             { key: 'accounts', label: '계정 관리', adminOnly: false },
@@ -64,22 +59,29 @@ export function SettingsPage() {
             { key: 'backup', label: '백업·복구', adminOnly: true },
             { key: 'audit', label: '감사 로그', adminOnly: true },
           ] as { key: TabKey; label: string; adminOnly: boolean }[]
-        )
-          .filter((t) => isAdmin || !t.adminOnly)
-          .map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
-              tab === t.key
-                ? 'border-snow text-bone'
-                : 'border-transparent text-slatey hover:text-ash'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        ).map((t) => {
+          const locked = t.adminOnly && !isAdmin
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              aria-disabled={locked || undefined}
+              title={locked ? '관리자 전용' : undefined}
+              className={`flex items-center gap-1 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+                tab === t.key
+                  ? 'border-snow text-bone'
+                  : locked
+                    ? 'border-transparent text-slatey/70 hover:text-slatey'
+                    : 'border-transparent text-slatey hover:text-ash'
+              }`}
+            >
+              {locked && <LockKey size={13} weight="fill" className="opacity-70" />}
+              {t.label}
+              {locked && <span className="text-[10px] font-normal text-slatey">관리자 전용</span>}
+            </button>
+          )
+        })}
       </div>
 
       {tab === 'accounts' &&
@@ -93,29 +95,18 @@ export function SettingsPage() {
           />
         ))}
       {tab === 'codes' &&
-        (isAdmin ? <CodesTab /> : <AdminOnlyNotice feature="공통 코드 관리" />)}
+        (isAdmin ? <CodesTab /> : <PermissionNotice feature="공통 코드 관리" />)}
       {tab === 'params' &&
-        (isAdmin ? <BaseParamsRatesTab /> : <AdminOnlyNotice feature="기준값·매출단가" />)}
+        (isAdmin ? <BaseParamsRatesTab /> : <PermissionNotice feature="기준값·매출단가" />)}
       {tab === 'system' &&
-        (isAdmin ? <SystemConfigTab /> : <AdminOnlyNotice feature="시스템 설정" />)}
+        (isAdmin ? <SystemConfigTab /> : <PermissionNotice feature="시스템 설정" />)}
       {tab === 'integrations' &&
-        (isAdmin ? <IntegrationsTab /> : <AdminOnlyNotice feature="연동 관리" />)}
+        (isAdmin ? <IntegrationsTab /> : <PermissionNotice feature="연동 관리" />)}
       {tab === 'backup' &&
-        (isAdmin ? <BackupTab /> : <AdminOnlyNotice feature="백업·복구" />)}
+        (isAdmin ? <BackupTab /> : <PermissionNotice feature="백업·복구" />)}
       {tab === 'audit' &&
-        (isAdmin ? <AuditLogTab /> : <AdminOnlyNotice feature="감사 로그" />)}
+        (isAdmin ? <AuditLogTab /> : <PermissionNotice feature="감사 로그" />)}
     </div>
-  )
-}
-
-// ── ADMIN 전용 안내 (MANAGER 이하) ──────────────────────────────────
-function AdminOnlyNotice({ feature }: { feature: string }) {
-  return (
-    <EmptyState
-      icon={<ShieldCheck size={36} />}
-      title="ADMIN 전용 기능입니다"
-      description={`${feature}은(는) 관리자(ADMIN) 권한으로만 조회·변경할 수 있습니다.`}
-    />
   )
 }
 

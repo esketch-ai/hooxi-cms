@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { useClientOptions } from '../../lib/api/queries'
+import { roleLabel } from '../../lib/roles'
 import { useBuyerOptions } from '../buyers/api'
 import {
   absoluteMagicLink,
@@ -30,13 +31,14 @@ import {
   type ExternalRole,
 } from './api'
 
+// 배지 색/구조는 유지하고 라벨 텍스트만 공용 roleLabel로 수렴(중복 해소)
 const ROLE_BADGES: Record<ExternalRole, { label: string; cls: string }> = {
   PARTNER: {
-    label: '운수사',
+    label: roleLabel('PARTNER'),
     cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25',
   },
   INVESTOR: {
-    label: '투자·금융사',
+    label: roleLabel('INVESTOR'),
     cls: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-400/25',
   },
 }

@@ -17,6 +17,7 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
@@ -276,7 +277,8 @@ export function AccountsPage() {
         subtitle="고객이 제공한 외부 사이트 로그인 계정 통합 관리"
         actions={
           <div className="hidden items-center gap-2 sm:flex">
-            {isAdmin && (
+            {/* 안내 사유는 아래 배너가 정본(이중 안내 방지) → RoleGate reason 생략 */}
+            <RoleGate allow={isAdmin}>
               <button
                 type="button"
                 onClick={() => setConfirmOpen(true)}
@@ -285,7 +287,7 @@ export function AccountsPage() {
                 <ShieldCheck size={16} weight="bold" />
                 지금 전체 점검
               </button>
-            )}
+            </RoleGate>
             <button
               type="button"
               onClick={() => {
