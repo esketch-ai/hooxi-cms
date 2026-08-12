@@ -729,13 +729,13 @@ function AssetsTab({ clientId }: { clientId: string }) {
 
   return (
     <section className="rounded-3xl border border-hairline bg-graphite p-5">
-      <h2 className="mb-3 text-sm font-semibold text-bone">자산 및 연동 현황</h2>
+      <h2 className="mb-3 text-sm font-semibold text-bone">자산·연동 마스터</h2>
       {isLoading ? (
         <SkeletonTableRows rows={3} />
       ) : assets.length === 0 ? (
         <EmptyState
           title="등록된 자산이 없습니다"
-          description="자산 등록·연동 관리는 '자산 및 연동 현황' 화면에서 제공됩니다."
+          description="자산 등록·연동 관리는 '자산·연동 마스터' 화면에서 제공됩니다."
         />
       ) : (
         <div className="overflow-x-auto">

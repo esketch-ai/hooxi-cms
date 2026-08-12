@@ -273,8 +273,8 @@ export function AccountsPage() {
   return (
     <div className="animate-fade-in space-y-4">
       <PageHeader
-        title="수집 계정 관리"
-        subtitle="고객이 제공한 외부 사이트 로그인 계정 통합 관리"
+        title="계정 점검"
+        subtitle="자산 중 로그인 계정 보유분 통합 점검 — 매월 자동"
         actions={
           <div className="hidden items-center gap-2 sm:flex">
             {/* 안내 사유는 아래 배너가 정본(이중 안내 방지) → RoleGate reason 생략 */}

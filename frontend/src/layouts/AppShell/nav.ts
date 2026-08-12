@@ -60,14 +60,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
       { label: '매수자 마스터', path: '/buyers', icon: Bank, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-      { label: '자산 및 연동 현황', path: '/assets', icon: Truck },
-      {
-        label: '전기버스 자산',
-        path: '/asset-vehicles',
-        icon: Bus,
-        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
-      },
-      { label: '수집 계정 관리', path: '/accounts', icon: LockKey },
+      { label: '자산·연동 마스터', path: '/assets', icon: Truck },
+      { label: '계정 점검', path: '/accounts', icon: LockKey },
     ],
   },
   {
@@ -88,6 +82,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'PROJECT & FINANCE',
     items: [
       { label: '감축 사업 관리', path: '/projects', icon: TreeStructure },
+      {
+        label: '전기버스 자산',
+        path: '/asset-vehicles',
+        icon: Bus,
+        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
+      },
       {
         label: '재무 원장',
         path: '/finance-ledger',

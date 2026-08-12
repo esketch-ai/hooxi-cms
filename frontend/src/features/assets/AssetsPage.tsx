@@ -283,7 +283,7 @@ export function AssetsPage() {
   return (
     <div className="animate-fade-in space-y-4">
       <PageHeader
-        title="자산 및 연동 현황"
+        title="자산·연동 마스터"
         subtitle="고객사 자산·관제 연동·외부기관 접속 계정 공동 관리"
         actions={
           /* 신규·일괄 등록 — 데스크톱 전용 (§7.1 태블릿은 다운로드만) */
