@@ -31,7 +31,6 @@ import { unwrapList, useCodes } from '../../lib/api/queries'
 import { useDebounced } from '../../lib/useDebounced'
 import { fmtServerDateTime } from '../../lib/format'
 import { docTypeLabel } from '../documents/DocumentsPage'
-import { useProjectOptions } from '../projects/api'
 import type {
   Document,
   Paginated,
@@ -55,7 +54,6 @@ const AXIS_LABELS: Record<AxisKey, string> = {
   region: '지역',
   client_type: '구분',
   contract_status: '계약 상태',
-  project_id: '감축 사업',
   asset_group: '자산 대분류',
 }
 
@@ -76,18 +74,11 @@ export function SegmentsPage() {
   const debouncedCriteria = useDebounced(criteria, 300)
 
   // 축 선택지 — 전 축을 공통 코드 마스터/목록 API로 통일 (region도 REGION 코드 사용)
-  const { data: projects = [] } = useProjectOptions()
   const region = useCodes('REGION')
   const clientType = useCodes('CLIENT_TYPE')
   const contractStatus = useCodes('CONTRACT_STATUS')
   const assetGroup = useCodes('ASSET_GROUP')
   const clientFolderCodes = useCodes('CLIENT_FOLDER') // mail-merge 구분폴더 선택지
-
-  const projectNameOf = useMemo(() => {
-    const m: Record<string, string> = {}
-    for (const p of projects) m[p.project_id] = p.project_name
-    return (id: string) => m[id] ?? id
-  }, [projects])
 
   // 축 정의 — 옵션 목록 + 값→표시명 (칩 라벨용)
   const axes: {
@@ -105,11 +96,6 @@ export function SegmentsPage() {
       key: 'contract_status',
       options: contractStatus.options,
       labelOf: contractStatus.labelOf,
-    },
-    {
-      key: 'project_id',
-      options: projects.map((p) => ({ value: p.project_id, label: p.project_name })),
-      labelOf: projectNameOf,
     },
     { key: 'asset_group', options: assetGroup.options, labelOf: assetGroup.labelOf },
   ]

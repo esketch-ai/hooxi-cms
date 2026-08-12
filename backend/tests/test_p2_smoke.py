@@ -286,7 +286,6 @@ def test_list_projects_filters(client, staff_headers):
     body = resp.json()
     assert body["total"] >= 1
     item = next(i for i in body["items"] if i["project_id"] == S["project_id"])
-    assert item["client_count"] == 0
     assert item["reg_code"] == "R-2026-KR-03-000777"
 
 

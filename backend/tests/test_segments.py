@@ -257,7 +257,7 @@ def test_update_segment_and_audit(client, staff_headers):
     assert body["name"] == "서울 운수 세그먼트"
     assert body["criteria"] == {
         "region": [REGION_A], "client_type": ["TRANSPORT"],
-        "contract_status": None, "project_id": None,
+        "contract_status": None,
         "asset_group": None,
     }
 

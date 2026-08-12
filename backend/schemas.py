@@ -611,7 +611,6 @@ class ProjectOut(BaseModel):
 class ProjectListItem(ProjectOut):
     """목록 행 — 참여 고객사 수 + 지연 단계 수(Phase 1)."""
 
-    client_count: int = 0
     delayed_stage_count: int = 0  # 지연 단계 수(목록 표식용)
 
 
@@ -1675,7 +1674,6 @@ class SegmentCriteria(BaseModel):
     region: Optional[List[str]] = None
     client_type: Optional[List[str]] = None
     contract_status: Optional[List[str]] = None
-    project_id: Optional[List[str]] = None
     asset_group: Optional[List[str]] = None
 
 

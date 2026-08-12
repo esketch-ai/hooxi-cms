@@ -17,7 +17,7 @@ import { ProjectFormModal } from './ProjectFormModal'
 
 const PAGE_SIZE = 20
 
-/** 사업명 + 고유번호 mono pill + 참여 N개사 */
+/** 사업명 + 고유번호 mono pill + 지연 배지 */
 export function ProjectNameCell({ project, link = true }: { project: Project; link?: boolean }) {
   const name = link ? (
     <Link
@@ -38,9 +38,6 @@ export function ProjectNameCell({ project, link = true }: { project: Project; li
           <span className="inline-flex items-center rounded border border-hairline bg-elevate px-1.5 py-0.5 font-mono text-[10px] text-ash">
             {project.reg_code}
           </span>
-        )}
-        {project.client_count != null && (
-          <span className="text-xs text-slatey">참여 {project.client_count}개사</span>
         )}
         {project.delayed_stage_count ? (
           <span className="inline-flex items-center rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">

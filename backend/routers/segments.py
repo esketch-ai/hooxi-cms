@@ -25,7 +25,6 @@ from models import (
     Asset,
     Client,
     Document,
-    Project,
     ReportRecipient,
     Segment,
     SegmentSend,
@@ -156,17 +155,11 @@ def can_receive_map(db: Session, clients: List[Client]) -> dict:
 # criteria 검증·직렬화 헬퍼
 # ---------------------------------------------------------------------------
 def _validate_criteria(db: Session, criteria: schemas.SegmentCriteria) -> None:
-    """criteria 값 검증 — 코드 축은 활성 공통 코드(validate_active_code 재사용),
-    project_id는 존재 여부. 미지원 키는 스키마(extra=forbid)가 422 처리."""
+    """criteria 값 검증 — 코드 축은 활성 공통 코드(validate_active_code 재사용).
+    미지원 키는 스키마(extra=forbid)가 422 처리."""
     for field, category in CRITERIA_CODE_CATEGORIES.items():
         for value in getattr(criteria, field) or []:
             validate_active_code(db, category, value)
-    for project_id in criteria.project_id or []:
-        if db.get(Project, project_id) is None:
-            raise HTTPException(
-                status_code=422,
-                detail="존재하지 않는 감축 사업입니다: '{0}'".format(project_id),
-            )
 
 
 def _dump_criteria(criteria: schemas.SegmentCriteria) -> str:

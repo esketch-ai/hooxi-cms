@@ -830,7 +830,6 @@ export interface SegmentCriteria {
   region?: string[]
   client_type?: string[]
   contract_status?: string[]
-  project_id?: string[]
   asset_group?: string[]
 }
 

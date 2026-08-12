@@ -401,7 +401,6 @@ def list_projects(
         schemas.ProjectListItem.model_validate(p, from_attributes=True).model_copy(
             update={
                 "manager_name": unames.get(p.manager_id),
-                "client_count": 0,
                 "delayed_stage_count": delay_map.get(p.project_id, 0),
             }
         )
