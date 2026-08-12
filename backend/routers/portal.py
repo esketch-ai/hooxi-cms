@@ -24,7 +24,14 @@ from auth import (
     decode_token,
     require_external_role,
 )
-from models import Project, ProjectSale, ProjectVehicle, User, get_db
+from models import (
+    Project,
+    ProjectParticipationSnapshot,
+    ProjectSale,
+    ProjectVehicle,
+    User,
+    get_db,
+)
 from services.portal import build_investor_view, build_partner_view
 
 router = APIRouter(prefix="/portal", tags=["portal"])
@@ -123,3 +130,83 @@ def get_project(
     if not in_scope:
         raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
     return build_investor_view(db, project, user.buyer_id)
+
+
+@router.get("/projects/{project_id}/timeline")
+def get_project_timeline(
+    project_id: str,
+    user: User = Depends(_external),
+    db: Session = Depends(get_db),
+) -> List[dict]:
+    """변동 타임라인(ProjectParticipationSnapshot, captured_at asc) — 역할별 필드 게이팅.
+
+    스코프 검증은 상세(get_project)와 동일 — 밖이면 404(존재 여부 비노출).
+    - PARTNER: 자기 client_id 스냅샷만 → {captured_at, effective_reduction, expected_payout}.
+      expected_payout None(산정 중)이면 그대로 노출.
+    - INVESTOR: 프로젝트 전체(모든 client) 스냅샷 → {captured_at, effective_reduction}.
+      expected_payout(원가)·client 식별정보는 응답에 원천 미포함(빌더가 아닌 여기서 보장).
+    """
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+
+    query = db.query(ProjectParticipationSnapshot).filter(
+        ProjectParticipationSnapshot.project_id == project.project_id
+    )
+
+    if user.role == "PARTNER":
+        in_scope = user.client_id and (
+            db.query(ProjectVehicle.vehicle_id)
+            .filter(
+                ProjectVehicle.project_id == project.project_id,
+                ProjectVehicle.client_id == user.client_id,
+            )
+            .first()
+        )
+        if not in_scope:
+            raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+        rows = (
+            query.filter(ProjectParticipationSnapshot.client_id == user.client_id)
+            .order_by(ProjectParticipationSnapshot.captured_at.asc())
+            .all()
+        )
+        return [
+            {
+                "captured_at": r.captured_at,
+                "effective_reduction": (
+                    round(float(r.effective_reduction_sum), 3)
+                    if r.effective_reduction_sum is not None
+                    else None
+                ),
+                "expected_payout": (
+                    round(float(r.expected_payout_sum), 2)
+                    if r.expected_payout_sum is not None
+                    else None
+                ),
+            }
+            for r in rows
+        ]
+
+    # INVESTOR — 프로젝트 전체 스냅샷, 감축량 시계열만(payout·client 식별 미포함)
+    in_scope = user.buyer_id and (
+        db.query(ProjectSale.sale_id)
+        .filter(
+            ProjectSale.project_id == project.project_id,
+            ProjectSale.buyer_id == user.buyer_id,
+        )
+        .first()
+    )
+    if not in_scope:
+        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+    rows = query.order_by(ProjectParticipationSnapshot.captured_at.asc()).all()
+    return [
+        {
+            "captured_at": r.captured_at,
+            "effective_reduction": (
+                round(float(r.effective_reduction_sum), 3)
+                if r.effective_reduction_sum is not None
+                else None
+            ),
+        }
+        for r in rows
+    ]

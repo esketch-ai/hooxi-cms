@@ -197,6 +197,41 @@ class AuditLogger:
             db, actor_id, "USER_PIN_RESET", target_type="USER", target_id=user_id
         )
 
+    # ── 외부 포털 계정 온보딩 (Phase 4 INC-6, 부록 N.8 D3) ──────────
+    @staticmethod
+    def external_account_create(db: Session, actor_id: str, user_id: str, role: str) -> AuditLog:
+        """외부 포털 계정 provision — 매직링크 토큰 원문은 절대 기록 금지(발급 사실만, R2-E6)."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "EXTERNAL_ACCOUNT_CREATE",
+            target_type="USER",
+            target_id=user_id,
+            new_value="ACTIVE({0})".format(role),
+        )
+
+    @staticmethod
+    def external_account_resend(db: Session, actor_id: str, user_id: str) -> AuditLog:
+        """매직링크 재발급 — 토큰 원문은 기록하지 않고 재발급 사실만."""
+        return AuditLogger.log_action(
+            db, actor_id, "EXTERNAL_ACCOUNT_RESEND", target_type="USER", target_id=user_id
+        )
+
+    @staticmethod
+    def external_account_deactivate(
+        db: Session, actor_id: str, user_id: str, old_status: str
+    ) -> AuditLog:
+        """외부 포털 계정 비활성 — 상태 전이만 기록."""
+        return AuditLogger.log_action(
+            db,
+            actor_id,
+            "EXTERNAL_ACCOUNT_DEACTIVATE",
+            target_type="USER",
+            target_id=user_id,
+            old_value=old_status,
+            new_value="INACTIVE",
+        )
+
     # ── 백업·복구 (SCR-14) ─────────────────────────────────────────
     @staticmethod
     def backup_create(db: Session, actor_id: str) -> AuditLog:

@@ -150,6 +150,37 @@ class MagicVerifyIn(BaseModel):
     token: str = Field(min_length=1)
 
 
+class ExternalAccountIn(BaseModel):
+    """외부 포털 계정 provision 요청 (INC-6, 부록 N.8 D3).
+
+    내부 users 관리(role 정규식 ^(ADMIN|MANAGER|STAFF)$)와 분리된 전용 입력 —
+    외부역할(PARTNER/INVESTOR)만 허용한다. client_id/buyer_id 필수 여부는 역할별로
+    라우터에서 검증(PARTNER=client_id, INVESTOR=buyer_id).
+    """
+
+    email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    name: Optional[str] = Field(default=None, max_length=50)
+    role: str = Field(pattern="^(PARTNER|INVESTOR)$")
+    client_id: Optional[str] = None  # PARTNER 필수 — 운수사(TRANSPORT)
+    buyer_id: Optional[str] = None  # INVESTOR 필수 — 매수자
+    kakao_contact_id: Optional[str] = None  # 주어지면 KakaoContact.client_id로 보강(브릿지)
+
+
+class ExternalAccountOut(BaseModel):
+    """외부 포털 계정 응답 — magic_link는 발급/재발급 시에만 채우고 목록에선 None."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: str
+    email: str
+    name: Optional[str] = None
+    role: str
+    client_id: Optional[str] = None
+    buyer_id: Optional[str] = None
+    status: str
+    magic_link: Optional[str] = None
+
+
 class AuthorizeResponse(BaseModel):
     authorize_url: str
     state: str
