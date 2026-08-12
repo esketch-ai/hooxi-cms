@@ -803,6 +803,65 @@ class ProjectOperatorListResponse(BaseModel):
     total: int  # 운수사 수
 
 
+# 자산관리 > 전기버스 — 크로스-프로젝트 차량 뷰(AV-1, 내부 전용 조회) ------------------
+class AssetVehicleRow(BaseModel):
+    """여러 사업을 가로지르는 차량 단위 행 — Project·Client 조인 조립(from_attributes 불가)."""
+
+    vehicle_id: str
+    project_id: str
+    project_name: str  # 조인(Project)
+    vehicle_no: Optional[str] = None
+    region: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None  # 조인(Client, 미매칭 None)
+    registered_at: Optional[date] = None
+    expire_at: Optional[date] = None  # 파생: 차령만료일(부록 L)
+    approved_at: Optional[date] = None  # 조인(Project 승인일)
+    total_reduction: Optional[float] = None  # 파생(연차 단순합)
+    remaining_age: Optional[float] = None  # 파생(잔여차령)
+    effective_reduction: Optional[float] = None  # 파생(잔여반영감축량)
+    expected_payout: Optional[float] = None  # 파생(예상지급액, 부록 L)
+    project_status: Optional[str] = None  # 조인(Project 진행상태)
+    approval_status: Optional[str] = None  # 조인(Project 승인상태)
+    # 사업 회계 집계값(compute_accounting) — 차량 그레인 아님, 그 차량이 속한 사업값을 그대로 표기
+    # ("(사업)" 라벨은 프론트). 같은 사업 차량은 동일값.
+    project_revenue: Optional[float] = None  # 사업 매출인식(sale_recognized)
+    project_cost: Optional[float] = None  # 사업 원가(product=총매입)
+    # 연차(1~10) 감축량 — AV-4 상세용으로 미리 포함
+    reduction_y1: Optional[float] = None
+    reduction_y2: Optional[float] = None
+    reduction_y3: Optional[float] = None
+    reduction_y4: Optional[float] = None
+    reduction_y5: Optional[float] = None
+    reduction_y6: Optional[float] = None
+    reduction_y7: Optional[float] = None
+    reduction_y8: Optional[float] = None
+    reduction_y9: Optional[float] = None
+    reduction_y10: Optional[float] = None
+
+
+class AssetVehicleKpi(BaseModel):
+    """차량 KPI(필터 결과 전체 기준, 페이지네이션 전) + 재무 KPI(AV-2).
+
+    차량 KPI(수·감축량·지급액)와 재무 KPI(매출·원가·이익)는 그레인이 다르다.
+    재무 KPI는 **필터에 걸린 distinct 사업 전체**의 compute_accounting 합(부분집합 과대계상 방지).
+    """
+
+    vehicle_count: int  # 차량 수
+    total_reduction: Optional[float] = None  # 총감축량 합(전건 null이면 None)
+    effective_reduction_sum: Optional[float] = None  # 잔여반영감축량 합
+    expected_payout_sum: Optional[float] = None  # 예상지급액 합
+    revenue: Optional[float] = None  # Σ 사업 매출인식(sale_recognized) — distinct 사업 기준
+    cost: Optional[float] = None  # Σ 사업 원가(product) — distinct 사업 기준
+    profit: Optional[float] = None  # Σ 사업 매출이익(gross_profit) — distinct 사업 기준
+
+
+class AssetVehicleListResponse(BaseModel):
+    items: List[AssetVehicleRow]
+    total: int  # 필터 결과 총 차량 수
+    kpi: AssetVehicleKpi
+
+
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
 # 매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(부록 N.8 D1) --------------
 class BuyerIn(BaseModel):

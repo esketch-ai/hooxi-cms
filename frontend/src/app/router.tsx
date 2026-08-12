@@ -22,6 +22,7 @@ import { DocumentsPage } from '../features/documents/DocumentsPage'
 import { SettingsPage } from '../features/settings/SettingsPage'
 import { GuidePage } from '../features/guide/GuidePage'
 import { AssetsPage } from '../features/assets/AssetsPage'
+import { AssetVehiclesPage } from '../features/asset-vehicles/AssetVehiclesPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
       { path: '/guide', element: <GuidePage /> }, // 사용자 가이드 (전 역할)
       // ── P2 구현 화면 ──────────────────────────────────────────────
       { path: '/assets', element: <AssetsPage /> }, // SCR-04
+      { path: '/asset-vehicles', element: <AssetVehiclesPage /> }, // AV-3 전기버스 자산
       { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
       { path: '/projects', element: <ProjectsPage /> }, // SCR-06
       { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세

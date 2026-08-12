@@ -1,5 +1,5 @@
 // 데스크톱 테이블 ↔ 모바일 카드 자동 전환 (플랜 §4.2 DataTable+CardList / §7 디바이스 전략)
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { EmptyState } from './EmptyState'
 import { SkeletonCards, SkeletonTableRows } from './Skeleton'
 
@@ -23,6 +23,9 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void
   /** 행 톤 다운 등 조건부 클래스 (예: HOLD 고객사) */
   rowClassName?: (row: T) => string
+  /** 확장 행 — rowKey가 이 값과 일치하는 행 아래에 상세 패널을 렌더 (옵트인) */
+  expandedKey?: string
+  renderExpanded?: (row: T) => ReactNode
   isLoading?: boolean
   emptyTitle?: string
   emptyDescription?: string
@@ -36,6 +39,8 @@ export function DataTable<T>({
   renderCard,
   onRowClick,
   rowClassName,
+  expandedKey,
+  renderExpanded,
   isLoading = false,
   emptyTitle = '데이터가 없습니다',
   emptyDescription,
@@ -84,28 +89,40 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr
-                key={rowKey(row)}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`group border-b border-hairline last:border-b-0 ${
-                  onRowClick ? 'cursor-pointer hover:bg-elevate' : ''
-                } ${rowClassName?.(row) ?? ''}`}
-              >
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={`px-4 py-3 align-middle ${
-                      col.stickyRight
-                        ? 'sticky right-0 z-[1] border-l border-hairline bg-graphite group-hover:bg-elevate'
-                        : ''
-                    } ${col.className ?? ''}`}
+            {rows.map((row) => {
+              const key = rowKey(row)
+              const expanded = renderExpanded && expandedKey === key
+              return (
+                <Fragment key={key}>
+                  <tr
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    className={`group border-b border-hairline last:border-b-0 ${
+                      onRowClick ? 'cursor-pointer hover:bg-elevate' : ''
+                    } ${expanded ? 'bg-elevate' : ''} ${rowClassName?.(row) ?? ''}`}
                   >
-                    {col.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={`px-4 py-3 align-middle ${
+                          col.stickyRight
+                            ? 'sticky right-0 z-[1] border-l border-hairline bg-graphite group-hover:bg-elevate'
+                            : ''
+                        } ${col.className ?? ''}`}
+                      >
+                        {col.render(row)}
+                      </td>
+                    ))}
+                  </tr>
+                  {expanded && (
+                    <tr className="border-b border-hairline last:border-b-0 bg-graphite">
+                      <td colSpan={columns.length} className="px-4 py-4">
+                        {renderExpanded!(row)}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -113,14 +130,24 @@ export function DataTable<T>({
       {/* 모바일: 카드 리스트 */}
       {renderCard && (
         <div className="space-y-3 sm:hidden">
-          {rows.map((row) => (
-            <div
-              key={rowKey(row)}
-              className={`rounded-3xl border border-hairline bg-graphite p-4 ${rowClassName?.(row) ?? ''}`}
-            >
-              {renderCard(row)}
-            </div>
-          ))}
+          {rows.map((row) => {
+            const key = rowKey(row)
+            const expanded = renderExpanded && expandedKey === key
+            return (
+              <div
+                key={key}
+                onClick={renderExpanded && onRowClick ? () => onRowClick(row) : undefined}
+                className={`rounded-3xl border border-hairline bg-graphite p-4 ${
+                  renderExpanded && onRowClick ? 'cursor-pointer' : ''
+                } ${rowClassName?.(row) ?? ''}`}
+              >
+                {renderCard(row)}
+                {expanded && (
+                  <div className="mt-3 border-t border-hairline pt-3">{renderExpanded!(row)}</div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </>
