@@ -29,6 +29,9 @@ JWT_SECRET = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL = timedelta(hours=8)
 REFRESH_TOKEN_TTL = timedelta(days=7)
+# 매직링크(INC-5): 포털 외부계정을 위한 1회성 로그인 링크 토큰 — 짧게(30분).
+# 링크 발급·전달(이메일 등)은 INC-6 온보딩. 여기선 토큰 생성 + verify만.
+MAGIC_TOKEN_TTL = timedelta(minutes=30)
 
 # --- 네이버웍스 OAuth (CR-1) ---
 # NW_CLIENT_ID / NW_CLIENT_SECRET / NW_REDIRECT_URI는 연동 설정(DB 우선 + env 폴백)
@@ -88,6 +91,11 @@ def create_access_token(user: User) -> str:
 
 def create_refresh_token(user: User) -> str:
     return _create_token(user, "refresh", REFRESH_TOKEN_TTL)
+
+
+def create_magic_token(user: User) -> str:
+    """포털 매직링크 토큰 — verify(/portal/auth/verify)에서 access+refresh로 교환."""
+    return _create_token(user, "magic", MAGIC_TOKEN_TTL)
 
 
 def decode_token(token: str, expected_type: str) -> dict:

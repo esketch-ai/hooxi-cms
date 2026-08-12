@@ -136,6 +136,20 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+class TokenPair(BaseModel):
+    """access+refresh 쌍 — 포털 매직링크 verify 응답(user 정보 없이 토큰만, INC-5)."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class MagicVerifyIn(BaseModel):
+    """매직링크 토큰 검증 요청 — 토큰 자체가 인증(별도 인증 헤더 불요)."""
+
+    token: str = Field(min_length=1)
+
+
 class AuthorizeResponse(BaseModel):
     authorize_url: str
     state: str

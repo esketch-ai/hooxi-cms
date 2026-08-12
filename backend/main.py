@@ -49,6 +49,7 @@ from routers import histories as histories_router
 from routers import imports as imports_router
 from routers import integrations as integrations_router
 from routers import kakao as kakao_router
+from routers import portal as portal_router
 from routers import projects as projects_router
 from routers import reports as reports_router
 from routers import schedules as schedules_router
@@ -325,6 +326,7 @@ app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(buyers_router.router, prefix=API_V1_PREFIX)
 app.include_router(segments_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
+app.include_router(portal_router.router, prefix=API_V1_PREFIX)
 app.include_router(chat_router.router, prefix=API_V1_PREFIX)
 app.include_router(config_router.router, prefix=API_V1_PREFIX)
 app.include_router(integrations_router.router, prefix=API_V1_PREFIX)
