@@ -2,16 +2,16 @@
 
 권고 2 — tb_settlement_snapshot (map_id, seq) 유니크 인덱스 존재·멱등·실효성.
 
-주의: 레거시 정산 라우터(/settlements)·참여 고객사 매핑 CRUD·수기 단가(§10.3) 제거로
-  단가 감사(PROJECT_UNIT_PRICE)·상태 전이 동시성(409) 테스트는 삭제.
-  SettlementSnapshot·ProjectClientMap 모델·유니크 인덱스는 유지되므로(증분 5) 인덱스
-  실효성만 직접 검증한다.
+주의: 레거시 정산 라우터(/settlements)·참여 고객사 매핑(tb_project_client_map)·수기 단가(§10.3)
+  물리 제거로 단가 감사(PROJECT_UNIT_PRICE)·상태 전이 동시성(409) 테스트는 삭제.
+  SettlementSnapshot 모델·유니크 인덱스는 보존되므로(증분 5) map_id는 임의 문자열로 직접
+  적재해 인덱스 실효성만 검증한다.
 """
 
 from sqlalchemy import inspect as sa_inspect
 
 import models
-from models import ProjectClientMap, SettlementSnapshot
+from models import SettlementSnapshot
 
 API = "/api/v1"
 S = {}  # 테스트 간 공유 상태 (생성된 리소스 id)
@@ -22,42 +22,11 @@ def _db():
 
 
 # ---------------------------------------------------------------------------
-# 셋업 — 고객사 + 사업 + 매핑 1건(매핑 CRUD 은퇴로 DB 직접 삽입)
+# 셋업 — 스냅샷 유니크 인덱스 검증용 map_id(임의 문자열)만 확보
+#   (tb_project_client_map 물리 제거로 map_id는 순수 감사 문자열)
 # ---------------------------------------------------------------------------
 def test_reco_setup(client, staff_headers):
-    resp = client.post(
-        API + "/clients",
-        headers=staff_headers,
-        json={"client_type": "TRANSPORT", "company_name": "리뷰권고운수"},
-    )
-    assert resp.status_code == 201, resp.text
-    S["client_id"] = resp.json()["client_id"]
-
-    resp = client.post(
-        API + "/projects",
-        headers=staff_headers,
-        json={
-            "project_name": "리뷰 권고 검증 사업",
-            "project_status": "모니터링",
-            "expected_credits": 1000,
-            "manager_id": "u-manager",
-        },
-    )
-    assert resp.status_code == 201, resp.text
-    S["project_id"] = resp.json()["project_id"]
-
-    # 스냅샷 유니크 인덱스 실효성 검증에 필요한 map_id만 DB 직접 삽입으로 확보
-    db = _db()
-    try:
-        m = ProjectClientMap(
-            project_id=S["project_id"], client_id=S["client_id"],
-            allocation_ratio=50, success_fee_rate=10, settlement_status="STANDBY",
-        )
-        db.add(m)
-        db.commit()
-        S["map_id"] = m.map_id
-    finally:
-        db.close()
+    S["map_id"] = "legacy-map-리뷰권고"
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """P2-G 백엔드 검증 마감 테스트 — 실무 정합성 시나리오 #3·#5·#6 잔여 6건.
 
 1. 스키마 길이 정합 — String(N) 컬럼 대응 입력 필드 max_length → 초과 시 422
-2. 정산 산식 상한 — unit_price·expected_credits le=1e12 + expected_amount Numeric(15,2) 초과 422
+2. 입력 상한 — expected_credits Numeric(10,2) 정수부 상한 초과 422
 3. 일정 시간 역전 — end_at < start_at 422
 4. 검색 와일드카드 이스케이프 — %·_ 검색은 리터럴 매치만
 5. soft 삭제 세그먼트 PUT 404
@@ -268,17 +268,10 @@ def test_asset_field_over_length_422(client, staff_headers):
 
 
 # ---------------------------------------------------------------------------
-# 2. 정산 산식 상한 — 입력 상한 + expected_amount Numeric(15,2) 초과 422
+# 2. 입력 상한 — expected_credits Numeric(10,2) 초과 422
+#    (수기 단가·예상 정산액 산식 상한은 레거시 물리제거로 은퇴)
 # ---------------------------------------------------------------------------
 def test_project_input_caps_422(client, admin_headers):
-    # 단가 상한(1e12) 초과
-    resp = client.post(
-        API + "/projects",
-        headers=admin_headers,
-        json={"project_name": "P2G 상한사업", "unit_price": 2e12},
-    )
-    assert resp.status_code == 422
-
     # 발행량 상한(Numeric(10,2) 정수부 8자리) 초과
     resp = client.post(
         API + "/projects",
@@ -286,7 +279,3 @@ def test_project_input_caps_422(client, admin_headers):
         json={"project_name": "P2G 상한사업", "expected_credits": 1e8},
     )
     assert resp.status_code == 422
-
-
-# 예상 정산액(§10.3) 산식 상한 테스트는 매핑·수기 단가 은퇴로 제거
-# (레거시 물리제거 — 모델·스키마는 증분 5까지 유지).

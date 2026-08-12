@@ -350,11 +350,10 @@ class ClientOut(BaseModel):
 
 
 class ClientListItem(ClientOut):
-    """목록 행 — 최근 활동 일시 + 이번 달 보고서 상태 미니 배지 + 성공 보수율(🔒 프론트 마스킹)."""
+    """목록 행 — 최근 활동 일시 + 이번 달 보고서 상태 미니 배지."""
 
     last_activity_at: Optional[datetime] = None
     report_status_this_month: Optional[str] = None
-    success_fee_rate: Optional[float] = None
 
 
 class ClientListResponse(BaseModel):
@@ -550,7 +549,6 @@ class ProjectCreate(BlankFKToNoneModel):
     mon_cycle: Optional[str] = Field(default=None, max_length=50)
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
-    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # §10.3 수기 단가
     # 지급 파라미터(max_payment·base_reduction·base_vehicle_age·approved_at)는 여기서 받지 않는다 —
     # PayoutParamsUpdate 전용 엔드포인트만 정본(차량 파생 재계산 동반, 부록 L). 단일 쓰기 경로.
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
@@ -572,7 +570,6 @@ class ProjectUpdate(BlankFKToNoneModel):
     mon_cycle: Optional[str] = Field(default=None, max_length=50)
     expected_issue_date: Optional[date] = None
     expected_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
-    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     # 지급 파라미터는 PayoutParamsUpdate 전용 엔드포인트만 정본(차량 재계산 동반) — 단일 쓰기 경로.
     issued_credits: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
     issued_at: Optional[date] = None
@@ -598,13 +595,11 @@ class ProjectOut(BaseModel):
     mon_cycle: Optional[str] = None
     expected_issue_date: Optional[date] = None  # D-day 계산용 (SCR-06)
     expected_credits: Optional[float] = None  # 🔒 프론트 마스킹
-    unit_price: Optional[float] = None  # 🔒
     max_payment: Optional[float] = None  # 🔒 최대지급액(차량당 상한) — expected_payout 파생 기준(부록 L)
     base_reduction: Optional[float] = None  # 기준감축량(기본 240)
     base_vehicle_age: Optional[float] = None  # 기준차령(기본 8)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     approval_status: Optional[str] = None  # 사업 승인상태(미승인/승인) — 미착품 전환 스위치(부록 L)
-    price_source: Optional[str] = None
     issued_credits: Optional[float] = None
     issued_at: Optional[date] = None
     manager_id: Optional[str] = None
@@ -625,12 +620,6 @@ class ProjectListResponse(BaseModel):
     total: int
 
 
-class UnitPriceUpdate(BaseModel):
-    """배출권 단가 수기 입력 (§10.3) — null 전달 시 '미정'으로 초기화."""
-
-    unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
-
-
 class PayoutParamsUpdate(BaseModel):
     """지급 파라미터 수기 입력(부록 L) — expected_payout 파생 기준. 전부 optional.
 
@@ -642,36 +631,6 @@ class PayoutParamsUpdate(BaseModel):
     base_reduction: Optional[float] = Field(default=None, gt=0, le=_BASE_REDUCTION_MAX)  # 예상지급액 분모 — 0 금지
     base_vehicle_age: Optional[float] = Field(default=None, gt=0, le=_BASE_AGE_MAX)  # 예상지급액 분모 — 0 금지
     approved_at: Optional[date] = None
-
-
-class ProjectMapIn(BlankFKToNoneModel):
-    """참여 고객사 매핑 등록/수정 — expected_amount는 서버 계산(§10.3)."""
-
-    client_id: str = Field(max_length=50)
-    asset_id: Optional[str] = Field(default=None, max_length=50)  # 연결 자산
-    allocation_ratio: float = Field(ge=0, le=100)  # 배분율(%)
-    success_fee_rate: float = Field(ge=0, le=100)  # 성공 보수율(%) 🔒
-
-
-class ProjectMapOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    map_id: str
-    project_id: str
-    client_id: str
-    client_name: Optional[str] = None
-    asset_id: Optional[str] = None
-    asset_summary: Optional[str] = None  # 연결 자산 요약 (분류·제원)
-    allocation_ratio: Optional[float] = None
-    success_fee_rate: Optional[float] = None  # 🔒
-    expected_amount: Optional[float] = None  # 🔒 서버 계산 — 단가 미입력 시 null(미정)
-    settlement_status: Optional[str] = None
-    billed_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    paid_amount: Optional[float] = None
-    payment_type: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 
 class ProjectStageOut(BaseModel):
@@ -995,10 +954,8 @@ class FleetImportResult(BaseModel):
 
 
 class ProjectDetailOut(ProjectOut):
-    """사업 상세 (SCR-06) — 개요 + 참여 고객사 매핑 목록 + 배분율 합계 + 진행 단계."""
+    """사업 상세 (SCR-06) — 개요 + 진행 단계 + 거래계약/원장 파생."""
 
-    clients: List[ProjectMapOut] = []
-    allocation_total: float = 0  # 배분율 합계(100% 검증 UI용)
     stages: List[ProjectStageOut] = []  # 진행 단계 타임라인(Phase 1)
     delayed_stage_count: int = 0  # 지연 단계 수(관찰용)
     vehicle_count: int = 0  # 참여 차량 수(Phase 2)
@@ -1021,92 +978,6 @@ class ProjectDetailOut(ProjectOut):
     gross_profit: Optional[float] = None  # 매출이익 = trunc(매출인식 − 제품)
     profit_rate: Optional[float] = None  # 이익률 = round(매출이익/매출인식, 3)
     ownership_total: Optional[float] = None  # 소유권비율 합(%)
-
-
-# ---------------------------------------------------------------------------
-# P2 — 정산 (SCR-07)
-# ---------------------------------------------------------------------------
-class SettlementRow(BaseModel):
-    """정산 행 — tb_project_client_map 기반. 금액은 항상 서버 계산 값."""
-
-    map_id: str
-    project_id: str
-    project_name: Optional[str] = None
-    client_id: str
-    client_name: Optional[str] = None
-    allocation_ratio: Optional[float] = None  # 배분율(%)
-    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
-    expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
-    settlement_status: str
-    unit_price: Optional[float] = None  # 🔒
-    expected_credits: Optional[float] = None  # 🔒
-    billed_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    paid_amount: Optional[float] = None
-    payment_type: Optional[str] = None
-    snapshot_count: int = 0  # 회차 스냅샷 수 — 0보다 크면 이력 존재(청구 취소 후 STANDBY 포함)
-
-
-class SettlementListResponse(BaseModel):
-    items: List[SettlementRow]
-    total: int
-
-
-class ClientProjectRow(BaseModel):
-    """고객사 상세 '참여 사업·정산' 탭 행 (SCR-03D) — 매핑+사업 조인.
-
-    보수율·예상 정산액 🔒은 프론트 SensitiveData 마스킹 대상(값은 그대로 응답).
-    """
-
-    map_id: str
-    project_id: str
-    project_name: Optional[str] = None
-    project_status: Optional[str] = None  # 진행 상태 배지 (기획/등록완료/모니터링/검증/발급완료)
-    allocation_ratio: Optional[float] = None  # 배분율(%)
-    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
-    expected_amount: Optional[float] = None  # 예상 정산액 🔒 — 단가 미입력 시 null(미정)
-    settlement_status: str
-    billed_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-
-
-class SettlementSnapshotOut(BaseModel):
-    """정산 회차 스냅샷 (R3-1, append-only) — 청구/입금 시점 동결 금액의 정본."""
-
-    snapshot_id: str
-    seq: int
-    action: str  # BILLED/REBILLED/REVERTED/COMPLETED
-    issued_credits: Optional[float] = None
-    amount: Optional[float] = None  # 회차 확정 금액 🔒
-    unit_price: Optional[float] = None  # 🔒
-    allocation_ratio: Optional[float] = None  # 배분율(%)
-    success_fee_rate: Optional[float] = None  # 보수율(%) 🔒
-    paid_amount: Optional[float] = None
-    reason: Optional[str] = None
-    created_by: Optional[str] = None
-    created_by_name: Optional[str] = None  # 처리자 표시명 (user_name_map 보강)
-    created_at: Optional[datetime] = None
-
-
-class SettlementSnapshotListResponse(BaseModel):
-    items: List[SettlementSnapshotOut]
-    total: int
-
-
-class SettlementStatusUpdate(BaseModel):
-    """정산 상태 전이 — STANDBY→BILLED→COMPLETED, 역행 금지(409). MANAGER 이상(§10.1)."""
-
-    settlement_status: str = Field(pattern="^(STANDBY|BILLED|COMPLETED)$")
-    # 실입금액 상한 — Numeric(15,2) 초과 방지 (#6 P2와 동일 취지)
-    paid_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # COMPLETED
-    payment_type: Optional[str] = Field(default=None, pattern="^(FULL|PARTIAL)$")
-    reason: Optional[str] = Field(default=None, max_length=200)  # 스냅샷 사유
-
-
-class SettlementRevert(BaseModel):
-    """청구 취소 (BILLED→STANDBY) — ADMIN 전용. 오발행 정정, REVERTED 스냅샷 기록."""
-
-    reason: Optional[str] = Field(default=None, max_length=200)  # 취소 사유(스냅샷)
 
 
 # ---------------------------------------------------------------------------

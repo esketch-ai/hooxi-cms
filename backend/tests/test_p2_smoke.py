@@ -246,7 +246,7 @@ def test_delete_asset_rbac_and_ok(client, staff_headers, admin_headers):
 # 감축 사업 (SCR-06)
 # ---------------------------------------------------------------------------
 def test_create_project(client, staff_headers):
-    """사업 등록 — 단가 미입력 상태로 시작(§10.3 금액 '미정')."""
+    """사업 등록 — 기본 개요 필드 저장."""
     resp = client.post(
         API + "/projects",
         headers=staff_headers,
@@ -263,8 +263,6 @@ def test_create_project(client, staff_headers):
     assert resp.status_code == 201, resp.text
     body = resp.json()
     S["project_id"] = body["project_id"]
-    assert body["price_source"] == "MANUAL"
-    assert body["unit_price"] is None
     assert body["expected_issue_date"] == "2026-12-01"  # D-day 계산용 날짜
 
 

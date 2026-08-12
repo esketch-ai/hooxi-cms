@@ -52,22 +52,6 @@ def _create_project(client, headers, name):
     return resp.json()["project_id"]
 
 
-def _map_client(client, headers, project_id, client_id, ratio):
-    # 매핑 CRUD 엔드포인트 은퇴(레거시 물리제거) — 세그먼트 축 데이터 형상만 필요하므로
-    # ProjectClientMap을 DB에 직접 삽입한다(모델은 증분 5까지 유지).
-    db = models.SessionLocal()
-    try:
-        m = models.ProjectClientMap(
-            project_id=project_id, client_id=client_id,
-            allocation_ratio=ratio, success_fee_rate=10, settlement_status="STANDBY",
-        )
-        db.add(m)
-        db.commit()
-        return m.map_id
-    finally:
-        db.close()
-
-
 def _create_asset(client, headers, client_id, asset_group):
     resp = client.post(
         API + "/assets",
@@ -98,11 +82,12 @@ def _audit_logs(db, action, target_id):
 
 @pytest.fixture(scope="module")
 def seg_data(client, staff_headers):
-    """모듈 전용 시드 — 고객사 3·사업 2·매핑 3·자산 2·공통 수신자 1.
+    """모듈 전용 시드 — 고객사 3·사업 2·자산 2·공통 수신자 1.
 
-    - c1: TRANSPORT/ACTIVE/서울, 이메일 O, MOBILITY 자산, 사업A(STANDBY)
-    - c2: BUILDING/HOLD/부산, 이메일 X, FACILITY 자산, 사업A(STANDBY)+사업B(BILLED)
-    - c3: TRANSPORT/END/서울, 이메일 X(공통 수신자 O), 사업A(BILLED)
+    (참여 고객사 매핑은 세그먼트 필터 미사용 — 레거시 물리제거로 시드에서 제외)
+    - c1: TRANSPORT/ACTIVE/서울, 이메일 O, MOBILITY 자산
+    - c2: BUILDING/HOLD/부산, 이메일 X, FACILITY 자산
+    - c3: TRANSPORT/END/서울, 이메일 X(공통 수신자 O)
     """
     c1 = _create_client(client, staff_headers, "세그운수A", "TRANSPORT", "ACTIVE",
                         REGION_A, "seg-c1@segments.example.com")
@@ -111,19 +96,13 @@ def seg_data(client, staff_headers):
 
     project_a = _create_project(client, staff_headers, "세그사업A")
     project_b = _create_project(client, staff_headers, "세그사업B")
-    map_a1 = _map_client(client, staff_headers, project_a, c1, 30)
-    map_a2 = _map_client(client, staff_headers, project_a, c2, 30)
-    map_a3 = _map_client(client, staff_headers, project_a, c3, 30)
-    map_b2 = _map_client(client, staff_headers, project_b, c2, 50)
 
     _create_asset(client, staff_headers, c1, "MOBILITY")
     _create_asset(client, staff_headers, c2, "FACILITY")
 
-    # 정산 상태·공통 수신자는 DB 직접 세팅 (상태전이 게이트 우회 — 데이터 형상만 필요)
+    # 공통 수신자는 DB 직접 세팅 (데이터 형상만 필요)
     db = models.SessionLocal()
     try:
-        db.get(models.ProjectClientMap, map_a3).settlement_status = "BILLED"  # c3: 사업A에서 청구
-        db.get(models.ProjectClientMap, map_b2).settlement_status = "BILLED"  # c2: 사업B에서만 청구
         db.add(models.ReportRecipient(
             client_id=c3, name="세그담당", email="seg-c3@segments.example.com",
             cc_yn="N", sub_id=None,
@@ -135,7 +114,6 @@ def seg_data(client, staff_headers):
     return {
         "c1": c1, "c2": c2, "c3": c3,
         "project_a": project_a, "project_b": project_b,
-        "maps": {"a1": map_a1, "a2": map_a2, "a3": map_a3, "b2": map_b2},
     }
 
 

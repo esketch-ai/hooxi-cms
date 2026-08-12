@@ -174,42 +174,14 @@ class Project(Base):
     mon_cycle = Column(String(50))
     expected_issue_date = Column(Date)
     expected_credits = Column(Numeric(10, 2))
-    unit_price = Column(Numeric(15, 2))  # 수기 단가 (§10.3)
     max_payment = Column(Numeric(15, 2))  # 최대지급액(차량당 상한) — expected_payout 파생 기준(부록 L)
     base_reduction = Column(Numeric(10, 3))  # 기준감축량(기본 240)
     base_vehicle_age = Column(Numeric(5, 2))  # 기준차령(기본 8)
     approved_at = Column(Date)  # 승인일(승인=NOT NULL). 지급 파라미터 입력 시 자동 세팅
     approval_status = Column(String(20))  # APPROVAL_STATUS: 미승인/승인 — 미착품 전환 스위치(부록 L)
-    price_source = Column(String(20), default="MANUAL")  # MANUAL → MARKET 확장
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
     issued_at = Column(Date)
     manager_id = Column(String(50), ForeignKey("tb_user.user_id"))
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-class ProjectClientMap(Base):
-    __tablename__ = "tb_project_client_map"
-
-    map_id = Column(String(50), primary_key=True, default=gen_uuid)
-    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
-    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
-    # 같은 (사업, 고객사) 매핑 중복 방지 — 동시 등록 경합 백스톱 (앱 검사 + DB 제약)
-    __table_args__ = (
-        UniqueConstraint("project_id", "client_id", name="uq_project_client_map_slot"),
-    )
-    asset_id = Column(String(50), ForeignKey("tb_asset.asset_id"), nullable=True)
-    allocation_ratio = Column(Numeric(5, 2))  # 배출권 배분 비율(%)
-    success_fee_rate = Column(Numeric(5, 2))  # 성공 보수율(%)
-    expected_amount = Column(Numeric(15, 2))  # 서버 계산 (§10.3)
-    settlement_status = Column(String(20), default="STANDBY")  # STANDBY/BILLED/COMPLETED
-    # 청구 증빙 (GAN A5) — 최신 상태만 보유, 회차 스냅샷은 tb_settlement_snapshot (R3-1)
-    billed_at = Column(DateTime)
-    billed_by = Column(String(50), ForeignKey("tb_user.user_id"))
-    completed_at = Column(DateTime)
-    completed_by = Column(String(50), ForeignKey("tb_user.user_id"))
-    paid_amount = Column(Numeric(15, 2))
-    payment_type = Column(String(20))  # FULL/PARTIAL
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -624,7 +596,8 @@ class SettlementSnapshot(Base):
     )
 
     snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
-    map_id = Column(String(50), ForeignKey("tb_project_client_map.map_id"), nullable=False)
+    # 레거시 정산 매핑(tb_project_client_map) 은퇴 후 순수 감사값 — 과거 map_id 문자열 보존
+    map_id = Column(String(50), nullable=False)
     seq = Column(Integer, nullable=False)
     # 5요소 동결
     issued_credits = Column(Numeric(10, 2))
@@ -807,8 +780,6 @@ def ensure_schema():
         ("uq_document_report_version", "tb_document", ["report_id", "version"]),
         # 정산 회차 seq max+1 동시 계산 경합 방지 (P0-B 준용, R3-1)
         ("uq_settlement_snapshot_map_seq", "tb_settlement_snapshot", ["map_id", "seq"]),
-        # 같은 (사업, 고객사) 매핑 중복 방지 — 이중 청구 예방 (DB 정밀검사 F2)
-        ("uq_project_client_map_slot", "tb_project_client_map", ["project_id", "client_id"]),
         # 같은 (사업, 단계코드) 중복 시드 방지 — 배포형 DB 단계 중복행 예방 (정교화 P0)
         ("uq_project_stage_slot", "tb_project_stage", ["project_id", "stage_code"]),
         # 운수사 보유 차량 마스터 — 식별키 차대번호 유일(부록 M, nullable 다중 null 허용)
@@ -863,7 +834,6 @@ def ensure_schema():
         ("ix_cv_client", "tb_client_vehicle", ["client_id"]),
         ("ix_cv_vehicle_no", "tb_client_vehicle", ["vehicle_no"]),
         # 6) 원장/정산 축 — client_id 선행 group·project_id 필터 (DBA P1)
-        ("ix_pcm_client", "tb_project_client_map", ["client_id"]),
         ("ix_sale_project", "tb_project_sale", ["project_id"]),
         ("ix_pinv_project", "tb_purchase_invoice", ["project_id"]),
     ]

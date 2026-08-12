@@ -32,7 +32,6 @@ from models import (  # noqa: E402
     IssueComment,
     KakaoContact,
     Project,
-    ProjectClientMap,
     ReportDelivery,
     ReportRecipient,
     ReportSubscription,
@@ -42,7 +41,6 @@ from models import (  # noqa: E402
     init_db,
     utcnow,
 )
-from routers.common import compute_expected_amount  # noqa: E402
 from services import crypto  # noqa: E402
 
 NOW = utcnow()
@@ -210,32 +208,17 @@ ASSETS = [
     ("demo-a-12", "demo-cl-06", "FACILITY", "SOLAR", 1, "ESS 연계 태양광", "N", "한국에너지공단 RPS", "API_KEY", None, "demo-token-12"),
 ]
 
-# (id, name, reg_code, status, expected_credits, unit_price, mon_cycle,
+# (id, name, reg_code, status, expected_credits, mon_cycle,
 #  issue_in_days(예상 발급일 오프셋), issued_credits, manager)
 PROJECTS = [
     ("demo-p-01", "수도권 전기버스 전환 감축사업", "R-2024-KR-03-000101", "모니터링",
-     12000, 15000, "분기", 45, None, "demo-user-01"),
+     12000, "분기", 45, None, "demo-user-01"),
     ("demo-p-02", "서해권 태양광 발전 감축사업", "R-2023-KR-03-000202", "검증",
-     8000, None, "반기", 90, None, "demo-user-02"),  # 단가 미입력 — 금액 '미정'
+     8000, "반기", 90, None, "demo-user-02"),
     ("demo-p-03", "히트펌프 보일러 대체 감축사업", "R-2025-KR-03-000303", "기획",
-     3000, None, "월간", None, None, "demo-user-03"),
+     3000, "월간", None, None, "demo-user-03"),
     ("demo-p-04", "노후 화물차 EV 전환 감축사업", "R-2022-KR-03-000404", "발급완료",
-     15000, 12000, "분기", -30, 14200, "demo-user-01"),
-]
-
-# (id, project, client, asset, allocation_ratio, success_fee_rate, settlement_status)
-# 사업별 배분율 합계 100% 이하 유지
-PROJECT_MAPS = [
-    ("demo-m-01", "demo-p-01", "demo-cl-01", "demo-a-02", 40, 10, "STANDBY"),
-    ("demo-m-02", "demo-p-01", "demo-cl-02", "demo-a-04", 35, 12, "STANDBY"),
-    ("demo-m-03", "demo-p-01", "demo-cl-05", "demo-a-08", 25, 10, "STANDBY"),
-    ("demo-m-04", "demo-p-02", "demo-cl-03", "demo-a-05", 60, 15, "STANDBY"),
-    ("demo-m-05", "demo-p-02", "demo-cl-06", "demo-a-09", 40, 15, "STANDBY"),
-    ("demo-m-06", "demo-p-03", "demo-cl-08", "demo-a-11", 50, 20, "STANDBY"),
-    ("demo-m-07", "demo-p-03", "demo-cl-04", "demo-a-07", 30, 20, "STANDBY"),
-    ("demo-m-08", "demo-p-04", "demo-cl-01", "demo-a-01", 50, 10, "BILLED"),
-    ("demo-m-09", "demo-p-04", "demo-cl-02", "demo-a-03", 30, 12, "COMPLETED"),
-    ("demo-m-10", "demo-p-04", "demo-cl-07", "demo-a-10", 20, 10, "STANDBY"),
+     15000, "분기", -30, 14200, "demo-user-01"),
 ]
 
 
@@ -457,13 +440,13 @@ def seed():
             )
         db.flush()
 
-        # --- P2: 감축 사업 (SCR-06) — 상태 분포·단가 입력/미입력 혼합 ---
-        for pid, name, reg, status, credits, price, cycle, issue_days, issued, mgr in PROJECTS:
+        # --- P2: 감축 사업 (SCR-06) — 상태 분포 ---
+        for pid, name, reg, status, credits, cycle, issue_days, issued, mgr in PROJECTS:
             issue_date = (NOW + timedelta(days=issue_days)).date() if issue_days is not None else None
             add_if_absent(
                 Project, pid,
                 lambda pid=pid, name=name, reg=reg, status=status, credits=credits,
-                price=price, cycle=cycle, issue_date=issue_date, issued=issued, mgr=mgr: Project(
+                cycle=cycle, issue_date=issue_date, issued=issued, mgr=mgr: Project(
                     project_id=pid, project_name=name, reg_code=reg, project_status=status,
                     reg_date=(NOW - timedelta(days=400)).date(),
                     credit_start_date=(NOW - timedelta(days=365)).date(),
@@ -472,35 +455,10 @@ def seed():
                     mon_start_date=(NOW - timedelta(days=180)).date(),
                     mon_end_date=(NOW + timedelta(days=180)).date(),
                     mon_cycle=cycle, expected_issue_date=issue_date,
-                    expected_credits=credits, unit_price=price, price_source="MANUAL",
+                    expected_credits=credits,
                     issued_credits=issued,
                     issued_at=issue_date if status == "발급완료" else None,
                     manager_id=mgr,
-                ),
-            )
-        db.flush()
-
-        # --- P2: 참여 고객사 매핑 (SCR-06/07) — expected_amount는 §10.3 산식으로 적재 ---
-        project_by_id = {p[0]: p for p in PROJECTS}
-        for mid, pid, cid, aid, ratio, fee, sstatus in PROJECT_MAPS:
-            credits, price = project_by_id[pid][4], project_by_id[pid][5]
-            add_if_absent(
-                ProjectClientMap, mid,
-                lambda mid=mid, pid=pid, cid=cid, aid=aid, ratio=ratio, fee=fee,
-                sstatus=sstatus, credits=credits, price=price: ProjectClientMap(
-                    map_id=mid, project_id=pid, client_id=cid, asset_id=aid,
-                    allocation_ratio=ratio, success_fee_rate=fee,
-                    expected_amount=compute_expected_amount(credits, ratio, price, fee),
-                    settlement_status=sstatus,
-                    billed_at=NOW - timedelta(days=10) if sstatus in ("BILLED", "COMPLETED") else None,
-                    billed_by="demo-user-01" if sstatus in ("BILLED", "COMPLETED") else None,
-                    completed_at=NOW - timedelta(days=3) if sstatus == "COMPLETED" else None,
-                    completed_by="demo-user-01" if sstatus == "COMPLETED" else None,
-                    paid_amount=(
-                        compute_expected_amount(credits, ratio, price, fee)
-                        if sstatus == "COMPLETED" else None
-                    ),
-                    payment_type="FULL" if sstatus == "COMPLETED" else None,
                 ),
             )
         db.flush()
