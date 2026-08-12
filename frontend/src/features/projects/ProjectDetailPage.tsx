@@ -322,6 +322,116 @@ function ApprovalStatusEditor({
   )
 }
 
+// 개요 카드 — 승인상태·승인일·최대지급액·톤당단가 인라인 편집 포함. dday/imminent 자체 산출.
+function OverviewSection({
+  project,
+  primaryClientName,
+}: {
+  project: Project
+  primaryClientName: string | null
+}) {
+  const dd = dday(project.expected_issue_date)
+  const imminent = isIssueImminent(dd)
+
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <StatusBadge domain="project" value={project.project_status} />
+        {project.reg_code && (
+          <span className="inline-flex items-center rounded border border-hairline bg-elevate px-1.5 py-0.5 font-mono text-[10px] text-ash">
+            {project.reg_code}
+          </span>
+        )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <OverviewItem label="대표 고객사">
+          {project.client_id ? (
+            <Link to={`/clients/${project.client_id}`} className="font-semibold hover:underline">
+              {primaryClientName ?? '고객사 보기'}
+            </Link>
+          ) : (
+            '—'
+          )}
+        </OverviewItem>
+        <OverviewItem label="담당 PM">{project.manager_name ?? '—'}</OverviewItem>
+        <OverviewItem label="유효기간">
+          {project.credit_start_date || project.credit_end_date
+            ? `${fmtDate(project.credit_start_date)} ~ ${fmtDate(project.credit_end_date)}`
+            : '기간 미정'}
+        </OverviewItem>
+        <OverviewItem label="모니터링">
+          {project.mon_start_date || project.mon_end_date
+            ? `${fmtDate(project.mon_start_date)} ~ ${fmtDate(project.mon_end_date)}`
+            : '기간 미정'}
+          {project.mon_cycle ? ` (${project.mon_cycle})` : ''}
+        </OverviewItem>
+        <OverviewItem label="예상 발급일">
+          {project.expected_issue_date ? (
+            <span className="flex items-center gap-1.5">
+              {fmtDate(project.expected_issue_date)}
+              {dd && (
+                <span
+                  className={`text-xs font-bold ${imminent ? 'text-rose-400' : 'text-slatey'}`}
+                >
+                  {dd.label}
+                </span>
+              )}
+            </span>
+          ) : (
+            '미정'
+          )}
+        </OverviewItem>
+        <OverviewItem label="예상 발급량">
+          {project.expected_credits != null ? (
+            <SensitiveData
+              type="text"
+              value={`${Number(project.expected_credits).toLocaleString('ko-KR')} tCO₂`}
+            />
+          ) : (
+            '—'
+          )}
+        </OverviewItem>
+        {project.issued_credits != null && (
+          <OverviewItem label="확정 발급량">
+            <SensitiveData
+              type="text"
+              value={`${Number(project.issued_credits).toLocaleString('ko-KR')} tCO₂`}
+            />
+            {project.issued_at && (
+              <span className="ml-1.5 text-xs text-slatey">({fmtDate(project.issued_at)})</span>
+            )}
+          </OverviewItem>
+        )}
+        <OverviewItem label="최대지급액 (차량당 상한)">
+          <MaxPaymentEditor projectId={project.project_id} unitPrice={project.max_payment} />
+        </OverviewItem>
+        <OverviewItem label="승인일">
+          <ApprovedAtEditor projectId={project.project_id} approvedAt={project.approved_at} />
+        </OverviewItem>
+        <OverviewItem label="승인상태">
+          <ApprovalStatusEditor
+            projectId={project.project_id}
+            approvalStatus={project.approval_status}
+          />
+        </OverviewItem>
+      </div>
+      {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}
+      <p className="mt-4 border-t border-hairline pt-3 text-xs text-slatey">
+        {project.created_at && `등록 ${fmtServerDateTime(project.created_at)}`}
+        {project.updated_at && ` / 수정 ${fmtServerDateTime(project.updated_at)}`}
+      </p>
+    </section>
+  )
+}
+
+type TabKey = 'overview' | 'vehicles' | 'finance'
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'overview', label: '개요·진행' },
+  { key: 'vehicles', label: '참여 차량' },
+  { key: 'finance', label: '재무' },
+]
+
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { showToast } = useToast()
@@ -331,6 +441,7 @@ export function ProjectDetailPage() {
   const deleteProject = useDeleteProject()
   const navigate = useNavigate()
 
+  const [tab, setTab] = useState<TabKey>('overview')
   const [editOpen, setEditOpen] = useState(false)
   const [deleteProjectOpen, setDeleteProjectOpen] = useState(false)
 
@@ -339,9 +450,6 @@ export function ProjectDetailPage() {
     () => clientOptions.find((c) => c.client_id === project?.client_id)?.company_name ?? null,
     [clientOptions, project],
   )
-
-  const dd = dday(project?.expected_issue_date)
-  const imminent = isIssueImminent(dd)
 
   if (isLoading) {
     return (
@@ -409,109 +517,60 @@ export function ProjectDetailPage() {
         }
       />
 
-      {/* 개요 카드 */}
-      <section className="rounded-3xl border border-hairline bg-graphite p-5">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <StatusBadge domain="project" value={project.project_status} />
-          {project.reg_code && (
-            <span className="inline-flex items-center rounded border border-hairline bg-elevate px-1.5 py-0.5 font-mono text-[10px] text-ash">
-              {project.reg_code}
-            </span>
-          )}
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <OverviewItem label="대표 고객사">
-            {project.client_id ? (
-              <Link to={`/clients/${project.client_id}`} className="font-semibold hover:underline">
-                {primaryClientName ?? '고객사 보기'}
-              </Link>
-            ) : (
-              '—'
-            )}
-          </OverviewItem>
-          <OverviewItem label="담당 PM">{project.manager_name ?? '—'}</OverviewItem>
-          <OverviewItem label="유효기간">
-            {project.credit_start_date || project.credit_end_date
-              ? `${fmtDate(project.credit_start_date)} ~ ${fmtDate(project.credit_end_date)}`
-              : '기간 미정'}
-          </OverviewItem>
-          <OverviewItem label="모니터링">
-            {project.mon_start_date || project.mon_end_date
-              ? `${fmtDate(project.mon_start_date)} ~ ${fmtDate(project.mon_end_date)}`
-              : '기간 미정'}
-            {project.mon_cycle ? ` (${project.mon_cycle})` : ''}
-          </OverviewItem>
-          <OverviewItem label="예상 발급일">
-            {project.expected_issue_date ? (
-              <span className="flex items-center gap-1.5">
-                {fmtDate(project.expected_issue_date)}
-                {dd && (
-                  <span
-                    className={`text-xs font-bold ${imminent ? 'text-rose-400' : 'text-slatey'}`}
-                  >
-                    {dd.label}
-                  </span>
-                )}
-              </span>
-            ) : (
-              '미정'
-            )}
-          </OverviewItem>
-          <OverviewItem label="예상 발급량">
-            {project.expected_credits != null ? (
-              <SensitiveData
-                type="text"
-                value={`${Number(project.expected_credits).toLocaleString('ko-KR')} tCO₂`}
-              />
-            ) : (
-              '—'
-            )}
-          </OverviewItem>
-          {project.issued_credits != null && (
-            <OverviewItem label="확정 발급량">
-              <SensitiveData
-                type="text"
-                value={`${Number(project.issued_credits).toLocaleString('ko-KR')} tCO₂`}
-              />
-              {project.issued_at && (
-                <span className="ml-1.5 text-xs text-slatey">({fmtDate(project.issued_at)})</span>
-              )}
-            </OverviewItem>
-          )}
-          <OverviewItem label="최대지급액 (차량당 상한)">
-            <MaxPaymentEditor projectId={project.project_id} unitPrice={project.max_payment} />
-          </OverviewItem>
-          <OverviewItem label="승인일">
-            <ApprovedAtEditor projectId={project.project_id} approvedAt={project.approved_at} />
-          </OverviewItem>
-          <OverviewItem label="승인상태">
-            <ApprovalStatusEditor
-              projectId={project.project_id}
-              approvalStatus={project.approval_status}
-            />
-          </OverviewItem>
-        </div>
-        {/* 공동 관리 가시화 — 등록/수정 일시 (작성자 조인은 백엔드 미제공) */}
-        <p className="mt-4 border-t border-hairline pt-3 text-xs text-slatey">
-          {project.created_at && `등록 ${fmtServerDateTime(project.created_at)}`}
-          {project.updated_at && ` / 수정 ${fmtServerDateTime(project.updated_at)}`}
-        </p>
-      </section>
+      {/* 탭 */}
+      <div className="flex gap-1 overflow-x-auto border-b border-hairline">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`shrink-0 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+              tab === t.key
+                ? 'border-snow text-bone'
+                : 'border-transparent text-slatey hover:text-ash'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {/* 진행 단계 타임라인 (Phase 1) */}
-      <StageTimeline project={project} />
+      {/* 개요·진행 */}
+      {tab === 'overview' && (
+        <>
+          <OverviewSection project={project} primaryClientName={primaryClientName} />
+          {/* 진행 단계 타임라인 (Phase 1) */}
+          <StageTimeline project={project} />
+        </>
+      )}
 
-      {/* 참여 운수사 롤업 (운수사별 집계 + 행 펼침 차량 목록) */}
-      <OperatorsSection projectId={project.project_id} />
+      {/* 참여 차량 */}
+      {tab === 'vehicles' && (
+        <>
+          {/* 참여 운수사 롤업 (운수사별 집계 + 행 펼침 차량 목록) */}
+          <OperatorsSection projectId={project.project_id} />
+          {/* 참여 차량 (Phase 2) */}
+          <VehiclesSection projectId={project.project_id} />
+        </>
+      )}
 
-      {/* 참여 차량 (Phase 2) */}
-      <VehiclesSection projectId={project.project_id} />
-
-      {/* 매입세금계산서 (P·B 회계 원장층 — 총매입=제품 산출) */}
-      <PurchaseInvoicesSection projectId={project.project_id} />
-
-      {/* 거래계약 (매수자별 선물 판매단가) + 회계 요약 */}
-      <SalesSection project={project} />
+      {/* 재무 */}
+      {tab === 'finance' && (
+        <>
+          <div className="flex justify-end">
+            <Link
+              to="/finance-ledger"
+              className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate"
+            >
+              전사 재무 원장 보기
+            </Link>
+          </div>
+          {/* 매입세금계산서 (P·B 회계 원장층 — 총매입=제품 산출) */}
+          <PurchaseInvoicesSection projectId={project.project_id} />
+          {/* 거래계약 (매수자별 선물 판매단가) + 회계 요약 */}
+          <SalesSection project={project} />
+        </>
+      )}
 
       <ProjectFormModal open={editOpen} onClose={() => setEditOpen(false)} project={project} />
       <ConfirmDialog
