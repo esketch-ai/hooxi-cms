@@ -25,6 +25,8 @@ from auth import (
     require_external_role,
 )
 from models import (
+    Buyer,
+    Client,
     Project,
     ProjectParticipationSnapshot,
     ProjectSale,
@@ -32,6 +34,7 @@ from models import (
     User,
     get_db,
 )
+from services.audit_logger import AuditLogger
 from services.portal import build_investor_view, build_partner_view
 
 router = APIRouter(prefix="/portal", tags=["portal"])
@@ -51,6 +54,27 @@ def verify_magic(payload: schemas.MagicVerifyIn, db: Session = Depends(get_db)):
     return schemas.TokenPair(
         access_token=create_access_token(user),
         refresh_token=create_refresh_token(user),
+    )
+
+
+@router.get("/me", response_model=schemas.PortalMe)
+def get_me(user: User = Depends(_external), db: Session = Depends(get_db)):
+    """로그인한 외부 사용자 신원(역할·소속) — /users/me는 외부역할 403이라 포털 전용 제공.
+
+    org_name: PARTNER는 client_id→Client.company_name, INVESTOR는 buyer_id→Buyer.name.
+    매핑 없거나 대상 없으면 None.
+    """
+    org_name = None
+    if user.role == "PARTNER" and user.client_id:
+        c = db.get(Client, user.client_id)
+        if c is not None:
+            org_name = c.company_name
+    elif user.role == "INVESTOR" and user.buyer_id:
+        b = db.get(Buyer, user.buyer_id)
+        if b is not None:
+            org_name = b.name
+    return schemas.PortalMe(
+        user_id=user.user_id, name=user.name, role=user.role, org_name=org_name
     )
 
 
@@ -116,6 +140,8 @@ def get_project(
         )
         if not in_scope:
             raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+        AuditLogger.portal_view(db, user.user_id, project.project_id, user.role)
+        db.commit()
         return build_partner_view(db, project, user.client_id)
 
     # INVESTOR
@@ -129,6 +155,8 @@ def get_project(
     )
     if not in_scope:
         raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+    AuditLogger.portal_view(db, user.user_id, project.project_id, user.role)
+    db.commit()
     return build_investor_view(db, project, user.buyer_id)
 
 

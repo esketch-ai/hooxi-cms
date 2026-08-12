@@ -150,6 +150,15 @@ class MagicVerifyIn(BaseModel):
     token: str = Field(min_length=1)
 
 
+class PortalMe(BaseModel):
+    """로그인한 외부 사용자 신원 — /users/me는 외부역할 403이라 포털 전용으로 제공(INC-7a)."""
+
+    user_id: str
+    name: str
+    role: str
+    org_name: Optional[str] = None
+
+
 class ExternalAccountIn(BaseModel):
     """외부 포털 계정 provision 요청 (INC-6, 부록 N.8 D3).
 

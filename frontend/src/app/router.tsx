@@ -1,7 +1,12 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { CircleNotch } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { AppShell } from '../layouts/AppShell'
+import { PortalAuthProvider } from '../features/portal/PortalAuthProvider'
+import { RequirePortal } from '../features/portal/PortalShell'
+import { PortalLoginPage } from '../features/portal/PortalLoginPage'
+import { PortalProjectsPage } from '../features/portal/PortalProjectsPage'
+import { PortalProjectDetailPage } from '../features/portal/PortalProjectDetailPage'
 import { LoginPage } from '../features/auth/LoginPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { IssuesPage } from '../features/issues/IssuesPage'
@@ -41,8 +46,31 @@ function RequireAuth() {
   return <AppShell />
 }
 
+/** 외부 포털(Phase 4) 서브트리 — 내부 AuthProvider와 분리된 PortalAuthProvider로만 감싼다 */
+function PortalRoot() {
+  return (
+    <PortalAuthProvider>
+      <Outlet />
+    </PortalAuthProvider>
+  )
+}
+
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  // ── Phase 4 외부 포털(PARTNER/INVESTOR) — 내부 AppShell/RequireAuth 밖 완전 별도 트리 ──
+  {
+    element: <PortalRoot />,
+    children: [
+      { path: '/portal/login', element: <PortalLoginPage /> },
+      {
+        element: <RequirePortal />,
+        children: [
+          { path: '/portal', element: <PortalProjectsPage /> },
+          { path: '/portal/projects/:projectId', element: <PortalProjectDetailPage /> },
+        ],
+      },
+    ],
+  },
   {
     element: <RequireAuth />,
     children: [

@@ -232,6 +232,14 @@ class AuditLogger:
             new_value="INACTIVE",
         )
 
+    # ── 외부 포털 열람 (Phase 4 INC-7) ──────────────────────────────
+    @staticmethod
+    def portal_view(db: Session, actor_id: str, project_id: str, role: str) -> AuditLog:
+        """외부 포털 프로젝트 상세 열람 — 누가(외부계정)·어떤 프로젝트를 열람했는지만. 금액/감축량 값 기록 금지(R2-E6)."""
+        return AuditLogger.log_action(
+            db, actor_id, "PORTAL_VIEW", target_type="PROJECT", target_id=project_id, new_value=role
+        )
+
     # ── 백업·복구 (SCR-14) ─────────────────────────────────────────
     @staticmethod
     def backup_create(db: Session, actor_id: str) -> AuditLog:
