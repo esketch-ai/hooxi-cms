@@ -21,6 +21,7 @@ from auth import get_current_user, require_permission
 from services import excel_import
 from models import (
     Asset,
+    Buyer,
     Client,
     ClientVehicle,
     Code,
@@ -145,10 +146,17 @@ def _vehicle_rollup(db: Session, project_id: str):
 
 # ── 거래계약(매수자별 선물 판매) + 내부 차액 수익 파생 ─────────────────────
 _SALE_FIELDS = (
-    "buyer_name", "buyer_type", "sale_unit_price", "quantity",
+    "buyer_name", "buyer_id", "buyer_type", "sale_unit_price", "quantity",
     "ownership_pct", "sale_invoice_amount", "sale_invoice_date", "is_hold",
     "contract_date", "memo",
 )
+
+
+def _resolve_buyer(db: Session, buyer_id: Optional[str]) -> Optional["Buyer"]:
+    """거래계약의 buyer_id 존재 검증 — 값이 있으면 매수자 마스터를 반환(없으면 404)."""
+    if not buyer_id:
+        return None
+    return common.get_or_404(db, Buyer, buyer_id, "매수자")
 
 
 def _sale_out(s: ProjectSale) -> schemas.ProjectSaleOut:
@@ -992,10 +1000,13 @@ def create_project_sale(
     common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.buyer_type:
         validate_active_code(db, "SALE_BUYER_TYPE", payload.buyer_type)
+    buyer = _resolve_buyer(db, payload.buyer_id)  # buyer_id 있으면 존재 검증
     _validate_ownership_total(db, project_id, payload.ownership_pct)  # 소유권비율 합 100% 초과 방지
     sale = ProjectSale(
         project_id=project_id, **{f: getattr(payload, f) for f in _SALE_FIELDS}
     )
+    if buyer is not None:  # 마스터 연결 시 표기명 동기화(표시 일관)
+        sale.buyer_name = buyer.name
     db.add(sale)
     db.flush()  # PK(gen_uuid)는 flush 시점 생성 — 감사 대상 ID 확보
     # 감사 로그 — 매수자·단가는 매출 축(원가단가와 한 레코드 병기 금지, H.6)
@@ -1035,11 +1046,14 @@ def update_project_sale(
     data = payload.model_dump(exclude_unset=True)
     if data.get("buyer_type"):
         validate_active_code(db, "SALE_BUYER_TYPE", data["buyer_type"])
+    buyer = _resolve_buyer(db, data["buyer_id"]) if data.get("buyer_id") else None
     if "ownership_pct" in data:
         _validate_ownership_total(db, project_id, data["ownership_pct"], exclude_sale_id=sale_id)
     for field in _SALE_FIELDS:
         if field in data:
             setattr(sale, field, data[field])
+    if buyer is not None:  # 마스터 연결 시 표기명 동기화(표시 일관)
+        sale.buyer_name = buyer.name
     AuditLogger.log_action(
         db,
         user.user_id,

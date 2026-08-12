@@ -37,6 +37,7 @@ from routers import assets as assets_router
 from routers import audit as audit_router
 from routers import batch as batch_router
 from routers import backups as backups_router
+from routers import buyers as buyers_router
 from routers import chat as chat_router
 from routers import client_vehicles as client_vehicles_router
 from routers import clients as clients_router
@@ -321,6 +322,7 @@ app.include_router(imports_router.router, prefix=API_V1_PREFIX)
 app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
 app.include_router(assets_router.router, prefix=API_V1_PREFIX)
 app.include_router(projects_router.router, prefix=API_V1_PREFIX)
+app.include_router(buyers_router.router, prefix=API_V1_PREFIX)
 app.include_router(segments_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(chat_router.router, prefix=API_V1_PREFIX)

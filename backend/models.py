@@ -303,6 +303,29 @@ class ClientVehicle(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class Buyer(Base):
+    """매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(Phase 4 INC-1, 부록 N.8 D1).
+
+    기존 ProjectSale.buyer_name(free-text)은 전환기 동안 유지하고, 거래계약이 buyer_id로
+    이 마스터를 참조한다(비파괴 additive). buyer_type은 SALE_BUYER_TYPE 공통코드 재사용.
+    """
+
+    __tablename__ = "tb_buyer"
+
+    buyer_id = Column(String(50), primary_key=True, default=gen_uuid)
+    name = Column(String(100), nullable=False)  # 매수자명(증권/투자/금융사)
+    buyer_type = Column(String(20))  # SALE_BUYER_TYPE 공통코드(증권사/투자사/금융사/기타)
+    biz_reg_no = Column(String(20))
+    contact_name = Column(String(50))
+    contact_phone = Column(String(20))
+    contact_email = Column(String(100))
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (UniqueConstraint("name", name="uq_buyer_name"),)
+
+
 class ProjectSale(Base):
     """거래계약(매수자별 선물 판매) — 프로젝트당 매수자 여럿(증권/투자/금융). 판매 단가는
     프로젝트 단일이 아니라 계약 단위로 관리한다(지급 max_payment와 별개 축).
@@ -318,8 +341,12 @@ class ProjectSale(Base):
         ForeignKey("tb_project.project_id", ondelete="CASCADE"),
         nullable=False,
     )
-    buyer_name = Column(String(100), nullable=False)  # 매수자(증권/투자/금융)
+    buyer_name = Column(String(100), nullable=False)  # 매수자(증권/투자/금융) — 전환기 유지
     buyer_type = Column(String(20))  # SALE_BUYER_TYPE 공통코드(증권사/투자사/금융사/기타)
+    # 매수자 마스터 링크(부록 N.8 D1) — nullable(전환기). 마스터 삭제 시 SET NULL로 자동 해제.
+    buyer_id = Column(
+        String(50), ForeignKey("tb_buyer.buyer_id", ondelete="SET NULL")
+    )
     sale_unit_price = Column(Numeric(15, 2))  # 선물 판매 톤당 단가(정보성 유지)
     quantity = Column(Numeric(14, 3))  # 판매 수량(tCO2, 정보성 유지)
     # 회계 원장층(부록 L.3) — 매출인식 기준: 실발행액 × 지급률
@@ -750,6 +777,8 @@ def ensure_schema():
         ("tb_project_sale", "sale_invoice_amount", "NUMERIC(15,2)"),
         ("tb_project_sale", "sale_invoice_date", "DATE"),
         ("tb_project_sale", "is_hold", "VARCHAR(1)"),
+        # 매수자 마스터 링크(부록 N.8 D1) — 비파괴 additive(전환기)
+        ("tb_project_sale", "buyer_id", "VARCHAR(50)"),
     ]
     try:
         insp = _inspect(engine)
@@ -784,6 +813,8 @@ def ensure_schema():
         ("uq_project_stage_slot", "tb_project_stage", ["project_id", "stage_code"]),
         # 운수사 보유 차량 마스터 — 식별키 차대번호 유일(부록 M, nullable 다중 null 허용)
         ("uq_client_vehicle_chassis", "tb_client_vehicle", ["chassis_no"]),
+        # 매수자 마스터 — 매수자명 유일(부록 N.8 D1). 배포형 DB 보강(신규는 __table_args__)
+        ("uq_buyer_name", "tb_buyer", ["name"]),
     ]
     try:
         insp = _inspect(engine)

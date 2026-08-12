@@ -577,3 +577,67 @@ H.6 원가/매출 분리를 아래 단위로 확정·구현했다(운수사·투
 3. 고객사별 fleet+참여상태 조회 엔드포인트(참여/미참여 필터).
 4. 고객사 상세 "보유 차량" 탭 UI.
 - 검증: 참여/미참여 분류 정확성·vehicle_no 매칭·마이그레이션 멱등·유니크 충돌.
+
+---
+
+# 부록 N — Phase 4 외부 이해관계자 포털 설계 (2026-08-12, 구현 전 설계)
+
+운수사 담당자·임원 / 투자·금융사에게 카카오 온보딩 → 소속 매핑·승인 → 역할별 정보 뷰를 제공하는 구조. 부록 H(외부 역할)·H.6(프리미엄 기밀)의 구체화. planner 2축 종합.
+
+## N.1 진단 (4 균열)
+1. **외부 신원 병목**: 운수사=Client(TRANSPORT)로 커버되나, **투자/금융사는 엔티티 부재** — `ProjectSale.buyer_name` free-text(models.py:321). INVESTOR 스코프 도출할 FK 없음.
+2. **인증 부재**: auth.py 도메인 잠금(@hooxipartners.com, 253/307) + 역할 정규식 하드블록(schemas.py:106/110/119)이 외부인·외부역할을 원천 차단. 외부 로그인 경로 없음.
+3. **기밀 경계 뭉침**: `_project_detail`가 원가·매출·마진을 한 응답에 담음(내부 전용). `/operators`도 감축량+예상지급액 혼합.
+4. **변동 이력 부재**: 파생값 제자리 덮어쓰기(`_recalc_vehicle_payouts`) → 과거값 미보존. 변동 타임라인 불가.
+
+## N.2 격리 원칙 (핵심)
+- 외부역할 PARTNER/INVESTOR를 **`ROLE_LEVEL`/`PERMISSION_MATRIX`에 넣지 않으면** 내부 라우터가 자동 403(auth.py require_role/permission) — 코드 변경 없이 격리 성립.
+- **마스킹 ≠ 접근제어**: 외부 응답은 전용 `/portal/*` 엔드포인트 + 전용 스키마(`PartnerPortalView`/`InvestorPortalView`)로 **금지 필드를 아예 선언하지 않음**(서버 원천 미포함). 내부 `ProjectDetailOut`·`compute_accounting` 재사용 금지.
+
+## N.3 비대칭 정보 뷰 매트릭스 (✅노출 / ❌원천 미포함)
+| 필드 | PARTNER(운수사) | INVESTOR(투자·금융) |
+|---|---|---|
+| 사업명·진행상태·진행단계(지연) | ✅ | ✅ |
+| 본인 감축량(effective_reduction) | ✅ 자기분 | — |
+| 참여 운수사별 감축량(집계) | ❌ | ✅ |
+| 예상지급액(수혜 금액, 원가) | ✅ 자기분 | ❌ |
+| 총 계약매출(단가×수량/실발행액) | ❌ | ✅ |
+| 판매단가·실발행액 | ❌ | ✅ 본인 계약 |
+| **지급률·매출인식·매출이익·이익률·제품** | ❌ | ❌ (원가율 역산) |
+| 미착품·부채·재고자산·마진 | ❌ | ❌ (내부 전용) |
+- **핵심 규칙**: PARTNER=감축량+원가(자기분), INVESTOR=감축량+총매출. 어느 응답도 원가·매출 동시 미포함(H.6).
+- **역산 차단(중요)**: 투자사는 자기 실발행액을 알기에 `sale_recognized/payout_rate` 노출 시 원가율 역산 → **절대 금지**. 매출은 gross(계약매출)만.
+
+## N.4 온보딩·인증
+- 플로우: 카카오 채널 가입 → 소속 매핑 신청 → 내부 승인(MANAGER, KakaoContact 상태머신 재사용) → 외부 계정 provision → 스코프 부여 → 포털 접근.
+- 기존 `KakaoContact`(kakao_user_key→client_id, PENDING/APPROVED/REJECTED/BLOCKED)는 운수사 전용 → 투자사 온보딩은 별도 신청 경로 필요.
+
+## N.5 변동 이력 (append-only 신설)
+- `tb_project_participation_snapshot`(운수사 축: effective_reduction_sum·expected_payout_sum·captured_at·trigger), `tb_project_sale_snapshot`(투자 축: quantity·reduction_attributed·gross_revenue). 트리거 시 직전과 동일하면 dedup(SettlementSnapshot 준용). PARTNER 금액변동·INVESTOR 감축량변동 = 스냅샷 시계열.
+
+## N.6 증분 로드맵 (회계층 안정 후 착수, K.2 D4)
+1. 외부역할 상수·격리 유틸 + 역할 정규식 처리(외부 부여는 별도 엔드포인트). 
+2. append-only 스냅샷 2종 + 기록 훅(제자리 계산 불변).
+3. 포털 전용 스키마 2종(금지 필드 미선언).
+4. `/portal/partner/*`·`/portal/investor/*` + 외부 인증(스코프 밖 403/404).
+5. 변동 타임라인 엔드포인트(스냅샷 투영).
+6. 링크 발급 + 알림톡/이메일 연동.
+7. 프론트 포털 페이지 + 역할 가드.
+- 각 증분 pytest(격리·필드 부재·스코프·dedup)·빌드 게이트.
+
+## N.7 결정 필요 (확정 후 착수)
+- **D1 투자사 신원**: (a) `tb_buyer` 마스터 승격(buyer_name→FK, 스코프 자동파생·정규화 마이그레이션) / (b) `tb_investor_access` 수동 부여(§3.4, 단순·운영부담) / (c) 무계정 capability 토큰 링크(최소·가입/승인 개념 약함). 사용자 요구("가입·매핑·승인")엔 (a)/(b) 정합.
+- **D2 외부 인증**: 카카오 OAuth(user_key 동일성 미확인) / 매직링크+자체 JWT(도메인잠금 무충돌·권고) / 이메일+PIN(내부경로 오염 주의).
+- **D3 외부 계정 위치**: tb_user 확장(플러밍 재사용·오염 위험) vs tb_external_account(격리·이중화).
+- **D4 전달 채널**: 웹 포털(로그인·게이팅 강제·권고) vs 알림톡 인라인(민감값 메시지 노출 위험).
+- **D5 변동 스냅샷 트리거·그레인**: 이벤트 기반(진짜 타임라인) vs 월주기(단순). 운수사 집계 vs 차량 단위.
+- **D6 단가 게이트 연동**: max_payment 미입력 시 payout None → 포털 "산정 중" 표기. 매출도 실발행액 미입력 시 gross/None.
+
+## N.8 확정 결정 (2026-08-12)
+- **D1 투자사 신원 = 매수자 마스터 `tb_buyer` 승격**. `ProjectSale.buyer_name` free-text → `buyer_id` FK. 스코프 자동 파생(투자사→거래 프로젝트). 기존 free-text 정규화 마이그레이션 동반. `User.buyer_id`로 INVESTOR 계정 연결.
+- **D2 외부 인증 = 매직링크 provision + 자체 JWT**. 도메인 잠금(auth.py)과 분리된 외부 경로. 내부 STAFF JIT 무오염.
+- **D3 외부 계정 위치 = `tb_user` 확장**(role PARTNER/INVESTOR + client_id/buyer_id nullable). 인증 플러밍 재사용. 외부역할 부여는 내부 users 관리와 **분리된 엔드포인트**로(STAFF 오부여 방지, 역할 정규식 분리).
+- **D4 전달 채널 = 웹 포털**(로그인·서버 게이팅 강제). 링크·알림은 기존 알림톡/이메일 재사용.
+- **D5 변동 스냅샷 = 이벤트 기반 · 운수사 집계 그레인**.
+- **D6 단가 게이트 = "산정 중" 표기**. max_payment·실발행액 미입력 시 payout/gross None → 포털 "산정 중".
+- 착수 전제: 회계층(Phase 2·3) 안정 — **충족**(P·B 완료). 로드맵 N.6 순서로 진행.

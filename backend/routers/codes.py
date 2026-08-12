@@ -21,6 +21,7 @@ from auth import get_current_user, require_role
 from models import (
     ActivityHistory,
     Asset,
+    Buyer,
     Client,
     ClientVehicle,
     Code,
@@ -56,13 +57,14 @@ CATEGORY_LABELS = {
 }
 
 # 코드 사용처 매핑 — 삭제 가능 판단(참조 카운트)용.
-# category -> (참조 모델, 코드값을 담는 컬럼명)
+# category -> (참조 모델, 코드값 컬럼명) 또는 여러 참조처의 리스트[(모델, 컬럼), ...]
 USAGE_REFS = {
     "CLIENT_TYPE": (Client, "client_type"),
     "CONTRACT_STATUS": (Client, "contract_status"),
     "REGION": (Client, "region"),
     "VEHICLE_INTRO": (ProjectVehicle, "introduction_type"),
-    "SALE_BUYER_TYPE": (ProjectSale, "buyer_type"),
+    # 거래계약(전환기 free-text)과 매수자 마스터가 함께 참조 — 둘 다 사용처 카운트에 포함
+    "SALE_BUYER_TYPE": [(ProjectSale, "buyer_type"), (Buyer, "buyer_type")],
     "VEHICLE_STATUS": (ClientVehicle, "status"),
     "ACTIVITY_TYPE": (ActivityHistory, "activity_type"),
     "ASSET_GROUP": (Asset, "asset_group"),
@@ -102,12 +104,19 @@ def _is_locked(category: str, code: str) -> bool:
 
 
 def _usage_count(db: Session, category: str, code: str) -> int:
-    """해당 코드값을 사용 중인 레코드 수 (삭제 가능 판단)."""
+    """해당 코드값을 사용 중인 레코드 수 (삭제 가능 판단).
+
+    USAGE_REFS 값은 단일 (모델, 컬럼) 또는 여러 참조처 리스트일 수 있다(예: SALE_BUYER_TYPE는
+    거래계약·매수자 마스터가 함께 참조). 리스트면 각 참조처 카운트를 합산한다.
+    """
     ref = USAGE_REFS.get(category)
     if ref is None:
         return 0
-    model, column = ref
-    return db.query(model).filter(getattr(model, column) == code).count()
+    refs = ref if isinstance(ref, list) else [ref]
+    return sum(
+        db.query(model).filter(getattr(model, column) == code).count()
+        for model, column in refs
+    )
 
 
 def _validate_color(color: Optional[str]) -> None:

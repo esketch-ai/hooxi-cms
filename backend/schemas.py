@@ -745,10 +745,56 @@ class ProjectOperatorListResponse(BaseModel):
 
 
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
+# 매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(부록 N.8 D1) --------------
+class BuyerIn(BaseModel):
+    """매수자 등록 — buyer_type은 SALE_BUYER_TYPE 공통코드(라우터 검증)."""
+
+    name: str = Field(min_length=1, max_length=100)  # 매수자명(증권/투자/금융사)
+    buyer_type: Optional[str] = Field(default=None, max_length=20)  # SALE_BUYER_TYPE
+    biz_reg_no: Optional[str] = Field(default=None, max_length=20)
+    contact_name: Optional[str] = Field(default=None, max_length=50)
+    contact_phone: Optional[str] = Field(default=None, max_length=20)
+    contact_email: Optional[str] = Field(default=None, max_length=100)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class BuyerUpdate(BaseModel):
+    """매수자 부분 수정 — 전달된 필드만 반영(전 필드 optional)."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    buyer_type: Optional[str] = Field(default=None, max_length=20)
+    biz_reg_no: Optional[str] = Field(default=None, max_length=20)
+    contact_name: Optional[str] = Field(default=None, max_length=50)
+    contact_phone: Optional[str] = Field(default=None, max_length=20)
+    contact_email: Optional[str] = Field(default=None, max_length=100)
+    memo: Optional[str] = Field(default=None, max_length=255)
+
+
+class BuyerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    buyer_id: str
+    name: str
+    buyer_type: Optional[str] = None
+    biz_reg_no: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class BuyerListResponse(BaseModel):
+    items: List[BuyerOut]
+    total: int
+
+
 class ProjectSaleIn(BaseModel):
     """거래계약 등록/수정 — buyer_type은 SALE_BUYER_TYPE 공통코드(라우터 검증)."""
 
-    buyer_name: str = Field(min_length=1, max_length=100)  # 매수자(증권/투자/금융)
+    buyer_name: str = Field(min_length=1, max_length=100)  # 매수자(증권/투자/금융, 전환기 유지)
+    buyer_id: Optional[str] = Field(default=None, max_length=50)  # 매수자 마스터 링크(부록 N.8 D1)
     buyer_type: Optional[str] = Field(default=None, max_length=20)  # SALE_BUYER_TYPE
     sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 선물 판매 단가(정보성)
     quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)  # 판매 수량(tCO2, 정보성)
@@ -765,6 +811,7 @@ class ProjectSaleUpdate(BaseModel):
     """거래계약 부분 수정 — 전달된 필드만 반영(buyer_name 포함 전 필드 optional)."""
 
     buyer_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    buyer_id: Optional[str] = Field(default=None, max_length=50)  # 매수자 마스터 링크
     buyer_type: Optional[str] = Field(default=None, max_length=20)
     sale_unit_price: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     quantity: Optional[float] = Field(default=None, ge=0, le=_CREDITS_MAX)
@@ -782,6 +829,7 @@ class ProjectSaleOut(BaseModel):
     sale_id: str
     project_id: str
     buyer_name: str
+    buyer_id: Optional[str] = None  # 매수자 마스터 링크(부록 N.8 D1)
     buyer_type: Optional[str] = None
     sale_unit_price: Optional[float] = None  # 🔒
     quantity: Optional[float] = None
