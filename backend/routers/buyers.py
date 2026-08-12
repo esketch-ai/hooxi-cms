@@ -144,8 +144,27 @@ def delete_buyer(
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
-    """매수자 삭제 — 거래계약의 buyer_id는 FK ondelete=SET NULL로 자동 해제(계약 보존)."""
+    """매수자 삭제 — 거래계약의 buyer_id는 FK ondelete=SET NULL로 자동 해제(계약 보존).
+
+    단, 활성 INVESTOR 외부 포털 계정이 연결된 경우 삭제 차단(409): SET NULL로 계정의
+    열람 스코프가 조용히 끊기는 사고 방지(먼저 계정 비활성화를 요구). 계약(ProjectSale)은
+    buyer_name이 남으므로 SET NULL 허용, 포털 계정만 보호한다.
+    """
     buyer = common.get_or_404(db, Buyer, buyer_id, "매수자")
+    linked_account = (
+        db.query(User.user_id)
+        .filter(
+            User.buyer_id == buyer_id,
+            User.role == "INVESTOR",
+            User.status != "INACTIVE",
+        )
+        .first()
+    )
+    if linked_account:
+        raise HTTPException(
+            status_code=409,
+            detail="이 매수자에 연결된 외부 포털 계정(투자·금융사)이 있어 삭제할 수 없습니다. 먼저 해당 계정을 비활성화하세요.",
+        )
     db.delete(buyer)
     AuditLogger.log_action(
         db,

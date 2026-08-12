@@ -13,6 +13,8 @@ import { IssuesPage } from '../features/issues/IssuesPage'
 import { CalendarPage } from '../features/calendar/CalendarPage'
 import { ClientsPage } from '../features/clients/ClientsPage'
 import { ClientDetailPage } from '../features/clients/ClientDetailPage'
+import { BuyersPage } from '../features/buyers/BuyersPage'
+import { PortalAccountsPage } from '../features/portal-admin/PortalAccountsPage'
 import { HistoriesPage } from '../features/histories/HistoriesPage'
 import { ReportsPage } from '../features/reports/ReportsPage'
 import { SegmentsPage } from '../features/segments/SegmentsPage'
@@ -81,6 +83,8 @@ export const router = createBrowserRouter([
       { path: '/calendar', element: <CalendarPage /> }, // SCR-11
       { path: '/clients', element: <ClientsPage /> }, // SCR-03
       { path: '/clients/:clientId', element: <ClientDetailPage /> }, // SCR-03D
+      { path: '/buyers', element: <BuyersPage /> }, // INC-8a 매수자 마스터
+      { path: '/portal-accounts', element: <PortalAccountsPage /> }, // INC-8b 외부 포털 계정
       { path: '/histories', element: <HistoriesPage /> }, // SCR-05
       { path: '/reports', element: <ReportsPage /> }, // SCR-12
       { path: '/reports/segments', element: <SegmentsPage /> }, // SCR-12 확장 — 세그먼트 발송

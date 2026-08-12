@@ -512,6 +512,7 @@ export interface Project {
 
 // tb_project_sale — 매수자별 선물 판매단가 거래계약 (내부 차액 수익 산출)
 export interface ProjectSalePayload {
+  buyer_id?: string | null // 매수자 마스터 FK — INVESTOR 스코프 연결
   buyer_name: string
   buyer_type?: string | null // SALE_BUYER_TYPE: 증권사/투자사/금융사/기타
   sale_unit_price?: number | null // 선물 단가 (원/tCO₂)

@@ -1,6 +1,7 @@
 // LNB 메뉴 트리 — SCREEN_DESIGN_PLAN §2.1 확정안 그대로
 import type { Icon } from '@phosphor-icons/react'
 import {
+  Bank,
   BookOpenText,
   Buildings,
   CalendarDots,
@@ -8,6 +9,7 @@ import {
   ClockCounterClockwise,
   FolderOpen, // v2에서 ph-folder-notch-open → FolderOpen으로 통합
   Gear,
+  IdentificationCard,
   Kanban,
   LockKey,
   PaperPlaneTilt,
@@ -50,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'MASTER DATA',
     items: [
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
+      { label: '매수자 마스터', path: '/buyers', icon: Bank, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '자산 및 연동 현황', path: '/assets', icon: Truck },
       { label: '수집 계정 관리', path: '/accounts', icon: LockKey },
     ],
@@ -75,6 +78,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'SYSTEM',
     items: [
+      {
+        label: '외부 포털 계정',
+        path: '/portal-accounts',
+        icon: IdentificationCard,
+        roles: ['ADMIN', 'MANAGER'],
+      },
       { label: '환경 설정', path: '/settings', icon: Gear, roles: ['ADMIN', 'MANAGER'] },
       { label: '사용자 가이드', path: '/guide', icon: BookOpenText },
     ],

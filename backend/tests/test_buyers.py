@@ -99,3 +99,37 @@ def test_delete_buyer_preserves_sale(client, staff_headers):
     assert client.delete(f"{BUYERS}/{b['buyer_id']}", headers=staff_headers).status_code == 200
     # 거래계약은 그대로 남는다(계약 보존)
     assert client.get(f"{PROJECTS}/{pid}/sales", headers=staff_headers).json()["total"] == 1
+
+
+def test_delete_buyer_blocked_by_active_investor_account(client, staff_headers):
+    """활성 INVESTOR 외부 포털 계정이 연결된 매수자는 삭제 차단(409) — 스코프 조용한 단절 방지.
+
+    비활성(INACTIVE) 계정은 차단 대상이 아니어야 한다(삭제 허용).
+    """
+    import models
+
+    b = client.post(BUYERS, headers=staff_headers, json={"name": "포털연결증권"}).json()
+    bid = b["buyer_id"]
+
+    # 활성 INVESTOR 계정 연결 → 삭제 409
+    db = models.SessionLocal()
+    try:
+        db.add(models.User(
+            user_id="inv-del-guard", email="inv-del@buyer.example", name="투자사",
+            role="INVESTOR", status="ACTIVE", buyer_id=bid,
+        ))
+        db.commit()
+    finally:
+        db.close()
+    r = client.delete(f"{BUYERS}/{bid}", headers=staff_headers)
+    assert r.status_code == 409, r.text
+
+    # 계정 비활성화 후에는 삭제 허용(200)
+    db = models.SessionLocal()
+    try:
+        u = db.get(models.User, "inv-del-guard")
+        u.status = "INACTIVE"
+        db.commit()
+    finally:
+        db.close()
+    assert client.delete(f"{BUYERS}/{bid}", headers=staff_headers).status_code == 200

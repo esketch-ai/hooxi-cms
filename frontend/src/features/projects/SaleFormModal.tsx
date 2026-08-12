@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { useCodes } from '../../lib/api/queries'
 import type { ProjectSale, ProjectSalePayload } from '../../types'
+import { useBuyerOptions } from '../buyers/api'
 import { useSaveSale } from './api'
 
 const inputCls =
@@ -33,6 +34,7 @@ interface Props {
 export function SaleFormModal({ open, onClose, projectId, sale }: Props) {
   const { showToast } = useToast()
   const { options: buyerTypeOptions } = useCodes('SALE_BUYER_TYPE')
+  const { data: buyers = [] } = useBuyerOptions()
   const save = useSaveSale(projectId, sale?.sale_id)
 
   const [form, setForm] = useState<ProjectSalePayload>({ buyer_name: '' })
@@ -59,7 +61,31 @@ export function SaleFormModal({ open, onClose, projectId, sale }: Props) {
     <Modal open={open} onClose={onClose} title={sale ? '거래계약 수정' : '거래계약 추가'} size="lg">
       <form onSubmit={submit} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="매수자">
+          <Field label="매수자 (마스터)">
+            <select
+              value={form.buyer_id ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                setForm((prev) => ({
+                  ...prev,
+                  buyer_id: v || null,
+                  // 마스터 선택 시 표시·백엔드 유지용 buyer_name 동기화
+                  buyer_name: v
+                    ? (buyers.find((b) => b.buyer_id === v)?.name ?? prev.buyer_name)
+                    : prev.buyer_name,
+                }))
+              }}
+              className={inputCls}
+            >
+              <option value="">선택 안 함</option>
+              {buyers.map((b) => (
+                <option key={b.buyer_id} value={b.buyer_id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="매수자명(표시)">
             <input
               value={form.buyer_name ?? ''}
               onChange={(e) => set('buyer_name', e.target.value)}
