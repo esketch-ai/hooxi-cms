@@ -849,6 +849,34 @@ class ProjectSaleListResponse(BaseModel):
     total_sale_amount: Optional[float] = None  # Σ(단가×수량, 둘 다 입력된 계약만) — 없으면 None
 
 
+# 변동 이력 스냅샷(append-only, Phase 4 INC-3 / 부록 N.8 D5) — Out만(타임라인 조회는 INC-6)
+class ParticipationSnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    snapshot_id: str
+    project_id: str
+    client_id: Optional[str] = None  # 운수사(미지정 허용)
+    captured_at: Optional[datetime] = None
+    effective_reduction_sum: Optional[float] = None  # Σ 잔여반영감축량
+    expected_payout_sum: Optional[float] = None  # Σ 예상지급액
+    trigger: Optional[str] = None  # 변동 유발
+    created_at: Optional[datetime] = None
+
+
+class SaleSnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    snapshot_id: str
+    project_id: str
+    sale_id: Optional[str] = None
+    buyer_id: Optional[str] = None
+    captured_at: Optional[datetime] = None
+    quantity: Optional[float] = None  # 판매 수량(tCO2)
+    gross_revenue: Optional[float] = None  # 총매출(실발행액 우선)
+    trigger: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 # 매입세금계산서(운수사 실지급=제품) — 회계 원장층(부록 L.3) 제품 원천 ------------
 class PurchaseInvoiceIn(BlankFKToNoneModel):
     """매입세금계산서 등록 — 금액 필수(ge=0). operator_name은 엑셀 import용 운수사 표기."""

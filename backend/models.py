@@ -752,6 +752,54 @@ class SegmentSendLog(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class ProjectParticipationSnapshot(Base):
+    """운수사 참여 집계 변동 이력(append-only) — Phase 4 INC-3, 부록 N.8 D5.
+
+    파생값(effective_reduction·expected_payout)은 제자리 계산을 유지(불변)하고,
+    변동 시점에만 (project, client) 그레인으로 스냅샷을 append한다. 직전 스냅샷과
+    값이 동일하면 기록하지 않는다(dedup). client_id는 미지정(미매칭) 운수사를 허용.
+    """
+
+    __tablename__ = "tb_project_participation_snapshot"
+
+    snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    client_id = Column(String(50), nullable=True)  # 운수사(미지정 허용) — FK 미설정
+    captured_at = Column(DateTime, default=utcnow)  # 변동 포착 시점
+    effective_reduction_sum = Column(Numeric(14, 3))  # Σ 잔여반영감축량
+    expected_payout_sum = Column(Numeric(15, 2))  # Σ 예상지급액
+    trigger = Column(String(30))  # 변동 유발(payout_params/vehicle_cud 등)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class ProjectSaleSnapshot(Base):
+    """거래계약(매출) 변동 이력(append-only) — Phase 4 INC-3, 부록 N.8 D5.
+
+    ProjectSale 각 계약을 (project, sale) 그레인으로 변동 시점에만 append한다.
+    gross_revenue는 실발행액 우선, 없으면 단가×수량, 둘 다 없으면 None. dedup 동일.
+    """
+
+    __tablename__ = "tb_project_sale_snapshot"
+
+    snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
+    project_id = Column(
+        String(50),
+        ForeignKey("tb_project.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sale_id = Column(String(50), nullable=True)  # 거래계약(삭제 대비 FK 미설정)
+    buyer_id = Column(String(50), nullable=True)  # 매수자(정보성)
+    captured_at = Column(DateTime, default=utcnow)  # 변동 포착 시점
+    quantity = Column(Numeric(14, 3))  # 판매 수량(tCO2)
+    gross_revenue = Column(Numeric(15, 2))  # 총매출(실발행액 우선)
+    trigger = Column(String(30))  # 변동 유발(sale_cud 등)
+    created_at = Column(DateTime, default=utcnow)
+
+
 def ensure_schema():
     """create_all은 '없는 테이블'만 만들고 '기존 테이블의 신규 컬럼'은 추가하지 않는다.
     Alembic 미도입 상태에서 배포된 테이블에 누락된 컬럼을 idempotent하게 보강한다.
@@ -877,6 +925,9 @@ def ensure_schema():
         # 6) 원장/정산 축 — client_id 선행 group·project_id 필터 (DBA P1)
         ("ix_sale_project", "tb_project_sale", ["project_id"]),
         ("ix_pinv_project", "tb_purchase_invoice", ["project_id"]),
+        # 7) 변동 이력 스냅샷(append-only, INC-3) — 타임라인 조회 대비(project·client 그레인)
+        ("ix_ppsnap_project_client", "tb_project_participation_snapshot", ["project_id", "client_id"]),
+        ("ix_pssnap_project", "tb_project_sale_snapshot", ["project_id"]),
     ]
     try:
         insp = _inspect(engine)

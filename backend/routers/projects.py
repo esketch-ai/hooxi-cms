@@ -26,7 +26,9 @@ from models import (
     ClientVehicle,
     Code,
     Project,
+    ProjectParticipationSnapshot,
     ProjectSale,
+    ProjectSaleSnapshot,
     ProjectStage,
     ProjectVehicle,
     PurchaseInvoice,
@@ -316,6 +318,109 @@ def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
     )
     for v in vehicles:
         _derive_vehicle(project, v)
+
+
+# ── 변동 이력 스냅샷(append-only, Phase 4 INC-3 / 부록 N.8 D5) ───────────────
+# 파생값은 제자리 계산을 유지(불변)하고, 변동 시점에만 스냅샷을 append한다. 직전
+# 스냅샷과 값이 같으면 기록하지 않는다(dedup). 스냅샷 add 전에는 aggregate 조회가
+# 최신값을 보도록 반드시 db.flush()를 먼저 호출한다(autoflush=False).
+_SNAP_EPS = 1e-6
+
+
+def _num_eq(a, b) -> bool:
+    """스냅샷 dedup 비교 — Numeric→float 변환 후 소수 오차 허용(1e-6). None은 정확 일치."""
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(float(a) - float(b)) <= _SNAP_EPS
+
+
+def _snapshot_participation(db: Session, project: Project, trigger: str) -> None:
+    """운수사(client_id) 그레인 참여 집계 스냅샷 — Σ 잔여반영감축량·Σ 예상지급액.
+
+    미지정(client_id None) 운수사도 한 그룹으로 포착한다. 직전 (project, client)
+    스냅샷과 값이 같으면 skip(dedup), 다르면 append.
+    """
+    rows = (
+        db.query(
+            ProjectVehicle.client_id,
+            func.sum(func.coalesce(ProjectVehicle.effective_reduction, 0)),
+            func.sum(ProjectVehicle.expected_payout),
+        )
+        .filter(ProjectVehicle.project_id == project.project_id)
+        .group_by(ProjectVehicle.client_id)
+        .all()
+    )
+    for client_id, eff_sum, pay_sum in rows:
+        eff = float(eff_sum) if eff_sum is not None else 0.0
+        pay = float(pay_sum) if pay_sum is not None else None
+        q = db.query(ProjectParticipationSnapshot).filter(
+            ProjectParticipationSnapshot.project_id == project.project_id
+        )
+        if client_id is None:
+            q = q.filter(ProjectParticipationSnapshot.client_id.is_(None))
+        else:
+            q = q.filter(ProjectParticipationSnapshot.client_id == client_id)
+        prev = q.order_by(ProjectParticipationSnapshot.captured_at.desc()).first()
+        if (
+            prev is not None
+            and _num_eq(prev.effective_reduction_sum, eff)
+            and _num_eq(prev.expected_payout_sum, pay)
+        ):
+            continue  # 값 무변 — dedup
+        db.add(
+            ProjectParticipationSnapshot(
+                project_id=project.project_id,
+                client_id=client_id,
+                effective_reduction_sum=eff,
+                expected_payout_sum=pay,
+                trigger=trigger,
+            )
+        )
+
+
+def _snapshot_sales(db: Session, project: Project, trigger: str) -> None:
+    """거래계약(sale) 그레인 매출 스냅샷 — 수량·총매출(실발행액 우선, 없으면 단가×수량).
+
+    직전 (project, sale) 스냅샷과 값이 같으면 skip(dedup), 다르면 append.
+    """
+    sales = (
+        db.query(ProjectSale)
+        .filter(ProjectSale.project_id == project.project_id)
+        .all()
+    )
+    for s in sales:
+        qty = float(s.quantity) if s.quantity is not None else None
+        if s.sale_invoice_amount is not None:
+            gross = float(s.sale_invoice_amount)
+        elif s.sale_unit_price is not None and s.quantity is not None:
+            gross = float(s.sale_unit_price) * float(s.quantity)
+        else:
+            gross = None
+        prev = (
+            db.query(ProjectSaleSnapshot)
+            .filter(
+                ProjectSaleSnapshot.project_id == project.project_id,
+                ProjectSaleSnapshot.sale_id == s.sale_id,
+            )
+            .order_by(ProjectSaleSnapshot.captured_at.desc())
+            .first()
+        )
+        if (
+            prev is not None
+            and _num_eq(prev.quantity, qty)
+            and _num_eq(prev.gross_revenue, gross)
+        ):
+            continue  # 값 무변 — dedup
+        db.add(
+            ProjectSaleSnapshot(
+                project_id=project.project_id,
+                sale_id=s.sale_id,
+                buyer_id=s.buyer_id,
+                quantity=qty,
+                gross_revenue=gross,
+                trigger=trigger,
+            )
+        )
 
 
 def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
@@ -807,6 +912,8 @@ def create_project_vehicle(
     _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
     _link_client_vehicle(db, vehicle)  # fleet 마스터 링크(참여 구분, 부록 M)
     db.add(vehicle)
+    db.flush()  # 파생값 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_participation(db, project, "vehicle_cud")  # 참여 집계 변동 이력(INC-3)
     db.commit()
     db.refresh(vehicle)
     return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
@@ -849,6 +956,8 @@ def update_project_vehicle(
     _derive_vehicle(project, vehicle)  # 파생값 일괄 재계산(부록 L)
     if "vehicle_no" in data:  # 차량번호 변경 시 fleet 마스터 링크 재설정(부록 M)
         _link_client_vehicle(db, vehicle)
+    db.flush()  # 파생값 재계산 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_participation(db, project, "vehicle_cud")  # 참여 집계 변동 이력(INC-3)
     db.commit()
     db.refresh(vehicle)
     return _vehicle_out(vehicle, _client_names(db, [vehicle.client_id]))
@@ -873,7 +982,10 @@ def delete_project_vehicle(
     )
     if vehicle is None:
         raise HTTPException(status_code=404, detail="차량을 찾을 수 없습니다")
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
     db.delete(vehicle)
+    db.flush()  # 삭제 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_participation(db, project, "vehicle_cud")  # 참여 집계 변동 이력(INC-3)
     db.commit()
     return schemas.MessageResponse(message="차량이 삭제되었습니다")
 
@@ -955,6 +1067,8 @@ async def commit_vehicle_import(
         ),
     )
     try:
+        db.flush()  # 삽입 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+        _snapshot_participation(db, project, "vehicle_cud")  # 참여 집계 변동 이력(INC-3)
         db.commit()
     except IntegrityError:
         db.rollback()  # 검증~반영 사이 참조(운수사 등) 삭제 경합 — 배치 무산, 재시도 안내
@@ -997,7 +1111,7 @@ def create_project_sale(
     db: Session = Depends(get_db),
 ):
     """거래계약 등록 — buyer_type은 SALE_BUYER_TYPE 공통코드 검증."""
-    common.get_or_404(db, Project, project_id, "감축 사업")
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
     if payload.buyer_type:
         validate_active_code(db, "SALE_BUYER_TYPE", payload.buyer_type)
     buyer = _resolve_buyer(db, payload.buyer_id)  # buyer_id 있으면 존재 검증
@@ -1017,6 +1131,8 @@ def create_project_sale(
         target_type="PROJECT_SALE",
         target_id=sale.sale_id,
     )
+    db.flush()  # 신규 계약 반영 후 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_sales(db, project, "sale_cud")  # 거래계약 매출 변동 이력(INC-3)
     db.commit()
     db.refresh(sale)
     return _sale_out(sale)
@@ -1061,6 +1177,9 @@ def update_project_sale(
         target_type="PROJECT_SALE",
         target_id=sale.sale_id,
     )
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    db.flush()  # 수정 반영 후 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_sales(db, project, "sale_cud")  # 거래계약 매출 변동 이력(INC-3)
     db.commit()
     db.refresh(sale)
     return _sale_out(sale)
@@ -1094,6 +1213,9 @@ def delete_project_sale(
         target_type="PROJECT_SALE",
         target_id=sale_id,
     )
+    project = common.get_or_404(db, Project, project_id, "감축 사업")
+    db.flush()  # 삭제 반영 후 조회가 삭제분을 제외하도록 flush(스냅샷 전제)
+    _snapshot_sales(db, project, "sale_cud")  # 거래계약 매출 변동 이력(INC-3)
     db.commit()
     return schemas.MessageResponse(message="거래계약이 삭제되었습니다")
 
@@ -1397,6 +1519,8 @@ def update_payout_params(
     elif project.approved_at is None:
         project.approved_at = date.today()  # 지급 파라미터 입력 = 승인 시점(미설정 시)
     _recalc_vehicle_payouts(db, project)
+    db.flush()  # 파생값 재계산 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+    _snapshot_participation(db, project, "payout_params")  # 참여 집계 변동 이력(INC-3)
     # 감사 로그 — 최대지급액만 old→new 기록(다른 파라미터 병기 금지, R2-E6/H.6)
     new_max = data.get("max_payment") if "max_payment" in data else old_max
     AuditLogger.log_action(
