@@ -1,11 +1,13 @@
 // SCR-14 감사 로그 탭 (ADMIN 전용) — tb_audit_log 조회 (GAN A10)
 // 필터(액션 유형·기간) + 테이블(시각·액션 배지·대상·수행자) + 페이지네이션
 import { useState } from 'react'
-import { ClipboardText } from '@phosphor-icons/react'
+import { ClipboardText, DownloadSimple } from '@phosphor-icons/react'
 import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { Pagination } from '../../components/Pagination'
+import { useToast } from '../../components/Toast'
+import { downloadExport } from '../../lib/export'
 import { fmtServerDate, fmtServerTime } from '../../lib/format'
 import { useAuditLogs, type AuditLogItem } from './api'
 
@@ -56,6 +58,8 @@ const ACTION_SPECS: Record<string, { label: string; cls: string }> = {
   EXTERNAL_ACCOUNT_RESEND: { label: '외부 링크 재발급', cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/25' },
   EXTERNAL_ACCOUNT_DEACTIVATE: { label: '외부계정 비활성화', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/25' },
   PORTAL_VIEW: { label: '외부 포털 열람', cls: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/25' },
+  // 데이터 반출 (EX-2~5 엑셀 내보내기)
+  DATA_EXPORT: { label: '데이터 내보내기', cls: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-400/25' },
 }
 
 const FALLBACK_SPEC = { label: '', cls: 'bg-elevate-strong text-ash border-hairline' }
@@ -91,10 +95,12 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 export function AuditLogTab() {
+  const { showToast } = useToast()
   const [action, setAction] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isError, refetch } = useAuditLogs({
     action: action || undefined,
@@ -105,6 +111,24 @@ export function AuditLogTab() {
   })
 
   const resetPage = () => setPage(1)
+
+  // 현재 필터 그대로 서버에 전달(전체행 반환) — 이 탭은 이미 ADMIN 전용(SettingsPage 게이트)
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await downloadExport(
+        '/audit-logs/export',
+        { action, date_from: dateFrom, date_to: dateTo },
+        '감사로그.xlsx',
+      )
+      showToast('엑셀 내보내기를 시작했습니다.', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '내보내기에 실패했습니다.', 'danger')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const columns: Column<AuditLogItem>[] = [
     {
@@ -222,6 +246,15 @@ export function AuditLogTab() {
             필터 초기화
           </button>
         )}
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <DownloadSimple size={16} />
+          {exporting ? '내보내는 중…' : '엑셀 내보내기'}
+        </button>
       </FilterBar>
 
       <DataTable

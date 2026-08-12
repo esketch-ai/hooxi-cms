@@ -53,15 +53,20 @@ export function previewMimeType(doc: {
   return mimes[ext] ?? 'application/octet-stream'
 }
 
-/** 실패(404/503 등) 시 AxiosError를 그대로 throw — 호출처에서 catch해 토스트 표시 */
-export async function downloadDocument(docId: string, filename?: string): Promise<void> {
-  const data = await fetchDocumentBlob(docId)
-  const url = URL.createObjectURL(data)
+/** Blob을 파일로 저장 — createObjectURL → <a download> click. 다운로드 공용(export.ts 재사용) */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = filename || 'document'
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/** 실패(404/503 등) 시 AxiosError를 그대로 throw — 호출처에서 catch해 토스트 표시 */
+export async function downloadDocument(docId: string, filename?: string): Promise<void> {
+  const data = await fetchDocumentBlob(docId)
+  downloadBlob(data, filename || 'document')
 }

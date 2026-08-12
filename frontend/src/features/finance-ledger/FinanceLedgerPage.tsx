@@ -2,7 +2,7 @@
 // 엑셀(재고자산·미착품 관리)의 시스템 대체. cf. 전기버스 자산(AV-3)은 '차량 grain' — subtitle로 구분.
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Coins, Package, Receipt, TrendUp, Warehouse } from '@phosphor-icons/react'
+import { Coins, DownloadSimple, Package, Receipt, TrendUp, Warehouse } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -10,8 +10,12 @@ import { Pagination } from '../../components/Pagination'
 import { KpiCard } from '../../components/KpiCard'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
+import { useToast } from '../../components/Toast'
+import { useAuth } from '../../app/AuthProvider'
 import { useCodes, useClientOptions } from '../../lib/api/queries'
 import { useBuyerOptions } from '../buyers/api'
+import { downloadExport } from '../../lib/export'
 import { fmtDate, fmtMoney } from '../../lib/format'
 import { useFinanceLedger } from './api'
 import type { FinanceLedgerRow } from './types'
@@ -55,9 +59,15 @@ function MoneyCell({ value }: { value: number | null }) {
 }
 
 export function FinanceLedgerPage() {
+  const { user } = useAuth()
+  const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
   const { data: buyers = [] } = useBuyerOptions()
   const { options: approvalStatusOptions } = useCodes('APPROVAL_STATUS')
+
+  // 엑셀 내보내기(EX-3) — 팀장 이상만. 백엔드도 403이라 게이트와 정합.
+  const isManagerUp = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const [exporting, setExporting] = useState(false)
 
   const [approvalStatus, setApprovalStatus] = useState('')
   const [clientId, setClientId] = useState('')
@@ -97,6 +107,20 @@ export function FinanceLedgerPage() {
   const total = data?.total ?? 0
   const totals = data?.totals
   const marketRate = data?.current_market_rate ?? null
+
+  // 현재 필터 그대로 서버에 전달(page·page_size는 서버가 무시하고 전체행 반환)
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await downloadExport('/finance-ledger/export', filters, '재무원장.xlsx')
+      showToast('엑셀 내보내기를 시작했습니다.', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '내보내기에 실패했습니다.', 'danger')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const columns: Column<FinanceLedgerRow>[] = [
     {
@@ -166,6 +190,19 @@ export function FinanceLedgerPage() {
       <PageHeader
         title="재무 원장"
         subtitle="전 감축사업 재무 집계 — 사업 단위 (cf. 전기버스 자산은 차량 단위)"
+        actions={
+          <RoleGate allow={isManagerUp} reason="엑셀 내보내기는 팀장 이상만 가능합니다.">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <DownloadSimple size={16} />
+              {exporting ? '내보내는 중…' : '엑셀 내보내기'}
+            </button>
+          </RoleGate>
+        }
       />
 
       {/* 현재시세 배너 — 재고평가 기준 매출단가. 등록/변경은 환경설정으로 안내(입력 UI 중복 금지, 읽기만) */}

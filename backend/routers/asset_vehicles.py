@@ -16,7 +16,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import schemas
-from auth import get_current_user
+from auth import get_current_user, require_role
 from models import (
     Client,
     Project,
@@ -27,8 +27,23 @@ from models import (
 )
 from routers import common
 from services import finance_query
+from services.audit_logger import AuditLogger
+from services.excel_export import (
+    DAILY_EXPORT_LIMIT,
+    MAX_EXPORT_ROWS,
+    ColumnSpec,
+    build_watermark,
+    build_workbook,
+    check_export_quota,
+    enforce_row_limit,
+    export_filename,
+    xlsx_response,
+)
 
 router = APIRouter(prefix="/asset-vehicles", tags=["asset-vehicles"])
+
+# 내보내기 균형 보안(EX-4) — 상한/일일한도 상수·가드는 services.excel_export 공용부를 재사용한다.
+# (이름을 모듈로 끌어와 endpoint별 monkeypatch·가독성 유지: DAILY_EXPORT_LIMIT·MAX_EXPORT_ROWS)
 
 _REDUCTION_YEARS = tuple("reduction_y{0}".format(i) for i in range(1, 11))
 
@@ -62,24 +77,9 @@ def _project_accounting(db: Session, project_ids):
     }
 
 
-@router.get("", response_model=schemas.AssetVehicleListResponse)
-def list_asset_vehicles(
-    project_id: Optional[str] = Query(None, description="사업 필터"),
-    region: Optional[str] = Query(None, description="지역 필터"),
-    client_id: Optional[str] = Query(None, description="운수사 필터(__none__=미지정)"),
-    approval_status: Optional[str] = Query(None, description="승인상태 필터(Project)"),
-    buyer_id: Optional[str] = Query(None, description="매수자 필터(거래계약 보유 사업의 차량)"),
-    registered_from: Optional[date] = Query(None, description="차량등록일 시작(이상)"),
-    registered_to: Optional[date] = Query(None, description="차량등록일 끝(이하)"),
-    expire_before: Optional[date] = Query(None, description="차령만료 임박(만료일 이하)"),
-    search: Optional[str] = Query(None, description="차량번호·운수사명 검색"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=200),
-    _: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """크로스-프로젝트 차량 목록(필터·통합검색·페이지) + 차량 KPI(필터 결과 전체 합)."""
-    q = (
+def _base_query(db: Session):
+    """차량 뷰 base 쿼리 — Project(inner)·Client(outer) 조인. 목록·내보내기 공유."""
+    return (
         db.query(
             ProjectVehicle,
             Project.project_name,
@@ -92,6 +92,22 @@ def list_asset_vehicles(
         .outerjoin(Client, ProjectVehicle.client_id == Client.client_id)
     )
 
+
+def _apply_filters(
+    q,
+    db: Session,
+    *,
+    project_id: Optional[str],
+    region: Optional[str],
+    client_id: Optional[str],
+    approval_status: Optional[str],
+    buyer_id: Optional[str],
+    registered_from: Optional[date],
+    registered_to: Optional[date],
+    expire_before: Optional[date],
+    search: Optional[str],
+):
+    """목록·내보내기 공유 필터 적용부('필터=파일' 보장 — 단일 진실원)."""
     if project_id:
         q = q.filter(ProjectVehicle.project_id == project_id)
     if region:
@@ -128,8 +144,14 @@ def list_asset_vehicles(
         if client_ids:
             conds.append(ProjectVehicle.client_id.in_(client_ids))
         q = q.filter(or_(*conds))
+    return q
 
-    total = q.count()
+
+def _build_kpi(db: Session, q):
+    """차량 KPI(필터 결과 전체 합) + 재무 KPI(distinct 사업 회계 합) — 목록·내보내기 공유.
+
+    반환: (AssetVehicleKpi, {project_id: {revenue,cost,profit}}). 후자는 행별 사업값 조회에 재사용.
+    """
     # 차량 KPI — 페이지네이션 전 필터 결과 전체 합(None 안전)
     agg = q.with_entities(
         func.count(ProjectVehicle.vehicle_id),
@@ -151,6 +173,42 @@ def list_asset_vehicles(
         cost=_sum_opt(a["cost"] for a in acct_by_pid.values()),
         profit=_sum_opt(a["profit"] for a in acct_by_pid.values()),
     )
+    return kpi, acct_by_pid
+
+
+@router.get("", response_model=schemas.AssetVehicleListResponse)
+def list_asset_vehicles(
+    project_id: Optional[str] = Query(None, description="사업 필터"),
+    region: Optional[str] = Query(None, description="지역 필터"),
+    client_id: Optional[str] = Query(None, description="운수사 필터(__none__=미지정)"),
+    approval_status: Optional[str] = Query(None, description="승인상태 필터(Project)"),
+    buyer_id: Optional[str] = Query(None, description="매수자 필터(거래계약 보유 사업의 차량)"),
+    registered_from: Optional[date] = Query(None, description="차량등록일 시작(이상)"),
+    registered_to: Optional[date] = Query(None, description="차량등록일 끝(이하)"),
+    expire_before: Optional[date] = Query(None, description="차령만료 임박(만료일 이하)"),
+    search: Optional[str] = Query(None, description="차량번호·운수사명 검색"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """크로스-프로젝트 차량 목록(필터·통합검색·페이지) + 차량 KPI(필터 결과 전체 합)."""
+    q = _apply_filters(
+        _base_query(db),
+        db,
+        project_id=project_id,
+        region=region,
+        client_id=client_id,
+        approval_status=approval_status,
+        buyer_id=buyer_id,
+        registered_from=registered_from,
+        registered_to=registered_to,
+        expire_before=expire_before,
+        search=search,
+    )
+
+    total = q.count()
+    kpi, acct_by_pid = _build_kpi(db, q)
 
     rows = (
         # 정렬 — 사업명·차량번호. vehicle_id 타이브레이커로 페이지 경계 누락/중복 방지
@@ -189,3 +247,166 @@ def list_asset_vehicles(
         for v, project_name, approved_at, proj_approval, project_status, company_name in rows
     ]
     return schemas.AssetVehicleListResponse(items=items, total=total, kpi=kpi)
+
+
+# 내보내기 컬럼 규격(EX-4) — 화면 컬럼과 정합(프로젝트명 … 원가(사업))
+_EXPORT_COLUMNS = [
+    ColumnSpec("project_name", "프로젝트명", "text"),
+    ColumnSpec("vehicle_no", "차량번호", "text"),
+    ColumnSpec("region", "지역", "text"),
+    ColumnSpec("client_name", "운수사", "text"),
+    ColumnSpec("registered_at", "차량등록일", "date"),
+    ColumnSpec("expire_at", "차령만료일", "date"),
+    ColumnSpec("approved_at", "사업승인일", "date"),
+    ColumnSpec("total_reduction", "10년 총감축량", "number"),
+    ColumnSpec("remaining_age", "잔여차령", "number"),
+    ColumnSpec("effective_reduction", "잔여반영감축량", "number"),
+    ColumnSpec("expected_payout", "예상지급액", "money"),
+    ColumnSpec("project_revenue", "매출(사업)", "money"),
+    ColumnSpec("project_cost", "원가(사업)", "money"),
+]
+
+
+def _export_filter_summary(
+    n,
+    project_id,
+    region,
+    client_id,
+    approval_status,
+    buyer_id,
+    registered_from,
+    registered_to,
+    expire_before,
+    search,
+):
+    """감사 new_value — 행수 + 필터 요약(id·지역·상태·기간)만. 금액·비밀값 원문 미기록(R2-E6)."""
+    parts = []
+    if project_id:
+        parts.append("project={0}".format(project_id))
+    if region:
+        parts.append("region={0}".format(region))
+    if client_id:
+        parts.append("client={0}".format(client_id))
+    if approval_status:
+        parts.append("approval={0}".format(approval_status))
+    if buyer_id:
+        parts.append("buyer={0}".format(buyer_id))
+    if registered_from:
+        parts.append("reg_from={0}".format(registered_from))
+    if registered_to:
+        parts.append("reg_to={0}".format(registered_to))
+    if expire_before:
+        parts.append("expire_before={0}".format(expire_before))
+    if search and search.strip():
+        parts.append("search={0}".format(search.strip()))
+    return "rows={0}; filters={1}".format(n, ", ".join(parts) if parts else "none")
+
+
+@router.get("/export")
+def export_asset_vehicles(
+    project_id: Optional[str] = Query(None, description="사업 필터"),
+    region: Optional[str] = Query(None, description="지역 필터"),
+    client_id: Optional[str] = Query(None, description="운수사 필터(__none__=미지정)"),
+    approval_status: Optional[str] = Query(None, description="승인상태 필터(Project)"),
+    buyer_id: Optional[str] = Query(None, description="매수자 필터(거래계약 보유 사업의 차량)"),
+    registered_from: Optional[date] = Query(None, description="차량등록일 시작(이상)"),
+    registered_to: Optional[date] = Query(None, description="차량등록일 끝(이하)"),
+    expire_before: Optional[date] = Query(None, description="차령만료 임박(만료일 이하)"),
+    search: Optional[str] = Query(None, description="차량번호·운수사명 검색"),
+    user: User = Depends(require_role("MANAGER")),
+    db: Session = Depends(get_db),
+):
+    """전기버스 자산 엑셀 내보내기(EX-4) — 화면과 동일 필터의 '전체' 결과를 .xlsx로.
+
+    조회(목록)보다 좁은 MANAGER 게이트 + 행 상한(400)·일일 반출 횟수(429)·워터마크·
+    DATA_EXPORT 감사(금액 원문 미기록)로 대량 유출을 억제한다. 페이지네이션 없음(전체행).
+    """
+    # 일일 반출 횟수 제한 — 공용 가드(오늘 KST DATA_EXPORT 감사 건수 재사용)
+    check_export_quota(db, user, daily_limit=DAILY_EXPORT_LIMIT)
+
+    q = _apply_filters(
+        _base_query(db),
+        db,
+        project_id=project_id,
+        region=region,
+        client_id=client_id,
+        approval_status=approval_status,
+        buyer_id=buyer_id,
+        registered_from=registered_from,
+        registered_to=registered_to,
+        expire_before=expire_before,
+        search=search,
+    )
+
+    total = q.count()
+    # 행 상한 — 공용 가드(무음 잘라내기 금지, 초과 시 400)
+    enforce_row_limit(total, max_rows=MAX_EXPORT_ROWS)
+
+    kpi, acct_by_pid = _build_kpi(db, q)
+
+    # 전체 차량 행(목록과 동일 정렬, 페이지네이션 없음)
+    projects = q.order_by(
+        Project.project_name.asc(),
+        ProjectVehicle.vehicle_no.asc(),
+        ProjectVehicle.vehicle_id.asc(),
+    ).all()
+    rows = []
+    for v, project_name, approved_at, _proj_approval, _project_status, company_name in projects:
+        acct = acct_by_pid.get(v.project_id, {})
+        rows.append(
+            {
+                "project_name": project_name,
+                "vehicle_no": v.vehicle_no,
+                "region": v.region,
+                "client_name": company_name,
+                "registered_at": v.registered_at,
+                "expire_at": v.expire_at,
+                "approved_at": approved_at,
+                "total_reduction": _num(v.total_reduction, 3),
+                "remaining_age": _num(v.remaining_age, 3),
+                "effective_reduction": _num(v.effective_reduction, 3),
+                "expected_payout": _num(v.expected_payout, 2),
+                "project_revenue": acct.get("revenue"),
+                "project_cost": acct.get("cost"),
+            }
+        )
+
+    # 합계행 = KPI 합(차량 감축·예상지급 + 재무 매출/원가). 차량수는 데이터 행수와 동일.
+    total_row = {
+        "total_reduction": kpi.total_reduction,
+        "effective_reduction": kpi.effective_reduction_sum,
+        "expected_payout": kpi.expected_payout_sum,
+        "project_revenue": kpi.revenue,
+        "project_cost": kpi.cost,
+    }
+
+    content = build_workbook(
+        _EXPORT_COLUMNS,
+        rows,
+        sheet_title="전기버스자산",
+        watermark=build_watermark(user),
+        total_row=total_row,
+    )
+
+    # 감사 — 반환 직전 기록(행수·필터 요약만, 금액·비밀값 원문 미기록) 후 커밋
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "DATA_EXPORT",
+        target_type="ASSET_VEHICLES",
+        new_value=_export_filter_summary(
+            len(rows),
+            project_id,
+            region,
+            client_id,
+            approval_status,
+            buyer_id,
+            registered_from,
+            registered_to,
+            expire_before,
+            search,
+        ),
+    )
+    db.commit()
+
+    return xlsx_response(content, export_filename("전기버스자산"))

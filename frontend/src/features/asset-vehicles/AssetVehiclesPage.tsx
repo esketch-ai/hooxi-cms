@@ -1,7 +1,7 @@
 // AV-3 전기버스 자산 — 자산관리 크로스-프로젝트 차량 목록 + 필터 + KPI
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bus, ChartLineUp, Coins, Gauge } from '@phosphor-icons/react'
+import { Bus, ChartLineUp, Coins, DownloadSimple, Gauge } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -9,9 +9,13 @@ import { Pagination } from '../../components/Pagination'
 import { KpiCard } from '../../components/KpiCard'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
+import { RoleGate } from '../../components/RoleGate'
+import { useToast } from '../../components/Toast'
+import { useAuth } from '../../app/AuthProvider'
 import { useCodes, useClientOptions } from '../../lib/api/queries'
 import { useProject, useProjectOptions } from '../projects/api'
 import { useBuyerOptions } from '../buyers/api'
+import { downloadExport } from '../../lib/export'
 import { fmtDate, fmtMoney } from '../../lib/format'
 import { useAssetVehicles } from './api'
 import type { AssetVehicleRow } from './types'
@@ -31,10 +35,16 @@ function fmtCount(value?: number | null, unit = ''): string {
 }
 
 export function AssetVehiclesPage() {
+  const { user } = useAuth()
+  const { showToast } = useToast()
   const { data: projects = [] } = useProjectOptions()
   const { data: clients = [] } = useClientOptions()
   const { data: buyers = [] } = useBuyerOptions()
   const { options: approvalStatusOptions } = useCodes('APPROVAL_STATUS')
+
+  // 엑셀 내보내기(EX-4) — 팀장 이상만. 백엔드도 403이라 게이트와 정합.
+  const isManagerUp = user?.role === 'ADMIN' || user?.role === 'MANAGER'
+  const [exporting, setExporting] = useState(false)
 
   const [projectId, setProjectId] = useState('')
   const [region, setRegion] = useState('')
@@ -88,6 +98,20 @@ export function AssetVehiclesPage() {
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const kpi = data?.kpi
+
+  // 현재 필터 그대로 서버에 전달(page·page_size는 서버가 무시하고 전체행 반환)
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await downloadExport('/asset-vehicles/export', filters, '전기버스자산.xlsx')
+      showToast('엑셀 내보내기를 시작했습니다.', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '내보내기에 실패했습니다.', 'danger')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // 운수사 옵션 — '__none__'(미지정) 선행 + 전체 고객사
   const clientOptions = useMemo(
@@ -214,6 +238,19 @@ export function AssetVehiclesPage() {
       <PageHeader
         title="전기버스 자산"
         subtitle="자산관리 관점의 크로스-프로젝트 전기버스 차량 현황"
+        actions={
+          <RoleGate allow={isManagerUp} reason="엑셀 내보내기는 팀장 이상만 가능합니다.">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <DownloadSimple size={16} />
+              {exporting ? '내보내는 중…' : '엑셀 내보내기'}
+            </button>
+          </RoleGate>
+        }
       />
 
       {/* 차량 KPI 4종 — 필터 걸린 차량 집계 */}
