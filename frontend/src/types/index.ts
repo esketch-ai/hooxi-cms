@@ -508,6 +508,9 @@ export interface Project {
   gross_profit?: number | null // 매출이익
   profit_rate?: number | null // 이익률 (0~1)
   ownership_total?: number | null // 소유권 합계 (%)
+  // ── 재고평가 파생 (비영속 read-only, P0-2 증분3) — 후시보유분 × 현재시세, 저장 없음 ──
+  current_market_rate?: number | null // 현재 매출단가 시세 (원/tCO2)
+  inventory_valuation?: number | null // 재고평가액 = Σ(is_hold='Y' quantity) × 현재시세
 }
 
 // tb_project_sale — 매수자별 선물 판매단가 거래계약 (내부 차액 수익 산출)

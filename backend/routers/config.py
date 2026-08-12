@@ -19,6 +19,7 @@ from routers import common
 from routers.batch import DEFAULT_CHECK_AGENCIES
 from routers.kakao import DEFAULT_SENSITIVE_KEYWORDS
 from services.audit_logger import AuditLogger
+from services.project_params import DEFAULT_PROJECT_BASE_PARAMS
 from services.report_sender import DEFAULT_REPORT_MAIL_BODY, DEFAULT_REPORT_MAIL_SUBJECT
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -43,6 +44,12 @@ KNOWN_DEFAULTS = {
         DEFAULT_REPORT_MAIL_BODY,
         "보고서 발송 메일 본문 템플릿 — 변수: {고객사명} {기간} {연도} {월} {보고서유형} {담당자명} "
         "(구독별 오버라이드가 우선)",
+    ),
+    "project_base_params": (
+        DEFAULT_PROJECT_BASE_PARAMS,
+        "감축 사업 파생값 기준값 — 기준감축량(base_reduction)·기준차령(base_vehicle_age)·"
+        "차령만료개월(expire_months)·차량당 기본 최대지급액(default_max_payment). "
+        "미저장 시 정본 기본값 240/8/108/2000000",
     ),
 }
 
@@ -99,6 +106,28 @@ def _validate_config_value(key: str, raw_value: str):
                 status_code=422,
                 detail="{0}은(는) 비어 있지 않은 문자열이어야 합니다".format(key),
             )
+    elif key == "project_base_params":
+        # 감축 사업 기준값 — 객체(부분 저장 허용). 지정된 키는 숫자·양수여야 함.
+        if not isinstance(parsed, dict):
+            raise HTTPException(
+                status_code=422, detail="project_base_params는 JSON 객체여야 합니다"
+            )
+        for k, v in parsed.items():
+            if k not in DEFAULT_PROJECT_BASE_PARAMS:
+                raise HTTPException(
+                    status_code=422,
+                    detail="알 수 없는 기준값 키입니다: {0}".format(k),
+                )
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="{0}은(는) 양수여야 합니다".format(k),
+                )
+            # expire_months는 정수 개월(소수 절삭 왜곡 방지 — 만료일 계산 전제)
+            if k == "expire_months" and float(v) != int(v):
+                raise HTTPException(
+                    status_code=422, detail="expire_months는 정수(개월)여야 합니다"
+                )
     return parsed
 
 

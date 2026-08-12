@@ -967,6 +967,24 @@ class ProjectSaleListResponse(BaseModel):
     total_sale_amount: Optional[float] = None  # Σ(단가×수량, 둘 다 입력된 계약만) — 없으면 None
 
 
+# 매출단가 시세 마스터(effective-dated) — 톤당 단가의 시점별 이력 -----------------
+class MarketRateIn(BaseModel):
+    effective_date: date
+    unit_price: float = Field(ge=0)
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+class MarketRateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    rate_id: str
+    effective_date: date
+    unit_price: float
+    note: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 # 변동 이력 스냅샷(append-only, Phase 4 INC-3 / 부록 N.8 D5) — Out만(타임라인 조회는 INC-6)
 class ParticipationSnapshotOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -1171,6 +1189,9 @@ class ProjectDetailOut(ProjectOut):
     gross_profit: Optional[float] = None  # 매출이익 = trunc(매출인식 − 제품)
     profit_rate: Optional[float] = None  # 이익률 = round(매출이익/매출인식, 3)
     ownership_total: Optional[float] = None  # 소유권비율 합(%)
+    # 재고평가 파생(비영속 read-only, 증분3) — 후시보유분 × 현재시세. 저장 없음.
+    current_market_rate: Optional[float] = None  # 현재 매출단가 시세(없으면 None)
+    inventory_valuation: Optional[float] = None  # 재고평가액 = Σ(is_hold='Y' quantity) × 현재시세(원단위 반올림)
 
 
 # ---------------------------------------------------------------------------

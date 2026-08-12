@@ -395,6 +395,24 @@ class PurchaseInvoice(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class MarketRate(Base):
+    """매출단가 시세 마스터(effective-dated) — 탄소배출권 톤당 단가의 시점별 이력.
+
+    현재 시세 = 유효일자(effective_date) ≤ 오늘 중 가장 최신 1건의 unit_price.
+    이력 보존이 목적이라 같은 effective_date 재등록은 append 허용(조회는 최신 우선).
+    실현매출·회계 원장(부록 L.3)과 무관한 참조성 마스터다(과거 불변).
+    """
+
+    __tablename__ = "tb_market_rate"
+
+    rate_id = Column(String(50), primary_key=True, default=gen_uuid)
+    effective_date = Column(Date, nullable=False, index=True)  # 시세 유효 시작일
+    unit_price = Column(Numeric(15, 2), nullable=False)  # 톤당 단가
+    note = Column(String(255))
+    created_by = Column(String(50), ForeignKey("tb_user.user_id"))  # 등록자(불변)
+    created_at = Column(DateTime, default=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

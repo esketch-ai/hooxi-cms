@@ -38,6 +38,8 @@ from models import (
 from routers import common
 from routers.codes import validate_active_code
 from services import accounting
+from services.market_rate import current_market_rate
+from services.project_params import base_params
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -227,9 +229,8 @@ def _validate_ownership_total(db: Session, project_id: str, new_pct: Optional[fl
 
 # ── 차량 파생값 정본 산식(부록 L) — 단가 미사용 ──────────────────────────────
 # 엑셀 v19.3 정본과 1:1 일치가 목표. 예상지급액은 최대지급액(차량당 상한) × 감축량비 ×
-# 잔여차령비로 산출한다(원가 톤당 단가 미사용).
-DEFAULT_BASE_REDUCTION = 240.0  # 기준감축량 기본값
-DEFAULT_BASE_VEHICLE_AGE = 8.0  # 기준차령 기본값
+# 잔여차령비로 산출한다(원가 톤당 단가 미사용). 기준감축량·기준차령·만료개월 기본값은
+# 공통 설정(tb_config project_base_params)으로 승격 — services.project_params.base_params.
 
 
 def _add_months(d: date, months: int) -> date:
@@ -240,11 +241,14 @@ def _add_months(d: date, months: int) -> date:
     return date(y, m, min(d.day, calendar.monthrange(y, m)[1]))
 
 
-def _expire_at(registered_at) -> Optional[date]:
-    """차령만료일 — EDATE(등록일, 12*9) - 1일. 등록일 없으면 None."""
+def _expire_at(registered_at, expire_months: int) -> Optional[date]:
+    """차령만료일 — EDATE(등록일, expire_months) - 1일. 등록일 없으면 None.
+
+    expire_months 기본값(108 = 12*9)은 공통 설정(project_base_params)에서 주입.
+    """
     if registered_at is None:
         return None
-    return _add_months(registered_at, 108) - timedelta(days=1)
+    return _add_months(registered_at, expire_months) - timedelta(days=1)
 
 
 def _remaining_age(expire_at, approved_at, base_age: float) -> Optional[float]:
@@ -289,15 +293,19 @@ def _expected_payout(max_payment, effective_reduction, remaining_age,
     return amount
 
 
-def _derive_vehicle(project: Project, vehicle: ProjectVehicle) -> None:
+def _derive_vehicle(project: Project, vehicle: ProjectVehicle, params: dict) -> None:
     """단일 차량 전체 파생값 재계산(부록 L 정본) — total_reduction·만료일·잔여차령·
     잔여반영감축량·예상지급액을 순수 파생값으로 채운다(수기 입력 없음).
+
+    params: 공통 기준값(base_params 결과). 차량 루프마다 재조회하지 않도록 호출부에서
+    1회 로드해 전달한다. 프로젝트별 base_reduction/base_vehicle_age 오버라이드가 있으면
+    그 값이 우선하고, 없으면(0/None) 공통 기준값을 쓴다.
     """
-    base_r = float(project.base_reduction) if project.base_reduction else DEFAULT_BASE_REDUCTION  # 0/None → 기본(0 나눗셈 방어)
-    base_a = float(project.base_vehicle_age) if project.base_vehicle_age else DEFAULT_BASE_VEHICLE_AGE
+    base_r = float(project.base_reduction) if project.base_reduction else params["base_reduction"]  # 0/None → 기본(0 나눗셈 방어)
+    base_a = float(project.base_vehicle_age) if project.base_vehicle_age else params["base_vehicle_age"]
     reductions = [getattr(vehicle, f) for f in _REDUCTION_YEARS]
     vehicle.total_reduction = _sum_reductions(vehicle)  # 연차 단순합(유지)
-    vehicle.expire_at = _expire_at(vehicle.registered_at)
+    vehicle.expire_at = _expire_at(vehicle.registered_at, params["expire_months"])
     vehicle.remaining_age = _remaining_age(vehicle.expire_at, project.approved_at, base_a)
     vehicle.effective_reduction = _effective_reduction(reductions, vehicle.remaining_age, base_r)
     vehicle.expected_payout = _expected_payout(
@@ -311,13 +319,14 @@ def _recalc_vehicle_payouts(db: Session, project: Project) -> None:
     지급 파라미터(최대지급액·기준감축량·기준차령)·승인일 변경 등 파생 경로에서 공통 적용.
     구성 요소 미입력 시 해당 차량 파생값은 None(미정).
     """
+    params = base_params(db)  # 공통 기준값 1회 로드(차량 루프마다 재조회 금지)
     vehicles = (
         db.query(ProjectVehicle)
         .filter(ProjectVehicle.project_id == project.project_id)
         .all()
     )
     for v in vehicles:
-        _derive_vehicle(project, v)
+        _derive_vehicle(project, v, params)
 
 
 # ── 변동 이력 스냅샷(append-only, Phase 4 INC-3 / 부록 N.8 D5) ───────────────
@@ -448,6 +457,15 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         expected_payment=payout_amount,
         sales=sales,
     )
+    # 재고평가 파생(비영속 read-only) — 후시보유분(is_hold='Y') 수량 합 × 현재시세.
+    # 시세 없거나 후시보유 없으면 None. 저장하지 않고 응답 조립 시 계산만 한다.
+    rate = current_market_rate(db)
+    held_qty = sum(
+        float(s.quantity) for s in sales if s.is_hold == "Y" and s.quantity is not None
+    )
+    inventory_valuation = (
+        round(held_qty * float(rate)) if rate is not None and held_qty > 0 else None
+    )
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -461,6 +479,8 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "payout_amount": payout_amount,
             "margin_amount": margin_amount,
             "margin_ratio": margin_ratio,
+            "current_market_rate": float(rate) if rate is not None else None,
+            "inventory_valuation": inventory_valuation,
             **acct,
         }
     )
@@ -598,6 +618,7 @@ def audit_vehicle_integrity(
     """
     projects = {p.project_id: p for p in db.query(Project).all()}
     vehicles = db.query(ProjectVehicle).all()  # 전부 선조회 — 루프 내 쿼리는 autoflush 유발
+    params = base_params(db)  # 공통 기준값 1회 로드(차량 루프마다 재조회 금지)
 
     checked = 0
     stale = 0
@@ -610,7 +631,7 @@ def audit_vehicle_integrity(
             checked += 1
             before = {f: _to_float(getattr(v, f)) for f in _DERIVED_FIELDS}
             try:
-                _derive_vehicle(project, v)  # in-memory 재계산(저장 안 함, 아래 rollback)
+                _derive_vehicle(project, v, params)  # in-memory 재계산(저장 안 함, 아래 rollback)
             except HTTPException as exc:
                 # _expected_payout 상한 초과 등 개별 차량 실패 — 중단 없이 stale로 집계
                 stale += 1
@@ -909,7 +930,7 @@ def create_project_vehicle(
     vehicle = ProjectVehicle(
         project_id=project_id, **{f: getattr(payload, f) for f in _VEHICLE_FIELDS}
     )
-    _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
+    _derive_vehicle(project, vehicle, base_params(db))  # 파생값 일괄 계산(부록 L)
     _link_client_vehicle(db, vehicle)  # fleet 마스터 링크(참여 구분, 부록 M)
     db.add(vehicle)
     db.flush()  # 파생값 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
@@ -953,7 +974,7 @@ def update_project_vehicle(
         if field in data:
             setattr(vehicle, field, data[field])
     project = common.get_or_404(db, Project, project_id, "감축 사업")
-    _derive_vehicle(project, vehicle)  # 파생값 일괄 재계산(부록 L)
+    _derive_vehicle(project, vehicle, base_params(db))  # 파생값 일괄 재계산(부록 L)
     if "vehicle_no" in data:  # 차량번호 변경 시 fleet 마스터 링크 재설정(부록 M)
         _link_client_vehicle(db, vehicle)
     db.flush()  # 파생값 재계산 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
@@ -1040,6 +1061,7 @@ async def commit_vehicle_import(
         for vid, no in db.query(ClientVehicle.vehicle_id, ClientVehicle.vehicle_no)
         if no
     }
+    params = base_params(db)  # 공통 기준값 1회 로드(차량 루프마다 재조회 금지)
     created, empty = 0, 0
     for parsed in result.valid_rows:
         fields = {f: getattr(parsed.payload, f) for f in _VEHICLE_FIELDS}
@@ -1049,7 +1071,7 @@ async def commit_vehicle_import(
             empty += 1
             continue
         vehicle = ProjectVehicle(project_id=project_id, **fields)
-        _derive_vehicle(project, vehicle)  # 파생값 일괄 계산(부록 L)
+        _derive_vehicle(project, vehicle, params)  # 파생값 일괄 계산(부록 L)
         if vehicle.vehicle_no:  # fleet 마스터 링크(참여 구분, 부록 M)
             vehicle.client_vehicle_id = fleet_by_no.get(vehicle.vehicle_no)
         db.add(vehicle)
@@ -1501,15 +1523,16 @@ def update_payout_params(
     차량의 파생값(예상지급액 등)을 재계산해 적재한다(순수 파생). null 전달 시 미정.
     """
     project = common.get_or_404(db, Project, project_id, "감축 사업")
+    params = base_params(db)  # 공통 기준값(기준값 미설정 시 초기화 기본값)
     data = payload.model_dump(exclude_unset=True)
     old_max = project.max_payment
     if "max_payment" in data:
         project.max_payment = data["max_payment"]
         # 최대지급액 세팅 시 기준값 미설정이면 정본 기본값(240/8)으로 초기화
         if project.base_reduction is None:
-            project.base_reduction = DEFAULT_BASE_REDUCTION
+            project.base_reduction = params["base_reduction"]
         if project.base_vehicle_age is None:
-            project.base_vehicle_age = DEFAULT_BASE_VEHICLE_AGE
+            project.base_vehicle_age = params["base_vehicle_age"]
     if "base_reduction" in data:
         project.base_reduction = data["base_reduction"]
     if "base_vehicle_age" in data:

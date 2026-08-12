@@ -1091,6 +1091,22 @@ function MarginSummary({ project }: { project: Project }) {
         <OverviewItem label="매출이익">{money(project.gross_profit)}</OverviewItem>
         <OverviewItem label="이익률">{ratePct(project.profit_rate)}</OverviewItem>
       </div>
+      {/* 재고평가 (현재시세 기준, 비영속 read-only) — 후시보유분 × 현재 매출단가 시세.
+          저장하지 않는 참조성 파생값이라 회계 원장(매출인식 등)과 분리해 표기한다. */}
+      <div className="mt-3 grid gap-4 border-t border-hairline pt-3 sm:grid-cols-2">
+        <OverviewItem label="현재시세 (원/tCO2)">
+          {money(project.current_market_rate)}
+        </OverviewItem>
+        <OverviewItem label="재고평가 (현재시세 기준)">
+          {project.inventory_valuation != null ? (
+            money(project.inventory_valuation)
+          ) : (
+            <span className="text-xs font-medium text-slatey">
+              후시보유·시세 입력 시 산출
+            </span>
+          )}
+        </OverviewItem>
+      </div>
       {!has && (
         <p className="mt-3 text-xs text-slatey">
           매입세금계산서·거래계약(매출세금계산서)·단가·지급 파라미터가 입력되면 회계 항목이 자동
