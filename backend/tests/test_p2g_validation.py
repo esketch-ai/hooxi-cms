@@ -288,52 +288,5 @@ def test_project_input_caps_422(client, admin_headers):
     assert resp.status_code == 422
 
 
-def test_expected_amount_overflow_422(client, admin_headers, staff_headers):
-    # 최대 허용 입력 조합은 산식 결과가 Numeric(15,2)를 넘는다 → 저장 전 422
-    resp = client.post(
-        API + "/projects",
-        headers=admin_headers,
-        json={
-            "project_name": "P2G 산식상한 사업",
-            "expected_credits": 99_999_999,
-            "unit_price": 1e12,
-        },
-    )
-    assert resp.status_code == 201, resp.text
-    project_id = resp.json()["project_id"]
-    S["overflow_project"] = project_id
-
-    resp = client.post(
-        API + "/projects/{0}/clients".format(project_id),
-        headers=admin_headers,
-        json={"client_id": S["c_len"], "allocation_ratio": 100, "success_fee_rate": 100},
-    )
-    assert resp.status_code == 422
-    assert "예상 정산액이 허용 범위를 초과합니다" in resp.json()["detail"]
-
-    # 정상 단가로 매핑 성립 후, 단가 인상으로 상한 초과 재계산 시도 → 422 (재계산 경로)
-    resp = client.put(
-        API + "/projects/{0}/unit-price".format(project_id),
-        headers=admin_headers,
-        json={"unit_price": 10000},
-    )
-    assert resp.status_code == 200, resp.text
-    resp = client.post(
-        API + "/projects/{0}/clients".format(project_id),
-        headers=admin_headers,
-        json={"client_id": S["c_len"], "allocation_ratio": 100, "success_fee_rate": 100},
-    )
-    assert resp.status_code == 201, resp.text
-
-    resp = client.put(
-        API + "/projects/{0}/unit-price".format(project_id),
-        headers=admin_headers,
-        json={"unit_price": 1e12},
-    )
-    assert resp.status_code == 422
-    assert "예상 정산액이 허용 범위를 초과합니다" in resp.json()["detail"]
-
-    # 차단 후에도 기존 단가·금액은 유지(트랜잭션 롤백)
-    resp = client.get(API + "/projects/" + project_id, headers=admin_headers)
-    assert resp.status_code == 200
-    assert resp.json()["unit_price"] == 10000
+# 예상 정산액(§10.3) 산식 상한 테스트는 매핑·수기 단가 은퇴로 제거
+# (레거시 물리제거 — 모델·스키마는 증분 5까지 유지).

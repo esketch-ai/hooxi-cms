@@ -198,19 +198,6 @@ def compute_expected_amount(expected_credits, allocation_ratio, unit_price, succ
     )
 
 
-def validate_expected_amount(amount):
-    """산식 결과가 Numeric(15,2)에 못 들어가면 422 (#6 P2) — DB 오류(500) 사전 차단.
-
-    단가·발행량 변경, 매핑 등록 등 expected_amount를 적재하는 모든 입력 경로에서
-    저장 직전에 호출한다(입력 시점 차단 우선)."""
-    if amount is not None and abs(amount) >= EXPECTED_AMOUNT_LIMIT:
-        raise HTTPException(
-            status_code=422,
-            detail="예상 정산액이 허용 범위를 초과합니다 — 단가·발행량 단위를 확인하세요",
-        )
-    return amount
-
-
 def user_name_map(db: Session, user_ids: Iterable[Optional[str]]) -> Dict[str, str]:
     ids = {uid for uid in user_ids if uid}
     if not ids:

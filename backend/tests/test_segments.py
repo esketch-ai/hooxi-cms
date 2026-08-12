@@ -54,13 +54,19 @@ def _create_project(client, headers, name):
 
 
 def _map_client(client, headers, project_id, client_id, ratio):
-    resp = client.post(
-        API + "/projects/{0}/clients".format(project_id),
-        headers=headers,
-        json={"client_id": client_id, "allocation_ratio": ratio, "success_fee_rate": 10},
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()["map_id"]
+    # 매핑 CRUD 엔드포인트 은퇴(레거시 물리제거) — 세그먼트 축 데이터 형상만 필요하므로
+    # ProjectClientMap을 DB에 직접 삽입한다(모델은 증분 5까지 유지).
+    db = models.SessionLocal()
+    try:
+        m = models.ProjectClientMap(
+            project_id=project_id, client_id=client_id,
+            allocation_ratio=ratio, success_fee_rate=10, settlement_status="STANDBY",
+        )
+        db.add(m)
+        db.commit()
+        return m.map_id
+    finally:
+        db.close()
 
 
 def _create_asset(client, headers, client_id, asset_group):
