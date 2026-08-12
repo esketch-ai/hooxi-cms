@@ -1056,6 +1056,46 @@ class ProjectDetailOut(ProjectOut):
 
 
 # ---------------------------------------------------------------------------
+# 포털 전용 뷰 (Phase 4 INC-4 / 부록 N.3 기밀 매트릭스)
+#
+# 원칙: 금지 필드를 스키마에 아예 선언하지 않아 서버가 원천 미포함(마스킹 아님).
+# 어느 뷰도 원가와 매출을 동시에 담지 않는다(H.6). 내부 ProjectDetailOut·
+# compute_accounting은 재사용/호출하지 않는다(별도 빌더 services/portal.py).
+# ---------------------------------------------------------------------------
+class PartnerPortalView(BaseModel):
+    """운수사(파트너) 포털 뷰 — 자기 참여분만.
+
+    매출·판매단가·마진·타 운수사 데이터 필드는 선언하지 않는다(원천 미포함).
+    자기 수혜금액(자기 차량 expected_payout 합)만 노출하며 원가율 역산 소지가 없다.
+    """
+
+    project_id: str
+    project_name: str
+    project_status: str
+    stages: List[ProjectStageOut] = []  # 진행 단계·지연(내부와 동일 산정)
+    my_vehicle_count: int = 0  # 자기 운수사 참여 차량 수
+    my_effective_reduction: Optional[float] = None  # 자기 운수사 잔여반영감축량 합(전건 None이면 None)
+    my_expected_payout: Optional[float] = None  # 자기 수혜금액 = Σ 자기 차량 expected_payout(산정 전이면 None)
+
+
+class InvestorPortalView(BaseModel):
+    """투자/금융(매수자) 포털 뷰 — 프로젝트 총량·감축량(익명)·자기 계약만.
+
+    예상지급액·원가·지급률·매출인식·매출이익·제품·미착품·마진 필드는 선언하지 않는다
+    (자기 실발행액으로 원가율 역산 방지). operators_reduction은 식별정보 없이 익명 라벨.
+    """
+
+    project_id: str
+    project_name: str
+    project_status: str
+    stages: List[ProjectStageOut] = []  # 진행 단계·지연
+    operators_reduction: List[dict] = []  # 참여 운수사별 감축량(익명): {label, vehicle_count, effective_reduction}
+    total_effective_reduction: Optional[float] = None  # 총 잔여반영감축량(전건 None이면 None)
+    total_contract_revenue: Optional[float] = None  # 프로젝트 총 계약매출 gross(실발행액 우선, 없으면 단가×수량)
+    my_contract: Optional[dict] = None  # 자기 매수자 계약: {quantity, gross_revenue, sale_unit_price, sale_invoice_amount}
+
+
+# ---------------------------------------------------------------------------
 # P1 — 활동 이력·이슈 (SCR-05 / 02)
 # ---------------------------------------------------------------------------
 class HistoryCreate(BlankFKToNoneModel):
