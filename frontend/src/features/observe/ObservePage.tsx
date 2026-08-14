@@ -17,6 +17,7 @@ import {
   Warehouse,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { ScreenGuide } from '../../components/ScreenGuide'
 import { KpiCard } from '../../components/KpiCard'
 import { SensitiveData } from '../../components/SensitiveData'
 import { SkeletonKpi } from '../../components/Skeleton'
@@ -70,11 +71,30 @@ export function ObservePage() {
         subtitle={`전사 KPI · 사업 지연 · 재무 · 감축량 요약${stats ? ` (${stats.period})` : ''} — 읽기 전용`}
       />
 
-      {/* 전사 KPI — GET /dashboard/stats */}
-      {statsLoading ? (
-        <SkeletonKpi count={4} />
-      ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <ScreenGuide
+        perspective="전사 요약"
+        links={[
+          { label: '재무 원장', to: '/finance-ledger' },
+          { label: '전기버스 자산', to: '/asset-vehicles' },
+          { label: '자산관리 보고', to: '/asset-report' },
+        ]}
+      >
+        회사 전체를 한 장으로 보는 <strong className="font-medium text-bone">읽기 전용</strong> 요약입니다.
+        지표를 누르면 원본 화면으로 이동합니다. 편집·정산·통지는 각 업무 화면에서 합니다. 재무·예상지급액
+        합계는 재무 원장·자산관리 보고와 <strong className="font-medium text-bone">동일 원천의 전사 합</strong>
+        입니다.
+      </ScreenGuide>
+
+      {/* 운영 현황 — GET /dashboard/stats */}
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-sm font-medium text-bone">운영 현황</h2>
+          <p className="mt-0.5 text-xs text-slatey">관리 고객사·보고서·이슈·계약</p>
+        </div>
+        {statsLoading ? (
+          <SkeletonKpi count={4} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard
             title="관리 고객사"
             value={kpi?.total_clients ?? '—'}
@@ -116,13 +136,19 @@ export function ObservePage() {
             compact
           />
         </div>
-      )}
+        )}
+      </section>
 
-      {/* 재무 요약 — GET /finance-ledger totals(전사 합, 금액 SensitiveData money) */}
-      {financeLoading ? (
-        <SkeletonKpi count={5} />
-      ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      {/* 재무 (전사 합) — GET /finance-ledger totals(금액 SensitiveData money) */}
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-sm font-medium text-bone">재무 (전사 합)</h2>
+          <p className="mt-0.5 text-xs text-slatey">재무 원장과 같은 값</p>
+        </div>
+        {financeLoading ? (
+          <SkeletonKpi count={5} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <KpiCard
             title="매출인식"
             value={<SensitiveData type="money" value={fmtMoney(totals?.sale_recognized ?? null)} />}
@@ -164,13 +190,19 @@ export function ObservePage() {
             to="/finance-ledger"
           />
         </div>
-      )}
+        )}
+      </section>
 
-      {/* 감축량/자산 요약 — GET /asset-vehicles kpi(전체 기준) */}
-      {assetsLoading ? (
-        <SkeletonKpi count={4} />
-      ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* 전기버스 감축·정산 예정 (전사 합) — GET /asset-vehicles kpi(전체 기준) */}
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-sm font-medium text-bone">전기버스 감축·정산 예정 (전사 합)</h2>
+          <p className="mt-0.5 text-xs text-slatey">전기버스 자산과 같은 값</p>
+        </div>
+        {assetsLoading ? (
+          <SkeletonKpi count={4} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard
             title="차량 수"
             value={
@@ -201,7 +233,8 @@ export function ObservePage() {
             to="/asset-vehicles"
           />
         </div>
-      )}
+        )}
+      </section>
 
       {/* 사업 단계 지연·임박 — GET /projects/stage-delays (읽기 전용, 편집 진입 없음) */}
       <section className="rounded-3xl border border-hairline bg-graphite p-5">

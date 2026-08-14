@@ -13,6 +13,7 @@ import {
   Stack,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { ScreenGuide } from '../../components/ScreenGuide'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { KpiCard } from '../../components/KpiCard'
@@ -62,6 +63,14 @@ export function SettlementsPage() {
         title="정산 관리"
         subtitle="정산 헤더 상태전이·이력 + 부서 워크플로우 파이프라인 — 내부 전용"
       />
+
+      <ScreenGuide
+        perspective="정산 단위(운수사×사업)"
+        links={[{ label: '예정 요약으로', to: '/asset-report' }]}
+      >
+        정산을 <strong className="font-medium text-bone">확정 → 청구 → 입금완료</strong>로 진행합니다.
+        파이프라인 탭에서 수집 → 결산 → 정산 → 보고 → 통지 전체 단계를 봅니다.
+      </ScreenGuide>
 
       {/* 탭 — 정산 목록 / 파이프라인 현황(과설계 회피: nav는 하나, 내부 탭으로 분리) */}
       <div className="flex gap-1.5 border-b border-hairline">

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bus, ChartLineUp, Coins, DownloadSimple, Gauge } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { ScreenGuide } from '../../components/ScreenGuide'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
@@ -254,6 +255,18 @@ export function AssetVehiclesPage() {
           </RoleGate>
         }
       />
+
+      <ScreenGuide
+        perspective="차량 1대 단위"
+        links={[
+          { label: '사업 단위로', to: '/finance-ledger' },
+          { label: '운수사 단위로', to: '/asset-report' },
+        ]}
+      >
+        어떤 전기버스가 있고 각 감축량·예상지급액인지 <strong className="font-medium text-bone">차량 단위</strong>
+        로 봅니다. 예상지급액은 전기버스 자산(차량)·재무 원장(사업)·자산관리 보고(운수사)에서{' '}
+        <strong className="font-medium text-bone">같은 값을 다른 축으로 본 것</strong>입니다.
+      </ScreenGuide>
 
       {/* 차량 KPI 4종 — 필터 걸린 차량 집계 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

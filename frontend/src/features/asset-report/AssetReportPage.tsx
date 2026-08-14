@@ -12,6 +12,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { ScreenGuide } from '../../components/ScreenGuide'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { KpiCard } from '../../components/KpiCard'
@@ -182,6 +183,20 @@ export function AssetReportPage() {
           </div>
         }
       />
+
+      <ScreenGuide
+        perspective="운수사 단위"
+        links={[
+          { label: '사업 단위로', to: '/finance-ledger' },
+          { label: '차량 단위로', to: '/asset-vehicles' },
+          // 정산 관리(/settlements)는 OBSERVER 화이트리스트 밖 — 내부역할에게만 노출(깨진 링크 방지)
+          ...(isObserver ? [] : [{ label: '정산 상태로', to: '/settlements' }]),
+        ]}
+      >
+        각 운수사에 <strong className="font-medium text-bone">정산될 예정액</strong>을 운수사 단위로
+        요약합니다(행 펼치면 사업별). 예상지급액은 전기버스 자산(차량)·재무 원장(사업)·자산관리 보고(운수사)
+        에서 <strong className="font-medium text-bone">같은 값을 다른 축으로 본 것</strong>입니다.
+      </ScreenGuide>
 
       {/* 전사 총계 KPI — 필터 기준 전 운수사 합 (사업수는 distinct, 금액 SensitiveData money) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

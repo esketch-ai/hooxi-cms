@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Coins, DownloadSimple, Package, Receipt, TrendUp, Warehouse } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { ScreenGuide } from '../../components/ScreenGuide'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
@@ -206,6 +207,18 @@ export function FinanceLedgerPage() {
           </RoleGate>
         }
       />
+
+      <ScreenGuide
+        perspective="사업 1건 단위"
+        links={[
+          { label: '차량 단위로', to: '/asset-vehicles' },
+          { label: '운수사 단위로', to: '/asset-report' },
+        ]}
+      >
+        사업별 매출·원가·이익·재고·예상지급액을 <strong className="font-medium text-bone">사업 단위</strong>로
+        봅니다. 예상지급액은 전기버스 자산(차량)·재무 원장(사업)·자산관리 보고(운수사)에서{' '}
+        <strong className="font-medium text-bone">같은 값을 다른 축으로 본 것</strong>입니다.
+      </ScreenGuide>
 
       {/* 현재시세 배너 — 재고평가 기준 매출단가. 등록/변경은 환경설정으로 안내(입력 UI 중복 금지, 읽기만) */}
       <div className="flex flex-col gap-1.5 rounded-3xl border border-hairline bg-graphite-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
