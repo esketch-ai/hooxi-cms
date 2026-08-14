@@ -33,6 +33,7 @@ from models import (
     get_db,
     init_db,
 )
+from routers import asset_report as asset_report_router
 from routers import asset_vehicles as asset_vehicles_router
 from routers import assets as assets_router
 from routers import audit as audit_router
@@ -328,6 +329,7 @@ app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
 app.include_router(assets_router.router, prefix=API_V1_PREFIX)
 app.include_router(asset_vehicles_router.router, prefix=API_V1_PREFIX)
 app.include_router(finance_ledger_router.router, prefix=API_V1_PREFIX)
+app.include_router(asset_report_router.router, prefix=API_V1_PREFIX)
 app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(buyers_router.router, prefix=API_V1_PREFIX)
 app.include_router(segments_router.router, prefix=API_V1_PREFIX)

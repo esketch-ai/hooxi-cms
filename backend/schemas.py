@@ -921,6 +921,54 @@ class FinanceLedgerResponse(BaseModel):
     current_market_rate: Optional[float] = None  # 오늘 현재시세(FL-2, 재고평가 기준단가)
 
 
+# 정산 요약 매트릭스(P2 '자산관리 보고') — 운수사×사업 grain 집계 --------------------
+class SettlementProjectBreakdown(BaseModel):
+    """운수사가 참여한 사업 1건의 정산 요약(드릴다운) — 저장 파생값 합(재계산 없음)."""
+
+    project_id: str
+    project_name: str
+    vehicle_count: int
+    total_reduction: Optional[float] = None  # Σ총감축량(None 안전)
+    effective_reduction: Optional[float] = None  # Σ잔여반영감축량(None 안전)
+    expected_payout: Optional[float] = None  # Σ예상지급액(None 안전)
+
+
+class SettlementSummaryRow(BaseModel):
+    """운수사 1행 — 참여 사업 롤업 요약 + 사업별 드릴다운(projects).
+
+    지급 정본은 ProjectVehicle.client_id(차량 소유 운수사). client_id=None은
+    '(미지정)' 운수사 행(NULL client_id 차량 집계 — Σ행==총계 정합 보장).
+    """
+
+    client_id: Optional[str] = None
+    company_name: str
+    region: Optional[str] = None
+    client_type: Optional[str] = None
+    contract_status: Optional[str] = None
+    participating_project_count: int  # 그 운수사 distinct 참여 사업수
+    participating_vehicle_count: int  # 참여 차량 단순합
+    total_reduction: Optional[float] = None
+    effective_reduction: Optional[float] = None
+    expected_payout: Optional[float] = None
+    projects: List[SettlementProjectBreakdown]
+
+
+class SettlementSummaryTotals(BaseModel):
+    """전사 총계 — distinct project(중복계상 회피)·차량 단순합·None 안전 감축/지급 합."""
+
+    distinct_project_count: int  # 전체 distinct 사업수(운수사 합산 아님)
+    participating_vehicle_count: int
+    total_reduction: Optional[float] = None
+    effective_reduction: Optional[float] = None
+    expected_payout: Optional[float] = None
+
+
+class SettlementSummaryResponse(BaseModel):
+    items: List[SettlementSummaryRow]  # 운수사 행((미지정) 포함)
+    total: int  # 운수사 행 수
+    totals: SettlementSummaryTotals  # 전사 총계
+
+
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
 # 매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(부록 N.8 D1) --------------
 class BuyerIn(BaseModel):

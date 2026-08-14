@@ -65,7 +65,8 @@ EXTERNAL_ROLES = {"PARTNER", "INVESTOR"}
 OBSERVER_SCOPE_EXACT = {
     "/api/v1/users/me", "/api/v1/codes", "/api/v1/dashboard/stats",
     "/api/v1/projects/stage-delays", "/api/v1/finance-ledger",
-    "/api/v1/asset-vehicles", "/api/v1/chat/badge",
+    "/api/v1/asset-vehicles", "/api/v1/asset-report/settlement-summary",
+    "/api/v1/chat/badge",
 }
 OBSERVER_SCOPE_PREFIX = ("/api/v1/auth/",)
 

@@ -12,6 +12,10 @@ describe('isObserverAllowed', () => {
   it('화이트리스트 정확 매칭 → true', () => {
     for (const p of OBSERVER_PATHS) expect(isObserverAllowed(p)).toBe(true)
   })
+  it('자산관리 보고(P2)는 OBSERVER 허용 경로', () => {
+    expect(OBSERVER_PATHS).toContain('/asset-report')
+    expect(isObserverAllowed('/asset-report')).toBe(true)
+  })
   it('화이트리스트 하위 경로(startsWith) → true', () => {
     expect(isObserverAllowed('/finance-ledger/123')).toBe(true)
     expect(isObserverAllowed('/guide/reports')).toBe(true)
