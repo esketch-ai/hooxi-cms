@@ -52,6 +52,10 @@ export interface SettlementSummaryFilters {
 // ── P3 정산 통지(메일) — 미리보기·발송 계약 (backend POST /asset-report/settlement-notice/*) ──
 // master.write(STAFF/MANAGER/ADMIN) 전용. 미지정(미매칭) 운수사는 백엔드가 미리보기에서 제외한다.
 
+/** 통지 유형(P4) — EXPECTED=live 예정액 고지 / CONFIRMED=확정 header(confirmed_amount) 고지.
+ *  기본 EXPECTED(무회귀). CONFIRMED은 확정 header 있는 운수사만 백엔드가 대상으로 남긴다. */
+export type SettlementNoticeType = 'EXPECTED' | 'CONFIRMED'
+
 /** 통지 미리보기 1행 — 운수사 단위. can_receive=false면 수신자(공통/주담당 메일) 없음 */
 export interface SettlementNoticePreviewItem {
   client_id: string
@@ -90,4 +94,11 @@ export interface SettlementNoticeSendPayload {
   client_ids?: string[]
   subject?: string
   body?: string
+  /** 통지 유형 — 미지정 시 백엔드 기본 EXPECTED */
+  notice_type?: SettlementNoticeType
+}
+
+/** 미리보기 payload — 현재 필터 + 통지 유형(대상·금액 원천 분기) */
+export interface SettlementNoticePreviewPayload extends SettlementSummaryFilters {
+  notice_type?: SettlementNoticeType
 }

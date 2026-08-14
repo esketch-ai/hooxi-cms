@@ -391,6 +391,148 @@ def test_send_target_locked_to_client_ids(client, manager_headers, monkeypatch):
     assert [d["client_id"] for d in res["details"]] == [s1]
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 증분 3 — 확정 정산 통지 연계(P4): notice_type=CONFIRMED
+# 확정 header(tb_settlement.confirmed_amount 동결값)로 금액 원천 스왑 + 확정 문구.
+# 미확정 운수사는 CONFIRMED 대상 제외. EXPECTED(기본)은 불변(무회귀).
+# ═══════════════════════════════════════════════════════════════════════════
+def _confirm_header(client_id, amount, status="CONFIRMED"):
+    """확정 header(tb_settlement) 직접 시드 — confirmed_amount를 동결값으로 고정.
+
+    live 예상지급액과 다른 값을 넣어 '확정 통지가 동결값을 쓰는지' 판별할 수 있게 한다.
+    """
+    db = models.SessionLocal()
+    try:
+        pv = (db.query(models.ProjectVehicle)
+              .filter(models.ProjectVehicle.client_id == client_id).first())
+        s = models.Settlement(
+            client_id=client_id, project_id=pv.project_id, period=None,
+            status=status, confirmed_amount=amount,
+        )
+        db.add(s)
+        db.commit()
+        return s.settlement_id
+    finally:
+        db.close()
+
+
+# ── CONFIRMED — 확정 header 동결값 사용·확정 문구·예정 disclaimer 부재 ─────────
+def test_confirmed_notice_uses_frozen_amount(client, manager_headers, monkeypatch):
+    cf = _mk_carrier(client, manager_headers, "확정CF", email="cf@carrier.example")
+    live = _payout_of(client, manager_headers, cf)
+    frozen = 777000.0
+    assert live is not None and live != frozen  # live와 다른 동결값으로 판별
+    _confirm_header(cf, frozen)
+
+    sent = _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [cf], "notice_type": "CONFIRMED"})
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == 1
+    body = sent[0]["body"]
+    # 금액 = 확정 header confirmed_amount(동결값), live 예상지급액 아님
+    assert "확정 정산액: {0:,.0f}원".format(frozen) in body
+    assert "{0:,.0f}원".format(live) not in body
+    # 확정 문구 포함, 예정 disclaimer 부재
+    assert "확정 정산액입니다" in body
+    assert "확정 정산 명세" in body
+    assert "정산 예정액이며 확정 금액이 아닙니다" not in body
+    # 활동 이력 '확정 명세' [자동]
+    db = models.SessionLocal()
+    try:
+        ah = (db.query(models.ActivityHistory)
+              .filter(models.ActivityHistory.client_id == cf,
+                      models.ActivityHistory.activity_type == "EMAIL").one())
+        assert ah.title.startswith("[자동]") and "확정" in ah.title
+    finally:
+        db.close()
+
+
+# ── CONFIRMED — 미확정 운수사는 preview sendable·send 대상 제외 ───────────────
+def test_confirmed_excludes_unconfirmed(client, manager_headers, monkeypatch):
+    conf = _mk_carrier(client, manager_headers, "확정있음", email="has-cf@carrier.example")
+    _confirm_header(conf, 500000.0)
+    noconf = _mk_carrier(client, manager_headers, "확정없음", email="no-cf@carrier.example")
+
+    # preview: CONFIRMED은 확정 header 있는 운수사만 목록·sendable
+    r = client.post(PREVIEW, headers=manager_headers, json={"notice_type": "CONFIRMED"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    ids = [i["client_id"] for i in body["items"]]
+    assert conf in ids and noconf not in ids  # 미확정 목록 제외
+    by_id = {i["client_id"]: i for i in body["items"]}
+    assert by_id[conf]["expected_payout"] == 500000.0  # 확정 금액 노출
+
+    # send: 미확정을 명시 요청해도 발송 안 됨(sendable 밖)
+    sent = _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [conf, noconf], "notice_type": "CONFIRMED"})
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["target_count"] == 1 and res["sent"] == 1
+    assert [d["client_id"] for d in res["details"]] == [conf]
+    assert "no-cf@carrier.example" not in [m["to"][0] for m in sent]
+
+
+# ── CONFIRMED — 스코프 격리 유지(각 메일 자기 운수사 확정액만, 타사 부재) ──────
+def test_confirmed_scope_isolation(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "확정격리A", email="cfa@carrier.example")
+    b = _mk_carrier(client, manager_headers, "확정격리B", email="cfb@carrier.example")
+    _confirm_header(a, 111000.0)
+    _confirm_header(b, 222000.0)
+
+    sent = _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a, b], "notice_type": "CONFIRMED"})
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == 2
+    by_to = {m["to"][0]: m["body"] for m in sent}
+    body_a = by_to["cfa@carrier.example"]
+    body_b = by_to["cfb@carrier.example"]
+    # A 본문: 자기 확정액·회사명만, B의 확정액·회사명 부재
+    assert "111,000원" in body_a and "통지운수확정격리A" in body_a
+    assert "222,000" not in body_a and "통지운수확정격리B" not in body_a
+    # 대칭
+    assert "222,000원" in body_b and "통지운수확정격리B" in body_b
+    assert "111,000" not in body_b and "통지운수확정격리A" not in body_b
+
+
+# ── CONFIRMED — 감사 금액 원문 미기록 유지(notice_type만 추가) ────────────────
+def test_confirmed_audit_no_secret(client, manager_headers, monkeypatch):
+    g = _mk_carrier(client, manager_headers, "확정감사", email="cfg@carrier.example")
+    _confirm_header(g, 333000.0)
+    _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [g], "notice_type": "CONFIRMED"})
+    assert r.status_code == 200, r.text
+    db = models.SessionLocal()
+    try:
+        log = (db.query(models.AuditLog)
+               .filter(models.AuditLog.action == "SETTLEMENT_NOTICE_SEND")
+               .order_by(models.AuditLog.created_at.desc()).first())
+        assert log.new_value.startswith("targets=")  # 계약 유지
+        assert "CONFIRMED" in log.new_value  # notice_type 기록
+        assert "333,000" not in log.new_value and "333000" not in log.new_value
+        assert "cfg@carrier.example" not in log.new_value
+    finally:
+        db.close()
+
+
+# ── EXPECTED(기본) — notice_type 미전달 시 기존 예정 통지 불변(무회귀) ─────────
+def test_expected_default_unchanged(client, manager_headers, monkeypatch):
+    e = _mk_carrier(client, manager_headers, "예정기본", email="exp@carrier.example")
+    _confirm_header(e, 999000.0)  # 확정 header가 있어도 EXPECTED은 live 예정액 사용
+    live = _payout_of(client, manager_headers, e)
+    sent = _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers, json={"client_ids": [e]})  # notice_type 미전달
+    assert r.status_code == 200, r.text
+    body = sent[0]["body"]
+    assert "{0:,.0f}원".format(live) in body  # live 예정액
+    assert "999,000원" not in body  # 확정 header 무시(EXPECTED)
+    assert "정산 예정액이며 확정 금액이 아닙니다" in body  # 예정 disclaimer
+    assert "확정 정산액입니다" not in body
+
+
 # ── 인가 — master.write(STAFF 200)·OBSERVER 403·외부역할 403·미인증 401 ──────
 def test_authz_preview_and_send(client, staff_headers, monkeypatch):
     # STAFF(master.write 보유) 200

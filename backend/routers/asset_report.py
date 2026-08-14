@@ -14,11 +14,12 @@ export 경로는 화이트리스트 미포함 → OBSERVER 자연 차단.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission, require_role
-from models import ActivityHistory, Client, User, get_db
+from models import ActivityHistory, Client, Settlement, User, get_db
 from routers import common
 from routers.segments import can_receive_map
 from services import email_service
@@ -159,9 +160,41 @@ def export_settlement_summary(
 # 실패 격리 + 건별 commit(segments._execute_send 관용구). master.write 게이트 +
 # 화이트리스트 미포함 → OBSERVER·외부역할 자연 차단.
 # ---------------------------------------------------------------------------
-def _sendable(item: dict, receivable: dict) -> bool:
-    """실효 발송 대상 — 예상지급액 산정 완료 & 수신 가능(공통 수신자/주 담당자 이메일)."""
-    return item.get("expected_payout") is not None and receivable.get(item["client_id"], False)
+# 확정 통지(P4 증분3) 대상 판정용 — status가 확정 이상인 header만 롤업(예정=header 없음 제외).
+# settlements 라우터 _TRANSITIONS와 동일 상태 문자열(코드 SETTLEMENT_STATUS) 사용.
+_CONFIRMED_STATUSES = ("CONFIRMED", "BILLED", "COMPLETED")
+
+
+def _confirmed_amount_map(db: Session, ids: list) -> dict:
+    """운수사별 확정 정산액 롤업 — Σ tb_settlement.confirmed_amount(status 확정 이상).
+
+    사업별 header를 운수사 단위로 합산(재계산 금지 — 동결값 confirmed_amount 사용).
+    확정 header가 없는 운수사는 키 자체가 없다 → CONFIRMED 통지 대상에서 자연 제외.
+    """
+    if not ids:
+        return {}
+    rows = (
+        db.query(Settlement.client_id, func.sum(Settlement.confirmed_amount))
+        .filter(
+            Settlement.client_id.in_(ids),
+            Settlement.status.in_(_CONFIRMED_STATUSES),
+        )
+        .group_by(Settlement.client_id)
+        .all()
+    )
+    return {cid: (float(amt) if amt is not None else None) for cid, amt in rows}
+
+
+def _payout_source(notice_type: str, item: dict, confirmed_map: dict):
+    """통지 유형별 금액 원천 — EXPECTED=live 예상지급액, CONFIRMED=확정 header 롤업."""
+    if notice_type == "CONFIRMED":
+        return confirmed_map.get(item["client_id"])
+    return item.get("expected_payout")
+
+
+def _sendable(payout, client_id: str, receivable: dict) -> bool:
+    """실효 발송 대상 — 금액 산정 완료(원천값 not None) & 수신 가능(공통 수신자/주 담당자 이메일)."""
+    return payout is not None and receivable.get(client_id, False)
 
 
 @router.post(
@@ -187,6 +220,14 @@ def preview_settlement_notice(
         region=payload.region,
     )
     targets = notice_service.settlement_notice_targets(data["items"])
+    # CONFIRMED은 확정 header(confirmed_amount) 있는 운수사만 대상 — 미확정은 목록·sendable 제외.
+    confirmed_map = (
+        _confirmed_amount_map(db, [t["client_id"] for t in targets])
+        if payload.notice_type == "CONFIRMED"
+        else {}
+    )
+    if payload.notice_type == "CONFIRMED":
+        targets = [t for t in targets if t["client_id"] in confirmed_map]
     # can_receive/to_count 판정은 Client 엔티티가 필요 — 대상 client_id 일괄 로드
     ids = [t["client_id"] for t in targets]
     clients = (
@@ -199,7 +240,8 @@ def preview_settlement_notice(
         schemas.SettlementNoticePreviewItem(
             client_id=t["client_id"],
             company_name=t["company_name"],
-            expected_payout=t.get("expected_payout"),
+            # EXPECTED=live 예상지급액 / CONFIRMED=확정 header 롤업(고지 금액과 일치)
+            expected_payout=_payout_source(payload.notice_type, t, confirmed_map),
             participating_vehicle_count=t.get("participating_vehicle_count") or 0,
             participating_project_count=t.get("participating_project_count") or 0,
             can_receive=receivable.get(t["client_id"], False),
@@ -207,7 +249,12 @@ def preview_settlement_notice(
         )
         for t in targets
     ]
-    sendable_count = sum(1 for t in targets if _sendable(t, receivable))
+    sendable_count = sum(
+        1
+        for t in targets
+        if _sendable(_payout_source(payload.notice_type, t, confirmed_map),
+                     t["client_id"], receivable)
+    )
     return schemas.SettlementNoticePreviewResponse(
         items=items, total=len(items), sendable_count=sendable_count
     )
@@ -247,6 +294,14 @@ def send_settlement_notice(
     targets = notice_service.settlement_notice_targets(data["items"])
     # client_id → item 매핑(스코프 격리 이중확인용 — 렌더 시 이 키로만 item을 가져온다)
     item_by_id = {t["client_id"]: t for t in targets}
+    # CONFIRMED은 확정 header 있는 운수사만 대상 — 미확정은 item_by_id에서 제외(sendable 자연 미포함).
+    confirmed_map = (
+        _confirmed_amount_map(db, list(item_by_id))
+        if payload.notice_type == "CONFIRMED"
+        else {}
+    )
+    if payload.notice_type == "CONFIRMED":
+        item_by_id = {cid: it for cid, it in item_by_id.items() if cid in confirmed_map}
     clients = {
         c.client_id: c
         for c in (
@@ -256,7 +311,11 @@ def send_settlement_notice(
         )
     }
     receivable = can_receive_map(db, list(clients.values()))
-    sendable_ids = [cid for cid, it in item_by_id.items() if _sendable(it, receivable)]
+    sendable_ids = [
+        cid
+        for cid, it in item_by_id.items()
+        if _sendable(_payout_source(payload.notice_type, it, confirmed_map), cid, receivable)
+    ]
 
     # 대상 = 요청 client_ids ∩ sendable(요청 순서 보존·중복 제거), 없으면 sendable 전체
     if payload.client_ids:
@@ -272,12 +331,19 @@ def send_settlement_notice(
 
     # 제목/본문 = 요청 오버라이드(실무자 고급옵션) 우선, 미지정 시 tb_config, 없으면 코드 기본값.
     # 오버라이드도 render_settlement_notice에서 client별 변수만 주입(정규식 치환) → 스코프 유출 없음.
-    subject_tpl = payload.subject or _config_template(
-        db, "settlement_notice_subject", notice_service.DEFAULT_SETTLEMENT_NOTICE_SUBJECT
-    )
-    body_tpl = payload.body or _config_template(
-        db, "settlement_notice_body", notice_service.DEFAULT_SETTLEMENT_NOTICE_BODY
-    )
+    # 통지 유형별 기본 템플릿·config 키 분기(EXPECTED=예정 명세 / CONFIRMED=확정 명세).
+    if payload.notice_type == "CONFIRMED":
+        subject_key, body_key = "settlement_notice_confirmed_subject", "settlement_notice_confirmed_body"
+        default_subject = notice_service.DEFAULT_SETTLEMENT_NOTICE_CONFIRMED_SUBJECT
+        default_body = notice_service.DEFAULT_SETTLEMENT_NOTICE_CONFIRMED_BODY
+        activity_title = "{0} 정산 확정 명세 이메일 발송".format(common.AUTO_PREFIX)
+    else:
+        subject_key, body_key = "settlement_notice_subject", "settlement_notice_body"
+        default_subject = notice_service.DEFAULT_SETTLEMENT_NOTICE_SUBJECT
+        default_body = notice_service.DEFAULT_SETTLEMENT_NOTICE_BODY
+        activity_title = "{0} 정산 예정 명세 이메일 발송".format(common.AUTO_PREFIX)
+    subject_tpl = payload.subject or _config_template(db, subject_key, default_subject)
+    body_tpl = payload.body or _config_template(db, body_key, default_body)
     now_kst = common.now_kst()
 
     sent = failed = 0
@@ -308,8 +374,17 @@ def send_settlement_notice(
             )
             continue
 
+        # CONFIRMED은 금액값을 확정 header 롤업으로 치환한 파생 item으로 렌더(원 summary item 불변).
+        render_item = item
+        if payload.notice_type == "CONFIRMED":
+            render_item = dict(item)
+            render_item["expected_payout"] = confirmed_map.get(cid)
         subject, html_body = notice_service.render_settlement_notice(
-            item, subject_tpl=subject_tpl, body_tpl=body_tpl, now=now_kst
+            render_item,
+            subject_tpl=subject_tpl,
+            body_tpl=body_tpl,
+            notice_type=payload.notice_type,
+            now=now_kst,
         )
         try:
             email_service.send_mail(
@@ -332,7 +407,7 @@ def send_settlement_notice(
             ActivityHistory(
                 client_id=cid, manager_id=user.user_id, created_by=user.user_id,
                 activity_date=now_kst, activity_type="EMAIL",
-                title="{0} 정산 예정 명세 이메일 발송".format(common.AUTO_PREFIX)[:200],
+                title=activity_title[:200],
                 content="수신자: {0}".format(", ".join(to + cc)),
             )
         )
@@ -346,7 +421,9 @@ def send_settlement_notice(
     # 감사 1건 — 카운트 요약만(금액·수신 이메일 원문 절대 미기록, R2-E6)
     AuditLogger.log_action(
         db, user.user_id, "SETTLEMENT_NOTICE_SEND", target_type="ASSET_REPORT",
-        new_value="targets={0}; sent={1}; failed={2}".format(len(target_ids), sent, failed),
+        new_value="targets={0}; sent={1}; failed={2}; type={3}".format(
+            len(target_ids), sent, failed, payload.notice_type
+        ),
     )
     db.commit()
     return schemas.SettlementNoticeSendResult(

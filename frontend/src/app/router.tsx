@@ -31,6 +31,7 @@ import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { FinanceLedgerPage } from '../features/finance-ledger/FinanceLedgerPage'
 import { AssetReportPage } from '../features/asset-report/AssetReportPage'
+import { SettlementsPage } from '../features/settlements/SettlementsPage'
 import { ChatPage } from '../features/chat/ChatPage'
 import { MapPage } from '../features/map/MapPage'
 import { ObservePage } from '../features/observe/ObservePage'
@@ -128,6 +129,7 @@ export const router = createBrowserRouter([
       { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
       { path: '/finance-ledger', element: <FinanceLedgerPage /> }, // FL-3 재무 원장(사업 grain)
       { path: '/asset-report', element: <AssetReportPage /> }, // P2 자산관리 보고(고객사 grain)
+      { path: '/settlements', element: <SettlementsPage /> }, // P4 정산 관리(SCR-07) — 내부 전용, OBSERVER 접근 불가
       // ── P3 구현 화면 ──────────────────────────────────────────────
       { path: '/chat', element: <ChatPage /> }, // SCR-08
       { path: '/map', element: <MapPage /> }, // SCR-09

@@ -59,6 +59,7 @@ from routers import projects as projects_router
 from routers import reports as reports_router
 from routers import schedules as schedules_router
 from routers import segments as segments_router
+from routers import settlements as settlements_router
 from routers import users as users_router
 from services import storage
 from services.audit_logger import AuditLogger
@@ -175,6 +176,7 @@ def seed_codes():
         ("APPROVAL_STATUS", "승인", "승인", "emerald", None, 20),
         # 정산 상태 (상태전이 머신 — 전 값 로직 참조)
         ("SETTLEMENT_STATUS", "STANDBY", "대기", "gray", None, 10),
+        ("SETTLEMENT_STATUS", "CONFIRMED", "확정", "blue", None, 15),
         ("SETTLEMENT_STATUS", "BILLED", "청구", "amber", None, 20),
         ("SETTLEMENT_STATUS", "COMPLETED", "입금완료", "emerald", None, 30),
         # 보고서 상태 (발송 상태전이 머신 — 전 값 로직 참조, APPROVED는 배치 자동 발송 대상)
@@ -333,6 +335,7 @@ app.include_router(asset_report_router.router, prefix=API_V1_PREFIX)
 app.include_router(projects_router.router, prefix=API_V1_PREFIX)
 app.include_router(buyers_router.router, prefix=API_V1_PREFIX)
 app.include_router(segments_router.router, prefix=API_V1_PREFIX)
+app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(market_rates_router.router, prefix=API_V1_PREFIX)
 app.include_router(portal_router.router, prefix=API_V1_PREFIX)

@@ -36,6 +36,26 @@ DEFAULT_SETTLEMENT_NOTICE_BODY = (
     "<p>문의 사항은 본 메일로 회신 주시기 바랍니다. 감사합니다.</p>"
 )
 
+# 확정 통지(P4 증분3) — 확정 정산액(confirmed_amount) 고지 기본 템플릿.
+# EXPECTED와 달리 '확정 정산 명세'·금액 라벨 '확정 정산액'. 금액값은 라우터에서 확정
+# header confirmed_amount 롤업으로 치환한 파생 item을 render에 전달한다(원 summary item 불변).
+DEFAULT_SETTLEMENT_NOTICE_CONFIRMED_SUBJECT = "[Hooxi Partners] {운수사명} 정산 확정 명세 안내"
+# 확정 본문은 확정 header 롤업(운수사 단위 동결 총액)만 고지 — 사업별 드릴다운({사업내역표})은
+# 부착하지 않는다. 드릴다운의 사업별 금액은 live 예상지급액(치환 대상 아님)이라 확정 총액과
+# 섞이면 혼선/유출이 되므로, 확정 통지에는 동결 총액만 노출한다(스코프·정합 보수적).
+DEFAULT_SETTLEMENT_NOTICE_CONFIRMED_BODY = (
+    "<p>{운수사명} 담당자님, 안녕하세요.</p>"
+    "<p>후시파트너스입니다. {기준일} 기준 확정 정산 명세를 안내드립니다.</p>"
+    "<ul>"
+    "<li>참여 사업수: {참여사업수}</li>"
+    "<li>참여 차량수: {참여차량수}</li>"
+    "<li>총감축량: {총감축량}</li>"
+    "<li>잔여반영감축량: {잔여반영감축량}</li>"
+    "<li>확정 정산액: {예상지급액}</li>"
+    "</ul>"
+    "<p>문의 사항은 본 메일로 회신 주시기 바랍니다. 감사합니다.</p>"
+)
+
 # 필수 고지 — 코드가 렌더 결과에 항상 부착(템플릿 오버라이드와 무관하게 누락 방지).
 SETTLEMENT_NOTICE_DISCLAIMER = (
     "본 금액은 정산 예정액이며 확정 금액이 아닙니다. "
@@ -43,6 +63,15 @@ SETTLEMENT_NOTICE_DISCLAIMER = (
 )
 _DISCLAIMER_HTML = (
     '<p style="color:#b45309;font-size:12px">※ ' + html.escape(SETTLEMENT_NOTICE_DISCLAIMER) + "</p>"
+)
+# 확정 통지 고지 — 확정 정산액임을 명시(예정 고지 문구는 부착하지 않는다).
+SETTLEMENT_NOTICE_CONFIRMED_DISCLAIMER = (
+    "본 금액은 확정 정산액입니다. 확정된 정산 금액으로 안내드립니다."
+)
+_DISCLAIMER_CONFIRMED_HTML = (
+    '<p style="color:#166534;font-size:12px">※ '
+    + html.escape(SETTLEMENT_NOTICE_CONFIRMED_DISCLAIMER)
+    + "</p>"
 )
 
 
@@ -103,6 +132,7 @@ def render_settlement_notice(
     *,
     subject_tpl: str,
     body_tpl: str,
+    notice_type: str = "EXPECTED",
     now: Optional[datetime] = None,
 ) -> Tuple[str, str]:
     """정산 명세 메일 (제목, HTML 본문) 렌더 — 스코프 격리 코어.
@@ -110,7 +140,11 @@ def render_settlement_notice(
     client_item(그 운수사 1건 롤업)만 입력받아, 그 운수사 수치·projects만으로 렌더한다.
     타 운수사 데이터는 애초에 함수에 들어오지 않으므로 유출이 구조적으로 불가능하다.
     치환은 render_template(정규식 안전) — 미지원 {변수}는 원문 유지(str.format 금지 규약).
-    고지 문구(_DISCLAIMER_HTML)는 템플릿 오버라이드와 무관하게 본문 끝에 항상 부착한다.
+
+    notice_type=EXPECTED(기본)이면 '예정액(확정 아님)' 고지(_DISCLAIMER_HTML)를,
+    CONFIRMED이면 '확정 정산액' 고지(_DISCLAIMER_CONFIRMED_HTML)를 본문 끝에 부착한다.
+    CONFIRMED의 금액값은 호출부에서 client_item.expected_payout를 확정 header
+    confirmed_amount로 치환해 전달한다(여기선 그대로 표시만 — 재계산·스코프 확장 없음).
     """
     base_date = (now or common.now_kst()).strftime("%Y-%m-%d")
     variables = {
@@ -123,6 +157,9 @@ def render_settlement_notice(
         "예상지급액": _fmt_money(client_item.get("expected_payout")),
         "사업내역표": _project_table_html(client_item.get("projects") or []),
     }
+    disclaimer = (
+        _DISCLAIMER_CONFIRMED_HTML if notice_type == "CONFIRMED" else _DISCLAIMER_HTML
+    )
     subject = render_template(subject_tpl, variables)
-    body = render_template(body_tpl, variables) + _DISCLAIMER_HTML
+    body = render_template(body_tpl, variables) + disclaimer
     return subject, body

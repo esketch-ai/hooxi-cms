@@ -20,6 +20,7 @@ import {
   SquaresFour,
   TreeStructure,
   Truck,
+  Wallet,
 } from '@phosphor-icons/react'
 import type { UserRole } from '../../types'
 
@@ -100,6 +101,13 @@ export const NAV_GROUPS: NavGroup[] = [
         path: '/asset-report',
         icon: ChartBar,
         roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
+      },
+      {
+        // P4 정산 관리 — 내부 전용(OBSERVER 제외). 상태전이는 MANAGER↑, 청구취소는 ADMIN.
+        label: '정산 관리',
+        path: '/settlements',
+        icon: Wallet,
+        roles: ['ADMIN', 'MANAGER', 'STAFF'],
       },
     ],
   },

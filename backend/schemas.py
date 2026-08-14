@@ -4,7 +4,7 @@
 import json
 import re
 from datetime import date, datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -997,11 +997,15 @@ class SettlementNoticePreviewRequest(BaseModel):
 
     미지정 시 전사 대상. 이 스코프가 그대로 sendable 판정·화면 목록이 되고, 프론트는 그
     sendable client_id들을 send.client_ids로 전달해 미리보기==발송 대상을 고정한다(표류 차단).
+
+    notice_type: EXPECTED(기본)=live 예정액 고지 / CONFIRMED=확정 header(confirmed_amount) 고지.
+    CONFIRMED은 확정 header 있는 운수사만 대상(미확정 제외).
     """
 
     client_id: Optional[str] = None  # 운수사 필터(ProjectVehicle.client_id)
     client_type: Optional[str] = None  # 고객사 구분 필터(Client.client_type)
     region: Optional[str] = None  # 지역 필터(Client.region)
+    notice_type: Literal["EXPECTED", "CONFIRMED"] = "EXPECTED"  # 기본 EXPECTED(무회귀)
 
 
 class SettlementNoticeSendRequest(BaseModel):
@@ -1009,11 +1013,14 @@ class SettlementNoticeSendRequest(BaseModel):
 
     subject/body 미지정 시 tb_config(settlement_notice_subject/_body) 오버라이드,
     미저장 시 코드 기본값(services.settlement_notice) 사용.
+
+    notice_type: EXPECTED(기본)=live 예정액 고지 / CONFIRMED=확정 header(confirmed_amount) 고지.
     """
 
     client_ids: Optional[List[str]] = None  # 특정 운수사 한정(없으면 sendable 전체)
     subject: Optional[str] = None
     body: Optional[str] = None
+    notice_type: Literal["EXPECTED", "CONFIRMED"] = "EXPECTED"  # 기본 EXPECTED(무회귀)
 
 
 class SettlementNoticeSendDetail(BaseModel):
@@ -1028,6 +1035,108 @@ class SettlementNoticeSendResult(BaseModel):
     sent: int
     failed: int
     details: List[SettlementNoticeSendDetail]
+
+
+# P4 정산 재건 — 정산 헤더(tb_settlement) 그레인=(고객사×사업). 상태전이 머신 --------------
+class SettlementOut(BaseModel):
+    """정산 헤더 1건 — 확정 시 동결된 지표·상태·감사 시각 포함. status는 SETTLEMENT_STATUS 코드값."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    settlement_id: str
+    client_id: str
+    project_id: str
+    period: Optional[str] = None  # 'YYYY-MM' — 단일 정산이면 None
+    status: str  # CONFIRMED/BILLED/COMPLETED (SETTLEMENT_STATUS)
+    confirmed_amount: Optional[float] = None
+    vehicle_count: Optional[int] = None  # 확정 시점 동결
+    effective_reduction: Optional[float] = None  # 확정 시점 동결
+    confirmed_at: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    billed_at: Optional[datetime] = None
+    billed_by: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completed_by: Optional[str] = None
+    paid_amount: Optional[float] = None  # 완료 시 실입금액
+    payment_type: Optional[str] = None  # 지급 구분 코드값
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class SettlementListResponse(BaseModel):
+    items: List[SettlementOut]
+    total: int
+
+
+class SettlementSnapshotOut(BaseModel):
+    """정산 스냅샷 1회차(append-only 감사) — map_id에 settlement_id 보관(재활용)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    snapshot_id: str
+    map_id: str  # settlement_id(재활용 감사키)
+    seq: int
+    issued_credits: Optional[float] = None
+    amount: Optional[float] = None
+    unit_price: Optional[float] = None
+    allocation_ratio: Optional[float] = None
+    success_fee_rate: Optional[float] = None
+    paid_amount: Optional[float] = None
+    vehicle_count: Optional[int] = None  # 확정 동결 지표(P4 additive)
+    effective_reduction: Optional[float] = None  # 확정 동결 지표(P4 additive)
+    action: str  # CONFIRMED/BILLED/REBILLED/REVERTED/COMPLETED
+    reason: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class SettlementStatusUpdate(BaseModel):
+    """정산 상태전이 요청 — target_status는 SETTLEMENT_STATUS 코드값(라우터 검증)."""
+
+    target_status: str  # CONFIRMED/BILLED/COMPLETED
+    reason: Optional[str] = Field(default=None, max_length=200)
+
+
+class SettlementConfirmRequest(BaseModel):
+    """정산 확정(freeze) 요청 — (고객사×사업[×기간]) 예정 정산을 CONFIRMED로 동결."""
+
+    client_id: str
+    project_id: str
+    period: Optional[str] = Field(default=None, max_length=7)  # 'YYYY-MM' — 단일 정산이면 None
+
+
+class SettlementSnapshotListResponse(BaseModel):
+    items: List[SettlementSnapshotOut]
+    total: int
+
+
+# 부서 워크플로우 파이프라인(P4 증분4) — (운수사×사업) 5단계 진행 파생(조회 전용) --------
+class PipelineRow(BaseModel):
+    """(운수사×사업) 파이프라인 1행 — 수집→결산→정산→보고→통지 5단계 파생 현황.
+
+    stage는 현재 최고 도달 단계 코드(none/collect/accounting/settlement/report/notice),
+    next_action은 아직 도달하지 못한 다음 단계의 할일 문자열이다. reported/notified는
+    신호 강약이 다르다(services.pipeline 주석): reported는 전역(약한) 신호, notified는
+    운수사 활동(정확) 또는 배치 감사(약한 전역). client_id=None은 '(미지정)' 셀(통지 불가).
+    """
+
+    client_id: Optional[str] = None
+    company_name: str
+    project_id: str
+    project_name: str
+    vehicle_count: int
+    has_accounting: bool  # 그 셀에 expected_payout non-null 차량 존재(결산 완료 신호)
+    settlement_status: Optional[str] = None  # None=예정 / CONFIRMED·BILLED·COMPLETED(헤더 status)
+    reported: bool  # DATA_EXPORT/ASSET_REPORT 감사 존재(전역 약한 신호)
+    notified: bool  # 운수사 [자동]정산 EMAIL 이력 or SETTLEMENT_NOTICE_SEND 감사
+    stage: str  # 현재 최고 도달 단계 코드
+    next_action: str  # 다음 할일(도달 못한 다음 단계 안내)
+
+
+class PipelineResponse(BaseModel):
+    items: List[PipelineRow]
+    total: int
+    stage_counts: Optional[Dict[str, int]] = None  # 단계 코드별 행 수(요약 카운트)
 
 
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------

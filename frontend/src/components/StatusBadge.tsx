@@ -76,6 +76,7 @@ export const BADGE_DICTIONARY: Record<BadgeDomain, Record<string, BadgeSpec>> = 
   },
   settlement: {
     STANDBY: { label: '대기', className: gray },
+    CONFIRMED: { label: '확정', className: blue }, // main.py seed 색(blue)과 일치, tb_code 미로딩 폴백
     BILLED: { label: '청구', className: yellow },
     COMPLETED: { label: '입금완료', className: green },
   },

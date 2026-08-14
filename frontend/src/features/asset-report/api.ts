@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import type {
   SettlementNoticePreview,
+  SettlementNoticePreviewPayload,
   SettlementNoticeSendPayload,
   SettlementNoticeSendResult,
   SettlementSummaryFilters,
@@ -30,14 +31,16 @@ export function useSettlementSummary(filters: SettlementSummaryFilters) {
 
 // ── P3 정산 통지 — master.write 전용. 성공/실패 토스트는 화면에서 처리 ──
 
-/** 통지 대상 미리보기 — POST(조회 성격). 대상·수신가능·발송가능 수 반환 */
+/** 통지 대상 미리보기 — POST(조회 성격). 대상·수신가능·발송가능 수 반환.
+ *  notice_type(예정/확정)에 따라 대상·금액 원천이 달라진다(백엔드 분기). */
 export function useSettlementNoticePreview() {
   return useMutation({
-    mutationFn: async (filters: SettlementSummaryFilters) => {
+    mutationFn: async (payload: SettlementNoticePreviewPayload) => {
       const body: Record<string, string> = {}
-      if (filters.client_id) body.client_id = filters.client_id
-      if (filters.client_type) body.client_type = filters.client_type
-      if (filters.region) body.region = filters.region
+      if (payload.client_id) body.client_id = payload.client_id
+      if (payload.client_type) body.client_type = payload.client_type
+      if (payload.region) body.region = payload.region
+      if (payload.notice_type) body.notice_type = payload.notice_type
       const { data } = await api.post<SettlementNoticePreview>(
         '/asset-report/settlement-notice/preview',
         body,

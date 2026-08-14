@@ -75,15 +75,19 @@ class AuditLogger:
     # ── 정산 (SCR-07) ──────────────────────────────────────────────
     @staticmethod
     def settlement_change(
-        db: Session, actor_id: str, map_id: str, old_status: str, new_status: str
+        db: Session, actor_id: str, settlement_id: str, old_status: str, new_status: str
     ) -> AuditLog:
-        """정산 상태 변경 — 금액 원문 기록 금지, 상태만."""
+        """정산 상태 변경 — 금액 원문 기록 금지, 상태 전이만(R2-E6).
+
+        P4 정산 재건: 대상은 tb_settlement 헤더(target_type="SETTLEMENT"). 레거시
+        tb_project_client_map은 은퇴했으므로 구 target_type "PROJECT_CLIENT_MAP"은 사문화한다.
+        """
         return AuditLogger.log_action(
             db,
             actor_id,
             "SETTLEMENT_CHANGE",
-            target_type="PROJECT_CLIENT_MAP",
-            target_id=map_id,
+            target_type="SETTLEMENT",
+            target_id=settlement_id,
             old_value=old_status,
             new_value=new_status,
         )

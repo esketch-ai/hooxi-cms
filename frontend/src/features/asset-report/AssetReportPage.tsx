@@ -28,6 +28,7 @@ import { fmtMoney } from '../../lib/format'
 import { useSettlementNoticePreview, useSettlementNoticeSend, useSettlementSummary } from './api'
 import type {
   SettlementNoticeSendResult,
+  SettlementNoticeType,
   SettlementSummaryFilters,
   SettlementSummaryRow,
 } from './types'
@@ -295,13 +296,15 @@ function SettlementNoticeModal({
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [result, setResult] = useState<SettlementNoticeSendResult | null>(null)
+  // 통지 유형(P4) — 예정액/확정액. 기본 예정(무회귀). 확정 선택 시 대상=확정 header 보유 운수사만.
+  const [noticeType, setNoticeType] = useState<SettlementNoticeType>('EXPECTED')
 
-  // 모달 오픈 시 1회 미리보기 — filters는 오픈 시점 스냅샷으로 고정
+  // 통지 유형 변경 시 미리보기 재조회 — filters는 오픈 시점 스냅샷으로 고정.
   const { mutate: runPreview } = preview
   useEffect(() => {
-    runPreview(filters)
+    runPreview({ ...filters, notice_type: noticeType })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [noticeType])
 
   const data = preview.data
   const items = data?.items ?? []
@@ -317,6 +320,7 @@ function SettlementNoticeModal({
         client_ids: sendableIds,
         subject: subject.trim() || undefined,
         body: body.trim() || undefined,
+        notice_type: noticeType,
       })
       setResult(res)
       setConfirmOpen(false)
@@ -372,7 +376,25 @@ function SettlementNoticeModal({
       >
         {result ? (
           <NoticeResultView result={result} />
-        ) : preview.isPending ? (
+        ) : (
+          <div className="space-y-3">
+            {/* 통지 유형 토글 — 예정액 통지 / 확정액 통지. 확정은 확정 header 보유 운수사만(백엔드 필터) */}
+            <div className="flex gap-1.5 rounded-full border border-hairline bg-elevate p-1 text-sm">
+              {(['EXPECTED', 'CONFIRMED'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setNoticeType(t)}
+                  disabled={preview.isPending}
+                  className={`flex-1 rounded-full px-3 py-1.5 font-medium transition disabled:opacity-60 ${
+                    noticeType === t ? 'bg-primary text-on-primary' : 'text-slatey hover:text-bone'
+                  }`}
+                >
+                  {t === 'EXPECTED' ? '예정액 통지' : '확정액 통지'}
+                </button>
+              ))}
+            </div>
+            {preview.isPending ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-slatey">
             <CircleNotch size={18} className="animate-spin" />
             대상을 확인하는 중…
@@ -383,7 +405,9 @@ function SettlementNoticeModal({
           </p>
         ) : items.length === 0 ? (
           <p className="py-6 text-center text-sm text-slatey">
-            통지 대상 운수사가 없습니다. (미지정 운수사는 제외됩니다.)
+            {noticeType === 'CONFIRMED'
+              ? '확정된 정산이 있는 운수사가 없습니다. (미확정·미지정 운수사는 제외됩니다.)'
+              : '통지 대상 운수사가 없습니다. (미지정 운수사는 제외됩니다.)'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -452,6 +476,8 @@ function SettlementNoticeModal({
               )}
             </div>
           </div>
+            )}
+          </div>
         )}
       </Modal>
 
@@ -460,7 +486,8 @@ function SettlementNoticeModal({
         title="정산 통지 발송"
         message={
           <>
-            <b className="text-bone">{sendableCount}</b>개사에 정산 예정액 통지 메일을 보냅니다.
+            <b className="text-bone">{sendableCount}</b>개사에 정산{' '}
+            {noticeType === 'CONFIRMED' ? '확정액' : '예정액'} 통지 메일을 보냅니다.
             <br />
             발송 후에는 되돌릴 수 없습니다.
           </>

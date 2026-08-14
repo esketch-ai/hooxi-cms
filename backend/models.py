@@ -649,7 +649,8 @@ class SettlementSnapshot(Base):
     )
 
     snapshot_id = Column(String(50), primary_key=True, default=gen_uuid)
-    # 레거시 정산 매핑(tb_project_client_map) 은퇴 후 순수 감사값 — 과거 map_id 문자열 보존
+    # 레거시 정산 매핑(tb_project_client_map) 은퇴 후 순수 감사값 — 과거 map_id 문자열 보존.
+    # P4 정산 재건: settlement_id(tb_settlement PK) 보관에 재사용(스키마 변경 0, 그레인 감사키).
     map_id = Column(String(50), nullable=False)
     seq = Column(Integer, nullable=False)
     # 5요소 동결
@@ -659,10 +660,47 @@ class SettlementSnapshot(Base):
     allocation_ratio = Column(Numeric(5, 2))
     success_fee_rate = Column(Numeric(5, 2))
     paid_amount = Column(Numeric(15, 2))
-    action = Column(String(20), nullable=False)  # BILLED/REBILLED/REVERTED/COMPLETED
+    # P4 정산 재건: 확정 시점 동결 지표(additive) — 차량 대수·유효감축량
+    vehicle_count = Column(Integer)
+    effective_reduction = Column(Numeric(14, 3))
+    action = Column(String(20), nullable=False)  # CONFIRMED/BILLED/REBILLED/REVERTED/COMPLETED
     reason = Column(String(200))
     created_by = Column(String(50), ForeignKey("tb_user.user_id"))
     created_at = Column(DateTime, default=utcnow)
+
+
+class Settlement(Base):
+    """정산 헤더 — P4 정산 재건. 그레인 = (client_id × project_id). 예정은 lazy(header 없음),
+    최초 확정 시 1건 생성. 상태전이 머신 CONFIRMED→BILLED→COMPLETED(코드 SETTLEMENT_STATUS)."""
+
+    __tablename__ = "tb_settlement"
+    __table_args__ = (
+        # (고객사, 사업, 기간) 단일 헤더 — 중복 확정 차단. period 미지정은 '' sentinel로 저장
+        # (라우터 confirm) — PG 유니크가 NULL을 distinct 취급해 NULL 중복을 못 막는 함정 회피.
+        UniqueConstraint(
+            "client_id", "project_id", "period", name="uq_settlement_client_project_period"
+        ),
+    )
+
+    settlement_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(String(50), ForeignKey("tb_client.client_id"), nullable=False)
+    project_id = Column(String(50), ForeignKey("tb_project.project_id"), nullable=False)
+    period = Column(String(7), nullable=True)  # 'YYYY-MM' — 단일 정산이면 null
+    # 최초 생성이 곧 확정 — 상태값 문자열(코드 SETTLEMENT_STATUS, 하드코딩 금지)
+    status = Column(String(20), nullable=False, default="CONFIRMED")
+    confirmed_amount = Column(Numeric(15, 2))  # 확정 청구액
+    vehicle_count = Column(Integer)  # 확정 시점 차량 대수(동결)
+    effective_reduction = Column(Numeric(14, 3))  # 확정 시점 유효감축량(동결)
+    confirmed_at = Column(DateTime)
+    confirmed_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    billed_at = Column(DateTime)
+    billed_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    completed_at = Column(DateTime)
+    completed_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    paid_amount = Column(Numeric(15, 2), nullable=True)  # 실입금액(완료 시)
+    payment_type = Column(String(20), nullable=True)  # 지급 구분(코드값)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class KakaoContact(Base):
@@ -858,6 +896,9 @@ def ensure_schema():
         ("tb_user", "buyer_id", "VARCHAR(50)"),
         # 외부 포털 매직링크 알림톡 발송 대상(INC-9) — nullable, FK 없음
         ("tb_user", "phone", "VARCHAR(20)"),
+        # P4 정산 재건 — 스냅샷 확정 지표 동결(additive 재활용). 배포 PG 조회 500 방지.
+        ("tb_settlement_snapshot", "vehicle_count", "INTEGER"),
+        ("tb_settlement_snapshot", "effective_reduction", "NUMERIC(14,3)"),
     ]
     try:
         insp = _inspect(engine)
@@ -894,6 +935,8 @@ def ensure_schema():
         ("uq_client_vehicle_chassis", "tb_client_vehicle", ["chassis_no"]),
         # 매수자 마스터 — 매수자명 유일(부록 N.8 D1). 배포형 DB 보강(신규는 __table_args__)
         ("uq_buyer_name", "tb_buyer", ["name"]),
+        # P4 정산 재건 — (고객사, 사업, 기간) 정산 헤더 유일(신규는 __table_args__, 배포형 보강)
+        ("uq_settlement_client_project_period", "tb_settlement", ["client_id", "project_id", "period"]),
     ]
     try:
         insp = _inspect(engine)
