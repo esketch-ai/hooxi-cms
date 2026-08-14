@@ -27,7 +27,7 @@ export function useBuyers(filters: BuyerFilters) {
 }
 
 /** 매수자 셀렉트 옵션용 전체 목록 (외부계정 발급·매출폼 재사용) */
-export function useBuyerOptions() {
+export function useBuyerOptions(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['buyers', 'options'],
     queryFn: async () => {
@@ -37,6 +37,7 @@ export function useBuyerOptions() {
       return unwrapList(data).items
     },
     staleTime: 60_000,
+    enabled: opts?.enabled ?? true, // OBSERVER 등 /buyers 차단 역할은 enabled:false로 호출 자체 억제
   })
 }
 

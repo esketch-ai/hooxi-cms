@@ -79,7 +79,7 @@ export function unwrapList<T>(data: T[] | Paginated<T> | null | undefined): {
 }
 
 /** 고객사 셀렉트 옵션용 전체 목록 (폼·필터 공용) */
-export function useClientOptions() {
+export function useClientOptions(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['clients', 'options'],
     queryFn: async () => {
@@ -89,6 +89,7 @@ export function useClientOptions() {
       return unwrapList(data).items
     },
     staleTime: 60_000,
+    enabled: opts?.enabled ?? true, // OBSERVER 등 /clients 차단 역할은 enabled:false로 호출 자체 억제
   })
 }
 

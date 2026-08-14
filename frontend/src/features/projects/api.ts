@@ -48,7 +48,7 @@ export function useProjects(filters: ProjectFilters) {
 }
 
 /** 셀렉트 옵션·대표사 판정용 전체 사업 목록 */
-export function useProjectOptions() {
+export function useProjectOptions(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['projects', 'options'],
     queryFn: async () => {
@@ -58,18 +58,19 @@ export function useProjectOptions() {
       return unwrapList(data).items
     },
     staleTime: 60_000,
+    enabled: opts?.enabled ?? true, // OBSERVER 등 /projects 차단 역할은 enabled:false로 호출 자체 억제
   })
 }
 
 /** 사업 상세 (ProjectDetailOut) — 개요 + 진행 단계 + 참여 차량·거래계약·회계 */
-export function useProject(projectId: string | undefined) {
+export function useProject(projectId: string | undefined, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['projects', projectId],
     queryFn: async () => {
       const { data } = await api.get<Project>(`/projects/${projectId}`)
       return data
     },
-    enabled: !!projectId,
+    enabled: !!projectId && (opts?.enabled ?? true), // OBSERVER는 /projects/{id} 차단 → 호출 억제
   })
 }
 

@@ -1,15 +1,16 @@
-"""OBSERVER(내부 읽기전용 역할) 격리 불변식 — OB-1.
+"""OBSERVER(경영전략실) 격리 불변식 — OB-1 (정책 A: 엄격 화이트리스트).
 
 핵심 불변식: OBSERVER는 auth.py의 ROLE_LEVEL·PERMISSION_MATRIX에 절대 등록하지 않는다.
-- get_current_user(:140)는 EXTERNAL_ROLES(PARTNER/INVESTOR)만 원천 거부하므로,
-  내부역할인 OBSERVER는 get_current_user만 건 관찰 조회 엔드포인트를 통과한다(200).
+- get_current_user는 OBSERVER에 대해 관찰 스코프 화이트리스트(OBSERVER_SCOPE_*)의 API만
+  통과시킨다(200). 화이트리스트 밖의 내부 조회·export는 이 지점에서 403이 된다 —
+  넓은 조회 허용이 아니라 '관찰 스코프만 허용'.
 - require_role/require_permission은 미등록 역할을 level 0/거부 처리하므로, OBSERVER는
   모든 쓰기·관리 GET에서 코드 변경 없이 전수 403이 된다(= 쓰기 자동 격리).
   이 자동 격리가 OBSERVER 도입의 근거이며, 아래 회귀락(4)이 향후 실수로 인한
   ROLE_LEVEL/PERMISSION_MATRIX 편입을 실패로 잡는다.
 
 역할 부여는 schemas.py 정규식(UserApproveRequest/UserRoleRequest/UserCreateRequest)에
-OBSERVER를 추가해 허용한다 — auth.py는 무변경.
+OBSERVER를 추가해 허용한다.
 """
 
 import pytest
@@ -106,15 +107,17 @@ def test_observer_blocked_delete_project(client, observer_headers):
 
 
 # ---------------------------------------------------------------------------
-# 3. 관찰 조회 200 — get_current_user만 건 내부 조회는 OBSERVER 통과
+# 3. 관찰 조회 200 — 관찰 스코프 화이트리스트(OBSERVER_SCOPE_*) API만 OBSERVER 통과
+#    (/observe 화면이 분해되는 4개 API + me/codes/badge 기반 API)
 # ---------------------------------------------------------------------------
 _OBSERVABLE_GET = [
+    "/api/v1/users/me",
+    "/api/v1/codes?category=CLIENT_TYPE",  # codes는 category 필수 — 쿼리는 path 밖이라 화이트리스트 매칭 무관
     "/api/v1/dashboard/stats",
-    "/api/v1/projects",
     "/api/v1/projects/stage-delays",
     "/api/v1/finance-ledger",
     "/api/v1/asset-vehicles",
-    "/api/v1/clients",
+    "/api/v1/chat/badge",
 ]
 
 
@@ -125,10 +128,30 @@ def test_observer_can_read(client, observer_headers, path):
 
 
 # ---------------------------------------------------------------------------
-# 3-1. 관리 GET 배제 — require_role("MANAGER") 엔드포인트는 OBSERVER 403
+# 3-1. 비(非)스코프 내부 GET 403 — 화이트리스트 밖 조회는 get_current_user에서 차단.
+#    (경로가 실제 라우터 root와 일치 → 404가 아닌 403임을 보장)
+#    export(/finance-ledger/export·/asset-vehicles/export)는 정확매칭 제외 + MANAGER 게이트.
 # ---------------------------------------------------------------------------
-def test_observer_blocked_on_users_list(client, observer_headers):
-    r = client.get("/api/v1/users", headers=observer_headers)
+_NON_SCOPE_GET = [
+    "/api/v1/clients",
+    "/api/v1/buyers",
+    "/api/v1/projects",
+    "/api/v1/projects/any-id",
+    "/api/v1/histories",
+    "/api/v1/reports",
+    "/api/v1/documents",
+    "/api/v1/schedules",
+    "/api/v1/audit-logs",
+    "/api/v1/external-accounts",
+    "/api/v1/users",
+    "/api/v1/finance-ledger/export",
+    "/api/v1/asset-vehicles/export",
+]
+
+
+@pytest.mark.parametrize("path", _NON_SCOPE_GET)
+def test_observer_blocked_on_non_scope_get(client, observer_headers, path):
+    r = client.get(path, headers=observer_headers)
     assert r.status_code == 403, r.text
 
 

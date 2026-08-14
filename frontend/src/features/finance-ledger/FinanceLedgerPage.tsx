@@ -61,8 +61,10 @@ function MoneyCell({ value }: { value: number | null }) {
 export function FinanceLedgerPage() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { data: clients = [] } = useClientOptions()
-  const { data: buyers = [] } = useBuyerOptions()
+  // OBSERVER(경영전략실)는 정책 A로 /clients·/buyers가 백엔드 403 → 필터 셀렉트 숨김 + 훅 미호출.
+  const isObserver = user?.role === 'OBSERVER'
+  const { data: clients = [] } = useClientOptions({ enabled: !isObserver })
+  const { data: buyers = [] } = useBuyerOptions({ enabled: !isObserver })
   const { options: approvalStatusOptions } = useCodes('APPROVAL_STATUS')
 
   // 엑셀 내보내기(EX-3) — 팀장 이상만. 백엔드도 403이라 게이트와 정합.
@@ -269,18 +271,23 @@ export function FinanceLedgerPage() {
           onChange={resetPage(setApprovalStatus)}
           options={approvalStatusOptions}
         />
-        <FilterSelect
-          label="매수자"
-          value={buyerId}
-          onChange={resetPage(setBuyerId)}
-          options={buyers.map((b) => ({ value: b.buyer_id, label: b.name }))}
-        />
-        <FilterSelect
-          label="고객사"
-          value={clientId}
-          onChange={resetPage(setClientId)}
-          options={clients.map((c) => ({ value: c.client_id, label: c.company_name }))}
-        />
+        {/* 매수자·고객사 필터는 /buyers·/clients 의존 — OBSERVER는 차단 대상이라 숨김 */}
+        {!isObserver && (
+          <>
+            <FilterSelect
+              label="매수자"
+              value={buyerId}
+              onChange={resetPage(setBuyerId)}
+              options={buyers.map((b) => ({ value: b.buyer_id, label: b.name }))}
+            />
+            <FilterSelect
+              label="고객사"
+              value={clientId}
+              onChange={resetPage(setClientId)}
+              options={clients.map((c) => ({ value: c.client_id, label: c.company_name }))}
+            />
+          </>
+        )}
         <FilterSelect
           label="후시보유"
           value={isHold}

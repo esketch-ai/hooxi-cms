@@ -37,9 +37,11 @@ function fmtCount(value?: number | null, unit = ''): string {
 export function AssetVehiclesPage() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const { data: projects = [] } = useProjectOptions()
-  const { data: clients = [] } = useClientOptions()
-  const { data: buyers = [] } = useBuyerOptions()
+  // OBSERVER(경영전략실)는 정책 A로 /projects·/clients·/buyers가 백엔드 403 → 필터 셀렉트 숨김 + 훅 미호출.
+  const isObserver = user?.role === 'OBSERVER'
+  const { data: projects = [] } = useProjectOptions({ enabled: !isObserver })
+  const { data: clients = [] } = useClientOptions({ enabled: !isObserver })
+  const { data: buyers = [] } = useBuyerOptions({ enabled: !isObserver })
   const { options: approvalStatusOptions } = useCodes('APPROVAL_STATUS')
 
   // 엑셀 내보내기(EX-4) — 팀장 이상만. 백엔드도 403이라 게이트와 정합.
@@ -303,30 +305,37 @@ export function AssetVehiclesPage() {
       </div>
 
       <FilterBar>
-        <FilterSelect
-          label="프로젝트"
-          value={projectId}
-          onChange={resetPage(setProjectId)}
-          options={projects.map((p) => ({ value: p.project_id, label: p.project_name }))}
-        />
-        <FilterSelect
-          label="운수사"
-          value={clientId}
-          onChange={resetPage(setClientId)}
-          options={clientOptions}
-        />
+        {/* 프로젝트·운수사·구매/투자사 필터는 /projects·/clients·/buyers 의존 — OBSERVER는 숨김 */}
+        {!isObserver && (
+          <FilterSelect
+            label="프로젝트"
+            value={projectId}
+            onChange={resetPage(setProjectId)}
+            options={projects.map((p) => ({ value: p.project_id, label: p.project_name }))}
+          />
+        )}
+        {!isObserver && (
+          <FilterSelect
+            label="운수사"
+            value={clientId}
+            onChange={resetPage(setClientId)}
+            options={clientOptions}
+          />
+        )}
         <FilterSelect
           label="승인상태"
           value={approvalStatus}
           onChange={resetPage(setApprovalStatus)}
           options={approvalStatusOptions}
         />
-        <FilterSelect
-          label="구매/투자사"
-          value={buyerId}
-          onChange={resetPage(setBuyerId)}
-          options={buyers.map((b) => ({ value: b.buyer_id, label: b.name }))}
-        />
+        {!isObserver && (
+          <FilterSelect
+            label="구매/투자사"
+            value={buyerId}
+            onChange={resetPage(setBuyerId)}
+            options={buyers.map((b) => ({ value: b.buyer_id, label: b.name }))}
+          />
+        )}
         <label className="flex items-center gap-1.5">
           <span className="shrink-0 text-xs font-medium text-ash">등록일</span>
           <input
@@ -399,7 +408,7 @@ export function AssetVehiclesPage() {
               setExpandedId((prev) => (prev === v.vehicle_id ? '' : v.vehicle_id))
             }
             expandedKey={expandedId}
-            renderExpanded={(v) => <VehicleDetailPanel row={v} />}
+            renderExpanded={(v) => <VehicleDetailPanel row={v} isObserver={isObserver} />}
             isLoading={isLoading}
             emptyTitle="해당 조건의 전기버스 차량이 없습니다"
             emptyDescription="필터를 조정하거나 감축 사업에 차량을 등록해 주세요."
@@ -414,9 +423,12 @@ export function AssetVehiclesPage() {
 }
 
 /** AV-4 행 펼침 상세 — 연차별 감축량·프로젝트 상태·계약/소유권(지연조회)·증빙(준비중) */
-function VehicleDetailPanel({ row }: { row: AssetVehicleRow }) {
-  // 계약·소유권은 행 데이터에 없어 소속 사업 상세를 지연 조회(react-query 캐시 재사용)
-  const { data: project, isLoading: salesLoading } = useProject(row.project_id)
+function VehicleDetailPanel({ row, isObserver }: { row: AssetVehicleRow; isObserver: boolean }) {
+  // 계약·소유권은 행 데이터에 없어 소속 사업 상세를 지연 조회(react-query 캐시 재사용).
+  // OBSERVER는 /projects/{id}가 백엔드 403 → 호출 억제 + 계약·소유권 섹션 미표시(인라인 차량 데이터만).
+  const { data: project, isLoading: salesLoading } = useProject(row.project_id, {
+    enabled: !isObserver,
+  })
   const sales = project?.sales ?? []
 
   const years: (number | null)[] = [
@@ -470,7 +482,8 @@ function VehicleDetailPanel({ row }: { row: AssetVehicleRow }) {
         </div>
       </section>
 
-      {/* 3. 계약·소유권 (지연 조회) */}
+      {/* 3. 계약·소유권 (지연 조회) — OBSERVER는 /projects/{id} 차단이라 섹션 자체 미표시 */}
+      {!isObserver && (
       <section>
         <h4 className="mb-2 text-xs font-semibold tracking-wide text-ash">계약·소유권</h4>
         {salesLoading ? (
@@ -518,6 +531,7 @@ function VehicleDetailPanel({ row }: { row: AssetVehicleRow }) {
           </div>
         )}
       </section>
+      )}
 
       {/* 4. 증빙문서 (P1 준비중 플레이스홀더) */}
       <section>

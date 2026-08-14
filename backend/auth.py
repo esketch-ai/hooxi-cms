@@ -14,7 +14,7 @@ from urllib.parse import quote
 import bcrypt
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -56,6 +56,23 @@ ROLE_LEVEL = {"STAFF": 1, "MANAGER": 2, "ADMIN": 3}
 # 외부역할(포털 전용) — ROLE_LEVEL/PERMISSION_MATRIX와 완전히 분리된 별도 집합.
 # 내부 인가 상수에 섞이면 격리가 깨지므로 독립 상수로 둔다.
 EXTERNAL_ROLES = {"PARTNER", "INVESTOR"}
+
+# OBSERVER(경영전략실) 관찰 스코프 — 정책 A(엄격). ROLE_LEVEL/PERMISSION_MATRIX/
+# EXTERNAL_ROLES 어디에도 등록하지 않는 별도 스코프 상수다(내부 인가 상수 격리 유지).
+# 프론트 observerAccess.ts(라우트 가드)에 대응하는 백엔드 API 스코프 — /observe 화면은
+# 아래 API로 분해된다. export(/finance-ledger/export 등)는 정확매칭이라 자연 제외 +
+# require_role("MANAGER")로 이중 차단된다.
+OBSERVER_SCOPE_EXACT = {
+    "/api/v1/users/me", "/api/v1/codes", "/api/v1/dashboard/stats",
+    "/api/v1/projects/stage-delays", "/api/v1/finance-ledger",
+    "/api/v1/asset-vehicles", "/api/v1/chat/badge",
+}
+OBSERVER_SCOPE_PREFIX = ("/api/v1/auth/",)
+
+
+def _observer_allowed(path: str) -> bool:
+    p = path.rstrip("/") or path  # trailing slash 정규화 (/finance-ledger/ == /finance-ledger)
+    return p in OBSERVER_SCOPE_EXACT or any(path.startswith(x) for x in OBSERVER_SCOPE_PREFIX)
 
 PERMISSION_MATRIX = {
     # 기능 키: 허용 역할 목록
@@ -138,17 +155,24 @@ def get_external_user(
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """내부 인증 — 외부역할(PARTNER/INVESTOR)은 원천 거부(403). 모든 내부 라우터의
     기반이므로, 이 한 지점이 외부 계정의 내부 시스템 접근(원가·매출 혼합 응답 포함)을
-    전면 차단한다. 외부 계정은 /portal 전용 경로만 사용한다(격리 불변식)."""
+    전면 차단한다. 외부 계정은 /portal 전용 경로만 사용한다(격리 불변식).
+
+    OBSERVER(경영전략실)는 내부역할이지만 정책 A(엄격)로 관찰 스코프 화이트리스트
+    (OBSERVER_SCOPE_*)의 API만 통과시킨다 — 그 외 내부 조회·export는 여기서 403.
+    role != OBSERVER면 경로검사 미적용(내부 3역할·외부격리 회귀 없음)."""
     user = get_external_user(credentials, db)
     if user.role in EXTERNAL_ROLES:
         raise HTTPException(
             status_code=403, detail="외부 계정은 내부 시스템에 접근할 수 없습니다 (포털을 이용하세요)"
         )
+    if user.role == "OBSERVER" and not _observer_allowed(request.url.path):
+        raise HTTPException(status_code=403, detail="관찰 권한 범위를 벗어난 접근입니다")
     return user
 
 
