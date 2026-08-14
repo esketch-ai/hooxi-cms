@@ -128,7 +128,7 @@ export const TOPICS: GuideTopic[] = [
     title: '고객사 관리',
     summary: '신규·엑셀 일괄 등록과 고객사 360° 상세',
     featureRoute: '/clients',
-    related: ['assets', 'histories', 'documents'],
+    related: ['assets', 'fleet-import', 'histories'],
     Body: () => (
       <>
         <Flow>
@@ -183,7 +183,7 @@ export const TOPICS: GuideTopic[] = [
     title: '자산 · 수집 계정',
     summary: '자산 등록·계정 정보·제원표 촬영·계정 점검·폴더 규칙',
     featureRoute: '/assets',
-    related: ['clients', 'asset-vehicles', 'issues'],
+    related: ['clients', 'fleet-import', 'asset-vehicles'],
     Body: () => (
       <>
         <ul>
@@ -223,6 +223,61 @@ export const TOPICS: GuideTopic[] = [
             <code className="text-xs">지역_고객사명_분류</code>(예:{' '}
             <code className="text-xs">서울_대성운수_운수</code>) 형식으로 자동 생성됩니다. 구분은
             공통 코드(운수/빌딩/공장 등)에 따르고, 이미 만들어진 폴더는 이름이 유지됩니다.
+          </li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'fleet-import',
+    categoryId: 'client-asset',
+    eyebrow: 'Fleet · 부록 M',
+    title: '전국 버스 명부 업로드',
+    summary: '보유 차량 마스터를 양식·미리보기로 일괄 반영(차대번호 기준 업서트)',
+    featureRoute: '/clients',
+    related: ['clients', 'assets', 'asset-vehicles'],
+    Body: () => (
+      <>
+        <p>
+          운수사 <b>보유 차량 명부</b>를 엑셀로 한 번에 반영하는 기능입니다.{' '}
+          <b>고객사 상세 → 보유 차량 탭 → <Kbd>전국 버스 명부 업로드</Kbd></b>에서 엽니다. 특정
+          고객사 화면 안에 있지만, 업로드는 <b>전국(전역) 단위</b>입니다 — 파일에 담긴 모든 차량이
+          반영되고, 각 행의 <b>업체명</b>을 운수사 고객사와 자동으로 매칭해 소속을 붙입니다.
+        </p>
+        <Flow>
+          <li>
+            <Kbd>양식 다운로드</Kbd> — 시트명 <code className="text-xs">BUS_LIST_ALL</code>,
+            한글 헤더(차량번호는 필수 <b>*</b>)와 예시 행이 담긴 파일을 받습니다.{' '}
+            <b>예시 행은 그대로 올려도 자동 제외</b>되니 지우지 않아도 됩니다.
+          </li>
+          <li>
+            파일을 고르면 <b>바로 반영되지 않고 미리보기</b>가 먼저 뜹니다 —{' '}
+            <b>총 N행 · 신규 · 갱신 · 건너뜀 · 운수사매칭</b> 집계와, <b>건너뜀 행은 사유</b>(예:
+            차량번호 없음)가 표시됩니다. 이 단계에서는 <b>DB가 바뀌지 않습니다</b>.
+          </li>
+          <li>
+            내용을 확인한 뒤 <Kbd>반영</Kbd>을 눌러야 실제로 저장됩니다. 결과는{' '}
+            <i>신규 N · 갱신 N · 운수사매칭 N · 참여연결 N</i>으로 요약됩니다.
+          </li>
+        </Flow>
+        <Note title="재업로드 = 추적 갱신(업서트)">
+          같은 명부를 다시 올리면 <b>차대번호(없으면 차량번호) 기준으로 같은 차량을 찾아 갱신</b>
+          하고, 없는 차량만 새로 만듭니다. 화면에서 수기로 바꾼 <b>상태(폐차 등)</b>와{' '}
+          <b>소속 운수사</b>는 파일에 없으면 보존됩니다 — 명부를 다시 올려도 기존 수기값을 함부로
+          덮지 않으니 안심하고 최신 명부로 갱신하세요.
+        </Note>
+        <ul>
+          <li>
+            인식하는 컬럼: <b>차량번호</b>(필수)·업체명·차대번호·차명·연식·차량등록일·차종·
+            길이/너비/높이(mm)·총중량(kg)·승차정원·연료. <b>순서는 무관</b>하며 모르는 컬럼은
+            무시됩니다.
+          </li>
+          <li>
+            업로드하면 감축사업 <b>참여 차량과 자동 연결</b>되고, 도입구분(<Chip>대체도입</Chip>·
+            <Chip>신규도입</Chip>)이 비어 있던 참여차량에 한해 자동 판별됩니다(수기값은 보존).
+          </li>
+          <li>
+            제한: 엑셀(.xlsx)만, 최대 25MB. 이 기능은 <b>마스터 편집 권한</b>이 필요합니다.
           </li>
         </ul>
       </>
