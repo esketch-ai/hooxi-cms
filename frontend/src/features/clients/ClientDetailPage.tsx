@@ -1,5 +1,5 @@
 // SCR-03D 고객사 상세 360° 뷰 — 상담 전화 응대를 이 화면 하나로 완결
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -8,7 +8,6 @@ import {
   CaretRight,
   Car,
   ChatCircleDots,
-  CircleNotch,
   DownloadSimple,
   MagnifyingGlass,
   PencilSimple,
@@ -45,11 +44,11 @@ import {
   useClientReports,
   useClientVehicles,
   useDeleteClient,
-  useImportFleet,
   useRemoveRecipient,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
+import { FleetImportModal } from './FleetImportModal'
 
 type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'chat'
 
@@ -820,30 +819,8 @@ function VehiclesTab({ clientId }: { clientId: string }) {
     if (page > maxPage) setPage(maxPage)
   }, [data?.total, page])
   const { labelOf: introLabel } = useCodes('VEHICLE_INTRO')
-  const importFleet = useImportFleet(clientId)
-  const { showToast } = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [fleetModalOpen, setFleetModalOpen] = useState(false)
   const vehicles = data?.items ?? []
-
-  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (fileRef.current) fileRef.current.value = '' // 같은 파일 재선택 허용
-    if (!file) return
-    try {
-      const r = await importFleet.mutateAsync(file)
-      const tail = r.skipped > 0 ? ` · 건너뜀 ${r.skipped}건` : ''
-      showToast(
-        r.created + r.updated > 0
-          ? `신규 ${r.created} · 갱신 ${r.updated}대 · 운수사매칭 ${r.client_matched} · 참여연결 ${r.linked_participation}${tail}.`
-          : `반영된 차량이 없습니다${tail}. 양식·값을 확인해 주세요.`,
-        r.created + r.updated > 0 ? 'success' : 'info',
-      )
-    } catch (err) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
-        ?.detail
-      showToast(detail || '명부 업로드에 실패했습니다.', 'danger')
-    }
-  }
 
   return (
     <section className="space-y-3">
@@ -861,20 +838,20 @@ function VehiclesTab({ clientId }: { clientId: string }) {
         <div className="flex items-center gap-2 self-start">
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={importFleet.isPending}
-            className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+            onClick={() => setFleetModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-full border border-hairline px-3 py-2 text-sm font-medium text-bone hover:bg-elevate"
           >
-            {importFleet.isPending ? (
-              <CircleNotch size={15} className="animate-spin" />
-            ) : (
-              <UploadSimple size={15} />
-            )}
+            <UploadSimple size={15} />
             전국 버스 명부 업로드
           </button>
-          <input ref={fileRef} type="file" accept=".xlsx" onChange={onUpload} className="hidden" />
         </div>
       </div>
+
+      <FleetImportModal
+        open={fleetModalOpen}
+        onClose={() => setFleetModalOpen(false)}
+        clientId={clientId}
+      />
 
       {/* 필터 세그먼트 + 검색(차량번호) */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

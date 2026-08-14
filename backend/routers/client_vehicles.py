@@ -10,9 +10,10 @@
 from datetime import date, datetime
 from io import BytesIO
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from openpyxl import load_workbook
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from openpyxl import Workbook, load_workbook
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -76,24 +77,36 @@ def _coerce(value, kind: str):
     return value
 
 
-# ── A. 전역 엑셀 업로드 ────────────────────────────────────────────────────
-@router.post("/fleet/import", response_model=schemas.FleetImportResult)
-async def import_fleet(
-    file: UploadFile = File(...),
-    user: User = Depends(require_permission("master.write")),
-    db: Session = Depends(get_db),
-):
-    """운수사 보유 차량 전량 엑셀 업로드(BUS_LIST_ALL) — 차대번호 upsert + 참여 링크 갱신.
+_XLSX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+_FLEET_REQUIRED = {"vehicle_no"}  # 양식 헤더에 " *" 표기할 필수 필드
+# 양식 예시행 차량번호 접두 — 파스/분류에서 이 접두로 시작하면 skip(실데이터엔 없어 회귀 0)
+EXAMPLE_PREFIX = "(예시) "
+# 양식 예시행 1개(필드→값). 헤더 순서(_HEADER_MAP)에 맞춰 write.
+_FLEET_EXAMPLE_ROW = {
+    "vehicle_no": EXAMPLE_PREFIX + "서울70사1234",
+    "operator_name": "서울교통공사",
+    "chassis_no": "KMJHG18BPMC000001",
+    "model_name": "일렉시티",
+    "model_year": 2022,
+    "registered_at": "2022-03-01",
+    "vehicle_class": "대형 승합",
+    "length_mm": 10995,
+    "width_mm": 2495,
+    "height_mm": 3405,
+    "gross_weight_kg": 17300,
+    "seating_capacity": 47,
+    "fuel": "전기",
+}
 
-    - 업체명(operator_name) == 운수사(Client.company_name, TRANSPORT)면 client_id 매칭(미매칭 None).
-    - region = 차량번호 앞 2글자, status 기본 '운행'.
-    - 식별키 = 차대번호(chassis_no) 있으면 chassis 기준, 없으면 차량번호 기준 upsert.
-      5,668행 규모 — 선조회 dict로 N+1 방지, 커밋 1회.
-    - 업로드 후 ProjectVehicle.client_vehicle_id를 차량번호 일치로 세팅(참여 구분 신선도).
-    - 도입구분 자동 판별: 참여차량 차량번호가 내연 fleet에 있으면 대체도입, 없으면 신규도입.
-      introduction_type이 비어있는(None) 참여차량만 자동설정(기존 수기값 보존).
+
+def _open_fleet_workbook(content: bytes):
+    """업로드 bytes → (데이터 행 이터레이터, 열인덱스→(필드,타입) 매핑).
+
+    import/preview 공유. 크기·빈파일·엑셀오류·헤더 검증은 기존 import 동작과 동일
+    (상태코드·메시지 불변). 1행 헤더를 소비하고 데이터 행 이터레이터를 돌려준다.
     """
-    content = await file.read()
     if not content:
         raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
     if len(content) > 25 * 1024 * 1024:
@@ -115,18 +128,42 @@ async def import_fleet(
     col_field: dict = {}  # 열 인덱스 → (필드, 타입)
     for idx, cell in enumerate(header):
         name = str(cell).strip() if cell is not None else ""
+        name = name.rstrip("* ").strip()  # 양식의 필수 표기 " *" 접미 흡수
         if name in _HEADER_MAP:
             col_field[idx] = _HEADER_MAP[name]
     if not any(f == "vehicle_no" for f, _ in col_field.values()):
         raise HTTPException(
             status_code=422, detail="필수 컬럼이 없습니다: 차량번호 — 헤더를 확인하세요"
         )
+    return rows_iter, col_field
 
-    # 선조회: 차대번호/차량번호→기존 마스터, 업체명→운수사 client_id (N+1 방지)
-    fleet = db.query(ClientVehicle).all()
-    by_chassis = {cv.chassis_no: cv for cv in fleet if cv.chassis_no}
-    by_vehicle_no = {cv.vehicle_no: cv for cv in fleet if cv.vehicle_no}
-    client_by_name = {}
+
+def _parse_fleet_row(values, col_field: dict) -> dict:
+    """엑셀 행 값 → {필드: 강제변환값}. region/client 파생은 호출측 책임."""
+    parsed = {}
+    for idx, (field, kind) in col_field.items():
+        parsed[field] = _coerce(values[idx] if idx < len(values) else None, kind)
+    return parsed
+
+
+def _classify_fleet_row(parsed: dict, by_chassis: dict, by_vehicle_no: dict):
+    """행 분류 순수 함수 → ("skip"|"new"|"update", 기존 cv|None). 인덱스 미변형.
+
+    식별키: 차대번호 있으면 chassis, 없으면 차량번호. 빈 차량번호/예시행이면 skip.
+    """
+    vehicle_no = parsed.get("vehicle_no")
+    if not vehicle_no or vehicle_no.startswith(EXAMPLE_PREFIX):
+        return "skip", None
+    chassis_no = parsed.get("chassis_no")
+    cv = by_chassis.get(chassis_no) if chassis_no else by_vehicle_no.get(vehicle_no)
+    if cv is None:
+        return "new", None
+    return "update", cv
+
+
+def _fleet_client_by_name(db: Session) -> dict:
+    """업체명 → 운수사 client_id(동명이인은 None 보류). import/preview 공유."""
+    client_by_name: dict = {}
     _dup_names = set()
     for cid, name in db.query(Client.client_id, Client.company_name).filter(
         Client.client_type == "TRANSPORT"
@@ -136,19 +173,66 @@ async def import_fleet(
         client_by_name[name] = cid
     for name in _dup_names:
         client_by_name[name] = None
+    return client_by_name
+
+
+def _build_fleet_template() -> bytes:
+    """전국 버스 명부 업로드 양식(.xlsx) 생성 — 헤더는 _HEADER_MAP 단일원천.
+
+    시트명=BUS_LIST_ALL, 1행=라벨(필수 필드는 " *" 접미), 2행=예시 1행(차량번호 접두 방지).
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = _FLEET_SHEET
+    headers = []
+    example = []
+    for label, (field, _kind) in _HEADER_MAP.items():
+        headers.append(label + (" *" if field in _FLEET_REQUIRED else ""))
+        example.append(_FLEET_EXAMPLE_ROW.get(field))
+    ws.append(headers)
+    ws.append(example)
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ── A. 전역 엑셀 업로드 ────────────────────────────────────────────────────
+@router.post("/fleet/import", response_model=schemas.FleetImportResult)
+async def import_fleet(
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """운수사 보유 차량 전량 엑셀 업로드(BUS_LIST_ALL) — 차대번호 upsert + 참여 링크 갱신.
+
+    - 업체명(operator_name) == 운수사(Client.company_name, TRANSPORT)면 client_id 매칭(미매칭 None).
+    - region = 차량번호 앞 2글자, status 기본 '운행'.
+    - 식별키 = 차대번호(chassis_no) 있으면 chassis 기준, 없으면 차량번호 기준 upsert.
+      5,668행 규모 — 선조회 dict로 N+1 방지, 커밋 1회.
+    - 업로드 후 ProjectVehicle.client_vehicle_id를 차량번호 일치로 세팅(참여 구분 신선도).
+    - 도입구분 자동 판별: 참여차량 차량번호가 내연 fleet에 있으면 대체도입, 없으면 신규도입.
+      introduction_type이 비어있는(None) 참여차량만 자동설정(기존 수기값 보존).
+    """
+    content = await file.read()
+    rows_iter, col_field = _open_fleet_workbook(content)
+
+    # 선조회: 차대번호/차량번호→기존 마스터, 업체명→운수사 client_id (N+1 방지)
+    fleet = db.query(ClientVehicle).all()
+    by_chassis = {cv.chassis_no: cv for cv in fleet if cv.chassis_no}
+    by_vehicle_no = {cv.vehicle_no: cv for cv in fleet if cv.vehicle_no}
+    client_by_name = _fleet_client_by_name(db)
 
     created = updated = client_matched = skipped = 0
     for values in rows_iter:
         if values is None:
             continue
-        parsed = {}
-        for idx, (field, kind) in col_field.items():
-            parsed[field] = _coerce(values[idx] if idx < len(values) else None, kind)
-        vehicle_no = parsed.get("vehicle_no")
-        if not vehicle_no:
+        parsed = _parse_fleet_row(values, col_field)
+        kind, cv = _classify_fleet_row(parsed, by_chassis, by_vehicle_no)
+        if kind == "skip":
             if any(v is not None for v in values):  # 완전 빈 행은 skip 집계 제외
                 skipped += 1
             continue
+        vehicle_no = parsed["vehicle_no"]
         operator_name = parsed.get("operator_name")
         matched_client_id = client_by_name.get(operator_name) if operator_name else None
         if matched_client_id:
@@ -156,9 +240,7 @@ async def import_fleet(
         parsed["region"] = vehicle_no[:2]
         chassis_no = parsed.get("chassis_no")
 
-        # 식별키: 차대번호 있으면 chassis 기준, 없으면 vehicle_no 기준 upsert
-        cv = by_chassis.get(chassis_no) if chassis_no else by_vehicle_no.get(vehicle_no)
-        if cv is None:
+        if kind == "new":
             cv = ClientVehicle(vehicle_no=vehicle_no)
             for k, v in parsed.items():
                 setattr(cv, k, v)
@@ -239,6 +321,94 @@ async def import_fleet(
         linked_participation=linked,
         introduction_derived=introduction_derived,
         skipped=skipped,
+    )
+
+
+@router.get("/fleet/template")
+def download_fleet_template(
+    _: User = Depends(require_permission("master.write")),
+):
+    """전국 버스 명부 업로드 양식(.xlsx) 다운로드 — 헤더(필수 *)+예시 1행.
+
+    파일명 한글은 RFC 5987 인코딩(imports 다운로드와 동일 관용구)."""
+    content = _build_fleet_template()
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": "attachment; filename*=UTF-8''{0}".format(
+                quote("전국버스명부_양식.xlsx")
+            )
+        },
+    )
+
+
+@router.post("/fleet/preview", response_model=schemas.FleetPreviewResult)
+async def preview_fleet(
+    file: UploadFile = File(...),
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """전역 fleet 엑셀 dry-run — 실반영 없이 신규/갱신/건너뜀 예측(부록 M).
+
+    DB read-only(flush/commit/add 금지). import와 동일 규칙으로 분류·집계하되
+    파일 내 중복 파리티를 위해 신규 예측 행을 센티넬로 인덱스에 등록해 뒤 중복행이
+    갱신으로 잡히게 한다. 응답 rows는 '건너뜀' 행 상세만(대량 페이로드 방지).
+    """
+    content = await file.read()
+    rows_iter, col_field = _open_fleet_workbook(content)
+
+    fleet = db.query(ClientVehicle).all()
+    by_chassis = {cv.chassis_no: cv for cv in fleet if cv.chassis_no}
+    by_vehicle_no = {cv.vehicle_no: cv for cv in fleet if cv.vehicle_no}
+    client_by_name = _fleet_client_by_name(db)
+
+    _sentinel = object()  # 파일 내 신규 예측 등록용(뒤 중복행 → 갱신 파리티)
+    total_rows = created = updated = skipped = client_matched = 0
+    rows: list = []
+    for rownum, values in enumerate(rows_iter, start=2):  # 1행 헤더, 데이터는 2행부터
+        if values is None:
+            continue
+        parsed = _parse_fleet_row(values, col_field)
+        vehicle_no = parsed.get("vehicle_no")
+        kind, _cv = _classify_fleet_row(parsed, by_chassis, by_vehicle_no)
+        if kind == "skip":
+            if not any(v is not None for v in values):
+                continue  # 완전 빈 행은 집계 제외(import와 동일)
+            total_rows += 1
+            skipped += 1
+            reason = "예시행" if (vehicle_no and vehicle_no.startswith(EXAMPLE_PREFIX)) else "차량번호 없음"
+            rows.append(
+                schemas.FleetPreviewRow(
+                    row=rownum,
+                    vehicle_no=vehicle_no,
+                    chassis_no=parsed.get("chassis_no"),
+                    classification="건너뜀",
+                    reason=reason,
+                )
+            )
+            continue
+        total_rows += 1
+        operator_name = parsed.get("operator_name")
+        if operator_name and client_by_name.get(operator_name):
+            client_matched += 1
+        chassis_no = parsed.get("chassis_no")
+        if kind == "new":
+            created += 1
+            # 파일 내 중복 파리티: 신규 예측을 센티넬로 등록(뒤 동일키 행 → 갱신)
+            if chassis_no:
+                by_chassis[chassis_no] = _sentinel
+            by_vehicle_no[vehicle_no] = _sentinel
+        else:
+            updated += 1
+
+    return schemas.FleetPreviewResult(
+        total_rows=total_rows,
+        created=created,
+        updated=updated,
+        skipped=skipped,
+        client_matched=client_matched,
+        rows=rows,
     )
 
 

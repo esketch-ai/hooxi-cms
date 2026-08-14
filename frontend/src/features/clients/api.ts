@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api/client'
 import { unwrapList } from '../../lib/api/queries'
+import { downloadExport } from '../../lib/export'
 import type {
   ActivityHistory,
   Asset,
@@ -12,6 +13,7 @@ import type {
   ClientVehiclePayload,
   Document,
   FleetImportResult,
+  FleetPreviewResult,
   Paginated,
   ReportDelivery,
   ReportRecipient,
@@ -210,6 +212,27 @@ export function useClientVehicles(
     },
     enabled: !!clientId,
     placeholderData: (prev) => prev, // 페이지 전환 시 이전 결과 유지(깜빡임 방지)
+  })
+}
+
+/** fleet 양식(xlsx) 다운로드 — Content-Disposition filename* 파싱은 downloadExport에 위임 */
+export function useFleetTemplate() {
+  return useMutation({
+    mutationFn: async () => {
+      await downloadExport('/fleet/template', {}, '전국버스명부_양식.xlsx')
+    },
+  })
+}
+
+/** fleet 미리보기 — 반영 전 행별 검증(DB 무변경). 반영 시 같은 파일을 useImportFleet로 재전송 */
+export function useFleetPreview() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post<FleetPreviewResult>('/fleet/preview', fd)
+      return data
+    },
   })
 }
 

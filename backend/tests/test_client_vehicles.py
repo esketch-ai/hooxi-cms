@@ -1,6 +1,7 @@
 """운수사 보유 차량(fleet) — CRUD·참여 구분·전역 엑셀 업로드·업체명 매칭 (부록 M)."""
 
 import io
+from urllib.parse import unquote
 
 import openpyxl
 
@@ -206,3 +207,97 @@ def test_create_client_vehicle_backlinks_participation(client, staff_headers):
     lr = client.get(f"{API}/clients/{cid}/vehicles", headers=staff_headers).json()
     assert lr["participating_count"] == 1
     assert lr["items"][0]["participation"] is True
+
+
+# ── D. 전국 버스 명부 양식/미리보기(dry-run) ─────────────────────────────────
+def test_fleet_template_download(client, staff_headers):
+    """양식 다운로드 — 시트명·헤더 순서·필수 * ·예시행·파일명 헤더."""
+    r = client.get(f"{API}/fleet/template", headers=staff_headers)
+    assert r.status_code == 200, r.text
+    assert "전국버스명부" in unquote(r.headers["content-disposition"])
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames[0] == "BUS_LIST_ALL"
+    ws = wb["BUS_LIST_ALL"]
+    header = [c.value for c in ws[1]]
+    # 헤더 라벨(순서) == _FLEET_HEADERS, 차량번호에만 '*'
+    assert [h.rstrip(" *") for h in header] == _FLEET_HEADERS
+    assert "*" in header[0]  # 차량번호(필수)
+    assert all("*" not in h for h in header[1:])
+    # 예시행 존재 + 차량번호 예시 접두
+    example = [c.value for c in ws[2]]
+    assert example[0] and example[0].startswith("(예시) ")
+
+
+def test_fleet_preview_template_example_skipped(client, staff_headers):
+    """다운로드 양식을 그대로 preview에 올리면 예시행은 건너뜀(실반영 예측 안 됨)."""
+    tpl = client.get(f"{API}/fleet/template", headers=staff_headers).content
+    r = client.post(
+        f"{API}/fleet/preview", headers=staff_headers,
+        files={"file": ("tpl.xlsx", io.BytesIO(tpl), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["created"] == 0 and res["updated"] == 0
+    assert res["skipped"] == 1
+    assert res["rows"][0]["classification"] == "건너뜀"
+    assert res["rows"][0]["reason"] == "예시행"
+
+
+def test_fleet_preview_no_db_mutation(client, staff_headers):
+    """preview는 DB 무변경 — preview 후에도 매칭 소속 차량 수 불변(생성 안 됨)."""
+    cid = _mk_client(client, staff_headers, "미리보기무변경운수")
+    buf = _fleet_xlsx([
+        ["서울70사5001", "미리보기무변경운수", "PV0001", "일렉시티", 2021, "2021-01-01", "대형 승합", 1, 1, 1, 1, 40, "전기"],
+    ])
+    before = client.get(f"{API}/clients/{cid}/vehicles", headers=staff_headers).json()["total"]
+    r1 = client.post(
+        f"{API}/fleet/preview", headers=staff_headers,
+        files={"file": ("bus.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    ).json()
+    assert r1["created"] == 1
+    after = client.get(f"{API}/clients/{cid}/vehicles", headers=staff_headers).json()["total"]
+    assert before == after == 0  # preview로 생성 안 됨
+
+
+def test_fleet_preview_import_parity_with_dup(client, staff_headers):
+    """파리티 — 파일 내 차대번호 중복행 포함, preview 카운트 == import 결과 카운트."""
+    _mk_client(client, staff_headers, "파리티운수")
+    rows = [
+        ["서울70사6001", "파리티운수", "DUP001", "일렉시티", 2021, "2021-01-01", "대형 승합", 1, 1, 1, 1, 40, "전기"],
+        ["서울70사6002", "미등록", "DUP002", "일렉시티", 2021, "2021-01-01", "대형 승합", 1, 1, 1, 1, 40, "전기"],
+        # 차대번호 DUP001 중복행 → 파일 내에서 갱신으로 잡혀야(신규는 1건)
+        ["서울70사6001", "파리티운수", "DUP001", "일렉시티", 2022, "2022-01-01", "대형 승합", 1, 1, 1, 1, 40, "전기"],
+        ["", "누락업체", "", "차명", 2020, "", "", 1, 1, 1, 1, 40, "전기"],  # 차량번호 없음 → 건너뜀
+    ]
+    prev = client.post(
+        f"{API}/fleet/preview", headers=staff_headers,
+        files={"file": ("bus.xlsx", _fleet_xlsx(rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    ).json()
+    imp = client.post(
+        f"{API}/fleet/import", headers=staff_headers,
+        files={"file": ("bus.xlsx", _fleet_xlsx(rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    ).json()
+    assert prev["created"] == imp["created"]
+    assert prev["updated"] == imp["updated"]
+    assert prev["skipped"] == imp["skipped"]
+    assert prev["client_matched"] == imp["client_matched"]
+    # 중복행이 갱신으로 잡혀 신규 2 / 갱신 1 / 건너뜀 1
+    assert prev["created"] == 2 and prev["updated"] == 1 and prev["skipped"] == 1
+
+
+def test_fleet_preview_missing_vehicle_no_column_422(client, staff_headers):
+    """차량번호 헤더 없는 파일 → preview 422(import와 동일 메시지)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "BUS_LIST_ALL"
+    ws.append(["업체명", "차대번호"])  # 차량번호 없음
+    ws.append(["어떤운수", "X"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    r = client.post(
+        f"{API}/fleet/preview", headers=staff_headers,
+        files={"file": ("bad.xlsx", buf, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert r.status_code == 422
+    assert "차량번호" in r.json()["detail"]

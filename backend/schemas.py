@@ -1223,6 +1223,27 @@ class FleetImportResult(BaseModel):
     skipped: int = 0  # vehicle_no 없는 행 등
 
 
+class FleetPreviewRow(BaseModel):
+    """전역 fleet 미리보기 상세 행(부록 M) — '건너뜀' 행만 반환(페이로드 절감)."""
+
+    row: int  # 엑셀 물리 행번호(1행 헤더, 데이터는 2행부터)
+    vehicle_no: Optional[str] = None
+    chassis_no: Optional[str] = None
+    classification: str  # "신규"|"갱신"|"건너뜀"
+    reason: Optional[str] = None  # 건너뜀 사유(예: "차량번호 없음"·"예시행")
+
+
+class FleetPreviewResult(BaseModel):
+    """전역 fleet 엑셀 dry-run 결과 — 실반영 없이 예측 집계(부록 M)."""
+
+    total_rows: int = 0  # 처리 데이터 행 수(완전 빈 행 제외)
+    created: int = 0  # 신규 예측
+    updated: int = 0  # 갱신 예측
+    skipped: int = 0  # 건너뜀(차량번호 없음·예시행 등)
+    client_matched: int = 0  # 업체명→운수사 매칭 예측
+    rows: List[FleetPreviewRow] = []  # '건너뜀' 행 상세만
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 진행 단계 + 거래계약/원장 파생."""
 

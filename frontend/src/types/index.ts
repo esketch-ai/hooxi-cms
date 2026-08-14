@@ -676,6 +676,24 @@ export interface FleetImportResult {
   skipped: number // vehicle_no 없는 행 등
 }
 
+// fleet 미리보기 — 반영 전 검증 결과(DB 무변경). rows에는 '건너뜀' 행만 담긴다.
+export interface FleetPreviewRow {
+  row: number // 엑셀 행번호(헤더 제외 1-base)
+  vehicle_no?: string | null
+  chassis_no?: string | null
+  classification: '신규' | '갱신' | '건너뜀'
+  reason?: string | null // 건너뜀 사유
+}
+
+export interface FleetPreviewResult {
+  total_rows: number
+  created: number // 신규(카운트만)
+  updated: number // 갱신(카운트만)
+  skipped: number
+  client_matched: number // 업체명→운수사 매칭 성공 행
+  rows: FleetPreviewRow[] // '건너뜀' 행만
+}
+
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
 export interface ProjectStage {
   stage_code: string
