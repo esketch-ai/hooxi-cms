@@ -73,6 +73,7 @@ export const TOPICS: GuideTopic[] = [
             [<Chip>실무 STAFF</Chip>, '고객사·자산·이력·보고서·발송 등 일상 업무 전부. 계정 정보 열람(감사 기록됨)'],
             [<Chip>팀장 MANAGER</Chip>, '+ 자산·사업 삭제, 정산 상태 변경, 사용자 목록'],
             [<Chip>관리자 ADMIN</Chip>, '+ 계정 승인·역할 변경, 공통 코드·시스템 설정·연동 관리, 백업·복구, 감사 로그'],
+            [<Chip>경영전략실 OBSERVER</Chip>, '관찰 전용 — 통합 현황판·경영 관찰·재무 원장·전기버스 자산·자산관리 보고만 조회. 편집·정산·통지는 불가'],
           ]}
         />
         <Note title="처음이라면">
@@ -509,7 +510,7 @@ export const TOPICS: GuideTopic[] = [
     title: '감축 사업 · 정산',
     summary: '사업 등록·배분율·정산 흐름과 금액 동결 원칙',
     featureRoute: '/projects',
-    related: ['finance-ledger', 'asset-vehicles', 'buyers'],
+    related: ['finance-ledger', 'asset-vehicles', 'buyers', 'settlements'],
     Body: () => (
       <>
         <Flow>
@@ -655,7 +656,7 @@ export const TOPICS: GuideTopic[] = [
     title: '재무 원장',
     summary: '사업별 매출·원가·이익을 한 표에서 보는 회계 원장(조회 전용)',
     featureRoute: '/finance-ledger',
-    related: ['projects', 'asset-vehicles', 'buyers'],
+    related: ['projects', 'asset-vehicles', 'buyers', 'asset-report'],
     Body: () => (
       <>
         <p>
@@ -748,6 +749,126 @@ export const TOPICS: GuideTopic[] = [
           <b>엑셀 내보내기</b>는 <Chip>팀장 MANAGER</Chip> 이상만 가능하며 워터마크·감사 기록이
           남습니다.
         </Note>
+      </>
+    ),
+  },
+  {
+    id: 'asset-report',
+    categoryId: 'finance',
+    eyebrow: 'AR',
+    title: '자산관리 보고',
+    summary: '운수사별 정산 예정·현황을 조회하고 운수사에 정산 명세를 통지',
+    featureRoute: '/asset-report',
+    related: ['finance-ledger', 'settlements', 'projects'],
+    Body: () => (
+      <>
+        <p>
+          경영전략실·내부 실무자가 <b>운수사별 정산 예정·현황을 한눈에 조회</b>하고, 각 운수사에
+          정산 명세를 통지하는 화면입니다. 재무 원장이 "사업 한 줄", 전기버스 자산이 "차량 한
+          줄"이라면, 여기는 <b>"운수사 한 줄"</b>로 지급 관점을 모아 봅니다.
+        </p>
+        <h3 className="pt-1 text-sm font-semibold text-bone">운수사 × 사업 매트릭스</h3>
+        <ul>
+          <li>
+            운수사마다 한 줄로 <b>참여 사업 수·참여 차량 수·총감축량·잔여반영감축량·예상지급액
+            (정산 예정)</b>이 나옵니다. 맨 위에는 <b>전사 총계</b>가 표시됩니다.
+          </li>
+          <li>
+            행을 누르면 펼쳐져 <b>그 운수사의 사업별 드릴다운</b>(사업 단위 감축량·예상지급액)을
+            볼 수 있습니다.
+          </li>
+          <li>
+            값은 재무 원장과 <b>같은 원천에서 자동 계산</b>되어 <b>정합</b>합니다(예상지급액 합이
+            동일). 이 화면은 매출·매입이 아니라 <b>예상지급액(정산 예정) 중심</b>입니다.
+          </li>
+        </ul>
+        <Note title="경영전략실은 조회만">
+          경영전략실(<Chip>OBSERVER</Chip>)은 <b>조회 전용</b>입니다 — 운수사 필터가 숨겨지고,
+          엑셀 내보내기와 정산 통지 버튼이 노출되지 않습니다. <b>엑셀 내보내기</b>는{' '}
+          <Chip>팀장 MANAGER</Chip> 이상만 가능합니다.
+        </Note>
+        <h3 className="pt-1 text-sm font-semibold text-bone">운수사 정산 통지</h3>
+        <Flow>
+          <li>
+            실무자(마스터 편집 권한)에게만 <Kbd>정산 통지</Kbd> 버튼이 보입니다(경영전략실
+            미노출).
+          </li>
+          <li>
+            누르면 <b>미리보기</b> — 대상 운수사 목록과 <b>수신 가능 여부</b>(수신처 유무)를
+            먼저 확인합니다.
+          </li>
+          <li>
+            <b>예정·확정 토글</b>로 어떤 금액을 통지할지 고릅니다. '예정액'은 확정 전 금액이고,
+            정산 관리에서 확정하면 '확정액'으로 통지할 수 있습니다.
+          </li>
+          <li>
+            확인 후 발송하면 <b>각 운수사에게 자기 정산 명세만</b> 이메일로 나갑니다 — 한 운수사
+            메일에 다른 운수사 정보가 절대 섞이지 않습니다.
+          </li>
+        </Flow>
+        <Note title="발송 안전 차단">
+          정산 통지 메일은 Gmail 연동이 설정돼 있을 때만 실제로 발송됩니다. 미설정이면 다른
+          발송과 동일하게 <b>안전하게 차단</b>되어 아무 메일도 나가지 않습니다.
+        </Note>
+      </>
+    ),
+  },
+  {
+    id: 'settlements',
+    categoryId: 'finance',
+    eyebrow: 'ST',
+    title: '정산 관리',
+    summary: '정산 상태를 확정·청구·입금 처리하는 내부 전용 화면(정방향 단방향)',
+    featureRoute: '/settlements',
+    accessLabel: '팀장 이상',
+    related: ['asset-report', 'projects', 'finance-ledger'],
+    Body: () => (
+      <>
+        <p>
+          카본크레딧실 실무자가 <b>정산 상태를 확정·청구·입금 처리</b>하는 내부 전용 화면입니다.
+          경영전략실·외부 파트너는 접근할 수 없습니다.
+        </p>
+        <Flow>
+          <li>
+            상태 흐름: (<Chip>예정</Chip>) → <Kbd>확정</Kbd> → <Chip>확정</Chip> →{' '}
+            <Kbd>청구</Kbd> → <Chip>청구</Chip> → <Kbd>입금완료</Kbd> → <Chip>입금완료</Chip>.{' '}
+            <b>정방향만 진행되며 되돌릴 수 없습니다</b>(입금완료가 종단).
+          </li>
+          <li>
+            <b>확정하는 순간 예상지급액이 '확정 정산액'으로 동결</b>됩니다 — 이후 기준값·차량이
+            바뀌어도 확정액은 변하지 않습니다.
+          </li>
+          <li>
+            각 전이는 <Chip>팀장 MANAGER</Chip> 이상만 할 수 있습니다.{' '}
+            <b>청구 취소(청구 → 확정)는 관리자(ADMIN)만</b> 가능하며 <b>사유가 필수</b>입니다.
+          </li>
+          <li>
+            행을 누르면 펼쳐져 <b>스냅샷 이력</b>(단계·금액·사유·처리자·일시)이 보존되어 보입니다.
+          </li>
+        </Flow>
+        <Note title="확정할 수 없는 사업">
+          예상지급액이 <b>'미정'</b>인 사업(지급 파라미터 미입력)은 확정할 수 없습니다. 사업에{' '}
+          <b>최대지급액·승인일</b> 입력이 선행돼야 예상지급액이 산정되고, 그래야 확정이
+          가능합니다.
+        </Note>
+        <h3 className="pt-1 text-sm font-semibold text-bone">파이프라인 현황판</h3>
+        <p>
+          탭에서 <b>수집 → 결산 → 정산 → 보고 → 통지</b> 5단계의 진행 상태와 <b>다음 할일</b>을
+          운수사 × 사업별로 봅니다.
+        </p>
+        <Table
+          head={['단계', '의미']}
+          rows={[
+            [<Chip>수집</Chip>, '차량 등록'],
+            [<Chip>결산</Chip>, '예상지급액 산정'],
+            [<Chip>정산</Chip>, '확정 · 청구 · 입금'],
+            [<Chip>보고</Chip>, '자산관리 보고 반출'],
+            [<Chip>통지</Chip>, '운수사 통지 발송'],
+          ]}
+        />
+        <p>
+          확정한 정산은 <b>자산관리 보고</b>의 정산 통지에서 '확정액'으로 통지할 수 있습니다.
+        </p>
       </>
     ),
   },
