@@ -252,10 +252,14 @@ def _expire_at(registered_at, expire_months: int) -> Optional[date]:
 
 
 def _remaining_age(expire_at, approved_at, base_age: float) -> Optional[float]:
-    """잔여차령 — MIN(기준차령, (만료일-승인일)/365). 만료일·승인일 없으면 None."""
+    """잔여차령 — CLAMP(0, 기준차령, (만료일-승인일)/365). 만료일·승인일 없으면 None.
+
+    승인일이 차령만료일 이후면 잔여수명이 없으므로 0으로 절하한다(음수 표시 방지).
+    이 경우 잔여반영감축량·예상지급액은 이미 0으로 수렴하므로 금액은 불변(무회귀).
+    """
     if expire_at is None or approved_at is None:
         return None
-    return min(base_age, (expire_at - approved_at).days / 365.0)
+    return max(0.0, min(base_age, (expire_at - approved_at).days / 365.0))
 
 
 def _effective_reduction(reductions, remaining_age, base_reduction: float) -> Optional[float]:

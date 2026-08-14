@@ -259,7 +259,7 @@ class ProjectVehicle(Base):
     total_reduction = Column(Numeric(14, 3))  # 파생: 연차 단순합(서버 계산·저장)
     private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
     expire_at = Column(Date)  # 파생: 차령만료일(EDATE(등록일,108)-1, 부록 L)
-    remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(MIN(기준차령,(만료-승인)/365), 부록 L)
+    remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(CLAMP(0,기준차령,(만료-승인)/365), 부록 L)
     effective_reduction = Column(Numeric(14, 3))  # 파생: 잔여반영감축량(MIN(기준감축량, 가중합), 부록 L)
     expected_payout = Column(Numeric(15, 2))  # 파생: 예상지급액(부록 L 정본 산식, 단가 미사용)
     client_vehicle_id = Column(

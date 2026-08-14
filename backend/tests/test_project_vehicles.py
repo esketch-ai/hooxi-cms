@@ -283,3 +283,22 @@ def test_vehicle_integrity_audit(client, staff_headers):
     # 감사가 예상지급액을 바꾸지 않았는지(읽기전용)
     v = client.get(f"{PROJECTS}/{pid}/vehicles", headers=staff_headers).json()["items"][0]
     assert v["expected_payout"] is not None
+
+
+def test_remaining_age_clamped_nonnegative():
+    """잔여차령 CLAMP(0, 기준차령, (만료-승인)/365) — 승인이 만료 이후면 음수 아닌 0."""
+    from datetime import date
+
+    from routers.projects import _remaining_age
+
+    base_age = 8.0
+    # 정상: 승인이 만료 이전 → 양수, 기준차령 이하
+    normal = _remaining_age(date(2030, 3, 14), date(2023, 1, 1), base_age)
+    assert 0.0 < normal <= base_age
+    # 기준차령 상한: 만료가 아주 먼 미래여도 base_age로 캡
+    assert _remaining_age(date(2100, 1, 1), date(2023, 1, 1), base_age) == base_age
+    # 엣지: 승인이 만료 이후 → 음수 아닌 0 (금액은 이미 0으로 수렴)
+    assert _remaining_age(date(2030, 3, 14), date(2031, 1, 1), base_age) == 0.0
+    # 결측 입력 → None
+    assert _remaining_age(None, date(2023, 1, 1), base_age) is None
+    assert _remaining_age(date(2030, 3, 14), None, base_age) is None
