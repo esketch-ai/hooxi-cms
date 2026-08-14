@@ -1,21 +1,36 @@
 // P2 자산관리 보고 — 운수사(고객사)별 정산 예정 요약. 부서 엑셀 보고의 시스템 대체.
 // cf. FL-3 재무 원장은 '사업 grain', 여기는 '고객사 grain' — 참여사업·차량·예상지급액 집계(subtitle로 구분).
-import { useMemo, useState } from 'react'
-import { CheckCircle, Coins, DownloadSimple, TreeStructure, Truck } from '@phosphor-icons/react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  CheckCircle,
+  CircleNotch,
+  Coins,
+  DownloadSimple,
+  EnvelopeSimple,
+  TreeStructure,
+  Truck,
+  WarningCircle,
+} from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { KpiCard } from '../../components/KpiCard'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
+import { Modal } from '../../components/Modal'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { RoleGate } from '../../components/RoleGate'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { useCodes, useClientOptions } from '../../lib/api/queries'
 import { downloadExport } from '../../lib/export'
 import { fmtMoney } from '../../lib/format'
-import { useSettlementSummary } from './api'
-import type { SettlementSummaryRow } from './types'
+import { useSettlementNoticePreview, useSettlementNoticeSend, useSettlementSummary } from './api'
+import type {
+  SettlementNoticeSendResult,
+  SettlementSummaryFilters,
+  SettlementSummaryRow,
+} from './types'
 
 /** 정수(참여수량·감축량 tCO₂ 등) 포맷 — nullable */
 function fmtQty(value?: number | null, unit = ''): string {
@@ -44,6 +59,10 @@ export function AssetReportPage() {
   // 엑셀 내보내기 — 팀장 이상만(백엔드 require_role("MANAGER")과 정합). OBSERVER·STAFF엔 미노출.
   const isManagerUp = user?.role === 'ADMIN' || user?.role === 'MANAGER'
   const [exporting, setExporting] = useState(false)
+
+  // 정산 통지(메일) — master.write(STAFF/MANAGER/ADMIN)만. OBSERVER·외부엔 버튼 미노출.
+  const isStaffUp = ['ADMIN', 'MANAGER', 'STAFF'].includes(user?.role ?? '')
+  const [noticeOpen, setNoticeOpen] = useState(false)
 
   const [clientType, setClientType] = useState('')
   const [region, setRegion] = useState('')
@@ -136,17 +155,30 @@ export function AssetReportPage() {
         title="자산관리 보고"
         subtitle="운수사별 정산 예정 요약 — 고객사 단위 (cf. 재무 원장은 사업 단위)"
         actions={
-          <RoleGate allow={isManagerUp} reason="엑셀 내보내기는 팀장 이상만 가능합니다.">
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <DownloadSimple size={16} />
-              {exporting ? '내보내는 중…' : '엑셀 내보내기'}
-            </button>
-          </RoleGate>
+          <div className="flex items-center gap-2">
+            {/* 정산 통지 — 내부 실무자용(master.write). OBSERVER·외부엔 미노출 */}
+            <RoleGate allow={isStaffUp}>
+              <button
+                type="button"
+                onClick={() => setNoticeOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+              >
+                <EnvelopeSimple size={16} />
+                정산 통지
+              </button>
+            </RoleGate>
+            <RoleGate allow={isManagerUp} reason="엑셀 내보내기는 팀장 이상만 가능합니다.">
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <DownloadSimple size={16} />
+                {exporting ? '내보내는 중…' : '엑셀 내보내기'}
+              </button>
+            </RoleGate>
+          </div>
         }
       />
 
@@ -236,6 +268,250 @@ export function AssetReportPage() {
       {total > 0 && (
         <p className="px-1 text-xs text-slatey">총 {fmtQty(total)} 개 운수사</p>
       )}
+
+      {/* 정산 통지 모달 — 게이트 통과(master.write) 시에만 마운트 */}
+      {isStaffUp && noticeOpen && (
+        <SettlementNoticeModal filters={filters} onClose={() => setNoticeOpen(false)} />
+      )}
+    </div>
+  )
+}
+
+/** 정산 통지 모달 — 미리보기(대상·수신가능) → 확인 → 발송 → 건별 결과.
+ *  현재 화면 필터를 그대로 대상 조건으로 사용한다(미매칭 운수사는 백엔드가 제외). */
+function SettlementNoticeModal({
+  filters,
+  onClose,
+}: {
+  filters: SettlementSummaryFilters
+  onClose: () => void
+}) {
+  const { showToast } = useToast()
+  const preview = useSettlementNoticePreview()
+  const send = useSettlementNoticeSend()
+
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [result, setResult] = useState<SettlementNoticeSendResult | null>(null)
+
+  // 모달 오픈 시 1회 미리보기 — filters는 오픈 시점 스냅샷으로 고정
+  const { mutate: runPreview } = preview
+  useEffect(() => {
+    runPreview(filters)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const data = preview.data
+  const items = data?.items ?? []
+  const sendableCount = data?.sendable_count ?? 0
+  // 미리보기에서 확정한 sendable(수신 가능 & 예상지급액 산정) client_id — send 대상으로 고정(표류 차단)
+  const sendableIds = items
+    .filter((it) => it.can_receive && it.expected_payout != null)
+    .map((it) => it.client_id)
+
+  async function handleSend() {
+    try {
+      const res = await send.mutateAsync({
+        client_ids: sendableIds,
+        subject: subject.trim() || undefined,
+        body: body.trim() || undefined,
+      })
+      setResult(res)
+      setConfirmOpen(false)
+      showToast(
+        `발송 완료 — 성공 ${res.sent}건, 실패 ${res.failed}건`,
+        res.failed > 0 ? 'danger' : 'success',
+      )
+    } catch (err) {
+      // 503(Gmail 미설정)·기타 — 서버 detail 우선 안내(발송 안 됨)
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '이메일 발송이 설정되지 않았습니다(환경설정 > 연동).', 'danger')
+      setConfirmOpen(false)
+    }
+  }
+
+  return (
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title="정산 통지 메일"
+        size="lg"
+        footer={
+          result ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90"
+            >
+              닫기
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                disabled={preview.isPending || sendableCount === 0}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                발송 ({sendableCount})
+              </button>
+            </>
+          )
+        }
+      >
+        {result ? (
+          <NoticeResultView result={result} />
+        ) : preview.isPending ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-slatey">
+            <CircleNotch size={18} className="animate-spin" />
+            대상을 확인하는 중…
+          </div>
+        ) : preview.isError ? (
+          <p className="py-6 text-center text-sm text-rose-400">
+            대상을 불러오지 못했습니다. 다시 시도해 주세요.
+          </p>
+        ) : items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slatey">
+            통지 대상 운수사가 없습니다. (미지정 운수사는 제외됩니다.)
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-ash">
+              대상 <b className="text-bone">{items.length}</b>개사 중 발송 가능{' '}
+              <b className="text-emerald-400">{sendableCount}</b>개사
+              <span className="text-slatey"> · 수신자 없는 운수사는 발송에서 제외됩니다.</span>
+            </p>
+
+            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              {items.map((item) => (
+                <div
+                  key={item.client_id}
+                  className="flex items-center gap-2 rounded-xl border border-hairline bg-elevate px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-bone">{item.company_name}</p>
+                    <p className="text-xs text-slatey">
+                      참여사업 {fmtQty(item.participating_project_count)} · 참여차량{' '}
+                      {fmtQty(item.participating_vehicle_count)}
+                      {item.can_receive && ` · 수신 ${fmtQty(item.to_count)}명`}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <MoneyCell value={item.expected_payout ?? null} />
+                  </div>
+                  {!item.can_receive && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
+                      title="공통 수신자 또는 주 담당자 이메일이 없어 발송이 제외됩니다"
+                    >
+                      <WarningCircle size={11} weight="fill" />
+                      수신자 없음
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 고급 옵션 — 제목/본문 오버라이드(미지정 시 기본 템플릿) */}
+            <div className="border-t border-hairline pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="text-xs font-medium text-slatey hover:text-bone"
+              >
+                {showAdvanced ? '▾ 고급 옵션 닫기' : '▸ 고급 옵션 (제목·본문 직접 입력)'}
+              </button>
+              {showAdvanced && (
+                <div className="mt-2 space-y-2">
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="제목 (미입력 시 기본 템플릿)"
+                    className="w-full rounded-xl border border-hairline bg-elevate px-3 py-2 text-sm text-bone placeholder:text-smoke"
+                  />
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder="본문 (미입력 시 기본 템플릿)"
+                    rows={3}
+                    className="w-full rounded-xl border border-hairline bg-elevate px-3 py-2 text-sm text-bone placeholder:text-smoke"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="정산 통지 발송"
+        message={
+          <>
+            <b className="text-bone">{sendableCount}</b>개사에 정산 예정액 통지 메일을 보냅니다.
+            <br />
+            발송 후에는 되돌릴 수 없습니다.
+          </>
+        }
+        confirmLabel="발송"
+        danger
+        loading={send.isPending}
+        onConfirm={handleSend}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
+  )
+}
+
+/** 발송 결과 요약 — 대상·성공·실패 + 건별 SENT/FAILED(실패 사유) */
+function NoticeResultView({ result }: { result: SettlementNoticeSendResult }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-ash">
+        대상 <b className="text-bone">{result.target_count}</b> · 성공{' '}
+        <span className="text-emerald-400">{result.sent}</span> · 실패{' '}
+        <span className={result.failed > 0 ? 'text-rose-400' : ''}>{result.failed}</span>
+      </p>
+      <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+        {result.details.map((d) => (
+          <div
+            key={d.client_id}
+            className="flex items-center gap-2 rounded-xl border border-hairline bg-elevate px-3 py-2"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-bone">{d.company_name}</p>
+              {d.result === 'FAILED' && d.reason && (
+                <p className="truncate text-xs text-rose-400" title={d.reason}>
+                  {d.reason}
+                </p>
+              )}
+            </div>
+            {d.result === 'SENT' ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle size={11} weight="fill" />
+                성공
+              </span>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+                <WarningCircle size={11} weight="fill" />
+                실패
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

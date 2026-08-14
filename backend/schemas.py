@@ -969,6 +969,67 @@ class SettlementSummaryResponse(BaseModel):
     totals: SettlementSummaryTotals  # 전사 총계
 
 
+# 운수사 정산내역 능동 통지(P3) — 이메일 정산 명세 발송 미리보기/발송 ------------------
+class SettlementNoticePreviewItem(BaseModel):
+    """통지 대상 운수사 1건 미리보기 — 발송 전 대상·수신 가능 여부 확인용.
+
+    (미지정) 운수사(client_id=None)는 대상에서 제외되어 여기 나타나지 않는다.
+    expected_payout=None(미산정)은 목록엔 포함되나 sendable(실효 발송 대상)에서는 빠진다.
+    """
+
+    client_id: str
+    company_name: str
+    expected_payout: Optional[float] = None  # None이면 '산정 중'(본문 표기)
+    participating_vehicle_count: int
+    participating_project_count: int
+    can_receive: bool  # 공통 수신자 or 주 담당자 이메일 보유
+    to_count: int  # TO 수신자 수(0이면 발송 실패 격리 대상)
+
+
+class SettlementNoticePreviewResponse(BaseModel):
+    items: List[SettlementNoticePreviewItem]
+    total: int  # 대상 운수사 수((미지정) 제외)
+    sendable_count: int  # expected_payout not None & can_receive 인 실효 발송 대상 수
+
+
+class SettlementNoticePreviewRequest(BaseModel):
+    """정산 명세 미리보기 요청 — 화면 필터 스코프(P2 settlement-summary와 동일 시그니처).
+
+    미지정 시 전사 대상. 이 스코프가 그대로 sendable 판정·화면 목록이 되고, 프론트는 그
+    sendable client_id들을 send.client_ids로 전달해 미리보기==발송 대상을 고정한다(표류 차단).
+    """
+
+    client_id: Optional[str] = None  # 운수사 필터(ProjectVehicle.client_id)
+    client_type: Optional[str] = None  # 고객사 구분 필터(Client.client_type)
+    region: Optional[str] = None  # 지역 필터(Client.region)
+
+
+class SettlementNoticeSendRequest(BaseModel):
+    """정산 명세 발송 요청 — client_ids 미지정 시 sendable 전체 발송.
+
+    subject/body 미지정 시 tb_config(settlement_notice_subject/_body) 오버라이드,
+    미저장 시 코드 기본값(services.settlement_notice) 사용.
+    """
+
+    client_ids: Optional[List[str]] = None  # 특정 운수사 한정(없으면 sendable 전체)
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
+
+class SettlementNoticeSendDetail(BaseModel):
+    client_id: str
+    company_name: str
+    result: str  # "SENT" | "FAILED"
+    reason: Optional[str] = None  # FAILED 사유(수신자 없음 등)
+
+
+class SettlementNoticeSendResult(BaseModel):
+    target_count: int
+    sent: int
+    failed: int
+    details: List[SettlementNoticeSendDetail]
+
+
 # 거래계약(매수자별 선물 판매단가) — 프로젝트당 매수자 여럿, 차액 수익 파생 ------------
 # 매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(부록 N.8 D1) --------------
 class BuyerIn(BaseModel):

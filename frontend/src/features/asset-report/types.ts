@@ -48,3 +48,46 @@ export interface SettlementSummaryFilters {
   client_type?: string
   region?: string
 }
+
+// ── P3 정산 통지(메일) — 미리보기·발송 계약 (backend POST /asset-report/settlement-notice/*) ──
+// master.write(STAFF/MANAGER/ADMIN) 전용. 미지정(미매칭) 운수사는 백엔드가 미리보기에서 제외한다.
+
+/** 통지 미리보기 1행 — 운수사 단위. can_receive=false면 수신자(공통/주담당 메일) 없음 */
+export interface SettlementNoticePreviewItem {
+  client_id: string
+  company_name: string
+  expected_payout?: number | null
+  participating_vehicle_count: number
+  participating_project_count: number
+  can_receive: boolean
+  to_count: number
+}
+
+export interface SettlementNoticePreview {
+  items: SettlementNoticePreviewItem[]
+  total: number
+  /** 실제 발송 가능(수신자 보유) 운수사 수 */
+  sendable_count: number
+}
+
+/** 통지 발송 결과 1건 — 운수사 단위 SENT/FAILED */
+export interface SettlementNoticeSendDetail {
+  client_id: string
+  company_name: string
+  result: 'SENT' | 'FAILED'
+  reason?: string | null
+}
+
+export interface SettlementNoticeSendResult {
+  target_count: number
+  sent: number
+  failed: number
+  details: SettlementNoticeSendDetail[]
+}
+
+/** 발송 payload — client_ids 미지정 시 발송 가능 전체 대상, 제목/본문 미지정 시 기본 템플릿 */
+export interface SettlementNoticeSendPayload {
+  client_ids?: string[]
+  subject?: string
+  body?: string
+}
