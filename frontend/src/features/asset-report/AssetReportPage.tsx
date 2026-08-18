@@ -1,7 +1,8 @@
 // P2 자산관리 보고 — 운수사(고객사)별 정산 예정 요약. 부서 엑셀 보고의 시스템 대체.
 // cf. FL-3 재무 원장은 '사업 grain', 여기는 '고객사 grain' — 참여사업·차량·예상지급액 집계(subtitle로 구분).
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  ChatCircleDots,
   CheckCircle,
   CircleNotch,
   Coins,
@@ -28,6 +29,8 @@ import { downloadExport } from '../../lib/export'
 import { fmtMoney } from '../../lib/format'
 import { useSettlementNoticePreview, useSettlementNoticeSend, useSettlementSummary } from './api'
 import type {
+  SettlementNoticeChannel,
+  SettlementNoticePreviewItem,
   SettlementNoticeSendResult,
   SettlementNoticeType,
   SettlementSummaryFilters,
@@ -313,6 +316,8 @@ function SettlementNoticeModal({
   const [result, setResult] = useState<SettlementNoticeSendResult | null>(null)
   // 통지 유형(P4) — 예정액/확정액. 기본 예정(무회귀). 확정 선택 시 대상=확정 header 보유 운수사만.
   const [noticeType, setNoticeType] = useState<SettlementNoticeType>('EXPECTED')
+  // 통지 채널(P3) — 이메일/알림톡/둘 다. 기본 이메일(무회귀). 알림톡 미설정 시 알림톡 채널 발송 0.
+  const [channel, setChannel] = useState<SettlementNoticeChannel>('EMAIL')
 
   // 통지 유형 변경 시 미리보기 재조회 — filters는 오픈 시점 스냅샷으로 고정.
   const { mutate: runPreview } = preview
@@ -323,10 +328,33 @@ function SettlementNoticeModal({
 
   const data = preview.data
   const items = data?.items ?? []
-  const sendableCount = data?.sendable_count ?? 0
-  // 미리보기에서 확정한 sendable(수신 가능 & 예상지급액 산정) client_id — send 대상으로 고정(표류 차단)
+  // 채널별 발송 가능 판정 — 이메일=수신자 & 예상지급액 산정, 알림톡=연동 번호 보유 & 예상지급액 산정.
+  // 알림톡 본문엔 금액이 없으나 백엔드 sendable_alimtalk_count/alimtalk_sendable_ids가 payout not None을
+  // 동일 게이트로 요구하므로('통지할 정산 존재' 불변식), 프론트 BOTH 카운트·sendableIds도 맞춰 과대집계를 막는다.
+  const emailOk = (it: SettlementNoticePreviewItem) => it.can_receive && it.expected_payout != null
+  const alimtalkOk = (it: SettlementNoticePreviewItem) =>
+    !!it.can_receive_alimtalk && it.expected_payout != null
+  const emailSendableCount = data?.sendable_count ?? 0
+  const alimtalkSendableCount = data?.sendable_alimtalk_count ?? 0
+  // BOTH는 적어도 한 채널 발송 가능한 운수사(합집합)를 로컬 집계
+  const bothSendableCount = items.filter((it) => emailOk(it) || alimtalkOk(it)).length
+  const channelSendableCount =
+    channel === 'EMAIL'
+      ? emailSendableCount
+      : channel === 'ALIMTALK'
+        ? alimtalkSendableCount
+        : bothSendableCount
+  // 알림톡 미설정/수신 불가 안내 — 대상은 있으나 알림톡 sendable이 0인 경우
+  const alimtalkUnavailable = alimtalkSendableCount === 0 && (data?.total ?? 0) > 0
+  // 미리보기에서 확정한 sendable client_id — 선택 채널 기준으로 send 대상 고정(표류 차단)
   const sendableIds = items
-    .filter((it) => it.can_receive && it.expected_payout != null)
+    .filter((it) =>
+      channel === 'EMAIL'
+        ? emailOk(it)
+        : channel === 'ALIMTALK'
+          ? alimtalkOk(it)
+          : emailOk(it) || alimtalkOk(it),
+    )
     .map((it) => it.client_id)
 
   async function handleSend() {
@@ -336,12 +364,17 @@ function SettlementNoticeModal({
         subject: subject.trim() || undefined,
         body: body.trim() || undefined,
         notice_type: noticeType,
+        channel,
       })
       setResult(res)
       setConfirmOpen(false)
+      const parts = [`이메일 성공 ${res.sent}·실패 ${res.failed}`]
+      if (channel !== 'EMAIL') {
+        parts.push(`알림톡 성공 ${res.alimtalk_sent ?? 0}·실패 ${res.alimtalk_failed ?? 0}`)
+      }
       showToast(
-        `발송 완료 — 성공 ${res.sent}건, 실패 ${res.failed}건`,
-        res.failed > 0 ? 'danger' : 'success',
+        `발송 완료 — ${parts.join(' · ')}`,
+        res.failed > 0 || (res.alimtalk_failed ?? 0) > 0 ? 'danger' : 'success',
       )
     } catch (err) {
       // 503(Gmail 미설정)·기타 — 서버 detail 우선 안내(발송 안 됨)
@@ -380,10 +413,10 @@ function SettlementNoticeModal({
               <button
                 type="button"
                 onClick={() => setConfirmOpen(true)}
-                disabled={preview.isPending || sendableCount === 0}
+                disabled={preview.isPending || channelSendableCount === 0}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                발송 ({sendableCount})
+                발송 ({channelSendableCount})
               </button>
             </>
           )
@@ -409,6 +442,22 @@ function SettlementNoticeModal({
                 </button>
               ))}
             </div>
+            {/* 통지 채널 토글 — 이메일 / 알림톡 / 둘 다. 알림톡은 금액 미포함(도착 알림+링크) */}
+            <div className="flex gap-1.5 rounded-full border border-hairline bg-elevate p-1 text-sm">
+              {(['EMAIL', 'ALIMTALK', 'BOTH'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setChannel(c)}
+                  disabled={preview.isPending}
+                  className={`flex-1 rounded-full px-3 py-1.5 font-medium transition disabled:opacity-60 ${
+                    channel === c ? 'bg-primary text-on-primary' : 'text-slatey hover:text-bone'
+                  }`}
+                >
+                  {c === 'EMAIL' ? '이메일' : c === 'ALIMTALK' ? '알림톡' : '이메일+알림톡'}
+                </button>
+              ))}
+            </div>
             {preview.isPending ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-slatey">
             <CircleNotch size={18} className="animate-spin" />
@@ -427,10 +476,21 @@ function SettlementNoticeModal({
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-ash">
-              대상 <b className="text-bone">{items.length}</b>개사 중 발송 가능{' '}
-              <b className="text-emerald-400">{sendableCount}</b>개사
+              대상 <b className="text-bone">{items.length}</b>개사 중 이메일 발송 가능{' '}
+              <b className="text-emerald-400">{emailSendableCount}</b>개사 · 알림톡 발송 가능{' '}
+              <b className="text-emerald-400">{alimtalkSendableCount}</b>개사
               <span className="text-slatey"> · 수신자 없는 운수사는 발송에서 제외됩니다.</span>
             </p>
+
+            {/* 알림톡 미설정/수신 불가 안내 — 알림톡 포함 채널 선택 시 노출 */}
+            {alimtalkUnavailable && channel !== 'EMAIL' && (
+              <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                카카오 알림톡이 아직 설정되지 않았거나 수신 가능한 운수사가 없습니다(환경설정 &gt; 연동).
+                {channel === 'ALIMTALK'
+                  ? ' 알림톡 단독 발송은 할 수 없습니다.'
+                  : ' 이메일 수신자에게만 발송됩니다.'}
+              </p>
+            )}
 
             <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
               {items.map((item) => (
@@ -443,16 +503,36 @@ function SettlementNoticeModal({
                     <p className="text-xs text-slatey">
                       참여사업 {fmtQty(item.participating_project_count)} · 참여차량{' '}
                       {fmtQty(item.participating_vehicle_count)}
-                      {item.can_receive && ` · 수신 ${fmtQty(item.to_count)}명`}
+                      {item.can_receive && ` · 이메일 ${fmtQty(item.to_count)}명`}
+                      {item.can_receive_alimtalk && ` · 알림톡 ${fmtQty(item.alimtalk_to_count)}명`}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <MoneyCell value={item.expected_payout ?? null} />
                   </div>
-                  {!item.can_receive && (
+                  {/* 채널별 수신 가능 배지 — 이메일/알림톡 병기 */}
+                  {item.can_receive && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                      title="공통 수신자 또는 주 담당자 이메일로 발송됩니다"
+                    >
+                      <EnvelopeSimple size={11} weight="fill" />
+                      이메일
+                    </span>
+                  )}
+                  {item.can_receive_alimtalk && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                      title="카카오 알림톡 연동 번호로 발송됩니다(금액 미포함, 도착 알림+링크)"
+                    >
+                      <ChatCircleDots size={11} weight="fill" />
+                      알림톡
+                    </span>
+                  )}
+                  {!item.can_receive && !item.can_receive_alimtalk && (
                     <span
                       className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"
-                      title="공통 수신자 또는 주 담당자 이메일이 없어 발송이 제외됩니다"
+                      title="공통 수신자 또는 주 담당자 이메일·알림톡 번호가 없어 발송이 제외됩니다"
                     >
                       <WarningCircle size={11} weight="fill" />
                       수신자 없음
@@ -501,8 +581,10 @@ function SettlementNoticeModal({
         title="정산 통지 발송"
         message={
           <>
-            <b className="text-bone">{sendableCount}</b>개사에 정산{' '}
-            {noticeType === 'CONFIRMED' ? '확정액' : '예정액'} 통지 메일을 보냅니다.
+            <b className="text-bone">{channelSendableCount}</b>개사에 정산{' '}
+            {noticeType === 'CONFIRMED' ? '확정액' : '예정액'} 통지를{' '}
+            {channel === 'EMAIL' ? '이메일' : channel === 'ALIMTALK' ? '카카오 알림톡' : '이메일·알림톡'}
+            (으)로 보냅니다.
             <br />
             발송 후에는 되돌릴 수 없습니다.
           </>
@@ -517,14 +599,54 @@ function SettlementNoticeModal({
   )
 }
 
-/** 발송 결과 요약 — 대상·성공·실패 + 건별 SENT/FAILED(실패 사유) */
+/** 채널별 결과 배지 — SENT=성공(초록)/FAILED=실패(빨강)/SKIPPED=스킵(중립 회색). 채널 아이콘 병기 */
+function ChannelBadge({
+  icon,
+  label,
+  state,
+}: {
+  icon: ReactNode
+  label: string
+  state: 'SENT' | 'FAILED' | 'SKIPPED'
+}) {
+  const tone =
+    state === 'SENT'
+      ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+      : state === 'SKIPPED'
+        ? 'border-hairline bg-elevate text-ash'
+        : 'border-rose-400/25 bg-rose-500/15 text-rose-700 dark:text-rose-300'
+  const suffix = state === 'SENT' ? '성공' : state === 'SKIPPED' ? '스킵' : '실패'
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}
+    >
+      {icon}
+      {label} {suffix}
+    </span>
+  )
+}
+
+/** 발송 결과 요약 — 이메일·알림톡 성공/실패 + 건별 채널 결과(email_result/alimtalk_result, 없으면 result) */
 function NoticeResultView({ result }: { result: SettlementNoticeSendResult }) {
+  const alimtalkSent = result.alimtalk_sent ?? 0
+  const alimtalkFailed = result.alimtalk_failed ?? 0
+  const hasAlimtalk =
+    alimtalkSent > 0 ||
+    alimtalkFailed > 0 ||
+    result.details.some((d) => d.alimtalk_result != null)
   return (
     <div className="space-y-3">
       <p className="text-sm text-ash">
-        대상 <b className="text-bone">{result.target_count}</b> · 성공{' '}
-        <span className="text-emerald-400">{result.sent}</span> · 실패{' '}
+        대상 <b className="text-bone">{result.target_count}</b> · 이메일 성공{' '}
+        <span className="text-emerald-400">{result.sent}</span> 실패{' '}
         <span className={result.failed > 0 ? 'text-rose-400' : ''}>{result.failed}</span>
+        {hasAlimtalk && (
+          <>
+            {' '}
+            · 알림톡 성공 <span className="text-emerald-400">{alimtalkSent}</span> 실패{' '}
+            <span className={alimtalkFailed > 0 ? 'text-rose-400' : ''}>{alimtalkFailed}</span>
+          </>
+        )}
       </p>
       <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
         {result.details.map((d) => (
@@ -540,17 +662,37 @@ function NoticeResultView({ result }: { result: SettlementNoticeSendResult }) {
                 </p>
               )}
             </div>
-            {d.result === 'SENT' ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                <CheckCircle size={11} weight="fill" />
-                성공
-              </span>
-            ) : (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300">
-                <WarningCircle size={11} weight="fill" />
-                실패
-              </span>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {/* 채널별 결과가 있으면 채널 배지 병기, 없으면 통합 결과 배지 */}
+              {d.email_result != null || d.alimtalk_result != null ? (
+                <>
+                  {d.email_result != null && (
+                    <ChannelBadge
+                      icon={<EnvelopeSimple size={11} weight="fill" />}
+                      label="이메일"
+                      state={d.email_result}
+                    />
+                  )}
+                  {d.alimtalk_result != null && (
+                    <ChannelBadge
+                      icon={<ChatCircleDots size={11} weight="fill" />}
+                      label="알림톡"
+                      state={d.alimtalk_result}
+                    />
+                  )}
+                </>
+              ) : d.result === 'SENT' ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle size={11} weight="fill" />
+                  성공
+                </span>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+                  <WarningCircle size={11} weight="fill" />
+                  실패
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>

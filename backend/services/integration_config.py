@@ -68,6 +68,7 @@ REGISTRY: Dict[str, dict] = {
             IntegrationField("KAKAO_TEMPLATE_REPORT", "보고서 도착 템플릿", required=False),
             IntegrationField("KAKAO_TEMPLATE_REPLY", "답변 알림 템플릿", required=False),
             IntegrationField("KAKAO_TEMPLATE_PORTAL_INVITE", "포털 초대 알림톡 템플릿 코드", required=False),
+            IntegrationField("KAKAO_TEMPLATE_SETTLEMENT", "정산 통지 알림톡 템플릿", required=False),
             IntegrationField("SOLAPI_SENDER", "등록 발신번호(문자 폴백)", required=False),
         ],
     },

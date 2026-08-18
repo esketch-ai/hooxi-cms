@@ -984,12 +984,17 @@ class SettlementNoticePreviewItem(BaseModel):
     participating_project_count: int
     can_receive: bool  # 공통 수신자 or 주 담당자 이메일 보유
     to_count: int  # TO 수신자 수(0이면 발송 실패 격리 대상)
+    # 알림톡 채널(P3 증분) — 수신번호 원천(KakaoContact APPROVED phone or 주 담당자 전화) 보유 여부.
+    # 알림톡 미설정(SOLAPI/템플릿)이면 게이트로 전부 false·count 0.
+    can_receive_alimtalk: bool = False
+    alimtalk_to_count: int = 0  # 알림톡 수신번호 수(0/1)
 
 
 class SettlementNoticePreviewResponse(BaseModel):
     items: List[SettlementNoticePreviewItem]
     total: int  # 대상 운수사 수((미지정) 제외)
     sendable_count: int  # expected_payout not None & can_receive 인 실효 발송 대상 수
+    sendable_alimtalk_count: int = 0  # 금액 산정 완료 & 알림톡 수신번호 & 알림톡 설정 인 대상 수
 
 
 class SettlementNoticePreviewRequest(BaseModel):
@@ -1021,20 +1026,28 @@ class SettlementNoticeSendRequest(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     notice_type: Literal["EXPECTED", "CONFIRMED"] = "EXPECTED"  # 기본 EXPECTED(무회귀)
+    # 발송 채널(P3 증분) — 기본 EMAIL(무회귀). BOTH/ALIMTALK 시 알림톡 병행·단독.
+    # 채널별 독립 실패격리. 요청 채널이 전부 미설정이면 503(발송·감사 0).
+    channel: Literal["EMAIL", "ALIMTALK", "BOTH"] = "EMAIL"
 
 
 class SettlementNoticeSendDetail(BaseModel):
     client_id: str
     company_name: str
-    result: str  # "SENT" | "FAILED"
+    result: str  # "SENT" | "FAILED"(기존 계약 유지 — EMAIL 포함 시 이메일 결과, ALIMTALK 단독이면 알림톡 결과)
     reason: Optional[str] = None  # FAILED 사유(수신자 없음 등)
+    # 채널별 결과(P3 증분) — 요청 채널만 값 존재. "SENT"|"FAILED"|"SKIPPED"|None(미요청).
+    email_result: Optional[str] = None
+    alimtalk_result: Optional[str] = None
 
 
 class SettlementNoticeSendResult(BaseModel):
     target_count: int
-    sent: int
-    failed: int
+    sent: int  # 이메일 발송 성공 수(기존 계약 유지)
+    failed: int  # 이메일 발송 실패 수(기존 계약 유지)
     details: List[SettlementNoticeSendDetail]
+    alimtalk_sent: int = 0  # 알림톡 발송 성공 수(P3 증분)
+    alimtalk_failed: int = 0  # 알림톡 발송 실패 수(P3 증분)
 
 
 # P4 정산 재건 — 정산 헤더(tb_settlement) 그레인=(고객사×사업). 상태전이 머신 --------------

@@ -8,7 +8,7 @@ increment 1 범위: services.settlement_notice 순수 함수만(HTTP·발송 없
 """
 
 import models
-from services import email_service
+from services import email_service, integration_config, kakao_service
 from services import settlement_notice as sn
 
 API = "/api/v1"
@@ -554,3 +554,296 @@ def test_authz_preview_and_send(client, staff_headers, monkeypatch):
     # 미인증 401
     assert client.post(PREVIEW).status_code == 401
     assert client.post(SEND, json={}).status_code == 401
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 증분(P3 백엔드) — 카카오 알림톡 채널(channel EMAIL|ALIMTALK|BOTH)
+# 알림톡 본문 금액 미포함(운수사명·기준일·통지유형만). 수신번호 = KakaoContact
+# (APPROVED·phone) 우선 → Client.main_contact_phone 폴백. 채널별 독립 실패격리.
+# 실발송 없음: kakao_service.send_alimtalk/is_configured_alimtalk·integration_config.resolve
+# 를 전부 monkeypatch.
+# ═══════════════════════════════════════════════════════════════════════════
+def _approve_contact(client_id, phone, suffix=""):
+    """승인(APPROVED) 카카오 연락처 시드 — 알림톡 수신번호 원천."""
+    db = models.SessionLocal()
+    try:
+        db.add(models.KakaoContact(
+            kakao_user_key="kuk-" + client_id + suffix,
+            client_id=client_id, name="담당", phone=phone,
+            status="APPROVED", approved_at=models.utcnow(),
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _patch_alimtalk(monkeypatch, template="TMPL_SETTLE", fail=False):
+    """알림톡 설정 mock — send_alimtalk 호출 인자 캡처(실발송 없음). fail=True면 KakaoSendError."""
+    calls = []
+
+    def fake_resolve(key):
+        return template if key == "KAKAO_TEMPLATE_SETTLEMENT" else ""
+
+    def fake_send(to, template_code, variables=None, buttons=None):
+        calls.append({"to": to, "template_code": template_code,
+                      "variables": dict(variables or {})})
+        if fail:
+            raise kakao_service.KakaoSendError("boom")
+        return {"ok": True}
+
+    monkeypatch.setattr(kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(integration_config, "resolve", fake_resolve)
+    monkeypatch.setattr(kakao_service, "send_alimtalk", fake_send)
+    return calls
+
+
+# ── (a) 채널 미지정=이메일만(기존 무회귀) — alimtalk 필드 None·카운트 0 ─────────
+def test_channel_default_email_only(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "기본채널", email="ch-def@carrier.example")
+    _approve_contact(a, "010-0000-1111")  # 연락처 있어도 EMAIL 채널이면 알림톡 미발송
+    _patch_mail(monkeypatch)
+    r = client.post(SEND, headers=manager_headers, json={"client_ids": [a]})  # channel 미지정
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["sent"] == 1 and res["alimtalk_sent"] == 0 and res["alimtalk_failed"] == 0
+    d = res["details"][0]
+    assert d["result"] == "SENT" and d["email_result"] == "SENT"
+    assert d["alimtalk_result"] is None
+
+
+# ── (b) BOTH + 알림톡 미설정 → 이메일만·알림톡 스킵 ──────────────────────────
+def test_both_alimtalk_unconfigured(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "BOTH미설정", email="both-nc@carrier.example")
+    sent = _patch_mail(monkeypatch)
+    monkeypatch.setattr(kakao_service, "is_configured_alimtalk", lambda: False)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "BOTH"})
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["sent"] == 1 and res["alimtalk_sent"] == 0 and res["alimtalk_failed"] == 0
+    assert len(sent) == 1
+    d = res["details"][0]
+    assert d["result"] == "SENT" and d["alimtalk_result"] is None  # 게이트 off → 미대상
+
+
+# ── (c) 알림톡 설정 mock → send_alimtalk 인자 검증·금액 변수 부재 ─────────────
+def test_alimtalk_args_no_amount(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "알림톡C", email="atc@carrier.example")
+    pay = _payout_of(client, manager_headers, a)
+    _approve_contact(a, "010-1234-5678")
+    _patch_mail(monkeypatch)
+    calls = _patch_alimtalk(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "BOTH"})
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["sent"] == 1 and res["alimtalk_sent"] == 1
+    assert res["details"][0]["alimtalk_result"] == "SENT"
+    assert len(calls) == 1
+    c0 = calls[0]
+    assert c0["to"] == "010-1234-5678"  # KakaoContact APPROVED phone
+    assert c0["template_code"] == "TMPL_SETTLE"
+    assert set(c0["variables"].keys()) == {"운수사명", "기준일", "통지유형"}
+    assert c0["variables"]["운수사명"] == "통지운수알림톡C"
+    assert c0["variables"]["통지유형"] == "예정"
+    # 금액 변수·금액값 부재(유출 리스크 최소)
+    assert "예상지급액" not in c0["variables"] and "금액" not in c0["variables"]
+    assert "{0:,.0f}".format(pay) not in str(c0["variables"])
+    assert str(int(pay)) not in str(c0["variables"])
+
+
+# ── (c') main_contact_phone 폴백 — KakaoContact 없으면 주 담당자 전화 사용 ─────
+def test_alimtalk_phone_fallback(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "폴백전화", email="fb@carrier.example")
+    _set_attr(a, main_contact_phone="010-7777-8888")  # KakaoContact 없음 → 폴백
+    _patch_mail(monkeypatch)
+    calls = _patch_alimtalk(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "ALIMTALK"})
+    assert r.status_code == 200, r.text
+    assert r.json()["alimtalk_sent"] == 1
+    assert calls[0]["to"] == "010-7777-8888"
+
+
+# ── (d) 알림톡 예외 → 이메일 SENT 유지·detail alimtalk FAILED ─────────────────
+def test_alimtalk_failure_keeps_email(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "알림톡실패", email="atf@carrier.example")
+    _approve_contact(a, "010-9999-0000")
+    _patch_mail(monkeypatch)
+    _patch_alimtalk(monkeypatch, fail=True)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "BOTH"})
+    assert r.status_code == 200, r.text
+    res = r.json()
+    assert res["sent"] == 1 and res["alimtalk_sent"] == 0 and res["alimtalk_failed"] == 1
+    d = res["details"][0]
+    assert d["result"] == "SENT"  # 기존 계약 — 이메일 결과 유지
+    assert d["email_result"] == "SENT" and d["alimtalk_result"] == "FAILED"
+    db = models.SessionLocal()
+    try:
+        assert db.query(models.ActivityHistory).filter(
+            models.ActivityHistory.client_id == a,
+            models.ActivityHistory.activity_type == "EMAIL").count() == 1
+        assert db.query(models.ActivityHistory).filter(
+            models.ActivityHistory.client_id == a,
+            models.ActivityHistory.activity_type == "KAKAO").count() == 0
+    finally:
+        db.close()
+
+
+# ── (d') KakaoSendError 아닌 예외(httpx 타임아웃 등)도 전면 삼킴 — 500 없음·격리 보존 ──
+# send_alimtalk은 httpx.post(타임아웃/연결오류)·resp.json()(파싱오류) 등 KakaoSendError
+# 아닌 예외를 던질 수 있다. 이게 send 루프로 전파되면 HTTP 500·세션 롤백으로 이미 발송된
+# 이메일 활동이력이 유실되고 나머지 대상이 미발송된다(채널 격리 붕괴). 전면 포착 검증.
+def test_alimtalk_generic_exception_isolated(client, manager_headers, monkeypatch):
+    import httpx
+
+    a = _mk_carrier(client, manager_headers, "알림톡예외A", email="age-a@carrier.example")
+    b = _mk_carrier(client, manager_headers, "알림톡예외B", email="age-b@carrier.example")
+    _approve_contact(a, "010-3333-4444")
+    _approve_contact(b, "010-5555-7777")
+    sent = _patch_mail(monkeypatch)
+
+    def fake_resolve(key):
+        return "TMPL_SETTLE" if key == "KAKAO_TEMPLATE_SETTLEMENT" else ""
+
+    def boom_send(to, template_code, variables=None, buttons=None):
+        raise httpx.TimeoutException("connect timeout")  # KakaoSendError 아님
+
+    monkeypatch.setattr(kakao_service, "is_configured_alimtalk", lambda: True)
+    monkeypatch.setattr(integration_config, "resolve", fake_resolve)
+    monkeypatch.setattr(kakao_service, "send_alimtalk", boom_send)
+
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a, b], "channel": "BOTH"})
+    assert r.status_code == 200, r.text  # 500 아님 — 예외 전파 차단
+    res = r.json()
+    # 이메일은 두 건 모두 SENT(채널 격리) — 알림톡 예외가 이메일/나머지 대상을 되돌리지 않음
+    assert res["sent"] == 2 and res["failed"] == 0
+    assert res["alimtalk_sent"] == 0 and res["alimtalk_failed"] == 2
+    assert len(sent) == 2  # 두 운수사 이메일 모두 발송
+    by_id = {d["client_id"]: d for d in res["details"]}
+    for cid in (a, b):
+        assert by_id[cid]["email_result"] == "SENT"
+        assert by_id[cid]["alimtalk_result"] == "FAILED"
+        assert by_id[cid]["result"] == "SENT"  # 기존 계약 — 이메일 결과 유지
+    # 이메일 활동이력 보존(각 1건), 알림톡 KAKAO 미적재
+    db = models.SessionLocal()
+    try:
+        assert db.query(models.ActivityHistory).filter(
+            models.ActivityHistory.client_id.in_([a, b]),
+            models.ActivityHistory.activity_type == "EMAIL").count() == 2
+        assert db.query(models.ActivityHistory).filter(
+            models.ActivityHistory.client_id.in_([a, b]),
+            models.ActivityHistory.activity_type == "KAKAO").count() == 0
+    finally:
+        db.close()
+
+
+# ── 알림톡 성공 → KAKAO 활동 이력 [자동] 적재(전화 원문 미기록) ───────────────
+def test_alimtalk_success_activity(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "알림톡성공", email="ats@carrier.example")
+    _approve_contact(a, "010-2222-3333")
+    _patch_mail(monkeypatch)
+    _patch_alimtalk(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "ALIMTALK"})
+    assert r.status_code == 200, r.text
+    assert r.json()["alimtalk_sent"] == 1
+    db = models.SessionLocal()
+    try:
+        ah = (db.query(models.ActivityHistory)
+              .filter(models.ActivityHistory.client_id == a,
+                      models.ActivityHistory.activity_type == "KAKAO").one())
+        assert ah.title.startswith("[자동]")
+        assert "010-2222-3333" not in (ah.content or "")
+        assert "01022223333" not in (ah.content or "")
+    finally:
+        db.close()
+
+
+# ── (e) ALIMTALK 단독 + 알림톡 미설정 → 503(발송·감사 0) ──────────────────────
+def test_alimtalk_only_unconfigured_503(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "단독미설정", email="ao@carrier.example")
+    monkeypatch.setattr(kakao_service, "is_configured_alimtalk", lambda: False)
+    db = models.SessionLocal()
+    try:
+        before = db.query(models.AuditLog).filter(
+            models.AuditLog.action == "SETTLEMENT_NOTICE_SEND").count()
+    finally:
+        db.close()
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "ALIMTALK"})
+    assert r.status_code == 503, r.text
+    db = models.SessionLocal()
+    try:
+        assert db.query(models.AuditLog).filter(
+            models.AuditLog.action == "SETTLEMENT_NOTICE_SEND").count() == before
+    finally:
+        db.close()
+
+
+# ── (f) 감사 new_value — 금액·전화 원문 부재, 채널/알림톡 카운트 포함 ──────────
+def test_alimtalk_audit_no_secret(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "알림톡감사", email="ata2@carrier.example")
+    pay = _payout_of(client, manager_headers, a)
+    _approve_contact(a, "010-5555-6666")
+    _patch_mail(monkeypatch)
+    _patch_alimtalk(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a], "channel": "BOTH"})
+    assert r.status_code == 200, r.text
+    db = models.SessionLocal()
+    try:
+        log = (db.query(models.AuditLog)
+               .filter(models.AuditLog.action == "SETTLEMENT_NOTICE_SEND")
+               .order_by(models.AuditLog.created_at.desc()).first())
+        assert log.new_value.startswith("targets=")
+        assert "channel=BOTH" in log.new_value and "alimtalk_sent=1" in log.new_value
+        assert "010-5555-6666" not in log.new_value and "01055556666" not in log.new_value
+        assert "{0:,.0f}".format(pay) not in log.new_value
+        assert str(int(pay)) not in log.new_value
+    finally:
+        db.close()
+
+
+# ── (g) preview can_receive_alimtalk/sendable_alimtalk_count(미설정 시 0) ──────
+def test_preview_alimtalk_counts(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "미리보기AT", email="pat@carrier.example")
+    _approve_contact(a, "010-1111-2222")
+    b = _mk_carrier(client, manager_headers, "미리보기무전화", email="pnp@carrier.example")
+
+    # 미설정 → 전부 false·count 0
+    monkeypatch.setattr(kakao_service, "is_configured_alimtalk", lambda: False)
+    body = client.post(PREVIEW, headers=manager_headers).json()
+    assert body["sendable_alimtalk_count"] == 0
+    assert all(i["can_receive_alimtalk"] is False and i["alimtalk_to_count"] == 0
+               for i in body["items"])
+
+    # 설정 → phone 있는 a만 can_receive_alimtalk True
+    _patch_alimtalk(monkeypatch)
+    body = client.post(PREVIEW, headers=manager_headers).json()
+    by_id = {i["client_id"]: i for i in body["items"]}
+    assert by_id[a]["can_receive_alimtalk"] is True and by_id[a]["alimtalk_to_count"] == 1
+    assert by_id[b]["can_receive_alimtalk"] is False and by_id[b]["alimtalk_to_count"] == 0
+    assert by_id[a]["expected_payout"] is not None
+    assert body["sendable_alimtalk_count"] >= 1
+
+
+# ── (h) 스코프 격리 — 각 알림톡 variables에 자기 운수사만, 타사 부재 ──────────
+def test_alimtalk_scope_isolation(client, manager_headers, monkeypatch):
+    a = _mk_carrier(client, manager_headers, "AT격리A", email="ata1@carrier.example")
+    b = _mk_carrier(client, manager_headers, "AT격리B", email="atb1@carrier.example")
+    _approve_contact(a, "010-0000-0001")
+    _approve_contact(b, "010-0000-0002")
+    _patch_mail(monkeypatch)
+    calls = _patch_alimtalk(monkeypatch)
+    r = client.post(SEND, headers=manager_headers,
+                    json={"client_ids": [a, b], "channel": "ALIMTALK"})
+    assert r.status_code == 200, r.text
+    assert r.json()["alimtalk_sent"] == 2
+    by_to = {c["to"]: c["variables"] for c in calls}
+    va = by_to["010-0000-0001"]
+    vb = by_to["010-0000-0002"]
+    assert va["운수사명"] == "통지운수AT격리A" and "통지운수AT격리B" not in str(va)
+    assert vb["운수사명"] == "통지운수AT격리B" and "통지운수AT격리A" not in str(vb)

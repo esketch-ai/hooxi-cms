@@ -50,8 +50,8 @@ export function useSettlementNoticePreview() {
   })
 }
 
-/** 통지 발송 — 건별 메일 발송으로 오래 걸릴 수 있어 timeout 상향(배치 관용구).
- *  Gmail 미설정 시 503 — 호출부에서 서버 detail 토스트 안내 */
+/** 통지 발송 — 건별 메일/알림톡 발송으로 오래 걸릴 수 있어 timeout 상향(배치 관용구).
+ *  channel(EMAIL/ALIMTALK/BOTH) 그대로 전달. Gmail 미설정 시 503 — 호출부에서 서버 detail 토스트 안내 */
 export function useSettlementNoticeSend() {
   return useMutation({
     mutationFn: async (payload: SettlementNoticeSendPayload) => {
