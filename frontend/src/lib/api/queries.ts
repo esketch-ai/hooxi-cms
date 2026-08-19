@@ -174,3 +174,66 @@ export function useDeleteDocument() {
     },
   })
 }
+
+// ── Dropbox 폴더명 규칙 점검/교정(reconcile) — ADMIN 전용 ─────────────
+// 미리보기(dry-run)로 이동/충돌/유지 후보를 계산 후, 적용으로 규칙 경로로 이동.
+export interface ReconcilePreviewItem {
+  client_id: string
+  company_name: string
+  current_path: string
+  proposed_path: string
+  action: 'skip_match' | 'move' | 'conflict'
+  reason: 'root_changed' | 'name_changed' | null
+}
+
+export interface ReconcilePreview {
+  total: number
+  move_count: number
+  conflict_count: number
+  skip_count: number
+  items: ReconcilePreviewItem[]
+}
+
+export interface ReconcileApplyDetail {
+  client_id: string
+  from_path: string
+  to_path: string
+  result: 'moved' | 'conflict' | 'failed'
+}
+
+export interface ReconcileApply {
+  total_candidates: number
+  moved: number
+  conflicts: number
+  failed: number
+  details: ReconcileApplyDetail[]
+}
+
+// 미리보기(dry-run) — 본문 없음. 미설정 503/권한 403은 error.response.data.detail로 안내.
+export function usePreviewReconcile() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ReconcilePreview>(
+        '/batch/reconcile-dropbox-folders/preview',
+      )
+      return data
+    },
+  })
+}
+
+// 적용 — 규칙 경로로 실제 이동. 파일은 보존(폴더 이동만).
+export function useApplyReconcile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ReconcileApply>('/batch/reconcile-dropbox-folders/apply')
+      return data
+    },
+    onSuccess: () => {
+      // 폴더 경로 변동 반영
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      queryClient.invalidateQueries({ queryKey: ['dropbox-tree'] })
+    },
+  })
+}

@@ -503,6 +503,49 @@ def test_public_tree_autocreates_root_when_missing(client, admin_headers, monkey
 
 
 # ---------------------------------------------------------------------------
+# 세그먼트 공용 발송자료 파일 열람 GET /segments/dropbox/file
+# ---------------------------------------------------------------------------
+def test_public_file_link_200(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    monkeypatch.setattr(dropbox_storage, "temporary_link", lambda p: "https://dl.example/" + p)
+    r = client.get(
+        API + "/segments/dropbox/file",
+        params={"path": PUBLIC_ROOT + "/공지.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["url"].endswith(PUBLIC_ROOT + "/공지.pdf")
+
+
+def test_public_file_link_403_outside_public_root(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    r = client.get(
+        API + "/segments/dropbox/file",
+        params={"path": "/트리e2e운수_9z9z/계약서/x.pdf"}, headers=admin_headers,  # 고객사 폴더는 공용 밖
+    )
+    assert r.status_code == 403
+
+
+def test_public_file_link_404_missing(client, admin_headers, monkeypatch):
+    _dbx_env(monkeypatch)
+    monkeypatch.setattr(dropbox_storage, "temporary_link", lambda p: None)  # 삭제/폴더
+    r = client.get(
+        API + "/segments/dropbox/file",
+        params={"path": PUBLIC_ROOT + "/없는.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 404
+
+
+def test_public_file_link_503_unconfigured(client, admin_headers):
+    """Dropbox 미설정이면 공용 파일 열람도 503 (공용 tree와 대칭)."""
+    assert not dropbox_storage.is_configured()
+    r = client.get(
+        API + "/segments/dropbox/file",
+        params={"path": PUBLIC_ROOT + "/공지.pdf"}, headers=admin_headers,
+    )
+    assert r.status_code == 503
+
+
+# ---------------------------------------------------------------------------
 # mail-merge: resolve_recipient_file (수신자별 개별 파일 해석)
 # ---------------------------------------------------------------------------
 class _MergeClient:

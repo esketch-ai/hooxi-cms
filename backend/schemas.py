@@ -2225,6 +2225,46 @@ class DropboxProvisionResponse(BaseModel):
     failed: int  # 생성 실패(재실행으로 재시도 가능)
 
 
+class ReconcilePreviewItem(BaseModel):
+    """폴더명 규칙 교정 미리보기 항목 — 고객사 1건의 현재/제안 경로·판정(읽기 전용)."""
+
+    client_id: str
+    company_name: str
+    current_path: str  # 현재 dropbox_folder(정규화)
+    proposed_path: str  # 현재 규칙으로 계산한 목표 경로(정규화)
+    action: str  # skip_match | move | conflict
+    reason: Optional[str] = None  # root_changed | name_changed | null (표시용)
+
+
+class ReconcilePreviewResponse(BaseModel):
+    """폴더명 규칙 교정 미리보기 — 전 대상 판정 요약(이동/생성/삭제 없음)."""
+
+    total: int  # 판정 대상(dropbox_folder 있는 고객사) 수
+    move_count: int
+    conflict_count: int
+    skip_count: int
+    items: List[ReconcilePreviewItem] = []
+
+
+class ReconcileApplyDetail(BaseModel):
+    """폴더명 규칙 교정 적용 결과 — 이동 시도 1건."""
+
+    client_id: str
+    from_path: str
+    to_path: str
+    result: str  # moved | conflict | failed
+
+
+class ReconcileApplyResponse(BaseModel):
+    """폴더명 규칙 교정 적용 결과 — move 대상만 이동(멱등·실패 격리)."""
+
+    total_candidates: int  # 재계산 시점의 move 대상 수
+    moved: int
+    conflicts: int
+    failed: int
+    details: List[ReconcileApplyDetail] = []
+
+
 class DropboxEntry(BaseModel):
     """Dropbox 폴더 항목 (조회 — GET /clients/{id}/dropbox/tree)."""
 

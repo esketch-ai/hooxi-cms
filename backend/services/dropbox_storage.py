@@ -30,6 +30,10 @@ class DropboxNotFound(RuntimeError):
     """요청한 Dropbox 경로가 존재하지 않음(폴더 조회 등)."""
 
 
+class DropboxConflict(RuntimeError):
+    """이동 대상 경로에 이미 항목이 존재함(autorename 없이 조용한 덮어쓰기 금지)."""
+
+
 def is_configured() -> bool:
     return bool(
         resolve("DROPBOX_APP_KEY")
@@ -178,6 +182,33 @@ def delete(path: str) -> bool:
         return True
     except dropbox.exceptions.ApiError:
         return False
+
+
+def move(src: str, dst: str) -> str:
+    """파일·폴더를 dst로 이동(rename 포함) — autorename 금지(조용한 접미사 방지).
+
+    반환: 이동된 경로(dst). 대상에 이미 항목이 있으면 DropboxConflict(덮어쓰기 안 함).
+    conflict가 아닌 ApiError(권한 등)는 호출부가 처리하도록 그대로 전파.
+    삭제(delete)는 절대 수반하지 않는다.
+    """
+    import dropbox
+
+    dbx = _get_client()
+    try:
+        _retry_once(
+            dbx.files_move_v2, src, dst,
+            autorename=False, allow_shared_folder=False, allow_ownership_transfer=False,
+        )
+        return dst
+    except dropbox.exceptions.ApiError as exc:
+        err = exc.error
+        if (
+            isinstance(err, dropbox.files.RelocationError)
+            and err.is_to()
+            and err.get_to().is_conflict()
+        ):
+            raise DropboxConflict(dst)
+        raise
 
 
 def file_size(path: str) -> Optional[int]:

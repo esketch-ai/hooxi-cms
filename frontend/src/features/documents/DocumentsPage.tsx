@@ -7,8 +7,10 @@ import {
   FolderOpen,
   FolderSimple,
   Plus,
+  TreeStructure,
   Trash,
 } from '@phosphor-icons/react'
+import { useAuth } from '../../app/AuthProvider'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -22,9 +24,13 @@ import { api } from '../../lib/api/client'
 import {
   isDeletableDoc,
   unwrapList,
+  useApplyReconcile,
   useClientOptions,
   useDeleteDocument,
   useDropboxTree,
+  usePreviewReconcile,
+  type ReconcileApply,
+  type ReconcilePreview,
 } from '../../lib/api/queries'
 import { downloadDocument, downloadErrorMessage, previewKind } from '../../lib/download'
 import { fmtServerDateTime } from '../../lib/format'
@@ -45,6 +51,10 @@ export const docTypeLabel = (t: string) =>
 export function DocumentsPage() {
   const { data: clients = [] } = useClientOptions()
   const { showToast } = useToast()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+  // 폴더명 규칙 점검/교정 모달(ADMIN 전용)
+  const [reconcileOpen, setReconcileOpen] = useState(false)
 
   // 다운로드 실패(404/503 등) 시 에러 토스트 (L-3)
   const handleDownload = async (docId: string, title?: string) => {
@@ -61,6 +71,15 @@ export function DocumentsPage() {
   // (dropbox 보기는 특정 고객사 폴더 선택 시에만 의미 — Dropbox에 직접 넣은 파일까지 열람)
   const [view, setView] = useState<'records' | 'dropbox'>('records')
   const isClientFolder = !!folder && folder !== 'COMMON'
+  // Dropbox 폴더 라이브 보기가 가능한 노드(고객사 폴더 + 공용 발송자료 폴더)
+  const canBrowseDropbox = isClientFolder || folder === 'COMMON'
+  // 선택 노드별 Dropbox 트리/파일 엔드포인트(고객사=고객사 폴더, 공용=공용_발송자료)
+  const dropboxEndpoints =
+    folder === 'COMMON'
+      ? { tree: '/segments/dropbox/tree', file: '/segments/dropbox/file' }
+      : isClientFolder
+        ? { tree: `/clients/${folder}/dropbox/tree`, file: `/clients/${folder}/dropbox/file` }
+        : null
   const [docType, setDocType] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -190,14 +209,27 @@ export function DocumentsPage() {
         title="문서 아카이브"
         subtitle="계약서·표준 양식·현장 사진·발송 보고서 문서함"
         actions={
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
-          >
-            <Plus size={16} weight="bold" />
-            문서 업로드
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setReconcileOpen(true)}
+                className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate"
+                title="고객사 Dropbox 폴더명이 규칙(지역+명+분류)과 일치하는지 점검·교정"
+              >
+                <TreeStructure size={16} />
+                폴더명 규칙 점검
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90"
+            >
+              <Plus size={16} weight="bold" />
+              문서 업로드
+            </button>
+          </div>
         }
       />
 
@@ -261,7 +293,7 @@ export function DocumentsPage() {
 
         {/* 문서 리스트 / Dropbox 폴더 보기 */}
         <div className="space-y-3">
-          {isClientFolder && (
+          {canBrowseDropbox && (
             <div className="flex w-fit gap-1 rounded-full border border-hairline bg-graphite p-1 text-sm">
               <button
                 type="button"
@@ -280,8 +312,12 @@ export function DocumentsPage() {
               </button>
             </div>
           )}
-          {isClientFolder && view === 'dropbox' ? (
-            <ClientDropboxBrowser key={folder} clientId={folder as string} />
+          {canBrowseDropbox && view === 'dropbox' && dropboxEndpoints ? (
+            <DropboxFolderBrowser
+              key={folder}
+              treeEndpoint={dropboxEndpoints.tree}
+              fileEndpoint={dropboxEndpoints.file}
+            />
           ) : isError ? (
             <EmptyState
               icon={<FolderOpen size={36} />}
@@ -344,6 +380,9 @@ export function DocumentsPage() {
         defaultClientId={folder && folder !== 'COMMON' ? folder : ''}
       />
       <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+      {isAdmin && (
+        <ReconcileFoldersModal open={reconcileOpen} onClose={() => setReconcileOpen(false)} />
+      )}
       <ConfirmDialog
         open={!!deleteDoc}
         title="문서 삭제"
@@ -374,17 +413,214 @@ export function DocumentsPage() {
   )
 }
 
-// 고객사 Dropbox 폴더 라이브 브라우저 — 앱 미등록 파일 포함, 파일 클릭 시 임시링크로 열람.
-function ClientDropboxBrowser({ clientId }: { clientId: string }) {
-  const { showToast } = useToast()
-  const [path, setPath] = useState<string | null>(null) // null = 고객사 루트
-  const [rootPath, setRootPath] = useState<string | null>(null)
-  const { data, isLoading, isError, error } = useDropboxTree(
-    `/clients/${clientId}/dropbox/tree`,
-    path,
-  )
+// ── 폴더명 규칙 점검/교정 Modal(ADMIN 전용) ──────────────────────────
+// 미리보기(dry-run)로 이동/충돌/유지 후보를 계산 → [적용]으로 규칙 경로로 실제 이동.
+// 파일은 보존(폴더 이동만). 미설정 503/권한 403은 detail 토스트로 안내.
+const reconcileActionLabel = (a: ReconcilePreview['items'][number]['action']) =>
+  a === 'conflict' ? '충돌' : a === 'move' ? '이동' : '유지'
+const reconcileReasonLabel = (r: ReconcilePreview['items'][number]['reason']) =>
+  r === 'root_changed' ? '루트 변경' : r === 'name_changed' ? '개명' : '—'
 
-  // clientId 변경 시엔 부모가 key로 remount하므로 별도 리셋 불필요(초기 상태로 새로 마운트).
+function ReconcileFoldersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { showToast } = useToast()
+  const preview = usePreviewReconcile()
+  const apply = useApplyReconcile()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [result, setResult] = useState<ReconcileApply | null>(null)
+
+  const detailOf = (err: unknown) =>
+    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+
+  // 모달 열릴 때 미리보기 자동 실행 / 상태 리셋
+  useEffect(() => {
+    if (!open) return
+    setResult(null)
+    apply.reset()
+    preview.mutate(undefined, {
+      onError: (err) =>
+        showToast(detailOf(err) ?? '미리보기를 불러오지 못했습니다.', 'danger'),
+    })
+    // 열릴 때 1회만 실행 (mutation 객체는 매 렌더 갱신되므로 open만 의존)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const data = preview.data
+  const rows = useMemo(
+    () => (data?.items ?? []).filter((i) => i.action !== 'skip_match'),
+    [data],
+  )
+  const canApply = !!data && data.move_count > 0
+
+  const handleApply = async () => {
+    try {
+      const res = await apply.mutateAsync()
+      setResult(res)
+      setConfirmOpen(false)
+      if (res.failed > 0 || res.conflicts > 0) {
+        showToast(
+          `이동 ${res.moved} · 충돌 ${res.conflicts} · 실패 ${res.failed}`,
+          res.failed > 0 ? 'danger' : 'info',
+        )
+      } else {
+        showToast(`${res.moved}건을 규칙 경로로 이동했습니다.`, 'success')
+      }
+    } catch (err) {
+      setConfirmOpen(false)
+      showToast(detailOf(err) ?? '적용에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <>
+      <Modal open={open} onClose={onClose} title="폴더명 규칙 점검" size="xl">
+        {preview.isPending ? (
+          <div className="flex items-center gap-2 px-2 py-10 text-sm text-slatey">
+            <CircleNotch size={16} className="animate-spin" /> 규칙 대조 중…
+          </div>
+        ) : preview.isError ? (
+          <EmptyState
+            icon={<FolderOpen size={36} />}
+            title="미리보기를 불러올 수 없습니다"
+            description={detailOf(preview.error) ?? 'Dropbox 연동/권한 상태를 확인하세요.'}
+          />
+        ) : data ? (
+          <div className="space-y-3">
+            {/* 요약 */}
+            <div className="flex flex-wrap gap-2 text-sm">
+              <span className="rounded-full border border-hairline bg-elevate-strong px-3 py-1 text-ash">
+                총 {data.total}
+              </span>
+              <span className="rounded-full border border-hairline bg-elevate-strong px-3 py-1 text-bone">
+                이동 {data.move_count}
+              </span>
+              <span className="rounded-full border border-hairline bg-elevate-strong px-3 py-1 text-amber-400">
+                충돌 {data.conflict_count}
+              </span>
+              <span className="rounded-full border border-hairline bg-elevate-strong px-3 py-1 text-slatey">
+                유지 {data.skip_count}
+              </span>
+            </div>
+
+            {/* 적용 결과(있으면) */}
+            {result && (
+              <div
+                className={`rounded-2xl border px-3 py-2 text-sm ${
+                  result.failed > 0
+                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                    : result.conflicts > 0
+                      ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                      : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                }`}
+              >
+                적용 결과 — 이동 {result.moved} · 충돌 {result.conflicts} · 실패 {result.failed}
+                {' / '}대상 {result.total_candidates}건
+              </div>
+            )}
+
+            {rows.length === 0 ? (
+              <p className="rounded-2xl border border-hairline bg-graphite px-3 py-6 text-center text-sm text-slatey">
+                {data.skip_count > 0
+                  ? `이동할 폴더가 없습니다 — ${data.skip_count}건 이미 규칙과 일치합니다.`
+                  : '이동할 폴더가 없습니다.'}
+              </p>
+            ) : (
+              <div className="max-h-[45vh] overflow-y-auto rounded-2xl border border-hairline">
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-elevate-strong text-xs text-slatey">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">회사명</th>
+                      <th className="px-3 py-2 font-medium">현재 경로</th>
+                      <th className="px-3 py-2 font-medium">제안 경로</th>
+                      <th className="px-3 py-2 font-medium">판정</th>
+                      <th className="px-3 py-2 font-medium">이유</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-hairline">
+                    {rows.map((it) => (
+                      <tr key={it.client_id}>
+                        <td className="px-3 py-2 text-bone">{it.company_name}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slatey">
+                          {it.current_path}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-ash">
+                          {it.proposed_path}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                              it.action === 'conflict'
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-primary/15 text-primary'
+                            }`}
+                          >
+                            {reconcileActionLabel(it.action)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-ash">
+                          {reconcileReasonLabel(it.reason)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 border-t border-hairline pt-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                disabled={!canApply || apply.isPending}
+                className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+              >
+                {apply.isPending && <CircleNotch size={14} className="animate-spin" />}
+                적용
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="폴더명 규칙 적용"
+        message={
+          <>
+            이동 <b>{data?.move_count ?? 0}</b>건을 규칙 경로로 옮깁니다. 파일은 보존되며 삭제되지
+            않습니다. 진행할까요?
+          </>
+        }
+        confirmLabel="적용"
+        loading={apply.isPending}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleApply}
+      />
+    </>
+  )
+}
+
+// Dropbox 폴더 라이브 브라우저 — 앱 미등록 파일 포함, 파일 클릭 시 임시링크로 열람.
+// treeEndpoint/fileEndpoint 주입형(고객사·공용 등 재사용). 읽기 전용.
+function DropboxFolderBrowser({
+  treeEndpoint,
+  fileEndpoint,
+}: {
+  treeEndpoint: string
+  fileEndpoint: string
+}) {
+  const { showToast } = useToast()
+  const [path, setPath] = useState<string | null>(null) // null = 폴더 루트
+  const [rootPath, setRootPath] = useState<string | null>(null)
+  const { data, isLoading, isError, error } = useDropboxTree(treeEndpoint, path)
+
+  // 엔드포인트 변경 시엔 부모가 key로 remount하므로 별도 리셋 불필요(초기 상태로 새로 마운트).
   useEffect(() => {
     if (data && rootPath === null) setRootPath(data.path)
   }, [data, rootPath])
@@ -397,10 +633,9 @@ function ClientDropboxBrowser({ clientId }: { clientId: string }) {
   }
   const openFile = async (p: string) => {
     try {
-      const { data: link } = await api.get<{ url: string }>(
-        `/clients/${clientId}/dropbox/file`,
-        { params: { path: p } },
-      )
+      const { data: link } = await api.get<{ url: string }>(fileEndpoint, {
+        params: { path: p },
+      })
       window.open(link.url, '_blank', 'noopener')
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

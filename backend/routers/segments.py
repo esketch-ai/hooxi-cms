@@ -73,6 +73,44 @@ def get_public_dropbox_tree(
         path=target, entries=[schemas.DropboxEntry(**e) for e in entries]
     )
 
+
+@router.get("/dropbox/file", response_model=schemas.DropboxFileLinkOut)
+def get_public_dropbox_file_link(
+    path: str = Query(..., description="열람할 파일의 Dropbox 경로(공용 발송자료 폴더 하위)"),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """공용 발송자료 Dropbox 폴더 내 파일 임시 열람 링크 — 발송자료 미리보기용.
+
+    확인(confinement) 필수: 공용 발송자료 폴더 하위 경로만 허용(고객사 tree file과 대칭).
+    Dropbox 미설정 503, 폴더 밖 403, 없음/폴더 404.
+    """
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다.")
+
+    root = client_folders.public_send_root()
+    target = client_folders.normalize_dropbox_path(path)
+    if not client_folders.is_within_folder(root, target):
+        raise HTTPException(
+            status_code=403, detail="공용 발송자료 폴더 밖의 경로에는 접근할 수 없습니다."
+        )
+
+    try:
+        url = dropbox_storage.temporary_link(target)  # 실패 시 None(파일 아님/삭제)
+    except dropbox_storage.DropboxConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if not url:
+        raise HTTPException(status_code=404, detail="해당 파일을 찾을 수 없습니다.")
+
+    # 파일 열람 감사 — 경로만 기록(R2-E6). 공용 발송자료 폴더 열람 추적.
+    AuditLogger.log_action(
+        db, user.user_id, "PUBLIC_FOLDER_FILE_OPEN",
+        target_type="PUBLIC_FOLDER", new_value=target,
+    )
+    db.commit()
+    return schemas.DropboxFileLinkOut(url=url)
+
+
 # criteria 축 → 공통 코드 카테고리 매핑 (region은 자유값, project_id는 존재 검증)
 CRITERIA_CODE_CATEGORIES = {
     "client_type": "CLIENT_TYPE",

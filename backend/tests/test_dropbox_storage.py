@@ -168,6 +168,71 @@ def test_list_folder_unconfigured_raises():
         dropbox_storage.list_folder("/x")
 
 
+# ---------------------------------------------------------------------------
+# move — 이동/이름변경(autorename 금지, conflict → DropboxConflict, 삭제 미수반)
+# ---------------------------------------------------------------------------
+def test_move_calls_files_move_v2_without_autorename(monkeypatch):
+    _configure(monkeypatch)
+    captured = {}
+
+    class FakeDbx:
+        def files_move_v2(self, src, dst, **kwargs):
+            captured["src"] = src
+            captured["dst"] = dst
+            captured["kwargs"] = kwargs
+            return object()
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    assert dropbox_storage.move("/A/old", "/A/new") == "/A/new"
+    assert (captured["src"], captured["dst"]) == ("/A/old", "/A/new")
+    # autorename=False 필수(조용한 접미사 금지)
+    assert captured["kwargs"]["autorename"] is False
+
+
+def test_move_conflict_raises_dropbox_conflict(monkeypatch):
+    import pytest
+
+    import dropbox
+
+    _configure(monkeypatch)
+    conflict = dropbox.exceptions.ApiError(
+        "req",
+        dropbox.files.RelocationError.to(
+            dropbox.files.WriteError.conflict(dropbox.files.WriteConflictError.file)
+        ),
+        "conflict", None,
+    )
+
+    class FakeDbx:
+        def files_move_v2(self, src, dst, **kwargs):
+            raise conflict
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    with pytest.raises(dropbox_storage.DropboxConflict):
+        dropbox_storage.move("/A/old", "/A/new")
+
+
+def test_move_other_api_error_propagates(monkeypatch):
+    import pytest
+
+    import dropbox
+
+    _configure(monkeypatch)
+    other = dropbox.exceptions.ApiError(
+        "req",
+        dropbox.files.RelocationError.from_lookup(dropbox.files.LookupError.not_found),
+        "src missing", None,
+    )
+
+    class FakeDbx:
+        def files_move_v2(self, src, dst, **kwargs):
+            raise other
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    with pytest.raises(dropbox.exceptions.ApiError):
+        dropbox_storage.move("/A/old", "/A/new")
+
+
 def test_save_uses_dropbox_scheme_and_path(monkeypatch):
     _configure(monkeypatch)
     captured = {}

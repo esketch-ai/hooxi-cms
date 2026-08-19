@@ -564,3 +564,177 @@ def provision_dropbox_folders(
     return schemas.DropboxProvisionResponse(
         total=len(targets), provisioned=provisioned, failed=failed
     )
+
+
+# ---------------------------------------------------------------------------
+# 폴더명 규칙 교정(reconcile) — 현재 규칙과 어긋난 기존 폴더를 목표 경로로 이동
+# ---------------------------------------------------------------------------
+# 규칙(지역+회사명+분류)이 바뀌거나 루트가 평탄화된 뒤, 이미 provision된 고객사 폴더를
+# 현재 규칙에 맞춰 정렬한다. 안전 불변식: 삭제 없음·move만·미리보기 후 적용·건별 실패
+# 격리·confinement 재검증·멱등(apply 시점 재판정)·dropbox_folder NULL은 대상 제외.
+
+
+def _reconcile_decide(db: Session, client: Client):
+    """고객사 1건의 교정 판정 — (current, proposed, action, reason) 반환.
+
+    dropbox_folder가 있는 고객사만 호출한다(NULL은 상위에서 제외). 읽기 전용:
+    Dropbox·DB를 변경하지 않고 경로 문자열과 DB 점유 여부만으로 결정한다.
+    """
+    root = dropbox_storage.root()  # 네임스페이스 루트면 '' (모든 최상위 경로가 허용)
+    current = client_folders.normalize_dropbox_path(client.dropbox_folder)
+    proposed = client_folders.normalize_dropbox_path(
+        "{0}/{1}".format(root, client_folders.folder_name(db, client))
+    )
+    if current == proposed:
+        action, reason = "skip_match", None
+    elif client_folders._folder_taken_by_other(db, client, proposed):
+        # 다른 고객사가 이미 목표 경로 점유 — 파일 혼입 방지(자동 접미사 금지, 보고만)
+        action, reason = "conflict", None
+    elif root and not client_folders.is_within_folder(root, proposed):
+        # 방어: 루트가 지정됐는데 목표가 그 밖이면 이동 금지(루트='' 은 전체 허용)
+        action, reason = "conflict", None
+    else:
+        action = "move"
+        # reason은 표시용 — leaf(마지막 세그먼트)가 같으면 루트만 바뀐 것, 다르면 개명
+        cur_leaf = current.rstrip("/").split("/")[-1]
+        prop_leaf = proposed.rstrip("/").split("/")[-1]
+        reason = "root_changed" if cur_leaf == prop_leaf else "name_changed"
+    return current, proposed, action, reason
+
+
+@router.post(
+    "/reconcile-dropbox-folders/preview",
+    response_model=schemas.ReconcilePreviewResponse,
+)
+def reconcile_dropbox_folders_preview(
+    secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """폴더명 규칙 교정 미리보기 — 현재 규칙과 어긋난 폴더를 판정만 한다(읽기 전용).
+
+    이동·생성·삭제를 절대 호출하지 않고, dropbox_folder가 있는 전 고객사의
+    현재/제안 경로와 action(skip_match·move·conflict)을 계산해 반환한다.
+    Dropbox 미설정 시 503.
+    """
+    actor = _optional_admin(credentials, db)
+    _authorize(secret, db, actor)
+
+    if not dropbox_storage.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Dropbox 연동이 설정되지 않았습니다 — 먼저 연동을 설정하세요.",
+        )
+
+    targets = db.query(Client).filter(Client.dropbox_folder.isnot(None)).all()
+    items = []
+    move_count = conflict_count = skip_count = 0
+    for c in targets:
+        current, proposed, action, reason = _reconcile_decide(db, c)
+        if action == "move":
+            move_count += 1
+        elif action == "conflict":
+            conflict_count += 1
+        else:
+            skip_count += 1
+        items.append(
+            schemas.ReconcilePreviewItem(
+                client_id=c.client_id,
+                company_name=c.company_name or "",
+                current_path=current,
+                proposed_path=proposed,
+                action=action,
+                reason=reason,
+            )
+        )
+    return schemas.ReconcilePreviewResponse(
+        total=len(targets),
+        move_count=move_count,
+        conflict_count=conflict_count,
+        skip_count=skip_count,
+        items=items,
+    )
+
+
+@router.post(
+    "/reconcile-dropbox-folders/apply",
+    response_model=schemas.ReconcileApplyResponse,
+)
+def reconcile_dropbox_folders_apply(
+    secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    """폴더명 규칙 교정 적용 — move 대상만 목표 경로로 이동(삭제 없음, 실패 격리).
+
+    미리보기 결과를 신뢰하지 않고 적용 시점에 판정을 재계산한다(멱등·경합 안전).
+    move 성공 시 dropbox_folder를 목표 경로로 갱신하고 감사 로그를 남긴다. 목적지가
+    점유돼 conflict면 스킵(경로 불변), 기타 예외는 rollback 후 건별 failed로 격리한다.
+    자동 접미사(_2)는 붙이지 않는다 — conflict는 보고만 한다. Dropbox 미설정 시 503.
+    """
+    actor = _optional_admin(credentials, db)
+    _authorize(secret, db, actor)
+
+    if not dropbox_storage.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Dropbox 연동이 설정되지 않았습니다 — 먼저 연동을 설정하세요.",
+        )
+
+    actor_id = (actor.user_id if actor else None) or _seed_admin_id(db)
+    targets = db.query(Client).filter(Client.dropbox_folder.isnot(None)).all()
+
+    candidates = 0
+    moved = conflicts = failed = 0
+    details = []
+    for c in targets:
+        # 적용 시점 재판정 — preview 이후 상태가 바뀌어도 안전(멱등·경합)
+        current, proposed, action, reason = _reconcile_decide(db, c)
+        if action != "move":
+            continue
+        candidates += 1
+        try:
+            dropbox_storage.move(current, proposed)
+            c.dropbox_folder = proposed
+            AuditLogger.log_action(
+                db, actor_id, "CLIENT_FOLDER_RENAME",
+                target_type="CLIENT", target_id=c.client_id,
+                new_value="{0} -> {1}".format(current, proposed),
+            )
+            db.commit()
+            moved += 1
+            result = "moved"
+        except dropbox_storage.DropboxConflict:
+            # 목적지에 이미 항목 존재 — 경로 불변(스킵), 보고만
+            conflicts += 1
+            result = "conflict"
+        except Exception:
+            db.rollback()
+            failed += 1
+            result = "failed"
+            log.warning(
+                "Dropbox 폴더 reconcile 실패 (client_id=%s)", c.client_id, exc_info=True
+            )
+        details.append(
+            schemas.ReconcileApplyDetail(
+                client_id=c.client_id, from_path=current, to_path=proposed, result=result
+            )
+        )
+
+    if actor_id and candidates:
+        # 교정 요약 감사 — 대상이 있을 때만(빈 실행 잡음 방지)
+        AuditLogger.log_action(
+            db, actor_id, "DROPBOX_RECONCILE", target_type="BATCH",
+            new_value="total={0}, moved={1}, conflicts={2}, failed={3}".format(
+                candidates, moved, conflicts, failed
+            ),
+        )
+        db.commit()
+
+    return schemas.ReconcileApplyResponse(
+        total_candidates=candidates,
+        moved=moved,
+        conflicts=conflicts,
+        failed=failed,
+        details=details,
+    )
