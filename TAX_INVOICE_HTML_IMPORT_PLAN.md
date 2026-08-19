@@ -1,0 +1,117 @@
+# 국세청 세금계산서 HTML 자동 반영 — 개발 계획서
+
+> 목적: 국세청(홈택스)에서 발급/발행된 **매입·매출 전자세금계산서 HTML 파일**을 정산 폴더에서
+> 파악하고 내부 값을 추출해 **감축사업 관리(정산)에 자동 반영**한다. 암호(대부분 사업자번호)가 걸린
+> 파일은 시스템이 보관 중인 사업자번호(고객사/투자사/자사)로 자동 해제한다.
+>
+> 작성: 2026-08-20. 상태: **계획 확정 · 코딩 착수는 실제 HTML 샘플 확보 후**.
+
+---
+
+## 0. 확정 결정 (사용자)
+
+| 항목 | 결정 |
+|---|---|
+| 트리거(진입점) | **Dropbox 정산폴더 스캔 + 사업 상세 직접 업로드 (둘 다 지원)** |
+| 반영 방식 | **미리보기 → 확인 후 적용** (즉시 자동 아님; 금액 데이터 안전) |
+| 자사(후시파트너스) 사업자번호 저장처 | **앱설정 config 키 `company_biz_reg_no` 신설** |
+| 매칭 실패(미등록 사업자번호) | **보류(미매칭)** — 자동 신규생성 안 함 |
+| 폴더명 규칙 정합 | 기존 `{지역}_{회사명}_{분류}` 유지, Dropbox 루트=`/`(앱폴더) |
+
+---
+
+## 1. 현재 구조 (조사 결과, file:line)
+
+### 1-A. 세금계산서 데이터 모델
+- **매입** `PurchaseInvoice`/`tb_purchase_invoice` (`backend/models.py:372`, 스키마 `schemas.py:1321`)
+  - `amount` Numeric(15,2) **필수** ← 파싱 핵심 · `issue_date` Date(=작성일자) · `payment_date` Date(입금일, nullable)
+  - `project_id`(FK, NOT NULL) · `client_id`(FK→운수사, SET NULL) · `operator_name`(free text) · `region` · `memo`
+  - 화이트리스트 `_INVOICE_FIELDS` (`routers/projects.py:1261`)
+  - **공급자 사업자번호 컬럼 없음** → `Client.biz_reg_no` 매칭 필요
+- **매출** = `ProjectSale`/`tb_project_sale` (`models.py:337`, 스키마 `schemas.py:1212`) — 별도 매출 인보이스 테이블 없음
+  - `sale_invoice_amount` Numeric(15,2) ← 매출인식 기준(파싱 핵심) · `sale_invoice_date` Date · `sale_payment_date` Date(nullable)
+  - `project_id`(FK, NOT NULL) · `buyer_id`(FK→투자사, SET NULL) · `buyer_name` · `is_hold`(Y/N, 매출인식 제외)
+
+### 1-B. 사업자번호 보관처
+| 주체 | 위치 | 상태 |
+|---|---|---|
+| 고객사(운수사) | `Client.biz_reg_no` (`models.py:98`) | ✅ 있음 |
+| 투자사/매수자 | `Buyer.biz_reg_no` (`models.py:326`) | ✅ 있음 |
+| **후시파트너스(자사)** | 없음 | ❌ **신규 필요 → config `company_biz_reg_no`** |
+- 정규화: `normalize_biz_no` (`routers/common.py:120`) = 숫자만 추출(하이픈/공백 무시). 매칭은 정규화 기준.
+- 형식 체크섬 검증기는 없음(문자열 저장).
+
+### 1-C. 정산 폴더 (Dropbox)
+- 폴더는 **고객사(Client)만** provisioning. `Client.dropbox_folder` (`models.py:114`). 투자사/자사 폴더 없음.
+- 고객사 폴더 밑 서브폴더 카테고리(tb_code CLIENT_FOLDER, `main.py:201`)에 **SETTLEMENT "정산" 있음**.
+- 파일 나열/열람: `dropbox_storage.list_folder`/`temporary_link`/`download` · mail-merge 해석 패턴 `client_folders.resolve_recipient_file` (`client_folders.py:56`, confinement 포함).
+
+### 1-D. 회계 반영 접점 (파싱값이 흘러갈 곳)
+- `compute_accounting` (`services/accounting.py:20`): `product = Σ PurchaseInvoice.amount`, `sale_recognized = trunc(Σ trunc(sale_invoice_amount × payout_rate))`(is_hold 제외), `gross_profit = sale_recognized − product`.
+- 배치 집계 `finance_query` (`services/finance_query.py:56`), 정산 요약 `settlement_summary.py`. **파싱으로 amount/sale_invoice_amount만 채우면 회계는 자동 재계산됨.**
+- CRUD 접점: 매입 `routers/projects.py:1310/1343/1385/1439(엑셀)`, 매출 `:1141/1178`. 권한 `master.write`. 감사 `PURCHASE_INVOICE_*`.
+
+### 1-E. 파싱 인프라
+- **HTML 파서 라이브러리 없음** → `requirements.txt` 신규 추가 필요(bs4/lxml/표준 `html.parser` 중 샘플 보고 결정). `defusedxml==0.7.1` 있음.
+- 참조 패턴: `services/excel_import.py` — `get_spec → build_template → parse_and_validate → ParseResult/valid_rows/to_preview` 3단계. HTML도 preview→commit 동형으로.
+- 국세청/세금계산서/암호 HTML 관련 기존 코드 **전무**.
+
+### 1-F. 엑셀 일괄등록과의 공존
+- 매입은 엑셀 import 있음(`import_spec.py:173`, operator_name free text, client_id 없음). 매출은 엑셀 import 없음.
+- **중복 방지 키 없음**(승인번호 컬럼 부재, project×운수사 다건 허용이 설계 전제) → HTML 반영 멱등 위해 **승인번호 고유키 신규 필요**.
+
+---
+
+## 2. 단계별 계획
+
+### P1 — 기반 (포맷 무관, 선반영 가능)
+- [ ] config 키 `company_biz_reg_no` 신설(환경설정 입력 UI + KNOWN_DEFAULTS). 자사 공급자/공급받는자 판정 기준.
+- [ ] 계산서 **고유키(승인번호) 컬럼** — `tb_purchase_invoice.approval_no`, `tb_project_sale.sale_approval_no`(nullable String) 추가 + `ensure_schema` 반영. 재반영 멱등·중복 방지.
+- [ ] HTML 파서 라이브러리 도입(샘플 보고 확정).
+
+### P2 — 파서 (⚠️ 실제 HTML 샘플 필요)
+- [ ] HTML → 구조값 추출: 공급자·공급받는자 사업자번호, 작성일자, 공급가액·세액·합계, 승인번호, 품목/비고.
+- [ ] **암호 해제**: 메커니즘(JS 복호화 / zip·pdf 내장 / 평문)은 실물 확인 후 확정. 사업자번호(자사·고객사·투자사 후보군)로 시도.
+- [ ] `parse_and_validate` 동형: 파일별 파싱 결과 + 검증 오류/경고.
+
+### P3 — 매칭·매핑
+- [ ] 사업자번호 → 자사(config)/고객사(`Client.biz_reg_no`)/투자사(`Buyer.biz_reg_no`) 판정 → **매입/매출 방향** 결정
+  - (예: 공급받는자=자사 → 매입 / 공급자=자사 → 매출; 상대측 사업자번호로 Client/Buyer 매칭)
+- [ ] `project_id` 결정: 업로드 경로면 URL 고정 / 스캔 경로면 폴더 소속으로 추론.
+- [ ] 값→필드 매핑 확정: 공급가액/세액/합계 중 무엇을 `amount`/`sale_invoice_amount`에 넣을지(부가세 포함/제외) — 샘플로 확정.
+- [ ] 미매칭 → 보류 리스트(사유 표기).
+
+### P4 — 반영 파이프라인
+- [ ] 미리보기: 파일별 {추출값, 매입/매출, 매칭상대, project, 중복(승인번호), 검증, 보류사유}.
+- [ ] 확정: PurchaseInvoice/ProjectSale 생성·갱신(승인번호 멱등) + 감사(경로/승인번호, 비밀값 금지 R2-E6). 회계 자동 재계산.
+- [ ] 엑셀 일괄등록과 중복 병합 규칙(승인번호 기준).
+
+### P5 — 트리거/UI
+- [ ] 사업 상세 HTML 업로드(UploadFile) → 미리보기 → 적용.
+- [ ] Dropbox 정산폴더 스캔 → 미리보기 → 적용. (투자사/자사 폴더 체계 필요 여부는 매칭 설계에서 결정.)
+- [ ] 재무 플래그 게이팅: 세금계산서는 사업상세(노출)지만 파생 회계는 은닉 대상 — 기존 예상지급액 게이팅과 정합.
+
+### P6 — 검증
+- [ ] 샘플 파일 e2e(매입·매출·평문·암호), 회계 정합(product/매출인식 반영), 매칭 실패 보류, 중복 재반영 멱등, 대량 스캔.
+
+---
+
+## 3. 미결/블로커 (코딩 착수 전 해소)
+
+1. **[하드 블로커] 실제 세금계산서 HTML 샘플** — (a) 평문 1개, (b) 암호 걸린 1개(가능하면 매입·매출 각 1). 파서 셀렉터·암호 메커니즘·값→필드 매핑을 실물로 확정. 로컬에서만 분석(외부 전송·게시 없음).
+2. 암호 방식 정체(JS 복호화 replicate 필요 시 리스크 큼) — 샘플로 판정.
+3. 값→필드 매핑(부가세 포함/제외) — 샘플로 확정.
+4. 매칭 방향 규칙 세부(공급자/공급받는자 ↔ 자사/상대) — 샘플 필드로 확정.
+5. project 매칭(스캔 경로): 정산 폴더가 고객사 폴더 밑이면 project 추론 단서 필요(사업↔고객사 다대다 가능성).
+6. 투자사/자사 Dropbox 폴더 체계 신설 여부(매출/자사 파일 위치).
+
+---
+
+## 4. 부수 신규 필요 항목 요약
+- HTML 파서 라이브러리(requirements) · 자사 사업자번호 config 키 · 계산서 승인번호 고유키 컬럼(멱등) · (선택) 투자사/자사 폴더 체계 · 매출 HTML 파이프라인(엑셀 미존재).
+
+---
+
+## 5. 다음 액션
+1. 사용자: 위 3-1 **HTML 샘플** 제공(스크래치패드 또는 저장소 경로).
+2. 개발: 샘플 분석 → P2 확정 → **P1(config·승인번호 컬럼)부터 4원칙 루프(planner→implementer→verifier→reviewer)로 착수**. 각 증분 로컬 커밋, 배포는 사용자 "배포" 명시 시.
