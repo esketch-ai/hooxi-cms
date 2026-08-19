@@ -11,7 +11,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ import schemas
 from auth import require_permission
 from models import Asset, Client, User, get_db
 from routers.assets import _ASSET_FIELDS
-from routers.clients import _CLIENT_FIELDS
+from routers.clients import _CLIENT_FIELDS, _provision_dropbox_folder_bg
 from services import excel_import
 from services.audit_logger import AuditLogger
 
@@ -96,6 +96,7 @@ async def preview_import(
 @router.post("/{entity}/commit", response_model=schemas.ImportCommitOut)
 async def commit_import(
     entity: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
@@ -104,6 +105,8 @@ async def commit_import(
 
     오류 행은 건너뛰고(errors로 안내) 감사 로그 EXCEL_IMPORT에 건수 요약만
     기록한다(행 내용·연락처 등 원문 기록 금지 — R2-E6 취지).
+    고객사 일괄 등록은 단건 등록과 동일하게 응답 후 Dropbox 전용 폴더를
+    백그라운드로 provision한다(best-effort — 미설정·실패는 반영에 무영향).
     """
     content = await _read_upload(file)
     result = excel_import.parse_and_validate(db, entity, content)
@@ -112,8 +115,11 @@ async def commit_import(
         raise HTTPException(status_code=404, detail="지원하지 않는 일괄 등록 대상입니다")
 
     valid = result.valid_rows
+    created_rows = []
     for parsed in valid:
-        db.add(factory(parsed.payload))
+        row = factory(parsed.payload)
+        db.add(row)
+        created_rows.append(row)
     error_rows = [r for r in result.rows if r.errors]
     AuditLogger.log_action(
         db,
@@ -125,6 +131,15 @@ async def commit_import(
         ),
     )
     db.commit()
+    # 고객사만 Dropbox 폴더 provision 대상 — 커밋 후 채워진 PK로 백그라운드 예약
+    # (자산은 폴더 대상 아님). client_id 미확보 행은 방어적으로 스킵.
+    if entity == "clients":
+        for row in created_rows:
+            client_id = getattr(row, "client_id", None)
+            if client_id:
+                background_tasks.add_task(
+                    _provision_dropbox_folder_bg, client_id, user.user_id
+                )
     return schemas.ImportCommitOut(
         entity=result.spec.entity,
         created=len(valid),
