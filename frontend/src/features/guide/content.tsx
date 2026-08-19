@@ -4,6 +4,7 @@
 // 실제 화면 기준으로 상세화했고, 각 토픽에 related(관련 가이드)를 채웠다.
 // 기능 변경 시 이 문서와 Docs/USER_GUIDE.html을 함께 갱신한다.
 import type { ReactNode } from 'react'
+import { FINANCE_FEATURES, isFinanceHiddenPath } from '../../lib/featureFlags'
 import { Kbd, Chip, Note, Flow, Table, Faq } from './blocks'
 
 // ── 타입 ────────────────────────────────────────────────────────────
@@ -989,10 +990,24 @@ export const TOPICS: GuideTopic[] = [
 ]
 
 // ── 헬퍼 ────────────────────────────────────────────────────────────
+/**
+ * 재무 OFF(운영 배포) 시 은닉해야 하는 토픽인지 판정한다.
+ * 재무 ON(개발/기본)이면 항상 false → 모든 토픽 노출(회귀 0).
+ * OFF면 featureRoute가 재무 은닉 경로(finance-ledger·asset-report·settlements·buyers·portal-accounts 등)인 토픽만 은닉.
+ */
+export function isTopicHidden(t: GuideTopic): boolean {
+  return !FINANCE_FEATURES && !!t.featureRoute && isFinanceHiddenPath(t.featureRoute)
+}
+
+/** 현재 배포에서 노출되는 토픽만(은닉 토픽 제외). 이전/다음 네비 등 순서 계산의 기준. */
+export function visibleTopics(): GuideTopic[] {
+  return TOPICS.filter((t) => !isTopicHidden(t))
+}
+
 export function getTopic(id: string): GuideTopic | undefined {
   return TOPICS.find((t) => t.id === id)
 }
 
 export function getCategoryTopics(catId: string): GuideTopic[] {
-  return TOPICS.filter((t) => t.categoryId === catId)
+  return TOPICS.filter((t) => t.categoryId === catId && !isTopicHidden(t))
 }

@@ -1,8 +1,9 @@
 // 사용자 가이드 허브(/guide index) — 신입 온보딩 트랙 + 카테고리별 토픽 카드 그리드
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/PageHeader'
+import { FINANCE_FEATURES, isFinanceHiddenPath } from '../../lib/featureFlags'
 import { Chip } from './blocks'
-import { CATEGORIES, getCategoryTopics, getTopic } from './content'
+import { CATEGORIES, getCategoryTopics, getTopic, isTopicHidden } from './content'
 
 // 신입 첫 주 온보딩 트랙 — TOPICS의 핵심 6개를 순서로 엮는다(설명은 이 화면 전용 1줄).
 const ONBOARDING: { topicId: string; desc: string }[] = [
@@ -27,7 +28,7 @@ export function GuideHubPage() {
         <ol className="relative space-y-3 border-l border-hairline pl-6">
           {ONBOARDING.map((step, i) => {
             const topic = getTopic(step.topicId)
-            if (!topic) return null
+            if (!topic || isTopicHidden(topic)) return null
             return (
               <li key={step.topicId} className="relative">
                 {/* 번호 배지 (좌측 라인 위에 얹음) */}
@@ -44,7 +45,7 @@ export function GuideHubPage() {
                     >
                       가이드 보기
                     </Link>
-                    {topic.featureRoute && (
+                    {topic.featureRoute && (FINANCE_FEATURES || !isFinanceHiddenPath(topic.featureRoute)) && (
                       <Link
                         to={topic.featureRoute}
                         className="rounded-full border border-hairline px-3 py-1 text-xs font-medium text-red-600 hover:bg-elevate dark:text-red-500"

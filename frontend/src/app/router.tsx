@@ -1,8 +1,9 @@
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router-dom'
 import { CircleNotch } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { AppShell } from '../layouts/AppShell'
 import { isObserverAllowed, OBSERVER_HOME } from '../layouts/AppShell/observerAccess'
+import { FINANCE_FEATURES, filterFinanceRoutes, includePortalRoutes } from '../lib/featureFlags'
 import { PortalAuthProvider } from '../features/portal/PortalAuthProvider'
 import { RequirePortal } from '../features/portal/PortalShell'
 import { PortalLoginPage } from '../features/portal/PortalLoginPage'
@@ -78,62 +79,69 @@ function PortalRoot() {
   )
 }
 
-export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
-  // ── Phase 4 외부 포털(PARTNER/INVESTOR) — 내부 AppShell/RequireAuth 밖 완전 별도 트리 ──
+// ── Phase 4 외부 포털(PARTNER/INVESTOR) — 내부 AppShell/RequireAuth 밖 완전 별도 트리 ──
+// 재무 OFF 시 이 서브트리는 라우트에서 통째로 제외한다(직접 URL은 catch-all이 처리).
+const portalRoute: RouteObject = {
+  element: <PortalRoot />,
+  children: [
+    { path: '/portal/login', element: <PortalLoginPage /> },
+    {
+      element: <RequirePortal />,
+      children: [
+        { path: '/portal', element: <PortalProjectsPage /> },
+        { path: '/portal/projects/:projectId', element: <PortalProjectDetailPage /> },
+      ],
+    },
+  ],
+}
+
+// RequireAuth 하위 내부 화면 — 재무 OFF면 filterFinanceRoutes가 은닉 6경로를 제거한다.
+const appRoutes: RouteObject[] = [
+  { path: '/', element: <RoleHome /> },
+  // ── P1 구현 화면 ──────────────────────────────────────────────
+  { path: '/dashboard', element: <DashboardPage /> }, // SCR-01
+  { path: '/observe', element: <ObservePage /> }, // OB-4 경영 관찰(OBSERVER 랜딩, 읽기 전용)
+  { path: '/issues', element: <IssuesPage /> }, // SCR-02
+  { path: '/calendar', element: <CalendarPage /> }, // SCR-11
+  { path: '/clients', element: <ClientsPage /> }, // SCR-03
+  { path: '/clients/:clientId', element: <ClientDetailPage /> }, // SCR-03D
+  { path: '/buyers', element: <BuyersPage /> }, // INC-8a 매수자 마스터
+  { path: '/portal-accounts', element: <PortalAccountsPage /> }, // INC-8b 외부 포털 계정
+  { path: '/histories', element: <HistoriesPage /> }, // SCR-05
+  { path: '/reports', element: <ReportsPage /> }, // SCR-12
+  { path: '/reports/segments', element: <SegmentsPage /> }, // SCR-12 확장 — 세그먼트 발송
+  { path: '/documents', element: <DocumentsPage /> }, // SCR-13
+  { path: '/settings', element: <SettingsPage /> }, // SCR-14 (계정 관리 탭)
+  // 사용자 가이드 (전 역할) — 허브 + 토픽 서브페이지
   {
-    element: <PortalRoot />,
+    path: '/guide',
+    element: <GuideLayout />,
     children: [
-      { path: '/portal/login', element: <PortalLoginPage /> },
-      {
-        element: <RequirePortal />,
-        children: [
-          { path: '/portal', element: <PortalProjectsPage /> },
-          { path: '/portal/projects/:projectId', element: <PortalProjectDetailPage /> },
-        ],
-      },
+      { index: true, element: <GuideHubPage /> },
+      { path: ':topicId', element: <GuideTopicPage /> },
     ],
   },
+  // ── P2 구현 화면 ──────────────────────────────────────────────
+  { path: '/assets', element: <AssetsPage /> }, // SCR-04
+  { path: '/asset-vehicles', element: <AssetVehiclesPage /> }, // AV-3 전기버스 자산
+  { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
+  { path: '/projects', element: <ProjectsPage /> }, // SCR-06
+  { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
+  { path: '/finance-ledger', element: <FinanceLedgerPage /> }, // FL-3 재무 원장(사업 grain)
+  { path: '/asset-report', element: <AssetReportPage /> }, // P2 자산관리 보고(고객사 grain)
+  { path: '/settlements', element: <SettlementsPage /> }, // P4 정산 관리(SCR-07) — 내부 전용, OBSERVER 접근 불가
+  // ── P3 구현 화면 ──────────────────────────────────────────────
+  { path: '/chat', element: <ChatPage /> }, // SCR-08
+  { path: '/map', element: <MapPage /> }, // SCR-09
+]
+
+export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
+  // 재무 OFF면 포털 서브트리 제외
+  ...(includePortalRoutes(FINANCE_FEATURES) ? [portalRoute] : []),
   {
     element: <RequireAuth />,
-    children: [
-      { path: '/', element: <RoleHome /> },
-      // ── P1 구현 화면 ──────────────────────────────────────────────
-      { path: '/dashboard', element: <DashboardPage /> }, // SCR-01
-      { path: '/observe', element: <ObservePage /> }, // OB-4 경영 관찰(OBSERVER 랜딩, 읽기 전용)
-      { path: '/issues', element: <IssuesPage /> }, // SCR-02
-      { path: '/calendar', element: <CalendarPage /> }, // SCR-11
-      { path: '/clients', element: <ClientsPage /> }, // SCR-03
-      { path: '/clients/:clientId', element: <ClientDetailPage /> }, // SCR-03D
-      { path: '/buyers', element: <BuyersPage /> }, // INC-8a 매수자 마스터
-      { path: '/portal-accounts', element: <PortalAccountsPage /> }, // INC-8b 외부 포털 계정
-      { path: '/histories', element: <HistoriesPage /> }, // SCR-05
-      { path: '/reports', element: <ReportsPage /> }, // SCR-12
-      { path: '/reports/segments', element: <SegmentsPage /> }, // SCR-12 확장 — 세그먼트 발송
-      { path: '/documents', element: <DocumentsPage /> }, // SCR-13
-      { path: '/settings', element: <SettingsPage /> }, // SCR-14 (계정 관리 탭)
-      // 사용자 가이드 (전 역할) — 허브 + 토픽 서브페이지
-      {
-        path: '/guide',
-        element: <GuideLayout />,
-        children: [
-          { index: true, element: <GuideHubPage /> },
-          { path: ':topicId', element: <GuideTopicPage /> },
-        ],
-      },
-      // ── P2 구현 화면 ──────────────────────────────────────────────
-      { path: '/assets', element: <AssetsPage /> }, // SCR-04
-      { path: '/asset-vehicles', element: <AssetVehiclesPage /> }, // AV-3 전기버스 자산
-      { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
-      { path: '/projects', element: <ProjectsPage /> }, // SCR-06
-      { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
-      { path: '/finance-ledger', element: <FinanceLedgerPage /> }, // FL-3 재무 원장(사업 grain)
-      { path: '/asset-report', element: <AssetReportPage /> }, // P2 자산관리 보고(고객사 grain)
-      { path: '/settlements', element: <SettlementsPage /> }, // P4 정산 관리(SCR-07) — 내부 전용, OBSERVER 접근 불가
-      // ── P3 구현 화면 ──────────────────────────────────────────────
-      { path: '/chat', element: <ChatPage /> }, // SCR-08
-      { path: '/map', element: <MapPage /> }, // SCR-09
-    ],
+    children: filterFinanceRoutes(appRoutes, FINANCE_FEATURES),
   },
   { path: '*', element: <RoleHome /> },
 ])

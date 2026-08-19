@@ -7,6 +7,7 @@ steps:
     args: ['build',
       '-t', 'gcr.io/$PROJECT_ID/hooxi-cms:$BUILD_ID',
       '-t', 'gcr.io/$PROJECT_ID/hooxi-cms:latest',
+      '--build-arg', 'FEATURE_FINANCE=${_FEATURE_FINANCE}',
       '.']
 images:
   - 'gcr.io/$PROJECT_ID/hooxi-cms:$BUILD_ID'
@@ -14,3 +15,6 @@ images:
 options:
   # 기본 SA 로깅 요구사항 회피(로그는 Cloud Logging으로)
   logging: CLOUD_LOGGING_ONLY
+substitutions:
+  # 재무·자산 기능 노출(기본 on). 운영은 deploy-prod.sh에서 off로 덮어씀.
+  _FEATURE_FINANCE: 'on'

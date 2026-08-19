@@ -18,7 +18,8 @@ IMAGE="gcr.io/${PROJECT}/hooxi-cms:latest"
 SQL_CONN="${PROJECT}:${REGION}:hooxi-cms-db"
 
 echo "▶ 1/2 Cloud Build 이미지 빌드+push …"
-gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml .
+# 운영은 재무·자산 은닉 빌드(_FEATURE_FINANCE=off). dev(main push)는 기본 on 유지.
+gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --substitutions=_FEATURE_FINANCE=off .
 
 echo "▶ 2/2 Cloud Run 배포 …"
 # 시크릿은 Secret Manager로 주입(감사로그 비밀값 금지 R2-E6 준수). DB는 Cloud SQL 유닉스소켓.

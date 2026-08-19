@@ -17,11 +17,25 @@ import { useCodes, useClientOptions } from '../../lib/api/queries'
 import { useProject, useProjectOptions } from '../projects/api'
 import { useBuyerOptions } from '../buyers/api'
 import { downloadExport } from '../../lib/export'
+import { FINANCE_FEATURES } from '../../lib/featureFlags'
 import { fmtDate, fmtMoney } from '../../lib/format'
 import { useAssetVehicles } from './api'
 import type { AssetVehicleRow } from './types'
 
 const PAGE_SIZE = 20
+
+/** 재무 OFF 시 숨길 금액 컬럼 키 — 예상지급액·매출(사업)·원가(사업) */
+export const FINANCE_COLUMN_KEYS = ['expected_payout', 'project_revenue', 'project_cost']
+
+/**
+ * 재무 플래그에 따른 표시 컬럼 필터(순수). ON이면 원본 그대로, OFF면 금액 컬럼 제거.
+ */
+export function visibleAssetVehicleColumns<T extends { key: string }>(
+  cols: T[],
+  financeEnabled: boolean,
+): T[] {
+  return financeEnabled ? cols : cols.filter((c) => !FINANCE_COLUMN_KEYS.includes(c.key))
+}
 
 /** 감축량 포맷 'N tCO₂' — nullable */
 function fmtReduction(value?: number | null): string {
@@ -125,7 +139,7 @@ export function AssetVehiclesPage() {
     [clients],
   )
 
-  const columns: Column<AssetVehicleRow>[] = [
+  const allColumns: Column<AssetVehicleRow>[] = [
     {
       key: 'project',
       header: '프로젝트명',
@@ -235,6 +249,8 @@ export function AssetVehiclesPage() {
         ),
     },
   ]
+  // 재무 OFF면 금액 컬럼(예상지급액·매출·원가) 제거
+  const columns = visibleAssetVehicleColumns(allColumns, FINANCE_FEATURES)
 
   return (
     <div className="animate-fade-in space-y-4">
@@ -256,19 +272,26 @@ export function AssetVehiclesPage() {
         }
       />
 
-      <ScreenGuide
-        perspective="차량 1대 단위"
-        links={[
-          { label: '사업 단위로', to: '/finance-ledger' },
-          { label: '운수사 단위로', to: '/asset-report' },
-        ]}
-      >
-        어떤 전기버스가 있고 각 감축량·예상지급액인지 <strong className="font-medium text-bone">차량 단위</strong>
-        로 봅니다. 예상지급액은 전기버스 자산(차량)·재무 원장(사업)·자산관리 보고(운수사)에서{' '}
-        <strong className="font-medium text-bone">같은 값을 다른 축으로 본 것</strong>입니다.
-      </ScreenGuide>
+      {FINANCE_FEATURES ? (
+        <ScreenGuide
+          perspective="차량 1대 단위"
+          links={[
+            { label: '사업 단위로', to: '/finance-ledger' },
+            { label: '운수사 단위로', to: '/asset-report' },
+          ]}
+        >
+          어떤 전기버스가 있고 각 감축량·예상지급액인지 <strong className="font-medium text-bone">차량 단위</strong>
+          로 봅니다. 예상지급액은 전기버스 자산(차량)·재무 원장(사업)·자산관리 보고(운수사)에서{' '}
+          <strong className="font-medium text-bone">같은 값을 다른 축으로 본 것</strong>입니다.
+        </ScreenGuide>
+      ) : (
+        <ScreenGuide perspective="차량 1대 단위">
+          어떤 전기버스가 있고 각 <strong className="font-medium text-bone">감축량</strong>이 얼마인지 차량
+          단위로 봅니다.
+        </ScreenGuide>
+      )}
 
-      {/* 차량 KPI 4종 — 필터 걸린 차량 집계 */}
+      {/* 차량 KPI — 필터 걸린 차량 집계 (재무 OFF면 예상지급액 카드 제외) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           title="차량 수"
@@ -285,37 +308,41 @@ export function AssetVehiclesPage() {
           value={fmtReduction(kpi?.effective_reduction_sum)}
           icon={<Gauge size={18} />}
         />
-        <KpiCard
-          title="예상 지급액 합계"
-          value={
-            <SensitiveData type="money" value={fmtMoney(kpi?.expected_payout_sum ?? null)} />
-          }
-          icon={<Coins size={18} />}
-          variant="dark"
-        />
+        {FINANCE_FEATURES && (
+          <KpiCard
+            title="예상 지급액 합계"
+            value={
+              <SensitiveData type="money" value={fmtMoney(kpi?.expected_payout_sum ?? null)} />
+            }
+            icon={<Coins size={18} />}
+            variant="dark"
+          />
+        )}
       </div>
 
-      {/* 재무 KPI 3종 — 관련 사업 전체 기준(차량 KPI와 그레인 다름, D2) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KpiCard
-          title="매출"
-          value={<SensitiveData type="money" value={fmtMoney(kpi?.revenue ?? null)} />}
-          sub="관련 사업 전체 기준"
-          variant="dark"
-        />
-        <KpiCard
-          title="원가"
-          value={<SensitiveData type="money" value={fmtMoney(kpi?.cost ?? null)} />}
-          sub="관련 사업 전체 기준"
-          variant="dark"
-        />
-        <KpiCard
-          title="이익"
-          value={<SensitiveData type="money" value={fmtMoney(kpi?.profit ?? null)} />}
-          sub="관련 사업 전체 기준"
-          variant="dark"
-        />
-      </div>
+      {/* 재무 KPI 3종 — 관련 사업 전체 기준(차량 KPI와 그레인 다름, D2). 재무 OFF면 전체 은닉. */}
+      {FINANCE_FEATURES && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <KpiCard
+            title="매출"
+            value={<SensitiveData type="money" value={fmtMoney(kpi?.revenue ?? null)} />}
+            sub="관련 사업 전체 기준"
+            variant="dark"
+          />
+          <KpiCard
+            title="원가"
+            value={<SensitiveData type="money" value={fmtMoney(kpi?.cost ?? null)} />}
+            sub="관련 사업 전체 기준"
+            variant="dark"
+          />
+          <KpiCard
+            title="이익"
+            value={<SensitiveData type="money" value={fmtMoney(kpi?.profit ?? null)} />}
+            sub="관련 사업 전체 기준"
+            variant="dark"
+          />
+        </div>
+      )}
 
       <FilterBar>
         {/* 프로젝트·운수사·구매/투자사 필터는 /projects·/clients·/buyers 의존 — OBSERVER는 숨김 */}
@@ -440,7 +467,7 @@ function VehicleDetailPanel({ row, isObserver }: { row: AssetVehicleRow; isObser
   // 계약·소유권은 행 데이터에 없어 소속 사업 상세를 지연 조회(react-query 캐시 재사용).
   // OBSERVER는 /projects/{id}가 백엔드 403 → 호출 억제 + 계약·소유권 섹션 미표시(인라인 차량 데이터만).
   const { data: project, isLoading: salesLoading } = useProject(row.project_id, {
-    enabled: !isObserver,
+    enabled: !isObserver && FINANCE_FEATURES,
   })
   const sales = project?.sales ?? []
 
@@ -495,8 +522,9 @@ function VehicleDetailPanel({ row, isObserver }: { row: AssetVehicleRow; isObser
         </div>
       </section>
 
-      {/* 3. 계약·소유권 (지연 조회) — OBSERVER는 /projects/{id} 차단이라 섹션 자체 미표시 */}
-      {!isObserver && (
+      {/* 3. 계약·소유권 (지연 조회) — OBSERVER는 /projects/{id} 차단이라 섹션 자체 미표시.
+          재무 OFF면 적용단가(금액) 노출 방지를 위해 섹션 전체 은닉. */}
+      {!isObserver && FINANCE_FEATURES && (
       <section>
         <h4 className="mb-2 text-xs font-semibold tracking-wide text-ash">계약·소유권</h4>
         {salesLoading ? (

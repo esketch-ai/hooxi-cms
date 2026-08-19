@@ -1,4 +1,5 @@
 // LNB 메뉴 트리 — SCREEN_DESIGN_PLAN §2.1 확정안 그대로
+import { isFinanceHiddenPath } from '../../lib/featureFlags'
 import type { Icon } from '@phosphor-icons/react'
 import {
   Bank,
@@ -125,3 +126,15 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ]
+
+/**
+ * 재무 기능 OFF 시 은닉 경로 항목을 제거한 nav 그룹(항목이 모두 사라진 그룹도 제거).
+ * financeEnabled=true(ON)면 원본 NAV_GROUPS를 그대로 반환(회귀 0).
+ */
+export function visibleNavGroups(financeEnabled: boolean): NavGroup[] {
+  if (financeEnabled) return NAV_GROUPS
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !isFinanceHiddenPath(item.path)),
+  })).filter((group) => group.items.length > 0)
+}

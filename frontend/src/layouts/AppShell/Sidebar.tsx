@@ -3,7 +3,8 @@ import { SignOut, X } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
 import { useChatBadge } from '../../lib/api/queries'
 import { roleLabel } from '../../lib/roles'
-import { NAV_GROUPS } from './nav'
+import { FINANCE_FEATURES } from '../../lib/featureFlags'
+import { visibleNavGroups } from './nav'
 import { isObserverAllowed } from './observerAccess'
 
 interface SidebarProps {
@@ -19,7 +20,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   // OBSERVER(경영 관찰)는 화이트리스트 경로 항목만 노출 — 기존 3역할 로직은 불변(회귀 0)
   const isObserver = user?.role === 'OBSERVER'
-  const groups = NAV_GROUPS.filter(
+  // 재무 OFF면 은닉 경로 항목을 먼저 제거(ON이면 NAV_GROUPS 원본 그대로) → 이후 기존 role 필터 적용
+  const groups = visibleNavGroups(FINANCE_FEATURES).filter(
     (group) => !group.roles || (user && group.roles.includes(user.role)),
   )
     .map((group) => ({

@@ -3,27 +3,30 @@
 // 없는 id는 허브로 리다이렉트.
 import { ArrowRight } from '@phosphor-icons/react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { FINANCE_FEATURES, isFinanceHiddenPath } from '../../lib/featureFlags'
 import { Chip } from './blocks'
-import { CATEGORIES, TOPICS, getTopic } from './content'
+import { CATEGORIES, getTopic, isTopicHidden, visibleTopics } from './content'
 
 export function GuideTopicPage() {
   const { topicId } = useParams<{ topicId: string }>()
   const topic = topicId ? getTopic(topicId) : undefined
 
-  if (!topic) return <Navigate to="/guide" replace />
+  // 없는 id, 또는 현재 배포에서 은닉된 토픽(재무 OFF)은 허브로 리다이렉트
+  if (!topic || isTopicHidden(topic)) return <Navigate to="/guide" replace />
 
   const category = CATEGORIES.find((c) => c.id === topic.categoryId)
   const { Body } = topic
 
-  // TOPICS 배열 순서 기준 이전/다음(카테고리 무시, 양끝은 한쪽 생략)
-  const idx = TOPICS.findIndex((t) => t.id === topic.id)
-  const prev = idx > 0 ? TOPICS[idx - 1] : undefined
-  const next = idx >= 0 && idx < TOPICS.length - 1 ? TOPICS[idx + 1] : undefined
+  // 노출 토픽 배열 순서 기준 이전/다음(카테고리 무시, 양끝은 한쪽 생략)
+  const nav = visibleTopics()
+  const idx = nav.findIndex((t) => t.id === topic.id)
+  const prev = idx > 0 ? nav[idx - 1] : undefined
+  const next = idx >= 0 && idx < nav.length - 1 ? nav[idx + 1] : undefined
 
-  // 관련 가이드 — 유효한 id만 해석
+  // 관련 가이드 — 유효하고 노출되는 id만 해석
   const related = (topic.related ?? [])
     .map((id) => getTopic(id))
-    .filter((t): t is NonNullable<typeof t> => !!t)
+    .filter((t): t is NonNullable<typeof t> => !!t && !isTopicHidden(t))
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -49,7 +52,7 @@ export function GuideTopicPage() {
             {topic.accessLabel && <Chip>{topic.accessLabel}</Chip>}
           </div>
         </div>
-        {topic.featureRoute && (
+        {topic.featureRoute && (FINANCE_FEATURES || !isFinanceHiddenPath(topic.featureRoute)) && (
           <Link
             to={topic.featureRoute}
             className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-hairline bg-elevate px-4 py-2 text-sm font-medium text-bone transition-colors hover:border-red-600/60 sm:self-auto dark:hover:border-red-500/60"

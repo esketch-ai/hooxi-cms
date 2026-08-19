@@ -23,6 +23,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { Skeleton } from '../../components/Skeleton'
 import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
+import { FINANCE_FEATURES } from '../../lib/featureFlags'
 import { useDebounced } from '../../lib/useDebounced'
 import { dday, fmtDate, fmtMoney, fmtServerDateTime } from '../../lib/format'
 import type {
@@ -432,6 +433,11 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'finance', label: '재무' },
 ]
 
+/** 재무 플래그에 따른 표시 탭(순수). OFF면 finance 탭 제거, ON이면 원본 그대로. */
+export function visibleProjectTabs(financeEnabled: boolean): { key: TabKey; label: string }[] {
+  return financeEnabled ? TABS : TABS.filter((t) => t.key !== 'finance')
+}
+
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { showToast } = useToast()
@@ -517,9 +523,9 @@ export function ProjectDetailPage() {
         }
       />
 
-      {/* 탭 */}
+      {/* 탭 — 재무 OFF면 finance 탭 제외 */}
       <div className="flex gap-1 overflow-x-auto border-b border-hairline">
-        {TABS.map((t) => (
+        {visibleProjectTabs(FINANCE_FEATURES).map((t) => (
           <button
             key={t.key}
             type="button"
@@ -554,8 +560,8 @@ export function ProjectDetailPage() {
         </>
       )}
 
-      {/* 재무 */}
-      {tab === 'finance' && (
+      {/* 재무 — 재무 OFF면 탭 자체가 없어 진입 불가(방어적으로 플래그도 확인) */}
+      {FINANCE_FEATURES && tab === 'finance' && (
         <>
           <div className="flex justify-end">
             <Link
@@ -735,7 +741,9 @@ function OperatorsSection({ projectId }: { projectId: string }) {
                 <th className="px-3 py-2.5 text-left font-semibold">운수사명</th>
                 <th className="px-3 py-2.5 text-right font-semibold">차량수</th>
                 <th className="px-3 py-2.5 text-right font-semibold">잔여반영감축량(tCO₂)</th>
-                <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+                {FINANCE_FEATURES && (
+                  <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -764,17 +772,19 @@ function OperatorsSection({ projectId }: { projectId: string }) {
                       <td className="px-3 py-2.5 text-right text-ash">
                         {o.total_reduction != null ? o.total_reduction.toLocaleString() : '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
-                        {o.total_expected_payout != null ? (
-                          <SensitiveData type="money" value={fmtMoney(o.total_expected_payout)} />
-                        ) : (
-                          <span className="text-slatey">미정</span>
-                        )}
-                      </td>
+                      {FINANCE_FEATURES && (
+                        <td className="px-3 py-2.5 text-right">
+                          {o.total_expected_payout != null ? (
+                            <SensitiveData type="money" value={fmtMoney(o.total_expected_payout)} />
+                          ) : (
+                            <span className="text-slatey">미정</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                     {isOpen && (
                       <tr>
-                        <td colSpan={4} className="bg-elevate/50 px-3 py-2">
+                        <td colSpan={FINANCE_FEATURES ? 4 : 3} className="bg-elevate/50 px-3 py-2">
                           <OperatorVehicles
                             projectId={projectId}
                             clientId={o.client_id ?? '__none__'}
@@ -811,7 +821,9 @@ function OperatorVehicles({ projectId, clientId }: { projectId: string; clientId
             <th className="px-2 py-1 text-left font-semibold">차량번호</th>
             <th className="px-2 py-1 text-left font-semibold">지역</th>
             <th className="px-2 py-1 text-right font-semibold">잔여반영감축량(tCO₂)</th>
-            <th className="px-2 py-1 text-right font-semibold">예상지급액</th>
+            {FINANCE_FEATURES && (
+              <th className="px-2 py-1 text-right font-semibold">예상지급액</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -822,13 +834,15 @@ function OperatorVehicles({ projectId, clientId }: { projectId: string; clientId
               <td className="px-2 py-1 text-right text-ash">
                 {v.effective_reduction != null ? v.effective_reduction.toLocaleString() : '—'}
               </td>
-              <td className="px-2 py-1 text-right">
-                {v.expected_payout != null ? (
-                  <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
-                ) : (
-                  <span className="text-slatey">—</span>
-                )}
-              </td>
+              {FINANCE_FEATURES && (
+                <td className="px-2 py-1 text-right">
+                  {v.expected_payout != null ? (
+                    <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
+                  ) : (
+                    <span className="text-slatey">—</span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -1003,7 +1017,9 @@ function VehiclesSection({ projectId }: { projectId: string }) {
                 <th className="px-3 py-2.5 text-left font-semibold">도입구분</th>
                 <th className="px-3 py-2.5 text-right font-semibold">총감축량(tCO₂)</th>
                 <th className="px-3 py-2.5 text-right font-semibold">잔여반영감축량(tCO₂)</th>
-                <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+                {FINANCE_FEATURES && (
+                  <th className="px-3 py-2.5 text-right font-semibold">예상지급액</th>
+                )}
                 <th className="px-3 py-2.5 text-right font-semibold">관리</th>
               </tr>
             </thead>
@@ -1021,13 +1037,15 @@ function VehiclesSection({ projectId }: { projectId: string }) {
                   <td className="px-3 py-2.5 text-right text-ash">
                     {v.effective_reduction != null ? v.effective_reduction.toLocaleString() : '—'}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {v.expected_payout != null ? (
-                      <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
-                    ) : (
-                      <span className="text-slatey">—</span>
-                    )}
-                  </td>
+                  {FINANCE_FEATURES && (
+                    <td className="px-3 py-2.5 text-right">
+                      {v.expected_payout != null ? (
+                        <SensitiveData type="money" value={fmtMoney(v.expected_payout)} />
+                      ) : (
+                        <span className="text-slatey">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1">
                       <button
