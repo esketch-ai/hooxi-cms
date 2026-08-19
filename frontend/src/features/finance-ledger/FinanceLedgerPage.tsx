@@ -110,6 +110,7 @@ export function FinanceLedgerPage() {
   const total = data?.total ?? 0
   const totals = data?.totals
   const marketRate = data?.current_market_rate ?? null
+  const marketRateAvg6 = data?.market_rate_avg6 ?? null // 직전 6개월 평균시세(예상수익 기준, B2)
 
   // 현재 필터 그대로 서버에 전달(page·page_size는 서버가 무시하고 전체행 반환)
   async function handleExport() {
@@ -186,6 +187,12 @@ export function FinanceLedgerPage() {
       className: 'text-right',
       render: (v) => <MoneyCell value={v.gross_profit} />,
     },
+    {
+      key: 'expected_revenue',
+      header: <span title="기준: 직전 6개월 평균시세">예상수익</span>,
+      className: 'text-right',
+      render: (v) => <MoneyCell value={v.expected_revenue ?? null} />,
+    },
   ]
 
   return (
@@ -229,6 +236,11 @@ export function FinanceLedgerPage() {
           <span className="text-sm text-ash">현재 매출단가 시세</span>
           <span className="text-lg font-bold tracking-tight text-bone">{fmtWon(marketRate)}</span>
           <span className="text-xs text-slatey">/ tCO₂</span>
+          {/* 예상수익 기준 — 직전 6개월 평균시세(B2). 현재시세와 구분해 병기 */}
+          <span className="ml-3 text-xs text-slatey">
+            예상수익 기준(직전 6개월 평균){' '}
+            <span className="font-medium text-ash">{fmtWon(marketRateAvg6)} / tCO₂</span>
+          </span>
         </div>
         <Link
           to="/settings"
@@ -239,7 +251,7 @@ export function FinanceLedgerPage() {
       </div>
 
       {/* 총계 KPI — 필터 기준 전 사업 합 (금액 SensitiveData money) */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <KpiCard
           title="매출인식"
           value={<SensitiveData type="money" value={fmtMoney(totals?.sale_recognized ?? null)} />}
@@ -272,6 +284,13 @@ export function FinanceLedgerPage() {
           title="재고평가"
           value={<SensitiveData type="money" value={fmtMoney(totals?.inventory_valuation ?? null)} />}
           sub="현재시세 기준"
+          icon={<Coins size={18} />}
+          variant="dark"
+        />
+        <KpiCard
+          title="예상수익"
+          value={<SensitiveData type="money" value={fmtMoney(totals?.expected_revenue ?? null)} />}
+          sub="직전 6개월 평균시세 기준"
           icon={<Coins size={18} />}
           variant="dark"
         />

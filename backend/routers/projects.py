@@ -38,7 +38,7 @@ from models import (
 from routers import common
 from routers.codes import validate_active_code
 from services import accounting
-from services.market_rate import current_market_rate
+from services.market_rate import current_market_rate, expected_revenue, trailing_avg_rate
 from services.project_params import base_params
 from services.audit_logger import AuditLogger
 
@@ -151,8 +151,8 @@ def _vehicle_rollup(db: Session, project_id: str):
 # ── 거래계약(매수자별 선물 판매) + 내부 차액 수익 파생 ─────────────────────
 _SALE_FIELDS = (
     "buyer_name", "buyer_id", "buyer_type", "sale_unit_price", "quantity",
-    "ownership_pct", "sale_invoice_amount", "sale_invoice_date", "is_hold",
-    "contract_date", "memo",
+    "ownership_pct", "sale_invoice_amount", "sale_invoice_date", "sale_payment_date",
+    "is_hold", "contract_date", "memo",
 )
 
 
@@ -470,6 +470,15 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
     inventory_valuation = (
         round(held_qty * float(rate)) if rate is not None and held_qty > 0 else None
     )
+    # 예상수익 파생(비영속 read-only) — 사업 Σ잔여반영감축량 × 직전 6개월 평균시세(원단위 절사).
+    # 회계 체인 미접촉(단일 소스 services.market_rate). 시세/Σeff None이면 None 전파.
+    avg6 = trailing_avg_rate(db)
+    # coalesce 미사용: 전건 NULL(지급파라미터 미설정)이면 Σ=None → 예상수익 None으로,
+    # 재무원장·자산관리보고·전기버스 KPI(모두 raw SUM)와 교차 정합 유지(0원 vs '-' 발산 방지).
+    eff_sum = db.query(
+        func.sum(ProjectVehicle.effective_reduction)
+    ).filter(ProjectVehicle.project_id == project.project_id).scalar()
+    expected_rev = expected_revenue(eff_sum, avg6)
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -485,6 +494,8 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "margin_ratio": margin_ratio,
             "current_market_rate": float(rate) if rate is not None else None,
             "inventory_valuation": inventory_valuation,
+            "market_rate_avg6": float(avg6) if avg6 is not None else None,
+            "expected_revenue": expected_rev,
             **acct,
         }
     )
@@ -1247,7 +1258,7 @@ def delete_project_sale(
 
 
 # ── 매입세금계산서(운수사 실지급=제품) CRUD — 회계 원장층 제품 원천(부록 L.3) ──
-_INVOICE_FIELDS = ("client_id", "operator_name", "region", "issue_date", "amount", "memo")
+_INVOICE_FIELDS = ("client_id", "operator_name", "region", "issue_date", "payment_date", "amount", "memo")
 _INVOICE_IMPORT_ENTITY = "purchase_invoices"
 
 

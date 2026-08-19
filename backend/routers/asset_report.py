@@ -27,6 +27,7 @@ from services import email_service, integration_config, kakao_service
 from services import settlement_notice as notice_service
 from services import settlement_summary as summary_service
 from services.audit_logger import AuditLogger
+from services.market_rate import trailing_avg_rate
 from services.report_sender import _config_template, resolve_recipients
 from services.excel_export import (
     DAILY_EXPORT_LIMIT,
@@ -58,7 +59,11 @@ def get_settlement_summary(
 ):
     """운수사×사업 정산 요약 매트릭스 — 운수사별 롤업 + 사업 드릴다운 + 전사 총계."""
     return summary_service.settlement_summary(
-        db, client_id=client_id, client_type=client_type, region=region
+        db,
+        client_id=client_id,
+        client_type=client_type,
+        region=region,
+        avg6=trailing_avg_rate(db),
     )
 
 
@@ -70,6 +75,7 @@ _EXPORT_COLUMNS = [
     ColumnSpec("total_reduction", "총감축량", "number"),
     ColumnSpec("effective_reduction", "잔여반영감축량", "number"),
     ColumnSpec("expected_payout", "예상지급액", "money"),
+    ColumnSpec("expected_revenue", "예상수익", "money"),
 ]
 
 
@@ -102,7 +108,11 @@ def export_settlement_summary(
     check_export_quota(db, user, daily_limit=DAILY_EXPORT_LIMIT)
 
     data = summary_service.settlement_summary(
-        db, client_id=client_id, client_type=client_type, region=region
+        db,
+        client_id=client_id,
+        client_type=client_type,
+        region=region,
+        avg6=trailing_avg_rate(db),
     )
 
     # 운수사×사업 평탄화 — 운수사-사업 1행(화면 드릴다운을 펼침)
@@ -117,6 +127,7 @@ def export_settlement_summary(
                     "total_reduction": p["total_reduction"],
                     "effective_reduction": p["effective_reduction"],
                     "expected_payout": p["expected_payout"],
+                    "expected_revenue": p["expected_revenue"],
                 }
             )
 
@@ -130,6 +141,7 @@ def export_settlement_summary(
         "total_reduction": totals["total_reduction"],
         "effective_reduction": totals["effective_reduction"],
         "expected_payout": totals["expected_payout"],
+        "expected_revenue": totals["expected_revenue"],
     }
 
     content = build_workbook(

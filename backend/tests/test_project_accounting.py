@@ -101,6 +101,55 @@ def test_ownership_over_100_rejected(client, staff_headers):
     assert r.status_code == 422, r.text
 
 
+def test_purchase_invoice_payment_date_roundtrip(client, staff_headers):
+    """매입세금계산서 입금일(payment_date) create→get→update round-trip (정보성·nullable)."""
+    pid = _mk_project(client, staff_headers, "매입입금일검증")
+    r = client.post(
+        f"{PROJECTS}/{pid}/purchase-invoices",
+        headers=staff_headers,
+        json={"operator_name": "운수사갑", "amount": 500000, "payment_date": "2026-04-10"},
+    )
+    assert r.status_code == 201, r.text
+    inv_id = r.json()["invoice_id"]
+    got = client.get(f"{PROJECTS}/{pid}/purchase-invoices", headers=staff_headers).json()
+    row = next(i for i in got["items"] if i["invoice_id"] == inv_id)
+    assert row["payment_date"] == "2026-04-10"
+    # 수정 반영
+    u = client.put(
+        f"{PROJECTS}/{pid}/purchase-invoices/{inv_id}",
+        headers=staff_headers,
+        json={"payment_date": "2026-05-20"},
+    )
+    assert u.status_code == 200, u.text
+    got2 = client.get(f"{PROJECTS}/{pid}/purchase-invoices", headers=staff_headers).json()
+    row2 = next(i for i in got2["items"] if i["invoice_id"] == inv_id)
+    assert row2["payment_date"] == "2026-05-20"
+
+
+def test_project_sale_payment_date_roundtrip(client, staff_headers):
+    """거래계약 매출세금계산서 입금일(sale_payment_date) create→get→update round-trip."""
+    pid = _mk_project(client, staff_headers, "매출입금일검증")
+    r = client.post(
+        f"{PROJECTS}/{pid}/sales",
+        headers=staff_headers,
+        json={"buyer_name": "증권X", "sale_payment_date": "2026-04-10"},
+    )
+    assert r.status_code == 201, r.text
+    sale_id = r.json()["sale_id"]
+    got = client.get(f"{PROJECTS}/{pid}/sales", headers=staff_headers).json()
+    row = next(s for s in got["items"] if s["sale_id"] == sale_id)
+    assert row["sale_payment_date"] == "2026-04-10"
+    u = client.put(
+        f"{PROJECTS}/{pid}/sales/{sale_id}",
+        headers=staff_headers,
+        json={"sale_payment_date": "2026-05-20"},
+    )
+    assert u.status_code == 200, u.text
+    got2 = client.get(f"{PROJECTS}/{pid}/sales", headers=staff_headers).json()
+    row2 = next(s for s in got2["items"] if s["sale_id"] == sale_id)
+    assert row2["sale_payment_date"] == "2026-05-20"
+
+
 def test_accounting_none_without_payout(client, staff_headers):
     """예상지급액 미산출(단가 게이트) 시 지급률·매출인식 None 전파, 제품은 산출."""
     pid = _mk_project(client, staff_headers, "회계게이트검증")

@@ -512,6 +512,9 @@ export interface Project {
   // ── 재고평가 파생 (비영속 read-only, P0-2 증분3) — 후시보유분 × 현재시세, 저장 없음 ──
   current_market_rate?: number | null // 현재 매출단가 시세 (원/tCO2)
   inventory_valuation?: number | null // 재고평가액 = Σ(is_hold='Y' quantity) × 현재시세
+  // ── 예상수익 파생 (비영속 read-only, B2) — Σ잔여반영감축량 × 직전 6개월 평균시세 ──
+  market_rate_avg6?: number | null // 직전 6개월 평균 매출단가 시세 (원/tCO2, 없으면 None)
+  expected_revenue?: number | null // 예상수익 = trunc(Σeff × 6개월평균시세), None 안전
 }
 
 // tb_project_sale — 매수자별 선물 판매단가 거래계약 (내부 차액 수익 산출)
@@ -527,6 +530,7 @@ export interface ProjectSalePayload {
   ownership_pct?: number | null // 소유권비율 (%)
   sale_invoice_amount?: number | null // 매출세금계산서 실발행액 — 매출인식 기준
   sale_invoice_date?: string | null // 매출세금계산서 발행일
+  sale_payment_date?: string | null // 매출세금계산서 입금일자
   is_hold?: string | null // 후시보유 'Y'/'N'
 }
 
@@ -548,6 +552,7 @@ export interface PurchaseInvoicePayload {
   client_id?: string | null
   region?: string | null
   issue_date?: string | null // 발행일
+  payment_date?: string | null // 입금일자
   amount: number // 금액 (필수)
   memo?: string | null
 }

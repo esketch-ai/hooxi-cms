@@ -361,6 +361,7 @@ class ProjectSale(Base):
     ownership_pct = Column(Numeric(5, 2))  # 소유권비율(%)
     sale_invoice_amount = Column(Numeric(15, 2))  # 매출세금계산서 실발행액 — 매출인식 기준
     sale_invoice_date = Column(Date)  # 매출세금계산서 발행일
+    sale_payment_date = Column(Date)  # 매출세금계산서 입금일(정보성, nullable)
     is_hold = Column(String(1), default="N")  # 후시보유 여부(Y/N)
     contract_date = Column(Date)
     memo = Column(String(255))
@@ -389,6 +390,7 @@ class PurchaseInvoice(Base):
     operator_name = Column(String(100))  # 운수사 표기(엑셀 import용)
     region = Column(String(20))
     issue_date = Column(Date)  # 발행일
+    payment_date = Column(Date)  # 입금일(정보성, nullable)
     amount = Column(Numeric(15, 2))  # 금액
     memo = Column(String(255))
     created_at = Column(DateTime, default=utcnow)
@@ -888,6 +890,8 @@ def ensure_schema():
         ("tb_project_sale", "ownership_pct", "NUMERIC(5,2)"),
         ("tb_project_sale", "sale_invoice_amount", "NUMERIC(15,2)"),
         ("tb_project_sale", "sale_invoice_date", "DATE"),
+        ("tb_project_sale", "sale_payment_date", "DATE"),
+        ("tb_purchase_invoice", "payment_date", "DATE"),
         ("tb_project_sale", "is_hold", "VARCHAR(1)"),
         # 매수자 마스터 링크(부록 N.8 D1) — 비파괴 additive(전환기)
         ("tb_project_sale", "buyer_id", "VARCHAR(50)"),

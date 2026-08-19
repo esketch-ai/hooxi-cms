@@ -821,6 +821,7 @@ class AssetVehicleRow(BaseModel):
     remaining_age: Optional[float] = None  # 파생(잔여차령)
     effective_reduction: Optional[float] = None  # 파생(잔여반영감축량)
     expected_payout: Optional[float] = None  # 파생(예상지급액, 부록 L)
+    expected_revenue: Optional[float] = None  # 예상수익 = trunc(effective_reduction × 6개월평균시세), None 안전(B2)
     project_status: Optional[str] = None  # 조인(Project 진행상태)
     approval_status: Optional[str] = None  # 조인(Project 승인상태)
     # 사업 회계 집계값(compute_accounting) — 차량 그레인 아님, 그 차량이 속한 사업값을 그대로 표기
@@ -854,12 +855,15 @@ class AssetVehicleKpi(BaseModel):
     revenue: Optional[float] = None  # Σ 사업 매출인식(sale_recognized) — distinct 사업 기준
     cost: Optional[float] = None  # Σ 사업 원가(product) — distinct 사업 기준
     profit: Optional[float] = None  # Σ 사업 매출이익(gross_profit) — distinct 사업 기준
+    # 예상수익 KPI(B2) — 전체 집계 grain(Σeff × 6개월평균시세). 가시행 합과 불일치 정상(예상지급액과 동일 취급)
+    expected_revenue: Optional[float] = None
 
 
 class AssetVehicleListResponse(BaseModel):
     items: List[AssetVehicleRow]
     total: int  # 필터 결과 총 차량 수
     kpi: AssetVehicleKpi
+    market_rate_avg6: Optional[float] = None  # 직전 6개월 평균 매출단가 시세(없으면 None, B2)
 
 
 # 재무 원장(카본크레딧실 재무 전용, FL-1) — 사업(프로젝트) grain 1행 + 전사 총계 ------
@@ -892,6 +896,7 @@ class FinanceLedgerRow(BaseModel):
     held_ownership: Optional[float] = None  # 후시보유 Σ 소유권비율(%)
     sold_ownership: Optional[float] = None  # 판매 계약 Σ 소유권비율(%)
     inventory_valuation: Optional[float] = None  # 재고평가(held_qty × 오늘 시세), None 안전
+    expected_revenue: Optional[float] = None  # 예상수익 = trunc(Σeff × 6개월평균시세), None 안전(B2)
 
 
 class FinanceLedgerTotals(BaseModel):
@@ -912,6 +917,7 @@ class FinanceLedgerTotals(BaseModel):
     profit_rate: Optional[float] = None  # 파생: 총 gross_profit / 총 sale_recognized
     held_qty: Optional[float] = None  # 후시보유 수량 합(FL-2, Σ 행)
     inventory_valuation: Optional[float] = None  # 재고평가 합(FL-2, None 안전)
+    expected_revenue: Optional[float] = None  # 예상수익 총계(Σ 사업행, None 안전, B2)
 
 
 class FinanceLedgerResponse(BaseModel):
@@ -919,6 +925,7 @@ class FinanceLedgerResponse(BaseModel):
     total: int  # 필터 결과 총 사업 수
     totals: FinanceLedgerTotals  # 필터 전체 총계
     current_market_rate: Optional[float] = None  # 오늘 현재시세(FL-2, 재고평가 기준단가)
+    market_rate_avg6: Optional[float] = None  # 직전 6개월 평균 매출단가 시세(없으면 None, B2)
 
 
 # 정산 요약 매트릭스(P2 '자산관리 보고') — 운수사×사업 grain 집계 --------------------
@@ -931,6 +938,7 @@ class SettlementProjectBreakdown(BaseModel):
     total_reduction: Optional[float] = None  # Σ총감축량(None 안전)
     effective_reduction: Optional[float] = None  # Σ잔여반영감축량(None 안전)
     expected_payout: Optional[float] = None  # Σ예상지급액(None 안전)
+    expected_revenue: Optional[float] = None  # 예상수익 = trunc(Σeff × 6개월평균시세), None 안전(B2)
 
 
 class SettlementSummaryRow(BaseModel):
@@ -950,6 +958,7 @@ class SettlementSummaryRow(BaseModel):
     total_reduction: Optional[float] = None
     effective_reduction: Optional[float] = None
     expected_payout: Optional[float] = None
+    expected_revenue: Optional[float] = None  # 예상수익 롤업(Σ 셀, None 안전, B2)
     projects: List[SettlementProjectBreakdown]
 
 
@@ -961,12 +970,14 @@ class SettlementSummaryTotals(BaseModel):
     total_reduction: Optional[float] = None
     effective_reduction: Optional[float] = None
     expected_payout: Optional[float] = None
+    expected_revenue: Optional[float] = None  # 예상수익 총계(Σ 셀, None 안전, B2)
 
 
 class SettlementSummaryResponse(BaseModel):
     items: List[SettlementSummaryRow]  # 운수사 행((미지정) 포함)
     total: int  # 운수사 행 수
     totals: SettlementSummaryTotals  # 전사 총계
+    market_rate_avg6: Optional[float] = None  # 직전 6개월 평균 매출단가 시세(없으면 None, B2)
 
 
 # 운수사 정산내역 능동 통지(P3) — 이메일 정산 명세 발송 미리보기/발송 ------------------
@@ -1210,6 +1221,7 @@ class ProjectSaleIn(BaseModel):
     ownership_pct: Optional[float] = Field(default=None, ge=0, le=100)  # 소유권비율(%)
     sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출세금계산서 실발행액
     sale_invoice_date: Optional[date] = None  # 매출세금계산서 발행일
+    sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
     is_hold: str = Field(default="N", pattern="^[YN]$")  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
@@ -1226,6 +1238,7 @@ class ProjectSaleUpdate(BaseModel):
     ownership_pct: Optional[float] = Field(default=None, ge=0, le=100)
     sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     sale_invoice_date: Optional[date] = None
+    sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
     is_hold: Optional[str] = Field(default=None, pattern="^[YN]$")
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
@@ -1244,6 +1257,7 @@ class ProjectSaleOut(BaseModel):
     ownership_pct: Optional[float] = None  # 소유권비율(%)
     sale_invoice_amount: Optional[float] = None  # 🔒 매출세금계산서 실발행액(매출인식 기준)
     sale_invoice_date: Optional[date] = None
+    sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
     is_hold: Optional[str] = None  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = None
@@ -1311,6 +1325,7 @@ class PurchaseInvoiceIn(BlankFKToNoneModel):
     operator_name: Optional[str] = Field(default=None, max_length=100)  # 운수사 표기(엑셀 import용)
     region: Optional[str] = Field(default=None, max_length=20)
     issue_date: Optional[date] = None  # 발행일
+    payment_date: Optional[date] = None  # 입금일(정보성)
     amount: float = Field(ge=0, le=_UNIT_PRICE_MAX)  # 금액(필수)
     memo: Optional[str] = Field(default=None, max_length=255)
 
@@ -1322,6 +1337,7 @@ class PurchaseInvoiceUpdate(BlankFKToNoneModel):
     operator_name: Optional[str] = Field(default=None, max_length=100)
     region: Optional[str] = Field(default=None, max_length=20)
     issue_date: Optional[date] = None
+    payment_date: Optional[date] = None  # 입금일(정보성)
     amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     memo: Optional[str] = Field(default=None, max_length=255)
 
@@ -1336,6 +1352,7 @@ class PurchaseInvoiceOut(BaseModel):
     operator_name: Optional[str] = None
     region: Optional[str] = None
     issue_date: Optional[date] = None
+    payment_date: Optional[date] = None  # 입금일(정보성)
     amount: Optional[float] = None  # 🔒
     memo: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -1503,6 +1520,9 @@ class ProjectDetailOut(ProjectOut):
     # 재고평가 파생(비영속 read-only, 증분3) — 후시보유분 × 현재시세. 저장 없음.
     current_market_rate: Optional[float] = None  # 현재 매출단가 시세(없으면 None)
     inventory_valuation: Optional[float] = None  # 재고평가액 = Σ(is_hold='Y' quantity) × 현재시세(원단위 반올림)
+    # 예상수익 파생(비영속 read-only, B2) — Σ잔여반영감축량 × 직전 6개월 평균시세(원단위 절사)
+    market_rate_avg6: Optional[float] = None  # 직전 6개월 평균 매출단가 시세(없으면 None)
+    expected_revenue: Optional[float] = None  # 예상수익 = trunc(Σeff × 6개월평균시세), None 안전
 
 
 # ---------------------------------------------------------------------------

@@ -78,6 +78,14 @@ def project_accounting_batch(
         .group_by(ProjectVehicle.project_id)
         .all()
     )
+    # 잔여반영감축량 Σ — 사업 전체 차량 기준(예상수익 leaf 조달, B2). payouts 배치 옆 add-only.
+    # 전건 None이면 SUM→None(예상수익 None 전파). N+1 회피 위해 여기서 1쿼리로 함께 집계한다.
+    eff_sums = dict(
+        db.query(ProjectVehicle.project_id, func.sum(ProjectVehicle.effective_reduction))
+        .filter(ProjectVehicle.project_id.in_(ids))
+        .group_by(ProjectVehicle.project_id)
+        .all()
+    )
     # 승인상태 — 사업 마스터
     approvals = dict(
         db.query(Project.project_id, Project.approval_status)
@@ -102,5 +110,9 @@ def project_accounting_batch(
         )
         # 후시/계약 소유권 분할 add-only(asset_vehicles는 revenue/cost/profit만 읽어 무영향)
         acct.update(_ownership_split(sales))
+        # 잔여반영감축량 Σ add-only(B2, 예상수익 leaf 원천) — Numeric→float, 전건 None이면 None.
+        # FinanceLedgerRow는 extra='ignore'라 이 키를 스프레드해도 무해(라우터가 명시 조달).
+        e = eff_sums.get(pid)
+        acct["effective_reduction_sum"] = float(e) if e is not None else None
         result[pid] = acct
     return result

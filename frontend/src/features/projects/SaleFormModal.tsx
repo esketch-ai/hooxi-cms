@@ -153,6 +153,14 @@ export function SaleFormModal({ open, onClose, projectId, sale }: Props) {
               className={inputCls}
             />
           </Field>
+          <Field label="매출세금계산서 입금일자">
+            <input
+              type="date"
+              value={form.sale_payment_date ?? ''}
+              onChange={(e) => set('sale_payment_date', e.target.value || null)}
+              className={inputCls}
+            />
+          </Field>
           <Field label="소유권비율 (%)">
             <input
               type="number"

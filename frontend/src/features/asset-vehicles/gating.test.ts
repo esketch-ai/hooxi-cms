@@ -8,6 +8,7 @@ const cols = [
   { key: 'total_reduction' },
   { key: 'effective_reduction' },
   { key: 'expected_payout' },
+  { key: 'expected_revenue' },
   { key: 'project_revenue' },
   { key: 'project_cost' },
 ]
@@ -17,9 +18,19 @@ describe('visibleAssetVehicleColumns', () => {
     expect(visibleAssetVehicleColumns(cols, true)).toBe(cols)
   })
 
-  it('OFF면 금액 컬럼(예상지급액·매출·원가) 제거', () => {
+  it('OFF면 금액 컬럼(예상지급액·예상수익·매출·원가) 제거', () => {
     const keys = visibleAssetVehicleColumns(cols, false).map((c) => c.key)
     for (const k of FINANCE_COLUMN_KEYS) expect(keys).not.toContain(k)
+  })
+
+  it('OFF면 예상수익 컬럼이 은닉된다(B3)', () => {
+    const keys = visibleAssetVehicleColumns(cols, false).map((c) => c.key)
+    expect(keys).not.toContain('expected_revenue')
+  })
+
+  it('ON이면 예상수익 컬럼이 유지된다(B3)', () => {
+    const keys = visibleAssetVehicleColumns(cols, true).map((c) => c.key)
+    expect(keys).toContain('expected_revenue')
   })
 
   it('OFF여도 차량·감축 컬럼은 유지', () => {

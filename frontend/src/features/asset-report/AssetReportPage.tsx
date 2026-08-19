@@ -87,6 +87,7 @@ export function AssetReportPage() {
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const totals = data?.totals
+  const marketRateAvg6 = data?.market_rate_avg6 ?? null // 직전 6개월 평균시세(예상수익 기준, B2)
 
   async function handleExport() {
     if (exporting) return
@@ -152,6 +153,12 @@ export function AssetReportPage() {
       className: 'text-right',
       render: (v) => <MoneyCell value={v.expected_payout} />,
     },
+    {
+      key: 'expected_revenue',
+      header: <span title="기준: 직전 6개월 평균시세">예상수익</span>,
+      className: 'text-right',
+      render: (v) => <MoneyCell value={v.expected_revenue ?? null} />,
+    },
   ]
 
   return (
@@ -202,7 +209,7 @@ export function AssetReportPage() {
       </ScreenGuide>
 
       {/* 전사 총계 KPI — 필터 기준 전 운수사 합 (사업수는 distinct, 금액 SensitiveData money) */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KpiCard
           title="참여 사업수"
           value={fmtQty(totals?.distinct_project_count)}
@@ -228,6 +235,13 @@ export function AssetReportPage() {
           title="예상지급액(정산예정)"
           value={<SensitiveData type="money" value={fmtMoney(totals?.expected_payout ?? null)} />}
           sub="필터 기준 전 운수사 합"
+          icon={<Coins size={18} />}
+          variant="dark"
+        />
+        <KpiCard
+          title="예상수익"
+          value={<SensitiveData type="money" value={fmtMoney(totals?.expected_revenue ?? null)} />}
+          sub={`기준: 직전 6개월 평균시세 ${marketRateAvg6 != null ? `${marketRateAvg6.toLocaleString('ko-KR')} 원/tCO₂` : '-'}`}
           icon={<Coins size={18} />}
           variant="dark"
         />
@@ -716,7 +730,10 @@ function ProjectBreakdownPanel({ row }: { row: SettlementSummaryRow }) {
               <th className="py-1.5 pr-4 text-right font-medium">차량수</th>
               <th className="py-1.5 pr-4 text-right font-medium">총감축량</th>
               <th className="py-1.5 pr-4 text-right font-medium">잔여반영감축량</th>
-              <th className="py-1.5 text-right font-medium">예상지급액</th>
+              <th className="py-1.5 pr-4 text-right font-medium">예상지급액</th>
+              <th className="py-1.5 text-right font-medium" title="기준: 직전 6개월 평균시세">
+                예상수익
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -728,8 +745,11 @@ function ProjectBreakdownPanel({ row }: { row: SettlementSummaryRow }) {
                 <td className="py-1.5 pr-4 text-right text-ash">
                   {fmtQty(p.effective_reduction, ' tCO₂')}
                 </td>
-                <td className="py-1.5 text-right">
+                <td className="py-1.5 pr-4 text-right">
                   <MoneyCell value={p.expected_payout} />
+                </td>
+                <td className="py-1.5 text-right">
+                  <MoneyCell value={p.expected_revenue ?? null} />
                 </td>
               </tr>
             ))}

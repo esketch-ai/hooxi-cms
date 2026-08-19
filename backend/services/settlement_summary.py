@@ -12,10 +12,13 @@ finance_query·compute_accounting과 동일한 None 전파 규약(그룹 전건 
 
 from typing import Optional
 
+from decimal import Decimal
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import Client, Project, ProjectVehicle
+from services.market_rate import expected_revenue
 
 # NULL client_id(미지정 운수사) 행의 표시 라벨 — 실제 client_id가 아니라 집계 표시 전용.
 UNASSIGNED_LABEL = "(미지정)"
@@ -37,6 +40,7 @@ def settlement_summary(
     client_id: Optional[str] = None,
     client_type: Optional[str] = None,
     region: Optional[str] = None,
+    avg6: Optional[Decimal] = None,
 ) -> dict:
     """운수사×사업 정산 요약 매트릭스 — 운수사별 롤업 + 사업 드릴다운 + 전사 총계.
 
@@ -118,6 +122,8 @@ def settlement_summary(
                 "expected_payout": (
                     round(float(payout), 2) if payout is not None else None
                 ),
+                # 예상수익 — 셀(운수사×사업) leaf에서 Σeff×6개월평균시세 원단위 절사(None 안전)
+                "expected_revenue": expected_revenue(ered, avg6),
             }
         )
 
@@ -133,6 +139,10 @@ def settlement_summary(
             (p["effective_reduction"] for p in projs), 3
         )
         entry["expected_payout"] = _sum_opt((p["expected_payout"] for p in projs), 2)
+        # 예상수익 롤업 — 셀 값을 None-안전 합(셀→운수사 정합). 원단위 정수라 0자리.
+        entry["expected_revenue"] = _sum_opt(
+            (p["expected_revenue"] for p in projs), 0
+        )
         items.append(entry)
     items.sort(key=lambda e: e["company_name"] or "")
 
@@ -146,6 +156,13 @@ def settlement_summary(
             (p["effective_reduction"] for p in all_cells), 3
         ),
         "expected_payout": _sum_opt((p["expected_payout"] for p in all_cells), 2),
+        # 예상수익 총계 — 셀 값 None-안전 합(셀→운수사→총계 정합).
+        "expected_revenue": _sum_opt((p["expected_revenue"] for p in all_cells), 0),
     }
 
-    return {"items": items, "total": len(items), "totals": totals}
+    return {
+        "items": items,
+        "total": len(items),
+        "totals": totals,
+        "market_rate_avg6": float(avg6) if avg6 is not None else None,
+    }

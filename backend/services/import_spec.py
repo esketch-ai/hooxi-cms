@@ -179,6 +179,7 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("operator_name", "운수사", example="한빛운수"),
             ImportColumn("region", "지역", code_category="REGION", example="제주"),
             ImportColumn("issue_date", "발행일", example="2026-01-15"),
+            ImportColumn("payment_date", "입금일", example="2026-02-15"),
             ImportColumn("amount", "금액", required=True, example="1000000"),
             ImportColumn("memo", "비고", example=""),
         ),

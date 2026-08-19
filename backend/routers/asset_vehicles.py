@@ -28,6 +28,7 @@ from models import (
 from routers import common
 from services import finance_query
 from services.audit_logger import AuditLogger
+from services.market_rate import expected_revenue, trailing_avg_rate
 from services.excel_export import (
     DAILY_EXPORT_LIMIT,
     MAX_EXPORT_ROWS,
@@ -147,10 +148,12 @@ def _apply_filters(
     return q
 
 
-def _build_kpi(db: Session, q):
+def _build_kpi(db: Session, q, avg6=None):
     """차량 KPI(필터 결과 전체 합) + 재무 KPI(distinct 사업 회계 합) — 목록·내보내기 공유.
 
     반환: (AssetVehicleKpi, {project_id: {revenue,cost,profit}}). 후자는 행별 사업값 조회에 재사용.
+    예상수익 KPI는 전체 집계 grain(Σeff × 6개월평균시세) — 가시 페이지 아닌 필터 전체
+    합이므로 예상지급액 KPI와 동일하게 가시행 합과 불일치가 정상이다.
     """
     # 차량 KPI — 페이지네이션 전 필터 결과 전체 합(None 안전)
     agg = q.with_entities(
@@ -172,6 +175,8 @@ def _build_kpi(db: Session, q):
         revenue=_sum_opt(a["revenue"] for a in acct_by_pid.values()),
         cost=_sum_opt(a["cost"] for a in acct_by_pid.values()),
         profit=_sum_opt(a["profit"] for a in acct_by_pid.values()),
+        # 예상수익 — 전체 Σ잔여반영감축량 × 6개월평균시세(원단위 절사, None 안전)
+        expected_revenue=expected_revenue(agg[2], avg6),
     )
     return kpi, acct_by_pid
 
@@ -208,7 +213,8 @@ def list_asset_vehicles(
     )
 
     total = q.count()
-    kpi, acct_by_pid = _build_kpi(db, q)
+    avg6 = trailing_avg_rate(db)
+    kpi, acct_by_pid = _build_kpi(db, q, avg6)
 
     rows = (
         # 정렬 — 사업명·차량번호. vehicle_id 타이브레이커로 페이지 경계 누락/중복 방지
@@ -237,6 +243,8 @@ def list_asset_vehicles(
             remaining_age=_num(v.remaining_age, 3),
             effective_reduction=_num(v.effective_reduction, 3),
             expected_payout=_num(v.expected_payout, 2),
+            # 예상수익 — 차량 leaf(effective_reduction × 6개월평균시세, 원단위 절사, None 안전)
+            expected_revenue=expected_revenue(v.effective_reduction, avg6),
             project_status=project_status,
             approval_status=proj_approval,
             # 행별 사업 회계값 — page 프로젝트는 distinct 집합의 부분이므로 위 dict에서 조회(D1-A)
@@ -246,7 +254,12 @@ def list_asset_vehicles(
         )
         for v, project_name, approved_at, proj_approval, project_status, company_name in rows
     ]
-    return schemas.AssetVehicleListResponse(items=items, total=total, kpi=kpi)
+    return schemas.AssetVehicleListResponse(
+        items=items,
+        total=total,
+        kpi=kpi,
+        market_rate_avg6=float(avg6) if avg6 is not None else None,
+    )
 
 
 # 내보내기 컬럼 규격(EX-4) — 화면 컬럼과 정합(프로젝트명 … 원가(사업))
@@ -262,6 +275,7 @@ _EXPORT_COLUMNS = [
     ColumnSpec("remaining_age", "잔여차령", "number"),
     ColumnSpec("effective_reduction", "잔여반영감축량", "number"),
     ColumnSpec("expected_payout", "예상지급액", "money"),
+    ColumnSpec("expected_revenue", "예상수익", "money"),
     ColumnSpec("project_revenue", "매출(사업)", "money"),
     ColumnSpec("project_cost", "원가(사업)", "money"),
 ]
@@ -342,7 +356,8 @@ def export_asset_vehicles(
     # 행 상한 — 공용 가드(무음 잘라내기 금지, 초과 시 400)
     enforce_row_limit(total, max_rows=MAX_EXPORT_ROWS)
 
-    kpi, acct_by_pid = _build_kpi(db, q)
+    avg6 = trailing_avg_rate(db)
+    kpi, acct_by_pid = _build_kpi(db, q, avg6)
 
     # 전체 차량 행(목록과 동일 정렬, 페이지네이션 없음)
     projects = q.order_by(
@@ -366,6 +381,7 @@ def export_asset_vehicles(
                 "remaining_age": _num(v.remaining_age, 3),
                 "effective_reduction": _num(v.effective_reduction, 3),
                 "expected_payout": _num(v.expected_payout, 2),
+                "expected_revenue": expected_revenue(v.effective_reduction, avg6),
                 "project_revenue": acct.get("revenue"),
                 "project_cost": acct.get("cost"),
             }
@@ -376,6 +392,7 @@ def export_asset_vehicles(
         "total_reduction": kpi.total_reduction,
         "effective_reduction": kpi.effective_reduction_sum,
         "expected_payout": kpi.expected_payout_sum,
+        "expected_revenue": kpi.expected_revenue,
         "project_revenue": kpi.revenue,
         "project_cost": kpi.cost,
     }

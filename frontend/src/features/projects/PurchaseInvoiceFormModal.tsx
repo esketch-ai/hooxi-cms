@@ -97,6 +97,14 @@ export function PurchaseInvoiceFormModal({ open, onClose, projectId, invoice }: 
               className={inputCls}
             />
           </Field>
+          <Field label="입금일자">
+            <input
+              type="date"
+              value={form.payment_date ?? ''}
+              onChange={(e) => set('payment_date', e.target.value || null)}
+              className={inputCls}
+            />
+          </Field>
           <Field label="금액 (원)">
             <input
               type="number"

@@ -39,6 +39,8 @@ export interface FinanceLedgerRow {
   sold_ownership: number | null
   /** 재고평가(현재시세 기준) */
   inventory_valuation: number | null
+  /** 예상수익 = trunc(Σeff × 직전 6개월 평균시세), None 안전(B2) */
+  expected_revenue?: number | null
 }
 
 /** 총계 — 필터 기준 전 사업 합 */
@@ -54,6 +56,8 @@ export interface FinanceLedgerTotals {
   profit_rate: number | null
   held_qty: number | null
   inventory_valuation: number | null
+  /** 예상수익 총계(Σ 사업행, None 안전, B2) */
+  expected_revenue?: number | null
 }
 
 export interface FinanceLedgerListResponse {
@@ -62,6 +66,8 @@ export interface FinanceLedgerListResponse {
   totals: FinanceLedgerTotals
   /** 현재 매출단가 시세(원/tCO2) — 재고평가 기준. 미등록 시 null */
   current_market_rate: number | null
+  /** 직전 6개월 평균 매출단가 시세(예상수익 기준, 없으면 None, B2) */
+  market_rate_avg6?: number | null
 }
 
 export interface FinanceLedgerFilters {

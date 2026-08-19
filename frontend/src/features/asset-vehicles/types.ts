@@ -16,6 +16,8 @@ export interface AssetVehicleRow {
   remaining_age: number | null
   effective_reduction: number | null
   expected_payout: number | null
+  /** 예상수익 = trunc(잔여반영감축량 × 직전 6개월 평균시세), None 안전(B2) */
+  expected_revenue?: number | null
   project_status: string | null
   approval_status: string | null
   // 연차별 감축량(AV-4 상세 펼침에서 재사용)
@@ -43,12 +45,16 @@ export interface AssetVehicleKpi {
   revenue: number | null
   cost: number | null
   profit: number | null
+  /** 예상수익 KPI(전체 집계 grain, Σeff × 6개월평균시세, None 안전, B2) */
+  expected_revenue?: number | null
 }
 
 export interface AssetVehicleListResponse {
   items: AssetVehicleRow[]
   total: number
   kpi: AssetVehicleKpi
+  /** 직전 6개월 평균 매출단가 시세(예상수익 기준, 없으면 None, B2) */
+  market_rate_avg6?: number | null
 }
 
 export interface AssetVehicleFilters {

@@ -1183,6 +1183,17 @@ function MarginSummary({ project }: { project: Project }) {
             </span>
           )}
         </OverviewItem>
+        {/* 예상수익 (비영속 read-only, B2) — Σ잔여반영감축량 × 직전 6개월 평균시세. */}
+        <OverviewItem label="예상수익 (6개월 평균시세 기준)">
+          {project.expected_revenue != null ? (
+            money(project.expected_revenue)
+          ) : (
+            <span className="text-xs font-medium text-slatey">시세 입력 시 산출</span>
+          )}
+        </OverviewItem>
+        <OverviewItem label="직전 6개월 평균시세 (원/tCO2)">
+          {money(project.market_rate_avg6)}
+        </OverviewItem>
       </div>
       {!has && (
         <p className="mt-3 text-xs text-slatey">

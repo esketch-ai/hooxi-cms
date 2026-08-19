@@ -37,7 +37,11 @@ from services.excel_export import (
     export_filename,
     xlsx_response,
 )
-from services.market_rate import current_market_rate
+from services.market_rate import (
+    current_market_rate,
+    expected_revenue,
+    trailing_avg_rate,
+)
 
 router = APIRouter(prefix="/finance-ledger", tags=["finance-ledger"])
 
@@ -109,10 +113,16 @@ def _make_inv_val(rate_f):
     return _inv_val
 
 
-def _build_totals(accts, inv_val):
-    """필터 전체 사업 grain 단순 None-안전 합 총계 — 비율은 제외, 총이익률만 파생."""
+def _build_totals(accts, inv_val, avg6=None):
+    """필터 전체 사업 grain 단순 None-안전 합 총계 — 비율은 제외, 총이익률만 파생.
+
+    예상수익 총계는 사업행 leaf(Σeff × 6개월평균시세)의 None-안전 합 — 사업행==총계 정합.
+    """
     total_sale = _sum_opt(a["sale_recognized"] for a in accts)
     total_profit = _sum_opt(a["gross_profit"] for a in accts)
+    total_expected_revenue = _sum_opt(
+        expected_revenue(a.get("effective_reduction_sum"), avg6) for a in accts
+    )
     return schemas.FinanceLedgerTotals(
         product=_sum_opt(a["product"] for a in accts),
         expected_payment=_sum_opt(a["expected_payment"] for a in accts),
@@ -133,6 +143,7 @@ def _build_totals(accts, inv_val):
             else None
         ),
         inventory_valuation=_sum_opt(inv_val(a.get("held_qty")) for a in accts),
+        expected_revenue=total_expected_revenue,
     )
 
 
@@ -178,8 +189,11 @@ def list_finance_ledger(
     rate_f = float(rate) if rate is not None else None
     _inv_val = _make_inv_val(rate_f)
 
+    # 예상수익 — 직전 6개월 평균시세 1회 산출(단일 소스). 사업행 leaf에서 Σeff×avg6 절사.
+    avg6 = trailing_avg_rate(db)
+
     # 총계 — 필터 전체(페이지 전) 사업 grain 단순 None-안전 합. 비율은 제외, 총이익률만 파생.
-    totals = _build_totals(list(acct_by_pid.values()), _inv_val)
+    totals = _build_totals(list(acct_by_pid.values()), _inv_val, avg6)
 
     # items — page 슬라이스(정렬: 승인일 desc, project_id asc 타이브레이크)
     rows = (
@@ -198,6 +212,9 @@ def list_finance_ledger(
             inventory_valuation=_inv_val(
                 acct_by_pid.get(p.project_id, {}).get("held_qty")
             ),
+            expected_revenue=expected_revenue(
+                acct_by_pid.get(p.project_id, {}).get("effective_reduction_sum"), avg6
+            ),
             **acct_by_pid.get(p.project_id, {}),
         )
         for p in rows
@@ -207,6 +224,7 @@ def list_finance_ledger(
         total=total,
         totals=totals,
         current_market_rate=rate_f,
+        market_rate_avg6=float(avg6) if avg6 is not None else None,
     )
 
 
@@ -227,6 +245,7 @@ _EXPORT_COLUMNS = [
     ColumnSpec("profit_rate", "매출이익률", "percent"),
     ColumnSpec("held_qty", "후시보유량", "number"),
     ColumnSpec("inventory_valuation", "재고평가", "money"),
+    ColumnSpec("expected_revenue", "예상수익", "money"),
 ]
 
 
@@ -302,7 +321,9 @@ def export_finance_ledger(
     rate_f = float(rate) if rate is not None else None
     _inv_val = _make_inv_val(rate_f)
 
-    totals = _build_totals(list(acct_by_pid.values()), _inv_val)
+    avg6 = trailing_avg_rate(db)
+
+    totals = _build_totals(list(acct_by_pid.values()), _inv_val, avg6)
 
     # 전체 사업 행(목록과 동일 정렬, 페이지네이션 없음)
     projects = q.order_by(
@@ -316,6 +337,9 @@ def export_finance_ledger(
             "project_name": p.project_name,
             "approval_status": p.approval_status,
             "inventory_valuation": _inv_val(acct.get("held_qty")),
+            "expected_revenue": expected_revenue(
+                acct.get("effective_reduction_sum"), avg6
+            ),
         }
         row.update(acct)
         rows.append(row)

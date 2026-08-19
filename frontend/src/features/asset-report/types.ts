@@ -9,6 +9,8 @@ export interface SettlementProjectBreakdown {
   total_reduction: number | null
   effective_reduction: number | null
   expected_payout: number | null
+  /** 예상수익 = trunc(Σeff × 직전 6개월 평균시세), None 안전(B2) */
+  expected_revenue?: number | null
 }
 
 /** 정산 요약 1행 — 고객사(운수사) 단위. 미매칭 고객은 client_id=null */
@@ -24,6 +26,8 @@ export interface SettlementSummaryRow {
   effective_reduction: number | null
   /** 예상지급액(정산예정) */
   expected_payout: number | null
+  /** 예상수익 롤업(Σ 셀, None 안전, B2) */
+  expected_revenue?: number | null
   /** 행 펼침 드릴다운 — 이 운수사가 참여한 사업 목록 */
   projects: SettlementProjectBreakdown[]
 }
@@ -35,12 +39,16 @@ export interface SettlementSummaryTotals {
   total_reduction: number | null
   effective_reduction: number | null
   expected_payout: number | null
+  /** 예상수익 총계(Σ 셀, None 안전, B2) */
+  expected_revenue?: number | null
 }
 
 export interface SettlementSummaryResponse {
   items: SettlementSummaryRow[]
   total: number
   totals: SettlementSummaryTotals
+  /** 직전 6개월 평균 매출단가 시세(예상수익 기준, 없으면 None, B2) */
+  market_rate_avg6?: number | null
 }
 
 export interface SettlementSummaryFilters {

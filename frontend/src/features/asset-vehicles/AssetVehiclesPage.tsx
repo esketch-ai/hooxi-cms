@@ -24,8 +24,13 @@ import type { AssetVehicleRow } from './types'
 
 const PAGE_SIZE = 20
 
-/** 재무 OFF 시 숨길 금액 컬럼 키 — 예상지급액·매출(사업)·원가(사업) */
-export const FINANCE_COLUMN_KEYS = ['expected_payout', 'project_revenue', 'project_cost']
+/** 재무 OFF 시 숨길 금액 컬럼 키 — 예상지급액·예상수익·매출(사업)·원가(사업) */
+export const FINANCE_COLUMN_KEYS = [
+  'expected_payout',
+  'expected_revenue',
+  'project_revenue',
+  'project_cost',
+]
 
 /**
  * 재무 플래그에 따른 표시 컬럼 필터(순수). ON이면 원본 그대로, OFF면 금액 컬럼 제거.
@@ -115,6 +120,7 @@ export function AssetVehiclesPage() {
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const kpi = data?.kpi
+  const marketRateAvg6 = data?.market_rate_avg6 ?? null // 직전 6개월 평균시세(예상수익 기준, B2)
 
   // 현재 필터 그대로 서버에 전달(page·page_size는 서버가 무시하고 전체행 반환)
   async function handleExport() {
@@ -227,6 +233,19 @@ export function AssetVehiclesPage() {
         ),
     },
     {
+      key: 'expected_revenue',
+      header: (
+        <span title="기준: 직전 6개월 평균시세">예상수익</span>
+      ),
+      className: 'text-right',
+      render: (v) =>
+        v.expected_revenue != null ? (
+          <SensitiveData type="money" value={fmtMoney(v.expected_revenue)} />
+        ) : (
+          <span className="text-smoke">—</span>
+        ),
+    },
+    {
       key: 'project_revenue',
       header: '매출(사업)',
       className: 'text-right',
@@ -314,6 +333,17 @@ export function AssetVehiclesPage() {
             value={
               <SensitiveData type="money" value={fmtMoney(kpi?.expected_payout_sum ?? null)} />
             }
+            icon={<Coins size={18} />}
+            variant="dark"
+          />
+        )}
+        {FINANCE_FEATURES && (
+          <KpiCard
+            title="예상수익 합계"
+            value={
+              <SensitiveData type="money" value={fmtMoney(kpi?.expected_revenue ?? null)} />
+            }
+            sub={`기준: 직전 6개월 평균시세 ${marketRateAvg6 != null ? `${marketRateAvg6.toLocaleString('ko-KR')} 원/tCO₂` : '-'}`}
             icon={<Coins size={18} />}
             variant="dark"
           />
