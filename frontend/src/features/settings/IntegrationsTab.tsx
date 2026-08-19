@@ -6,6 +6,7 @@ import {
   CheckCircle,
   CircleNotch,
   Copy,
+  FolderPlus,
   LinkSimple,
   PlugsConnected,
   Sparkle,
@@ -20,8 +21,10 @@ import {
   useDropboxExchange,
   useIntegrations,
   useKakaoWebhookUrl,
+  useProvisionDropboxFolders,
   useSaveIntegration,
   useTestIntegration,
+  type DropboxProvisionResult,
   type Integration,
   type IntegrationField,
   type IntegrationTestResult,
@@ -284,12 +287,15 @@ function IntegrationCard({ integration }: { integration: Integration }) {
         )}
       </div>
 
-      {/* Dropbox: OAuth 승인 마법사 */}
+      {/* Dropbox: OAuth 승인 마법사 + 폴더 일괄 생성(백필) */}
       {integration.name === 'dropbox' && (
-        <DropboxOAuthWizard
-          integration={integration}
-          onConnected={runTest}
-        />
+        <>
+          <DropboxOAuthWizard
+            integration={integration}
+            onConnected={runTest}
+          />
+          <DropboxProvisionSection integration={integration} />
+        </>
       )}
 
       {/* 연결 테스트 결과 */}
@@ -597,6 +603,90 @@ function DropboxOAuthWizard({
           </span>
         </li>
       </ol>
+    </div>
+  )
+}
+
+// ── Dropbox 폴더 일괄 생성(백필) ─────────────────────────────────────
+// dropbox_folder가 없는 고객사에 현재 루트로 Dropbox 폴더를 멱등 생성한다.
+function DropboxProvisionSection({ integration }: { integration: Integration }) {
+  const { showToast } = useToast()
+  const provision = useProvisionDropboxFolders()
+  const [result, setResult] = useState<DropboxProvisionResult | null>(null)
+
+  // 연동 완료(refresh token configured) 판정 — DropboxOAuthWizard와 동일 로직
+  const connected = !!integration.fields.find((f) => f.key === 'DROPBOX_REFRESH_TOKEN')?.configured
+
+  const run = async () => {
+    if (!window.confirm('폴더가 없는 전체 고객사에 Dropbox 폴더를 생성합니다. 진행할까요?')) return
+    setResult(null)
+    try {
+      const data = await provision.mutateAsync()
+      setResult(data)
+      if (data.total === 0) {
+        showToast('폴더가 필요한 고객사가 없습니다 — 이미 모두 생성되어 있습니다.', 'info')
+      } else if (data.failed > 0) {
+        // 전건·일부 실패는 200이라도 성공으로 오인되지 않게 danger로 표기
+        showToast(
+          `폴더 일괄 생성 — 총 ${data.total}건 중 ${data.provisioned}건 생성 · ${data.failed}건 실패`,
+          'danger',
+        )
+      } else {
+        showToast(
+          `폴더 일괄 생성 완료 — 총 ${data.total}건 중 ${data.provisioned}건 생성`,
+          'success',
+        )
+      }
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail
+      showToast(detail ?? '폴더 일괄 생성에 실패했습니다.', 'danger')
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-hairline bg-graphite-2 p-3.5">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-bone">
+        <FolderPlus size={14} />
+        폴더 일괄 생성
+      </p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-slatey">
+        폴더가 없는 고객사에 Dropbox 전용 폴더를 일괄 생성합니다. 이미 있는 폴더는 건너뜁니다(멱등).
+      </p>
+      {result && (
+        <div
+          className={`mt-2.5 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${
+            result.failed > 0
+              ? 'border-rose-400/25 bg-rose-500/15 text-rose-700 dark:text-rose-300'
+              : 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+          }`}
+        >
+          {result.failed > 0 ? (
+            <XCircle size={16} className="mt-0.5 shrink-0" />
+          ) : (
+            <CheckCircle size={16} className="mt-0.5 shrink-0" />
+          )}
+          <span className="break-all">
+            총 {result.total}건 중 {result.provisioned}건 생성 · {result.failed}건 실패
+          </span>
+        </div>
+      )}
+      <div className="mt-2.5">
+        <button
+          type="button"
+          onClick={run}
+          disabled={!connected || provision.isPending}
+          title={connected ? undefined : '먼저 Dropbox 연동을 완료하세요'}
+          className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+        >
+          {provision.isPending ? (
+            <CircleNotch size={14} className="animate-spin" />
+          ) : (
+            <FolderPlus size={14} />
+          )}
+          폴더 일괄 생성
+        </button>
+      </div>
     </div>
   )
 }

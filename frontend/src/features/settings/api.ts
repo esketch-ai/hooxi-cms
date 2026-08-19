@@ -213,6 +213,28 @@ export function useDropboxExchange() {
   })
 }
 
+/** Dropbox 폴더 일괄 생성(백필) 결과 — schemas.DropboxProvisionResponse */
+export interface DropboxProvisionResult {
+  total: number
+  provisioned: number
+  failed: number
+}
+
+/**
+ * dropbox_folder가 NULL인 전 고객사에 현재 루트로 Dropbox 폴더 일괄 생성(멱등).
+ * POST /batch/provision-dropbox-folders — Dropbox 미설정 시 503.
+ */
+export function useProvisionDropboxFolders() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<DropboxProvisionResult>(
+        '/batch/provision-dropbox-folders',
+      )
+      return data
+    },
+  })
+}
+
 /** 오픈빌더 폴백 블록에 등록할 웹훅 URL — 엔드포인트 미배포(404) 시 비노출 */
 export function useKakaoWebhookUrl(enabled: boolean) {
   return useQuery({
