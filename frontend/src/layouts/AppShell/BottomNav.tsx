@@ -8,6 +8,8 @@ import {
   SquaresFour,
 } from '@phosphor-icons/react'
 import { useChatBadge } from '../../lib/api/queries'
+import { useAuth } from '../../app/AuthProvider'
+import { isMenuAllowed } from '../../lib/menuAccess'
 import type { NavItem } from './nav'
 
 const TABS: Pick<NavItem, 'label' | 'path' | 'icon' | 'badgeKey'>[] = [
@@ -20,14 +22,17 @@ const TABS: Pick<NavItem, 'label' | 'path' | 'icon' | 'badgeKey'>[] = [
 
 export function BottomNav() {
   const { data: chatBadge } = useChatBadge()
+  const { user } = useAuth()
   const waiting = chatBadge?.waiting ?? 0
+  // 그룹 메뉴 접근(G4) — enforce에서만 필터(off/monitor 불변)
+  const tabs = TABS.filter((tab) => isMenuAllowed(user, tab.path))
 
   return (
     <nav
       className="fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 flex overflow-hidden rounded-[24px] border border-hairline bg-graphite/90 backdrop-blur lg:hidden"
       aria-label="하단 탭"
     >
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.path}
           to={tab.path}

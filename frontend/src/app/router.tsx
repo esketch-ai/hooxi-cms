@@ -3,6 +3,8 @@ import { CircleNotch } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { AppShell } from '../layouts/AppShell'
 import { isObserverAllowed, OBSERVER_HOME } from '../layouts/AppShell/observerAccess'
+import { ALL_MENU_PATHS } from '../layouts/AppShell/nav'
+import { groupHome, isPathAllowedForUser } from '../lib/menuAccess'
 import { FINANCE_FEATURES, filterFinanceRoutes, includePortalRoutes } from '../lib/featureFlags'
 import { PortalAuthProvider } from '../features/portal/PortalAuthProvider'
 import { RequirePortal } from '../features/portal/PortalShell'
@@ -61,14 +63,21 @@ function RequireAuth() {
     return <Navigate to={OBSERVER_HOME} replace />
   }
 
+  // 그룹 메뉴 접근(G4) — enforce 모드에서 허용 메뉴 밖 경로는 그룹 홈으로(off/monitor 불변).
+  // 진짜 차단은 백엔드(access_control) — 여기는 UX 리다이렉트다.
+  if (!isPathAllowedForUser(user, location.pathname, ALL_MENU_PATHS)) {
+    return <Navigate to={groupHome(user)} replace />
+  }
+
   // AppShell 내부의 <Outlet />이 하위 라우트를 렌더링
   return <AppShell />
 }
 
-/** 역할별 홈 — OBSERVER는 /observe, 그 외 내부역할은 종전대로 /dashboard */
+/** 역할별 홈 — OBSERVER는 /observe, enforce면 그룹 home_path, 그 외는 /dashboard */
 function RoleHome() {
   const { user } = useAuth()
-  return <Navigate to={user?.role === 'OBSERVER' ? OBSERVER_HOME : '/dashboard'} replace />
+  if (user?.role === 'OBSERVER') return <Navigate to={OBSERVER_HOME} replace />
+  return <Navigate to={groupHome(user)} replace />
 }
 
 /** 외부 포털(Phase 4) 서브트리 — 내부 AuthProvider와 분리된 PortalAuthProvider로만 감싼다 */

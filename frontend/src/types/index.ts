@@ -5,6 +5,15 @@
 export type UserRole = 'ADMIN' | 'MANAGER' | 'STAFF' | 'OBSERVER' | 'PARTNER' | 'INVESTOR'
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE'
 
+export type AccessMode = 'off' | 'monitor' | 'enforce'
+
+export interface AccessGroupBrief {
+  group_id: string
+  name: string
+  home_path?: string | null
+  implicit?: boolean // 명시 배정 없이 기본(전사) 그룹 암묵 상속
+}
+
 export interface User {
   user_id: string
   email: string
@@ -17,6 +26,28 @@ export interface User {
   last_login_at?: string | null
   created_at?: string
   updated_at?: string
+  // 접근 그룹(G1/G4) — /users/me에서만 채워짐(목록 API엔 없음)
+  groups?: AccessGroupBrief[]
+  allowed_menus?: string[]
+  home_path?: string
+  access_mode?: AccessMode
+}
+
+// 접근 그룹 관리(G3 — 설정 화면)
+export interface AccessGroupAdmin {
+  group_id: string
+  name: string
+  home_path?: string | null
+  is_default: boolean
+  memo?: string | null
+  menus: string[]
+  member_ids: string[]
+}
+
+export interface AccessGroupMeta {
+  menu_keys: string[]
+  mode: AccessMode
+  modes: AccessMode[]
 }
 
 export interface TokenPair {

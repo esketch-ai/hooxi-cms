@@ -133,6 +133,9 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
+/** 전체 메뉴 경로(정본) — 그룹 접근 가드(G4)의 판정 대상 목록 */
+export const ALL_MENU_PATHS: string[] = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.path))
+
 /**
  * 재무 기능 OFF 시 은닉 경로 항목을 제거한 nav 그룹(항목이 모두 사라진 그룹도 제거).
  * financeEnabled=true(ON)면 원본 NAV_GROUPS를 그대로 반환(회귀 0).

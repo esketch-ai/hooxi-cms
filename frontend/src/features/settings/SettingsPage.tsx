@@ -9,6 +9,7 @@ import {
   UserCircle,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { AccessGroupsTab } from './AccessGroupsTab'
 import { DataTable, type Column } from '../../components/DataTable'
 import { EmptyState } from '../../components/EmptyState'
 import { PermissionNotice } from '../../components/PermissionNotice'
@@ -27,7 +28,7 @@ import { IntegrationsTab } from './IntegrationsTab'
 import { CodesTab } from './CodesTab'
 import { BaseParamsRatesTab } from './BaseParamsRatesTab'
 
-type TabKey = 'accounts' | 'codes' | 'params' | 'system' | 'integrations' | 'backup' | 'audit'
+type TabKey = 'accounts' | 'access' | 'codes' | 'params' | 'system' | 'integrations' | 'backup' | 'audit'
 
 const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
   PENDING: { label: '승인 대기', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
@@ -52,6 +53,7 @@ export function SettingsPage() {
         {(
           [
             { key: 'accounts', label: '계정 관리', adminOnly: false },
+            { key: 'access', label: '접근 그룹', adminOnly: true },
             { key: 'codes', label: '공통 코드 관리', adminOnly: true },
             { key: 'params', label: '기준값·매출단가', adminOnly: true },
             { key: 'system', label: '시스템 설정', adminOnly: true },
@@ -94,6 +96,8 @@ export function SettingsPage() {
             description="계정 관리는 관리자(ADMIN)·팀장(MANAGER)만 조회할 수 있습니다."
           />
         ))}
+      {tab === 'access' &&
+        (isAdmin ? <AccessGroupsTab /> : <PermissionNotice feature="접근 그룹" />)}
       {tab === 'codes' &&
         (isAdmin ? <CodesTab /> : <PermissionNotice feature="공통 코드 관리" />)}
       {tab === 'params' &&

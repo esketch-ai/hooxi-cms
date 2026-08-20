@@ -6,6 +6,7 @@ import { roleLabel } from '../../lib/roles'
 import { FINANCE_FEATURES } from '../../lib/featureFlags'
 import { visibleNavGroups } from './nav'
 import { isObserverAllowed } from './observerAccess'
+import { isMenuAllowed } from '../../lib/menuAccess'
 
 interface SidebarProps {
   /** 모바일 오버레이 열림 상태 */
@@ -29,7 +30,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       items: group.items.filter(
         (item) =>
           (!item.roles || (user && item.roles.includes(user.role))) &&
-          (!isObserver || isObserverAllowed(item.path)),
+          (!isObserver || isObserverAllowed(item.path)) &&
+          // 그룹 메뉴 접근(G4) — enforce 모드에서만 허용 메뉴로 필터(off/monitor는 불변)
+          isMenuAllowed(user, item.path),
       ),
     }))
     .filter((group) => group.items.length > 0)
