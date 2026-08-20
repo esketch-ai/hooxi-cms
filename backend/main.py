@@ -33,6 +33,7 @@ from models import (
     get_db,
     init_db,
 )
+from routers import access_groups as access_groups_router
 from routers import asset_report as asset_report_router
 from routers import asset_vehicles as asset_vehicles_router
 from routers import assets as assets_router
@@ -370,6 +371,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError):
 API_V1_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_V1_PREFIX)
 app.include_router(users_router.router, prefix=API_V1_PREFIX)
+app.include_router(access_groups_router.router, prefix=API_V1_PREFIX)
 app.include_router(clients_router.router, prefix=API_V1_PREFIX)
 app.include_router(client_vehicles_router.router, prefix=API_V1_PREFIX)
 app.include_router(codes_router.router, prefix=API_V1_PREFIX)

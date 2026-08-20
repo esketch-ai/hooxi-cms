@@ -122,6 +122,7 @@ class UserMeOut(UserOut):
     groups: List[AccessGroupBrief] = []
     allowed_menus: List[str] = []  # 소속 그룹 허용 메뉴 합집합(ADMIN은 전체)
     home_path: str = "/dashboard"  # 로그인 자동 랜딩(우선순위 최상 그룹의 home)
+    access_mode: str = "off"  # off/monitor/enforce — 프론트는 enforce일 때만 메뉴 필터·가드
 
 
 class UserApproveRequest(BaseModel):
@@ -2812,3 +2813,35 @@ class FleetClientStatusOut(BaseModel):
     client_id: str
     trend: List[FleetStatusTrendItem] = []
     mgmt: Optional[FleetMgmtOut] = None
+
+
+# ── 접근 그룹 관리(G3) ──────────────────────────────────────────────────
+class AccessGroupIn(BaseModel):
+    name: str
+    home_path: Optional[str] = None
+    memo: Optional[str] = None
+    menus: List[str] = []
+
+
+class AccessGroupOut(BaseModel):
+    group_id: str
+    name: str
+    home_path: Optional[str] = None
+    is_default: bool = False
+    memo: Optional[str] = None
+    menus: List[str] = []
+    member_ids: List[str] = []
+
+
+class AccessGroupMeta(BaseModel):
+    menu_keys: List[str] = []
+    mode: str = "off"
+    modes: List[str] = []
+
+
+class AccessModeIn(BaseModel):
+    mode: str
+
+
+class UserGroupsIn(BaseModel):
+    group_ids: List[str] = []
