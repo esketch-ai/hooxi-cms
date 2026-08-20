@@ -49,8 +49,8 @@ def test_transport_standard_full_columns_and_upsert(client, staff_headers):
             models.Client.company_name.in_(["표준운수A", "표준운수B"])
         ).delete(synchronize_session=False)
         db.commit()
-        # 기존(사업자번호 없음)
-        db.add(models.Client(client_type="TRANSPORT", company_name="표준운수A", region="서울"))
+        # 기존(사업자번호 없음) — 지역이 일치해야 (지역+회사명) 보조 매칭으로 보강됨
+        db.add(models.Client(client_type="TRANSPORT", company_name="표준운수A", region="강원"))
         db.commit()
 
         data = _xlsx([
@@ -67,8 +67,8 @@ def test_transport_standard_full_columns_and_upsert(client, staff_headers):
 
         db.expire_all()
         a = db.query(models.Client).filter_by(company_name="표준운수A").first()
-        assert a.biz_reg_no == "221-81-00682"  # 빈 칸 보강
-        assert a.region == "서울"  # 기존 값 유지(덮어쓰기 없음)
+        assert a.biz_reg_no == "221-81-00682"  # 빈 칸 보강(사업자번호 → 정식 승격)
+        assert a.region == "강원"  # 기존 값 유지(덮어쓰기 없음, 지역 동일)
         assert str(a.license_date) == "1970-10-01" and a.bus_city == 73  # 비어있던 칸만 채움
         b = db.query(models.Client).filter_by(company_name="표준운수B").first()
         assert b is not None and b.biz_reg_no == "111-11-11111" and b.bus_rural == 5
@@ -108,6 +108,48 @@ def test_upsert_dedup_by_biz_reg_no(client, staff_headers):
     finally:
         db.query(models.Client).filter(
             models.Client.company_name.in_(["가나여객", "가나여객자동차"])
+        ).delete(synchronize_session=False)
+        db.commit()
+        db.close()
+
+
+def test_same_name_different_region_not_merged(client, staff_headers):
+    """동명이지역 회사는 별개 법인 — (지역+회사명) 키로 병합되지 않고 각각 생성/보강된다.
+
+    회사명만으로 매칭하던 시절엔 다른 지역의 동명 회사가 앞 건에 병합돼 고유 사업자번호가
+    누락됐다(예: 인천 동화운수 vs 전남 동화운수). 지역을 키에 포함해 재발 방지.
+    """
+    api = "/api/v1/imports/transport/commit"
+    db = models.SessionLocal()
+    try:
+        db.query(models.Client).filter(
+            models.Client.company_name == "동화운수"
+        ).delete(synchronize_session=False)
+        db.commit()
+        # 기존: 인천 동화운수(사업자번호 없음)
+        db.add(models.Client(client_type="TRANSPORT", company_name="동화운수", region="인천"))
+        db.commit()
+
+        data = _xlsx([
+            # 인천 건 = 기존과 (지역+명) 일치 → 보강(사업자번호 채움)
+            ["동화운수", "122-81-12237", None, "인천", "김", "032-1-1", None, None, None, 30, 0, 0],
+            # 전남 건 = 동명이지만 지역 상이 → 신규(병합 금지, 고유 사업자번호 보존)
+            ["동화운수", "410-81-17518", None, "전남", "이", "061-1-1", None, None, None, 20, 0, 0],
+        ])
+        r = client.post(api, headers=staff_headers,
+                        files={"file": ("dh.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["updated"] == 1 and body["created"] == 1  # 인천 보강 + 전남 신규
+
+        rows = db.query(models.Client).filter_by(company_name="동화운수").all()
+        assert len(rows) == 2  # 두 지역 각각 보존(병합 안 됨)
+        by_region = {c.region: c for c in rows}
+        assert by_region["인천"].biz_reg_no == "122-81-12237"
+        assert by_region["전남"].biz_reg_no == "410-81-17518"
+    finally:
+        db.query(models.Client).filter(
+            models.Client.company_name == "동화운수"
         ).delete(synchronize_session=False)
         db.commit()
         db.close()

@@ -124,33 +124,38 @@ async def commit_import(
     updated_count = 0
     # 운수사 표준/정보 upsert — 중복 제거 키 = 사업자번호(정규화) 우선, 없으면 회사명.
     # 사업자번호가 있으면 그 기준으로 기존 운수사를 찾아 보강(회사명 표기가 달라도 동일 법인으로 병합),
-    # 없으면 회사명(정제)으로 매칭. 파일 내 중복도 같은 키로 하나에 병합한다.
+    # 없으면 (지역+정제 회사명)으로 매칭. 파일 내 중복도 같은 키로 하나에 병합한다.
+    # ⚠️ 회사명만으로 매칭하면 다른 지역의 동명 회사(예: 인천 동화운수 vs 전남 동화운수)가
+    #    잘못 병합돼 고유 법인이 누락된다 → 지역을 매칭 키에 포함(사용자 결정: 키=지역+회사명+사업자번호).
     upsert = entity in ("transport_info", "transport")
-    # 기존 운수사 인덱스를 1회 로드(사업자번호 정규화·회사명) — 행마다 전체스캔 방지.
+
+    def _rn_key(region, name):
+        # (지역 정규화, 정제 회사명) — 표기 흔들림 흡수. _tf_company_clean은 정제명에 멱등.
+        return ((region or "").strip(), excel_import._tf_company_clean((name or "").strip()))
+
+    # 기존 운수사 인덱스를 1회 로드(사업자번호 정규화·지역+회사명) — 행마다 전체스캔 방지.
     by_biz: dict = {}
-    by_name: dict = {}
+    by_rn: dict = {}
     if upsert:
         for c in db.query(Client).filter(Client.client_type == "TRANSPORT").all():
             nb = common.normalize_biz_no(c.biz_reg_no)
             if nb:
                 by_biz.setdefault(nb, c)
-            by_name.setdefault((c.company_name or "").strip(), c)
+            by_rn.setdefault(_rn_key(c.region, c.company_name), c)
 
     def _find_existing(p):
+        # 1) 사업자번호 우선 — 동일 법인(지역·표기 달라도 병합)
         norm = common.normalize_biz_no(getattr(p, "biz_reg_no", None))
         if norm and norm in by_biz:
             return by_biz[norm]
-        name = (p.company_name or "").strip()
-        if norm:
-            # 사업자번호는 있으나 아직 미매칭 — 이름으로도 확인(이름 매칭 후 번호 보강 케이스)
-            return by_name.get(name)
-        return by_name.get(name)
+        # 2) 보조 — (지역+정제 회사명). 지역이 다르면 동명이라도 별개 법인으로 취급(신규 생성)
+        return by_rn.get(_rn_key(getattr(p, "region", None), p.company_name))
 
     def _remember(p, obj):
         norm = common.normalize_biz_no(getattr(p, "biz_reg_no", None))
         if norm:
             by_biz[norm] = obj
-        by_name[(p.company_name or "").strip()] = obj
+        by_rn.setdefault(_rn_key(obj.region, obj.company_name), obj)
 
     for parsed in valid:
         p = parsed.payload
