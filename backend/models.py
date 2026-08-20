@@ -399,6 +399,53 @@ class PurchaseInvoice(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class TaxInvoice(Base):
+    """세금계산서 원장 — 홈택스 보안메일 HTML 자동반영으로 적재하는 후시 전체 세금계산서.
+
+    매입(일반 매입처 포함)·매출을 방향 무관하게 담는 버도 원장(프로젝트 매입/매출과 별개
+    상위 원천). 국세청 승인번호(IssueID)로 멱등/중복방지(unique). 상대(자사 아닌 쪽)가 관리
+    마스터에 있으면 운수사/투자사로 링크(nullable), 프로젝트 연결도 nullable(추후).
+    금액은 공급가액(부가세 제외)이 원가/매출 접점. 수정/취소분은 음수 금액으로 적재된다.
+    """
+
+    __tablename__ = "tb_tax_invoice"
+
+    tax_invoice_id = Column(String(50), primary_key=True, default=gen_uuid)
+    approval_no = Column(String(30))  # 국세청 승인번호(IssueID) — 멱등/중복방지 키
+    direction = Column(String(10))  # 매입/매출/미상
+    invoicer_reg_no = Column(String(20))  # 공급자 사업자번호
+    invoicee_reg_no = Column(String(20))  # 공급받는자 사업자번호
+    invoicer_name = Column(String(100))  # 공급자 상호
+    invoicee_name = Column(String(100))  # 공급받는자 상호
+    counterpart_reg_no = Column(String(20))  # 자사 아닌 상대 사업자번호
+    counterpart_name = Column(String(100))
+    issue_date = Column(Date)  # 작성일자
+    supply_amount = Column(Numeric(15, 2))  # 공급가액(부가세 제외)
+    tax_amount = Column(Numeric(15, 2))  # 세액
+    total_amount = Column(Numeric(15, 2))  # 합계
+    type_code = Column(String(10))  # 국세청 TypeCode(0101 등)
+    purpose_code = Column(String(10))  # PurposeCode(청구/영수/수정 등)
+    # 매칭·연결(nullable) — 마스터 삭제 시 SET NULL로 자동 해제
+    matched_client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )
+    matched_buyer_id = Column(
+        String(50), ForeignKey("tb_buyer.buyer_id", ondelete="SET NULL")
+    )
+    project_id = Column(
+        String(50), ForeignKey("tb_project.project_id", ondelete="SET NULL")
+    )
+    source = Column(String(20), default="HTML_IMPORT")  # 적재 출처
+    memo = Column(String(255))
+    created_by = Column(String(50))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("approval_no", name="uq_tax_invoice_approval_no"),
+    )
+
+
 class MarketRate(Base):
     """매출단가 시세 마스터(effective-dated) — 탄소배출권 톤당 단가의 시점별 이력.
 

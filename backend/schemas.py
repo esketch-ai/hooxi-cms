@@ -1371,6 +1371,39 @@ class PurchaseInvoiceListResponse(BaseModel):
     total_amount: Optional[float] = None  # Σ amount(제품=총매입) — 없으면 None
 
 
+# 세금계산서 원장(홈택스 HTML 자동반영) — 후시 전체 매입/매출 -----------------------------
+class TaxInvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    tax_invoice_id: str
+    approval_no: Optional[str] = None
+    direction: Optional[str] = None  # 매입/매출/미상
+    invoicer_reg_no: Optional[str] = None
+    invoicee_reg_no: Optional[str] = None
+    invoicer_name: Optional[str] = None
+    invoicee_name: Optional[str] = None
+    counterpart_reg_no: Optional[str] = None
+    counterpart_name: Optional[str] = None
+    issue_date: Optional[date] = None
+    supply_amount: Optional[float] = None
+    tax_amount: Optional[float] = None
+    total_amount: Optional[float] = None
+    type_code: Optional[str] = None
+    purpose_code: Optional[str] = None
+    matched_client_id: Optional[str] = None
+    matched_buyer_id: Optional[str] = None
+    project_id: Optional[str] = None
+    source: Optional[str] = None
+    memo: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class TaxInvoiceListResponse(BaseModel):
+    items: List[TaxInvoiceOut]
+    total: int
+
+
 # 운수사 보유 차량(fleet) 마스터 — 부록 M. BUS_Info_list.xlsx 컬럼 반영 --------------
 class ClientVehicleIn(BlankFKToNoneModel):
     """차량 마스터 등록 — vehicle_no 필수(전국 유일). operator_name은 업체명 원문(운수사 매칭)."""
