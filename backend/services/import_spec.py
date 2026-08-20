@@ -53,6 +53,7 @@ class ImportSpec:
     schema_cls: Type[BaseModel]    # 행 검증을 위임할 대상 스키마
     columns: Tuple[ImportColumn, ...]
     filename: str                  # 양식 다운로드 파일명 (한글)
+    header_row: int = 1            # 헤더가 위치한 행(1-base) — 제목 행이 앞에 있는 실무 양식용
 
 
 # 인증 방식 — tb_code 카테고리가 아니라 AssetCreate 패턴(^(ID_PW|API_KEY|NONE)$)
@@ -121,6 +122,25 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("bus_city", "시내", example="73"),
             ImportColumn("bus_rural", "농어촌", example="0"),
             ImportColumn("bus_intercity", "시외", example="0"),
+        ),
+    ),
+    # ── 운수사 정보(정본) — 사업자/법인등록번호 포함, 회사명 매칭 upsert ──────
+    #    회사명이 기존 운수사와 일치하면 사업자번호 등 보강(update), 없으면 신규 생성.
+    "transport_info": ImportSpec(
+        entity="transport_info",
+        label="운수사 정보(정본)",
+        schema_cls=schemas.TransportRosterCreate,
+        filename="운수사_정보_일괄등록_양식.xlsx",
+        header_row=2,  # 1행은 '운수회사 목록' 제목, 2행이 컬럼 헤더
+        columns=(
+            ImportColumn("company_name", "운수회사명", required=True,
+                         transform="company_clean", example="강원고속"),
+            ImportColumn("region", "조합", transform="union_region", example="강원버스조합"),
+            ImportColumn("ceo_name", "대표자명", example="이동진"),
+            ImportColumn("corp_reg_no", "법인등록번호", example="140111-0000105"),
+            ImportColumn("biz_reg_no", "사업자등록번호", example="221-81-00682"),
+            ImportColumn("ceo_contact_phone", "전화번호", transform="phone_kr", example="033-254-8272"),
+            ImportColumn("fax", "팩스번호", transform="phone_kr", example="033-253-2304"),
         ),
     ),
     # ── 자산 (SCR-04 단건 등록과 동일 효과 — 인증 비밀값 없이 생성) ──────

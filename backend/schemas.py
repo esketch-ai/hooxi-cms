@@ -300,6 +300,7 @@ class ClientCreate(BaseModel):
     lng: Optional[float] = None
     # 운수사 명부 추가 정보(선택)
     fax: Optional[str] = Field(default=None, max_length=20)
+    corp_reg_no: Optional[str] = Field(default=None, max_length=20)  # 법인등록번호
     license_date: Optional[date] = None  # 면허일자
     bus_city: Optional[int] = None
     bus_rural: Optional[int] = None
@@ -416,6 +417,7 @@ class ClientOut(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     fax: Optional[str] = None
+    corp_reg_no: Optional[str] = None
     license_date: Optional[date] = None
     bus_city: Optional[int] = None
     bus_rural: Optional[int] = None
@@ -2650,4 +2652,5 @@ class ImportCommitOut(BaseModel):
     entity: str
     created: int
     skipped: int
+    updated: int = 0  # upsert(운수사 정보 정본)에서 기존 건 갱신 수
     errors: List[ImportRowResult] = []

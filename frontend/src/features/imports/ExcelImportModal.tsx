@@ -371,7 +371,12 @@ export function ExcelImportModal({ entity, open, onClose, onDone }: ExcelImportM
             <CheckCircle size={24} weight="fill" className="shrink-0 text-emerald-400" />
             <div>
               <p className="text-sm font-semibold text-bone">
-                {result.created}건 등록 완료
+                {result.created}건 등록
+                {(result.updated ?? 0) > 0 && (
+                  <span className="ml-2 font-medium text-sky-700 dark:text-sky-300">
+                    · {result.updated}건 갱신
+                  </span>
+                )}
                 {result.skipped > 0 && (
                   <span className="ml-2 font-medium text-amber-700 dark:text-amber-300">
                     · {result.skipped}건 건너뜀

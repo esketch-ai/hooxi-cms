@@ -296,20 +296,33 @@ class _Resolvers:
         return candidates[0]
 
 
-# 회사명에서 제거할 법인 표기(접두·접미) — (주)·㈜·주)·주식회사·(유)·유한회사
+# 회사명에서 제거할 법인 표기(접두·접미). 괄호 표기((주)(유)(합)(합자)(자)(자동차))는
+# 괄호가 있을 때만 제거하고, 괄호 없는 '자동차'·'자'는 상호의 일부이므로 보존한다.
+# '(자'·'(합'처럼 닫는 괄호가 잘린 표기도 흡수한다.
+_COMPANY_AFFIX = (
+    r"(?:주식회사|유한회사|합자회사|㈜|주\)"
+    r"|\(\s*(?:주|유|합|합자|자|자동차)\s*\)?)"
+)
 _COMPANY_AFFIX_RE = re.compile(
-    r"^\s*(?:\(주\)|㈜|주\)|주식회사|\(유\)|유한회사)\s*|\s*(?:\(주\)|㈜|주\)|주식회사|\(유\)|유한회사)\s*$"
+    r"^\s*" + _COMPANY_AFFIX + r"\s*|\s*" + _COMPANY_AFFIX + r"\s*$"
 )
 
 
 def _tf_company_clean(raw: str) -> str:
-    """회사명 법인표기 접두·접미 제거(양끝 반복). 예: '(주)남성버스'→'남성버스', '경성여객(주)'→'경성여객'."""
+    """회사명 법인표기 접두·접미 제거(양끝 반복). 예: '(주)남성버스'→'남성버스',
+    '경성여객(주)'→'경성여객', '신동아교통(합)'→'신동아교통', '세일교통(자'→'세일교통'.
+    괄호 없는 '다모아자동차'는 보존(자동차는 상호의 일부)."""
     name = raw.strip()
     prev = None
     while name and name != prev:  # 양쪽에 붙은 경우 반복 제거
         prev = name
         name = _COMPANY_AFFIX_RE.sub("", name).strip()
     return name or raw.strip()
+
+
+def _tf_union_region(raw: str) -> str:
+    """조합명 → 지역. 예: '경기버스조합'→'경기', '전남광주버스조합'→'전남광주'."""
+    return re.sub(r"(?:버스운송사업조합|버스조합|여객조합|조합)\s*$", "", raw.strip()).strip() or raw.strip()
 
 
 def _tf_phone_kr(raw: str) -> str:
@@ -339,6 +352,7 @@ _TRANSFORMS = {
     "company_clean": _tf_company_clean,
     "phone_kr": _tf_phone_kr,
     "license_date_kr": _tf_license_date_kr,
+    "union_region": _tf_union_region,
 }
 
 
@@ -470,9 +484,12 @@ def parse_and_validate(db: Session, entity: str, file_bytes: bytes) -> ParseResu
     try:
         ws = wb.worksheets[0]
         rows_iter = ws.iter_rows(values_only=True)
+        # 헤더 앞 제목 행(header_row-1개)을 건너뛴다 — 실무 양식은 1행이 제목인 경우가 있다.
+        for _ in range(max(0, spec.header_row - 1)):
+            next(rows_iter, None)
         header = next(rows_iter, None)
         if header is None:
-            raise HTTPException(status_code=422, detail="빈 파일입니다 — 1행에 컬럼 헤더가 필요합니다")
+            raise HTTPException(status_code=422, detail="빈 파일입니다 — 헤더 행이 필요합니다")
 
         # 헤더 매칭 — 라벨 기준(공백 trim·필수표시 제거), 순서 무관
         col_by_label = {c.label: c for c in spec.columns}
@@ -508,7 +525,7 @@ def parse_and_validate(db: Session, entity: str, file_bytes: bytes) -> ParseResu
         seen: Dict = {}
         label_by_field = {c.field: c.label for c in spec.columns}
 
-        for row_no, values in enumerate(rows_iter, start=2):
+        for row_no, values in enumerate(rows_iter, start=spec.header_row + 1):
             # 빈 행 스킵 (전 셀 공백)
             if values is None or all(
                 v is None or (isinstance(v, str) and not v.strip()) for v in values

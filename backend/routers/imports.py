@@ -35,6 +35,7 @@ _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.
 _ROW_FACTORY = {
     "clients": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "transport_roster": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
+    "transport_info": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "assets": lambda p: Asset(**{f: getattr(p, f) for f in _ASSET_FIELDS}),
 }
 
@@ -117,24 +118,48 @@ async def commit_import(
 
     valid = result.valid_rows
     created_rows = []
+    updated_count = 0
+    # 운수사 정보(정본)은 회사명(정제) + TRANSPORT 매칭 upsert — 있으면 non-None 필드만 보강.
+    upsert = entity == "transport_info"
     for parsed in valid:
-        row = factory(parsed.payload)
-        db.add(row)
-        created_rows.append(row)
+        p = parsed.payload
+        existing = None
+        if upsert:
+            existing = (
+                db.query(Client)
+                .filter(
+                    Client.client_type == "TRANSPORT",
+                    Client.company_name == p.company_name,
+                )
+                .first()
+            )
+        if existing is not None:
+            # 기존 건 보강 — 전달된(비어있지 않은) 값만 덮어써 기존 데이터 유실 방지
+            for f in _CLIENT_FIELDS:
+                val = getattr(p, f, None)
+                if f in ("client_type", "company_name"):
+                    continue
+                if val is not None:
+                    setattr(existing, f, val)
+            updated_count += 1
+        else:
+            row = factory(p)
+            db.add(row)
+            created_rows.append(row)
     error_rows = [r for r in result.rows if r.errors]
     AuditLogger.log_action(
         db,
         user.user_id,
         "EXCEL_IMPORT",
         target_type=result.spec.entity.upper().rstrip("S"),  # CLIENT/ASSET
-        new_value="{0} 일괄 등록 — 생성 {1}건 / 건너뜀 {2}건 (총 {3}행)".format(
-            result.spec.label, len(valid), len(error_rows), len(result.rows)
+        new_value="{0} 일괄 등록 — 생성 {1}건 / 갱신 {2}건 / 건너뜀 {3}건 (총 {4}행)".format(
+            result.spec.label, len(created_rows), updated_count, len(error_rows), len(result.rows)
         ),
     )
     db.commit()
     # 고객사만 Dropbox 폴더 provision 대상 — 커밋 후 채워진 PK로 백그라운드 예약
     # (자산은 폴더 대상 아님). client_id 미확보 행은 방어적으로 스킵.
-    if entity in ("clients", "transport_roster"):
+    if entity in ("clients", "transport_roster", "transport_info"):
         for row in created_rows:
             client_id = getattr(row, "client_id", None)
             if client_id:
@@ -143,7 +168,8 @@ async def commit_import(
                 )
     return schemas.ImportCommitOut(
         entity=result.spec.entity,
-        created=len(valid),
+        created=len(created_rows),
+        updated=updated_count,
         skipped=len(error_rows),
         errors=[excel_import.row_result(r) for r in error_rows],
     )

@@ -113,6 +113,7 @@ class Client(Base):
     lng = Column(Numeric(10, 7))
     # 운수사 명부(민원대응 회원명부) 추가 정보 — 팩스·면허일자·버스 대수(시내/농어촌/시외, 변경 잦음)
     fax = Column(String(20))
+    corp_reg_no = Column(String(20))  # 법인등록번호(운수사 정보)
     license_date = Column(Date)  # 면허일자
     bus_city = Column(Integer)  # 시내버스 대수
     bus_rural = Column(Integer)  # 농어촌버스 대수
@@ -933,6 +934,7 @@ def ensure_schema():
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
         # 운수사 명부(민원대응 회원명부) 추가 정보
         ("tb_client", "fax", "VARCHAR(20)"),
+        ("tb_client", "corp_reg_no", "VARCHAR(20)"),
         ("tb_client", "license_date", "DATE"),
         ("tb_client", "bus_city", "INTEGER"),
         ("tb_client", "bus_rural", "INTEGER"),

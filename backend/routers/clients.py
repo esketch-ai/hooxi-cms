@@ -103,7 +103,7 @@ _CLIENT_FIELDS = [
     "main_contact_name", "main_contact_phone", "main_contact_email",
     "contract_status", "contract_date", "keyman", "manager_id",
     "report_yn", "lat", "lng",
-    "fax", "license_date", "bus_city", "bus_rural", "bus_intercity",
+    "fax", "corp_reg_no", "license_date", "bus_city", "bus_rural", "bus_intercity",
 ]
 
 
