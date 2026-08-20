@@ -167,3 +167,45 @@ def test_fleet_status_endpoints(client, admin_headers):
         _cleanup(db)
     finally:
         db.close()
+
+
+def test_dashboard_fleet_aggregation(client, admin_headers):
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        c = models.Client(client_type="TRANSPORT", company_name="TESTF대시운수",
+                          region="서울", biz_reg_no="883-88-88883")
+        db.add(c)
+        db.commit()
+        cid = c.client_id
+        # 2개월치 + 미매칭 1건 + 수작업 관리
+        db.add_all([
+            models.FleetStatus(client_id=cid, region="서울", industry="CITY",
+                               company_name="TESTF대시운수", period="2026-05",
+                               license_count=100, total_count=100, electric=20),
+            models.FleetStatus(client_id=cid, region="서울", industry="CITY",
+                               company_name="TESTF대시운수", period="2026-06",
+                               license_count=100, total_count=100, electric=35),
+            models.FleetStatus(client_id=None, region="경기", industry="RURAL",
+                               company_name="TESTF보류대시", period="2026-06",
+                               license_count=10, total_count=10, electric=1),
+            models.FleetMgmt(client_id=cid, target_type="BIZ", contract_yn="Y"),
+        ])
+        db.commit()
+    finally:
+        db.close()
+    r = client.get("/api/v1/dashboard/fleet", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["period"] == "2026-06" and d["prev_period"] == "2026-05"
+    assert d["companies"] == 2 and d["matched_companies"] == 1
+    assert d["total_electric"] == 36  # 35 + 1
+    assert d["ev_delta"] == 16  # 36(6월) - 20(5월)
+    assert d["biz_target"] == 1 and d["contracted"] == 1
+    db = models.SessionLocal()
+    try:
+        db.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)
+        db.commit()
+        _cleanup(db)
+    finally:
+        db.close()

@@ -5,9 +5,11 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Buildings,
+  Bus,
   FileText,
   Fire,
   Handshake,
+  Lightning,
   MapTrifold,
   Plus,
   SquaresFour,
@@ -18,9 +20,10 @@ import { Timeline } from '../../components/Timeline'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonKpi, SkeletonTableRows } from '../../components/Skeleton'
 import { api } from '../../lib/api/client'
-import { unwrapList } from '../../lib/api/queries'
+import { unwrapList, useCodes } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMonth, fmtTime } from '../../lib/format'
 import type {
+  DashboardFleet,
   DashboardStats,
   Paginated,
   ReportDelivery,
@@ -65,6 +68,20 @@ export function DashboardPage() {
 
   // 사업 단계 지연/임박 관찰 (Phase 1) — 경영전략실 대응용 위젯
   const { data: stageDelays } = useStageDelays()
+
+  // 운수사 계약대수 현황 (F4) — 최신 월 집계. 데이터 없으면 위젯 숨김. 실패는 무시(현황판 유지)
+  const { data: fleet } = useQuery({
+    queryKey: ['dashboard', 'fleet'],
+    queryFn: async (): Promise<DashboardFleet | null> => {
+      try {
+        const { data } = await api.get<DashboardFleet>('/dashboard/fleet')
+        return data
+      } catch {
+        return null
+      }
+    },
+    retry: false,
+  })
 
   // 당월 보고서 — 액션 센터 + 이달 보고서 진행 위젯 공용. ReportsPage(['reports', period])와 키 분리,
   // 조회 실패 시 null 폴백 (현황판을 막지 않는다)
@@ -328,6 +345,9 @@ export function DashboardPage() {
         </section>
       )}
 
+      {/* 운수사 계약대수 현황 (F4) — 최신 월 집계 */}
+      {fleet && fleet.period && <FleetSection fleet={fleet} />}
+
       {/* KPI 5카드 */}
       {isLoading ? (
         <SkeletonKpi count={5} />
@@ -494,5 +514,95 @@ export function DashboardPage() {
       {/* 공용 ActivityForm 재사용 */}
       <ActivityForm open={formOpen} onClose={() => setFormOpen(false)} />
     </div>
+  )
+}
+
+// ── 운수사 계약대수 현황 섹션 (F4) — 최신 월 집계·전월 대비 전기 증감 ──
+function FleetSection({ fleet }: { fleet: DashboardFleet }) {
+  const { labelOf: industryLabel } = useCodes('FLEET_INDUSTRY')
+  const evUp = fleet.ev_delta > 0
+  const evDown = fleet.ev_delta < 0
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <Bus size={20} className="text-bone" weight="fill" />
+        <h2 className="text-base font-bold text-bone">운수사 계약대수 현황</h2>
+        <span className="rounded-full bg-elevate px-2 py-0.5 text-xs font-medium text-slatey">
+          {fleet.period} 기준
+        </span>
+        <span className="ml-auto text-xs text-slatey">
+          운수사 {fleet.companies}곳 · 고객사 연결 {fleet.matched_companies}
+        </span>
+      </div>
+
+      {/* 요약 지표 */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-hairline bg-elevate p-3.5">
+          <p className="text-xs text-slatey">총 면허대수</p>
+          <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-bone">
+            {fleet.total_license.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-hairline bg-elevate p-3.5">
+          <p className="flex items-center gap-1 text-xs text-slatey">
+            <Lightning size={12} weight="fill" className="text-emerald-500" />
+            전기버스
+          </p>
+          <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-emerald-500">
+            {fleet.total_electric.toLocaleString()}
+          </p>
+          <p className="mt-0.5 text-xs text-slatey">
+            비중 {fleet.ev_share}%
+            {fleet.prev_period && (
+              <span
+                className={
+                  evUp
+                    ? ' text-emerald-500'
+                    : evDown
+                      ? ' text-rose-400'
+                      : ' text-slatey'
+                }
+              >
+                {' · 전월 '}
+                {evUp ? '▲' : evDown ? '▼' : '—'}
+                {fleet.ev_delta !== 0 ? Math.abs(fleet.ev_delta) : ''}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-hairline bg-elevate p-3.5">
+          <p className="text-xs text-slatey">대상여부</p>
+          <p className="mt-1 text-sm font-semibold text-bone">
+            사업 {fleet.biz_target} · 규제 {fleet.reg_target}
+          </p>
+          <p className="mt-0.5 text-xs text-slatey">고객사 연결 기준</p>
+        </div>
+        <div className="rounded-2xl border border-hairline bg-elevate p-3.5">
+          <p className="text-xs text-slatey">계약여부</p>
+          <p className="mt-1 text-sm font-semibold text-bone">
+            계약 {fleet.contracted} · 미계약 {fleet.uncontracted}
+          </p>
+          <p className="mt-0.5 text-xs text-slatey">고객사 연결 기준</p>
+        </div>
+      </div>
+
+      {/* 업종 분포 (면허·전기) */}
+      {fleet.by_industry.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-ash">업종 분포</p>
+          <div className="flex flex-wrap gap-2">
+            {fleet.by_industry.map((d) => (
+              <span
+                key={d.key}
+                className="rounded-full border border-hairline bg-elevate px-3 py-1 text-xs text-bone"
+              >
+                {industryLabel(d.key)} · 면허 {d.license.toLocaleString()} · 전기{' '}
+                <span className="text-emerald-500">{d.electric.toLocaleString()}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }

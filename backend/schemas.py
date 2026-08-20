@@ -2103,6 +2103,31 @@ class DashboardStats(BaseModel):
     open_issues: List[HistoryOut]
 
 
+# 운수사 계약대수 현황 섹션(F4) — 최신 월 집계 + 전월 대비
+class FleetDistItem(BaseModel):
+    key: str  # 지역(조합) 또는 업종 코드
+    license: int = 0
+    electric: int = 0
+
+
+class DashboardFleet(BaseModel):
+    period: Optional[str] = None  # 데이터 있는 최신 월
+    prev_period: Optional[str] = None
+    companies: int = 0  # 최신 월 합산 행 수(운수사 스냅샷)
+    matched_companies: int = 0  # 고객사 연결된 수
+    total_license: int = 0
+    total_count: int = 0
+    total_electric: int = 0
+    ev_share: float = 0.0  # 전기 비중(%)
+    ev_delta: int = 0  # 전월 대비 전기 증감
+    biz_target: int = 0  # 대상여부=사업대상(BIZ)
+    reg_target: int = 0  # 대상여부=규제대상(REG)
+    contracted: int = 0  # 계약여부 Y
+    uncontracted: int = 0  # 계약여부 N/미지정
+    by_industry: List[FleetDistItem] = []
+    by_region: List[FleetDistItem] = []
+
+
 # ---------------------------------------------------------------------------
 # 시스템 설정 (SCR-14 설정 탭 — tb_config, ADMIN 전용 §10.1)
 # ---------------------------------------------------------------------------

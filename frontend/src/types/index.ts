@@ -766,6 +766,30 @@ export interface FleetClientStatus {
   mgmt?: FleetMgmt | null
 }
 
+export interface FleetDistItem {
+  key: string
+  license: number
+  electric: number
+}
+
+export interface DashboardFleet {
+  period?: string | null
+  prev_period?: string | null
+  companies: number
+  matched_companies: number
+  total_license: number
+  total_count: number
+  total_electric: number
+  ev_share: number
+  ev_delta: number
+  biz_target: number
+  reg_target: number
+  contracted: number
+  uncontracted: number
+  by_industry: FleetDistItem[]
+  by_region: FleetDistItem[]
+}
+
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
 export interface ProjectStage {
   stage_code: string
