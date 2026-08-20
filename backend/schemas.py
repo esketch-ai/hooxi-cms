@@ -2666,3 +2666,80 @@ class ImportCommitOut(BaseModel):
     skipped: int
     updated: int = 0  # upsert(운수사 정보 정본)에서 기존 건 갱신 수
     errors: List[ImportRowResult] = []
+
+
+# ── 운수사 계약대수 현황(F2/F3) ──────────────────────────────────────────
+class FleetStatusItem(BaseModel):
+    """업로드 미리보기 항목 — (고객사×월) 합산 결과 1건."""
+
+    region: Optional[str] = None
+    industry: Optional[str] = None
+    company_name: Optional[str] = None
+    period: Optional[str] = None
+    matched: bool = False
+    is_update: bool = False
+    matched_client_id: Optional[str] = None
+    matched_client_name: Optional[str] = None
+    license: int = 0
+    total: int = 0
+    diesel: int = 0
+    cng: int = 0
+    hybrid: int = 0
+    electric: int = 0
+    hydrogen: int = 0
+
+
+class FleetStatusPreviewOut(BaseModel):
+    period: str
+    total_rows: int
+    aggregated: int
+    matched: int
+    unmatched: int
+    items: List[FleetStatusItem] = []
+
+
+class FleetStatusCommitOut(BaseModel):
+    period: str
+    total_rows: int
+    aggregated: int
+    created: int
+    updated: int
+    matched: int
+    unmatched: int
+
+
+class FleetStatusTrendItem(BaseModel):
+    """고객사 상세 '현황' 탭 — 월별 대수 스냅샷 1건."""
+
+    period: str
+    license_count: Optional[int] = None
+    total_count: Optional[int] = None
+    diesel: Optional[int] = None
+    cng: Optional[int] = None
+    hybrid: Optional[int] = None
+    electric: Optional[int] = None
+    hydrogen: Optional[int] = None
+    region: Optional[str] = None
+    industry: Optional[str] = None
+
+
+class FleetMgmtIn(BaseModel):
+    """수작업 관리 저장 — 계약여부 등(업로드 무영향)."""
+
+    target_type: Optional[str] = None
+    contract_yn: Optional[str] = None
+    union_contract: Optional[str] = None
+    regulated_yn: Optional[str] = None
+    memo: Optional[str] = None
+
+
+class FleetMgmtOut(FleetMgmtIn):
+    client_id: str
+
+
+class FleetClientStatusOut(BaseModel):
+    """현황 탭 응답 — 월별 추이 + 수작업 관리."""
+
+    client_id: str
+    trend: List[FleetStatusTrendItem] = []
+    mgmt: Optional[FleetMgmtOut] = None
