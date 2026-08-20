@@ -8,7 +8,7 @@ import { TOPICS, getCategoryTopics, isTopicHidden, visibleTopics } from './conte
 //   (2) OFF에서의 은닉 판정은 경로 매칭 로직(isFinanceHiddenPath + featureRoute 유무 조합)으로 검증한다.
 
 // OFF일 때 은닉돼야 하는 토픽(설계 기준): featureRoute가 재무 은닉 경로인 5개.
-const EXPECTED_HIDDEN_IDS = ['finance-ledger', 'asset-report', 'settlements', 'buyers', 'portal-accounts']
+const EXPECTED_HIDDEN_IDS = ['tax-invoices', 'finance-ledger', 'asset-report', 'settlements', 'buyers', 'portal-accounts']
 
 describe('isTopicHidden / visibleTopics (현재 빌드 = ON)', () => {
   it('테스트 env에서 FINANCE_FEATURES는 ON(true)', () => {
@@ -35,7 +35,7 @@ describe('OFF 은닉 판정 로직(경로 매칭)', () => {
   // isTopicHidden의 OFF 분기와 동치인 순수 판정: featureRoute가 있고 재무 은닉 경로일 때 은닉.
   const wouldHideWhenOff = (route?: string): boolean => !!route && isFinanceHiddenPath(route)
 
-  it('설계상 은닉 대상 5개 토픽은 OFF에서 은닉된다', () => {
+  it('설계상 은닉 대상 6개 토픽은 OFF에서 은닉된다', () => {
     for (const id of EXPECTED_HIDDEN_IDS) {
       const t = TOPICS.find((x) => x.id === id)
       expect(t, `topic ${id} 존재`).toBeTruthy()
