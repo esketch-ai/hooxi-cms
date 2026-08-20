@@ -630,62 +630,83 @@ function FleetSection({ fleet }: { fleet: DashboardFleet }) {
 // ── 운수사 지역별 통계표 (F6) — 현황 탭 6표(대수 3 + 업체수 3) ──
 function FleetRegionTables({ data }: { data: DashboardFleetTables }) {
   const fmt = (n: number) => n.toLocaleString()
+  const [activeKey, setActiveKey] = useState(data.tables[0]?.key ?? '')
+  const active = data.tables.find((t) => t.key === activeKey) ?? data.tables[0]
+  if (!active) return null
   return (
     <section className="rounded-3xl border border-hairline bg-graphite p-5">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <MapTrifold size={20} className="text-bone" weight="fill" />
         <h2 className="text-base font-bold text-bone">운수사 지역별 통계</h2>
         <span className="rounded-full bg-elevate px-2 py-0.5 text-xs font-medium text-slatey">
           {data.period} 기준
         </span>
-        <span className="ml-auto text-xs text-slatey">대수 3표 · 업체수 3표</span>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        {data.tables.map((t) => (
-          <div key={t.key} className="rounded-2xl border border-hairline bg-elevate p-3.5">
-            <div className="mb-2 flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-bone">{t.title}</h3>
-              <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] text-slatey">
+
+      {/* 6표를 탭으로 — 한 번에 하나만 표시(화면 절약, 가로 스크롤 제거) */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {data.tables.map((t) => {
+          const on = t.key === active.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveKey(t.key)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                on
+                  ? 'border-snow bg-elevate text-bone'
+                  : 'border-hairline text-slatey hover:text-ash'
+              }`}
+            >
+              {t.title}
+              <span
+                className={`rounded-full px-1.5 py-px text-[10px] ${
+                  t.basis === 'license'
+                    ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300'
+                    : 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                }`}
+              >
                 {t.basis === 'license' ? '대수' : '업체수'}
               </span>
-            </div>
-            <div className="max-h-[280px] overflow-auto rounded-lg border border-hairline">
-              <table className="w-full text-right text-xs">
-                <thead className="sticky top-0 bg-graphite text-ash">
-                  <tr>
-                    <th className="px-2.5 py-1.5 text-left font-medium">지역</th>
-                    {t.columns.map((c) => (
-                      <th key={c} className="px-2.5 py-1.5 font-medium">
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* 전국 합계 — 상단 고정 강조 */}
-                  <tr className="border-y border-hairline bg-surface/60 font-semibold text-bone">
-                    <td className="px-2.5 py-1.5 text-left">{t.total.region}</td>
-                    <td className="px-2.5 py-1.5 font-mono tabular-nums">{fmt(t.total.c1)}</td>
-                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-emerald-500">
-                      {fmt(t.total.c2)}
-                    </td>
-                    <td className="px-2.5 py-1.5 font-mono tabular-nums">{fmt(t.total.c3)}</td>
-                  </tr>
-                  {t.rows.map((r) => (
-                    <tr key={r.region} className="border-b border-hairline/60 last:border-0">
-                      <td className="px-2.5 py-1.5 text-left text-slatey">{r.region}</td>
-                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-bone">{fmt(r.c1)}</td>
-                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-emerald-600 dark:text-emerald-500">
-                        {fmt(r.c2)}
-                      </td>
-                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-bone">{fmt(r.c3)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-hairline">
+        <table className="w-full min-w-[420px] text-right text-sm">
+          <thead className="bg-elevate text-xs text-ash">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">지역</th>
+              {active.columns.map((c) => (
+                <th key={c} className="px-3 py-2 font-medium">
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* 전국 합계 — 상단 강조 */}
+            <tr className="border-y border-hairline bg-surface/60 font-semibold text-bone">
+              <td className="px-3 py-2 text-left">{active.total.region}</td>
+              <td className="px-3 py-2 font-mono tabular-nums">{fmt(active.total.c1)}</td>
+              <td className="px-3 py-2 font-mono tabular-nums text-emerald-500">
+                {fmt(active.total.c2)}
+              </td>
+              <td className="px-3 py-2 font-mono tabular-nums">{fmt(active.total.c3)}</td>
+            </tr>
+            {active.rows.map((r) => (
+              <tr key={r.region} className="border-b border-hairline/60 last:border-0">
+                <td className="px-3 py-2 text-left text-slatey">{r.region}</td>
+                <td className="px-3 py-2 font-mono tabular-nums text-bone">{fmt(r.c1)}</td>
+                <td className="px-3 py-2 font-mono tabular-nums text-emerald-600 dark:text-emerald-500">
+                  {fmt(r.c2)}
+                </td>
+                <td className="px-3 py-2 font-mono tabular-nums text-bone">{fmt(r.c3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   )
