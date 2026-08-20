@@ -25,9 +25,13 @@ def _get_target_user(user_id: str, db: Session) -> User:
     return user
 
 
-@router.get("/me", response_model=schemas.UserOut)
-def get_me(user: User = Depends(get_current_user)):
-    return _user_out(user)
+@router.get("/me", response_model=schemas.UserMeOut)
+def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """내 정보 + 접근 그룹(G1) — 그룹·허용 메뉴 합집합·로그인 홈. 프론트 nav/가드 단일 소스."""
+    from access_control import resolve_user_access
+
+    base = _user_out(user).model_dump()
+    return schemas.UserMeOut(**base, **resolve_user_access(db, user))
 
 
 @router.get("", response_model=List[schemas.UserOut])

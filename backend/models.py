@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -379,6 +380,52 @@ class FleetMgmt(Base):
     updated_by = Column(String(50))
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AccessGroup(Base):
+    """접근 그룹(부서·경영진) — 메뉴(화면) 접근 축 (ACCESS_CONTROL_PLAN G1).
+
+    role(직급)은 행위 권한 그대로 두고, 그룹은 '어떤 메뉴가 보이고 접근되는가'만 담당한다.
+    is_default(전사) 그룹은 그룹 미배정 사용자의 암묵 소속(fail-safe) — 삭제 금지.
+    """
+
+    __tablename__ = "tb_access_group"
+
+    group_id = Column(String(50), primary_key=True, default=gen_uuid)
+    name = Column(String(50), nullable=False, unique=True)
+    home_path = Column(String(50), default="/dashboard")  # 로그인 자동 랜딩 경로
+    is_default = Column(Boolean, nullable=False, default=False)  # 전사(기본) 여부
+    memo = Column(String(200))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class GroupMenu(Base):
+    """그룹 × 허용 메뉴 — menu_key는 access_control.MENU_KEYS(nav 경로) 정본."""
+
+    __tablename__ = "tb_group_menu"
+
+    group_id = Column(
+        String(50),
+        ForeignKey("tb_access_group.group_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    menu_key = Column(String(50), primary_key=True)
+
+
+class UserGroup(Base):
+    """사용자 × 그룹 (N:M) — 겸직 허용, 허용 메뉴는 소속 그룹의 합집합."""
+
+    __tablename__ = "tb_user_group"
+
+    user_id = Column(
+        String(50), ForeignKey("tb_user.user_id", ondelete="CASCADE"), primary_key=True
+    )
+    group_id = Column(
+        String(50),
+        ForeignKey("tb_access_group.group_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
 
 
 class Buyer(Base):

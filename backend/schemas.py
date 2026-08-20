@@ -107,6 +107,23 @@ class UserOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class AccessGroupBrief(BaseModel):
+    """내 소속 그룹 요약 — /users/me 용(G1)."""
+
+    group_id: str
+    name: str
+    home_path: Optional[str] = None
+    implicit: bool = False  # 명시 배정 없이 기본(전사) 그룹을 암묵 상속한 경우
+
+
+class UserMeOut(UserOut):
+    """/users/me 확장 — 그룹·허용 메뉴·로그인 홈(G1). 목록 API는 UserOut 유지."""
+
+    groups: List[AccessGroupBrief] = []
+    allowed_menus: List[str] = []  # 소속 그룹 허용 메뉴 합집합(ADMIN은 전체)
+    home_path: str = "/dashboard"  # 로그인 자동 랜딩(우선순위 최상 그룹의 home)
+
+
 class UserApproveRequest(BaseModel):
     """가입 승인 (PENDING→ACTIVE) — role 지정 (CR-1)."""
 

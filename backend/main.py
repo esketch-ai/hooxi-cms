@@ -282,6 +282,38 @@ def seed_codes():
         print(f"⚠ Code seed skipped (database unavailable): {exc}")
 
 
+def seed_access_groups():
+    """접근 그룹 부트스트랩(G1) — tb_access_group이 비어있을 때만 초기 7종 생성.
+
+    이후 구성 변경은 관리 UI(G3) 몫 — 시드는 관리자가 만든/수정한 그룹을 절대 덮어쓰지
+    않는다(빈 테이블 1회 조건). 그룹 미배정 사용자는 is_default(전사) 그룹 권한을
+    암묵 상속하므로 사용자 배정 backfill은 불필요(fail-safe·회귀 0).
+    """
+    from access_control import SEED_GROUPS
+    from models import AccessGroup, GroupMenu
+
+    try:
+        db = SessionLocal()
+        try:
+            if db.query(AccessGroup).first() is not None:
+                return  # 이미 구성됨 — 관리자 편집 보존
+            for g in SEED_GROUPS:
+                grp = AccessGroup(
+                    name=g["name"], home_path=g["home_path"],
+                    is_default=g["is_default"], memo=g.get("memo"),
+                )
+                db.add(grp)
+                db.flush()  # group_id 확보
+                for key in g["menus"]:
+                    db.add(GroupMenu(group_id=grp.group_id, menu_key=key))
+            db.commit()
+            print(f"✓ Seeded {len(SEED_GROUPS)} access group(s)")
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f"⚠ Access group seed skipped (database unavailable): {exc}")
+
+
 def require_secure_jwt_secret():
     """기동 가드 — JWT_SECRET이 개발용 기본값이면 어떤 경우에도 기동을 막는다.
 
@@ -300,6 +332,7 @@ async def lifespan(app: FastAPI):
     if init_db():
         seed_admin()
         seed_codes()
+        seed_access_groups()
     yield
 
 
