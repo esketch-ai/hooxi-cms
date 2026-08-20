@@ -193,18 +193,25 @@ def parse_kec_xml(xml: str) -> dict:
 
     invoicer_reg_no: Optional[str] = None
     invoicee_reg_no: Optional[str] = None
+    invoicer_name: Optional[str] = None
+    invoicee_name: Optional[str] = None
 
-    # 1) Invoicer/Invoicee 래퍼 하위의 party ID를 구조적으로 추출
+    # 1) Invoicer/Invoicee 래퍼 하위의 party ID·상호(첫 NameText)를 구조적으로 추출
     for el in root.iter():
         lname = _local(el.tag)
         if lname in ("Invoicer", "InvoicerParty", "Invoicee", "InvoiceeParty"):
             reg = _first_id_10(el)
-            if reg is None:
-                continue
-            if lname.startswith("Invoicer") and invoicer_reg_no is None:
-                invoicer_reg_no = reg
-            elif lname.startswith("Invoicee") and invoicee_reg_no is None:
-                invoicee_reg_no = reg
+            name = _first_sub_text(el, "NameText")
+            if lname.startswith("Invoicer"):
+                if invoicer_reg_no is None and reg is not None:
+                    invoicer_reg_no = reg
+                if invoicer_name is None and name is not None:
+                    invoicer_name = name
+            elif lname.startswith("Invoicee"):
+                if invoicee_reg_no is None and reg is not None:
+                    invoicee_reg_no = reg
+                if invoicee_name is None and name is not None:
+                    invoicee_name = name
 
     # 2) 폴백 — 문서순 10자리 숫자 ID 두 개(첫=공급자, 둘째=공급받는자)
     if invoicer_reg_no is None or invoicee_reg_no is None:
@@ -236,6 +243,8 @@ def parse_kec_xml(xml: str) -> dict:
     return {
         "invoicer_reg_no": invoicer_reg_no,
         "invoicee_reg_no": invoicee_reg_no,
+        "invoicer_name": invoicer_name,
+        "invoicee_name": invoicee_name,
         "issue_id": _first_text(root, "IssueID"),
         "issue_datetime": issue_datetime,
         "type_code": _first_text(root, "TypeCode"),
@@ -254,6 +263,14 @@ def _first_id_10(el) -> Optional[str]:
             t = sub.text.strip()
             if re.fullmatch(r"\d{10}", t):
                 return t
+    return None
+
+
+def _first_sub_text(el, name: str) -> Optional[str]:
+    """요소 하위(자신 포함)에서 local-name이 name인 첫 비어있지 않은 텍스트."""
+    for sub in el.iter():
+        if _local(sub.tag) == name and sub.text and sub.text.strip():
+            return sub.text.strip()
     return None
 
 
@@ -299,19 +316,27 @@ def parse_secure_mail(
     except Exception:
         return {"ok": False, "reason": "decrypt_or_parse_error"}
 
-    company_norm = normalize_biz_no(company_biz_no)
+    # 자사 사업자번호는 복수 가능(후시파트너스·후시제주랩 등) — str 또는 리스트 허용
+    if isinstance(company_biz_no, str):
+        company_set = {normalize_biz_no(company_biz_no)} if company_biz_no.strip() else set()
+    else:
+        company_set = {normalize_biz_no(c) for c in (company_biz_no or []) if c}
+    company_set.discard("")
+
     invoicer = parsed.get("invoicer_reg_no")
     invoicee = parsed.get("invoicee_reg_no")
+    invoicer_name = parsed.get("invoicer_name")
+    invoicee_name = parsed.get("invoicee_name")
 
-    if invoicee and company_norm == normalize_biz_no(invoicee):
-        direction = "매입"
-        counterpart = invoicer
-    elif invoicer and company_norm == normalize_biz_no(invoicer):
-        direction = "매출"
-        counterpart = invoicee
+    if invoicee and normalize_biz_no(invoicee) in company_set:
+        direction = "매입"  # 자사가 공급받는자
+        counterpart, counterpart_name = invoicer, invoicer_name
+    elif invoicer and normalize_biz_no(invoicer) in company_set:
+        direction = "매출"  # 자사가 공급자
+        counterpart, counterpart_name = invoicee, invoicee_name
     else:
         direction = "미상"
-        counterpart = None
+        counterpart, counterpart_name = None, None
 
     return {
         "ok": True,
@@ -323,7 +348,10 @@ def parse_secure_mail(
         "total_amount": parsed.get("total_amount"),
         "invoicer_reg_no": invoicer,
         "invoicee_reg_no": invoicee,
+        "invoicer_name": invoicer_name,
+        "invoicee_name": invoicee_name,
         "counterpart_reg_no": counterpart,
+        "counterpart_name": counterpart_name,
         "type_code": parsed.get("type_code"),
         "purpose_code": parsed.get("purpose_code"),
         "matched_bizno": matched,
