@@ -67,54 +67,76 @@ def company_biznos(db) -> List[str]:
     return out
 
 
+class _MatchContext:
+    """복호화 후보·매칭 인덱스를 담는 1회 로드 컨텍스트 — 파일 루프 전체스캔 방지(DBA MED).
+
+    candidates: 복호화 후보 사업자번호(자사 우선·정규화·중복제거)
+    company: 자사 사업자번호(방향 판정용)
+    client_by_biz/buyer_by_biz: 정규화 사업자번호 → 마스터(상대 매칭 O(1))
+    """
+
+    __slots__ = ("candidates", "company", "client_by_biz", "buyer_by_biz")
+
+    def __init__(self, candidates, company, client_by_biz, buyer_by_biz):
+        self.candidates = candidates
+        self.company = company
+        self.client_by_biz = client_by_biz
+        self.buyer_by_biz = buyer_by_biz
+
+
+def build_context(db) -> _MatchContext:
+    """자사 + 전 고객사·투자사 사업자번호를 1회 로드해 후보 리스트·매칭 dict를 만든다."""
+    company = company_biznos(db)
+    seen = set(company)
+    candidates: List[str] = list(company)  # 자사 우선
+    client_by_biz: dict = {}
+    buyer_by_biz: dict = {}
+    for c in db.query(Client).filter(Client.biz_reg_no.isnot(None)).all():
+        nb = normalize_biz_no(c.biz_reg_no)
+        if not nb:
+            continue
+        client_by_biz.setdefault(nb, c)
+        if nb not in seen:
+            seen.add(nb)
+            candidates.append(nb)
+    for b in db.query(Buyer).filter(Buyer.biz_reg_no.isnot(None)).all():
+        nb = normalize_biz_no(b.biz_reg_no)
+        if not nb:
+            continue
+        buyer_by_biz.setdefault(nb, b)
+        if nb not in seen:
+            seen.add(nb)
+            candidates.append(nb)
+    return _MatchContext(candidates, company, client_by_biz, buyer_by_biz)
+
+
 def candidate_biznos(db) -> List[str]:
-    """복호화 후보 = 자사 + 전 고객사 + 전 투자사 사업자번호(정규화·중복제거, 자사 우선)."""
-    out: List[str] = []
+    """복호화 후보 = 자사 + 전 고객사 + 전 투자사 사업자번호(정규화·중복제거, 자사 우선).
 
-    def add(v: Optional[str]) -> None:
-        n = normalize_biz_no(v or "")
-        if n and n not in out:
-            out.append(n)
-
-    for n in company_biznos(db):
-        add(n)
-    for (b,) in db.query(Client.biz_reg_no).filter(Client.biz_reg_no.isnot(None)).all():
-        add(b)
-    for (b,) in db.query(Buyer.biz_reg_no).filter(Buyer.biz_reg_no.isnot(None)).all():
-        add(b)
-    return out
+    하위호환용 — 다건 처리는 build_context()를 재사용해 전체스캔을 피한다.
+    """
+    return build_context(db).candidates
 
 
-def _match_counterpart(db, counterpart_reg_no: Optional[str]) -> Tuple[Optional[Client], Optional[Buyer]]:
-    """상대 사업자번호 → 운수사(Client)/투자사(Buyer) 매칭. 각 없으면 None."""
-    if not counterpart_reg_no:
-        return None, None
-    norm = normalize_biz_no(counterpart_reg_no)
-    if not norm:
-        return None, None
-    client = next(
-        (c for c in db.query(Client).filter(Client.biz_reg_no.isnot(None)).all()
-         if normalize_biz_no(c.biz_reg_no) == norm),
-        None,
-    )
-    buyer = next(
-        (b for b in db.query(Buyer).filter(Buyer.biz_reg_no.isnot(None)).all()
-         if normalize_biz_no(b.biz_reg_no) == norm),
-        None,
-    )
-    return client, buyer
+def analyze_html(
+    db, html: str, filename: Optional[str] = None, ctx: Optional[_MatchContext] = None
+) -> dict:
+    """단일 HTML → 미리보기 항목(DB 무변경). 실패는 ok=False + reason.
 
-
-def analyze_html(db, html: str, filename: Optional[str] = None) -> dict:
-    """단일 HTML → 미리보기 항목(DB 무변경). 실패는 ok=False + reason."""
-    parsed = tax_invoice.parse_secure_mail(html, candidate_biznos(db), company_biznos(db))
+    ctx를 주면 후보·매칭 인덱스를 재사용(다건 처리 성능). 없으면 1회 로드(단건 하위호환).
+    """
+    if ctx is None:
+        ctx = build_context(db)
+    parsed = tax_invoice.parse_secure_mail(html, ctx.candidates, ctx.company)
     item: dict = {"filename": filename, "ok": bool(parsed.get("ok"))}
     if not parsed.get("ok"):
         item["reason"] = parsed.get("reason")
         return item
 
     approval_no = parsed.get("approval_no")
-    client, buyer = _match_counterpart(db, parsed.get("counterpart_reg_no"))
+    norm_cp = normalize_biz_no(parsed.get("counterpart_reg_no") or "")
+    client = ctx.client_by_biz.get(norm_cp) if norm_cp else None
+    buyer = ctx.buyer_by_biz.get(norm_cp) if norm_cp else None
     is_duplicate = bool(
         approval_no
         and db.query(TaxInvoice).filter(TaxInvoice.approval_no == approval_no).first()
@@ -146,8 +168,9 @@ def analyze_html(db, html: str, filename: Optional[str] = None) -> dict:
 
 
 def analyze_files(db, files: List[Tuple[str, str]]) -> List[dict]:
-    """[(filename, html)] → 미리보기 목록(DB 무변경)."""
-    return [analyze_html(db, html, filename) for filename, html in files]
+    """[(filename, html)] → 미리보기 목록(DB 무변경). 매칭 컨텍스트 1회 로드로 전체스캔 방지."""
+    ctx = build_context(db)
+    return [analyze_html(db, html, filename, ctx) for filename, html in files]
 
 
 def _to_date(iso: Optional[str]):
@@ -159,9 +182,12 @@ def _to_date(iso: Optional[str]):
         return None
 
 
-def commit_html(db, html: str, actor_id: Optional[str] = None, project_id: Optional[str] = None) -> dict:
+def commit_html(
+    db, html: str, actor_id: Optional[str] = None, project_id: Optional[str] = None,
+    ctx: Optional[_MatchContext] = None,
+) -> dict:
     """단일 HTML 적용 — 승인번호 unique로 멱등. result: created|duplicate|held."""
-    item = analyze_html(db, html)
+    item = analyze_html(db, html, ctx=ctx)
     if not item.get("ok"):
         return {"result": "held", "reason": item.get("reason")}
     approval_no = item.get("approval_no")
@@ -201,11 +227,12 @@ def commit_html(db, html: str, actor_id: Optional[str] = None, project_id: Optio
 
 
 def commit_files(db, files: List[Tuple[str, str]], actor_id: Optional[str] = None, project_id: Optional[str] = None) -> dict:
-    """[(filename, html)] 적용 — 건별 격리, 카운트 요약."""
+    """[(filename, html)] 적용 — 건별 격리, 카운트 요약. 매칭 컨텍스트 1회 로드."""
+    ctx = build_context(db)
     created = duplicate = held = 0
     details = []
     for filename, html in files:
-        r = commit_html(db, html, actor_id, project_id)
+        r = commit_html(db, html, actor_id, project_id, ctx=ctx)
         details.append({"filename": filename, **r})
         if r["result"] == "created":
             created += 1
