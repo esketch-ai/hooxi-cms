@@ -5,7 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { api } from '../../lib/api/client'
-import { useClientOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import { toDatetimeLocal } from '../../lib/format'
 import type { Schedule, SchedulePayload, ScheduleType } from '../../types'
 
@@ -32,6 +33,7 @@ interface ScheduleFormModalProps {
 export function ScheduleFormModal({ open, onClose, defaultDate, editing }: ScheduleFormModalProps) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   const queryClient = useQueryClient()
 
   const [scheduleType, setScheduleType] = useState<ScheduleType>('MEETING')
@@ -142,7 +144,7 @@ export function ScheduleFormModal({ open, onClose, defaultDate, editing }: Sched
               <option value="">선택 안 함</option>
               {clients.map((c) => (
                 <option key={c.client_id} value={c.client_id}>
-                  {c.company_name}
+                  {makeClientLabel(clientTypeLabel)(c)}
                 </option>
               ))}
             </select>

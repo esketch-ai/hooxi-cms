@@ -4,6 +4,7 @@ import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes, useUserOptions } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import { fmtDate } from '../../lib/format'
 import type { Project, ProjectPayload } from '../../types'
 import { MON_CYCLE_OPTIONS, useSaveProject } from './api'
@@ -77,6 +78,7 @@ interface ProjectFormModalProps {
 export function ProjectFormModal({ open, onClose, project }: ProjectFormModalProps) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   const { data: users = [] } = useUserOptions()
   const save = useSaveProject(project?.project_id)
   const { options: projectStatusOptions } = useCodes('PROJECT_STATUS')
@@ -166,7 +168,7 @@ export function ProjectFormModal({ open, onClose, project }: ProjectFormModalPro
               <option value="">선택</option>
               {clients.map((c) => (
                 <option key={c.client_id} value={c.client_id}>
-                  {c.company_name}
+                  {makeClientLabel(clientTypeLabel)(c)}
                 </option>
               ))}
             </select>

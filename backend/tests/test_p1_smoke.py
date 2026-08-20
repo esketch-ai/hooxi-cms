@@ -433,7 +433,7 @@ def test_list_reports_with_summary(client, staff_headers):
     assert body["summary"]["standby"] >= 1
     mine = [i for i in body["items"] if i["client_id"] == S["client_id"]]
     assert len(mine) == 1
-    assert mine[0]["client_name"] == "테스트운수"
+    assert "테스트운수" in mine[0]["client_name"]
     assert mine[0]["due_date"].endswith("-20")  # 구독 due_day=20 반영
     S["report_id"] = mine[0]["report_id"]
 
@@ -568,7 +568,7 @@ def test_upload_document(client, staff_headers):
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["doc_type"] == "CONTRACT"
-    assert body["client_name"] == "테스트운수"
+    assert "테스트운수" in body["client_name"]
     S["doc_id"] = body["doc_id"]
 
 

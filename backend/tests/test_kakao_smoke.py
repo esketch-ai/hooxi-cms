@@ -153,7 +153,7 @@ def test_contact_approve_gate(client, admin_headers, staff_headers, manager_head
     body = resp.json()
     assert body["status"] == "APPROVED"
     assert body["client_id"] == S["client_id"]
-    assert body["client_name"] == "카카오운수"
+    assert "카카오운수" in body["client_name"]
     assert body["approved_by_name"] == "팀장"
     assert body["approved_at"]
 
@@ -201,7 +201,7 @@ def test_webhook_approved_creates_thread_and_message(client, staff_headers):
     threads = resp.json()["items"]
     assert len(threads) == 1
     thread = threads[0]
-    assert thread["client_name"] == "카카오운수"
+    assert "카카오운수" in thread["client_name"]
     assert thread["contact_name"] == "김카카오"
     assert thread["mode"] == "AI"
     assert thread["status"] == "OPEN"
@@ -430,7 +430,7 @@ def test_chat_threads_search_and_filters(client, staff_headers):
     resp = client.get(API + "/chat/threads", params={"search": "카카오운수"}, headers=staff_headers)
     assert resp.status_code == 200
     assert resp.json()["total"] >= 1
-    assert all(t["client_name"] == "카카오운수" for t in resp.json()["items"])
+    assert all("카카오운수" in t["client_name"] for t in resp.json()["items"])
 
     resp = client.get(API + "/chat/threads", params={"mode": "AI"}, headers=staff_headers)
     assert all(t["mode"] == "AI" for t in resp.json()["items"])

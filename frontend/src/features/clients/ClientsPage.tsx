@@ -81,6 +81,7 @@ export function ClientsPage() {
               className="block truncate font-semibold text-bone hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
+              {c.region ? <span className="text-slatey">{c.region} · </span> : null}
               {c.company_name}
             </Link>
             {c.reg_status === 'PENDING' ? (

@@ -14,6 +14,7 @@ import { RoleGate } from '../../components/RoleGate'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { useCodes, useClientOptions } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import { useProject, useProjectOptions } from '../projects/api'
 import { useBuyerOptions } from '../buyers/api'
 import { downloadExport } from '../../lib/export'
@@ -63,6 +64,7 @@ export function AssetVehiclesPage() {
   const { data: clients = [] } = useClientOptions({ enabled: !isObserver })
   const { data: buyers = [] } = useBuyerOptions({ enabled: !isObserver })
   const { options: approvalStatusOptions } = useCodes('APPROVAL_STATUS')
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
 
   // 엑셀 내보내기(EX-4) — 팀장 이상만. 백엔드도 403이라 게이트와 정합.
   const isManagerUp = user?.role === 'ADMIN' || user?.role === 'MANAGER'
@@ -140,7 +142,7 @@ export function AssetVehiclesPage() {
   const clientOptions = useMemo(
     () => [
       { value: '__none__', label: '운수사 미지정' },
-      ...clients.map((c) => ({ value: c.client_id, label: c.company_name })),
+      ...clients.map((c) => ({ value: c.client_id, label: makeClientLabel(clientTypeLabel)(c) })),
     ],
     [clients],
   )

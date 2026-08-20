@@ -26,6 +26,7 @@ import { RoleGate } from '../../components/RoleGate'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { useCodes, useClientOptions, useUserOptions } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import { useProjectOptions } from '../projects/api'
 import { fmtDateTime, fmtMoney } from '../../lib/format'
 import {
@@ -124,6 +125,7 @@ function SettlementsListTab() {
   const { data: clients = [] } = useClientOptions()
   const { data: projects = [] } = useProjectOptions()
   const { options: statusOptions, labelOf: statusLabel } = useCodes('SETTLEMENT_STATUS')
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   const { data: users = [] } = useUserOptions()
   const userName = useMemo(() => {
     const m: Record<string, string> = {}
@@ -133,7 +135,7 @@ function SettlementsListTab() {
 
   const clientName = useMemo(() => {
     const m: Record<string, string> = {}
-    for (const c of clients) m[c.client_id] = c.company_name
+    for (const c of clients) m[c.client_id] = makeClientLabel(clientTypeLabel)(c)
     return (id: string) => m[id] ?? id
   }, [clients])
   const projectName = useMemo(() => {
@@ -216,7 +218,7 @@ function SettlementsListTab() {
           label="운수사"
           value={clientId}
           onChange={setClientId}
-          options={clients.map((c) => ({ value: c.client_id, label: c.company_name }))}
+          options={clients.map((c) => ({ value: c.client_id, label: makeClientLabel(clientTypeLabel)(c) }))}
         />
         <FilterSelect
           label="사업"
@@ -277,7 +279,7 @@ function SettlementsListTab() {
 
       {confirmOpen && (
         <ConfirmCreateModal
-          clients={clients.map((c) => ({ value: c.client_id, label: c.company_name }))}
+          clients={clients.map((c) => ({ value: c.client_id, label: makeClientLabel(clientTypeLabel)(c) }))}
           projects={projects.map((p) => ({ value: p.project_id, label: p.project_name }))}
           onClose={() => setConfirmOpen(false)}
         />
@@ -619,6 +621,7 @@ function PipelineTab() {
   const { data: clients = [] } = useClientOptions()
   const { data: projects = [] } = useProjectOptions()
   const { options: statusOptions } = useCodes('SETTLEMENT_STATUS')
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
 
   const [clientId, setClientId] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -702,7 +705,7 @@ function PipelineTab() {
           label="운수사"
           value={clientId}
           onChange={setClientId}
-          options={clients.map((c) => ({ value: c.client_id, label: c.company_name }))}
+          options={clients.map((c) => ({ value: c.client_id, label: makeClientLabel(clientTypeLabel)(c) }))}
         />
         <FilterSelect
           label="사업"

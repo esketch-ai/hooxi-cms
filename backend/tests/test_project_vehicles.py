@@ -234,7 +234,7 @@ def test_operator_rollup_and_client_filter(client, staff_headers):
 
     r = client.get(f"{PROJECTS}/{pid}/operators", headers=staff_headers).json()
     assert r["total"] == 2
-    assert r["items"][0]["client_name"] == "롤업운수갑"  # 차량수 desc
+    assert "롤업운수갑" in r["items"][0]["client_name"]  # 차량수 desc
     assert r["items"][0]["vehicle_count"] == 2
     assert r["items"][1]["vehicle_count"] == 1
 

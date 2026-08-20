@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
-from models import Client, Document, User, utcnow
+from models import Client, Code, Document, User, utcnow
 
 # 자동 적재 표식 — 보고서 발송·일정 완료로 생성된 활동 이력의 제목 접두어
 AUTO_PREFIX = "[자동]"
@@ -190,11 +190,34 @@ def user_name_map(db: Session, user_ids: Iterable[Optional[str]]) -> Dict[str, s
 
 
 def client_name_map(db: Session, client_ids: Iterable[Optional[str]]) -> Dict[str, str]:
+    """고객사 표시명 맵 — 담당자가 확실히 인지하도록 '지역 · 회사명 · 구분'으로 조합.
+
+    지역·구분이 비면 그 조각을 생략한다. 구분(client_type)은 tb_code CLIENT_TYPE 라벨로
+    해석(코드값만 있으면 그대로). 전 메뉴 참조 표시(활동이력·이슈·문서 등)의 단일 원천.
+    """
     ids = {cid for cid in client_ids if cid}
     if not ids:
         return {}
-    rows = db.query(Client.client_id, Client.company_name).filter(Client.client_id.in_(ids)).all()
-    return {cid: name for cid, name in rows}
+    rows = (
+        db.query(Client.client_id, Client.company_name, Client.region, Client.client_type)
+        .filter(Client.client_id.in_(ids))
+        .all()
+    )
+    type_labels = {
+        code: label
+        for code, label in db.query(Code.code, Code.label)
+        .filter(Code.category == "CLIENT_TYPE")
+        .all()
+    }
+    out: Dict[str, str] = {}
+    for cid, name, region, ctype in rows:
+        parts = [
+            (region or "").strip(),
+            (name or "").strip(),
+            (type_labels.get(ctype, ctype) or "").strip(),
+        ]
+        out[cid] = " · ".join(p for p in parts if p)
+    return out
 
 
 # ---------------------------------------------------------------------------

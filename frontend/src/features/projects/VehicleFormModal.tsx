@@ -5,6 +5,7 @@ import { CircleNotch } from '@phosphor-icons/react'
 import { Modal } from '../../components/Modal'
 import { useToast } from '../../components/Toast'
 import { useClientOptions, useCodes } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import type { ProjectVehicle, ProjectVehiclePayload } from '../../types'
 import { useSaveVehicle } from './api'
 
@@ -38,6 +39,7 @@ export function VehicleFormModal({ open, onClose, projectId, vehicle }: Props) {
   const { options: introOptions } = useCodes('VEHICLE_INTRO')
   const { options: regionOptions } = useCodes('REGION')
   const { data: clients = [] } = useClientOptions()
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   const save = useSaveVehicle(projectId, vehicle?.vehicle_id)
 
   const [form, setForm] = useState<ProjectVehiclePayload>({})
@@ -81,7 +83,7 @@ export function VehicleFormModal({ open, onClose, projectId, vehicle }: Props) {
               <option value="">선택 안 함</option>
               {clients.map((c) => (
                 <option key={c.client_id} value={c.client_id}>
-                  {c.company_name}
+                  {makeClientLabel(clientTypeLabel)(c)}
                 </option>
               ))}
             </select>

@@ -85,7 +85,7 @@ def test_preview_lists_ready_targets_only(client, staff_headers, admin_headers):
     assert body["total"] == 1 and body["ready_count"] == 1 and body["blocked_count"] == 0
     item = body["items"][0]
     assert item["report_id"] == approved_report
-    assert item["client_name"] == "미리보기승인운수"
+    assert "미리보기승인운수" in item["client_name"]
     assert item["filename"].endswith("report.pdf")  # 발송될 실제 첨부파일명(저장 prefix 포함)
     assert item["recipients"] == 1 and item["ready"] is True and item["issue"] is None
 

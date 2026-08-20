@@ -110,7 +110,7 @@ def test_client_link_success_with_audit(client, staff_headers):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["client_id"] == S["client_id"]
-    assert resp.json()["client_name"] == "이력수정운수"
+    assert "이력수정운수" in resp.json()["client_name"]
 
     log = _last_audit("HISTORY_CLIENT_LINK", S["call_id"])
     assert log is not None

@@ -6,7 +6,8 @@ import { useToast } from '../../components/Toast'
 import { EmptyState } from '../../components/EmptyState'
 import { RoleGate } from '../../components/RoleGate'
 import { SkeletonTableRows } from '../../components/Skeleton'
-import { useClientOptions } from '../../lib/api/queries'
+import { useClientOptions, useCodes } from '../../lib/api/queries'
+import { makeClientLabel } from '../../lib/clientLabel'
 import { fmtServerDateTime } from '../../lib/format'
 import type { KakaoContact } from '../../types'
 import { useUpdateKakaoContact } from './api'
@@ -22,6 +23,7 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
   const { user } = useAuth()
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  const { labelOf: clientTypeLabel } = useCodes('CLIENT_TYPE')
   const update = useUpdateKakaoContact()
 
   // MANAGER 미만은 승인/거절 버튼 숨김 (조회만)
@@ -116,7 +118,7 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
                   <option value="">고객사 선택…</option>
                   {clients.map((c) => (
                     <option key={c.client_id} value={c.client_id}>
-                      {c.company_name}
+                      {makeClientLabel(clientTypeLabel)(c)}
                     </option>
                   ))}
                 </select>
