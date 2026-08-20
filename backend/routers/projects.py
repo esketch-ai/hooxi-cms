@@ -152,7 +152,7 @@ def _vehicle_rollup(db: Session, project_id: str):
 _SALE_FIELDS = (
     "buyer_name", "buyer_id", "buyer_type", "sale_unit_price", "quantity",
     "ownership_pct", "sale_invoice_amount", "sale_invoice_date", "sale_payment_date",
-    "is_hold", "contract_date", "memo",
+    "sale_approval_no", "is_hold", "contract_date", "memo",
 )
 
 
@@ -1258,7 +1258,7 @@ def delete_project_sale(
 
 
 # ── 매입세금계산서(운수사 실지급=제품) CRUD — 회계 원장층 제품 원천(부록 L.3) ──
-_INVOICE_FIELDS = ("client_id", "operator_name", "region", "issue_date", "payment_date", "amount", "memo")
+_INVOICE_FIELDS = ("client_id", "operator_name", "region", "issue_date", "payment_date", "amount", "approval_no", "memo")
 _INVOICE_IMPORT_ENTITY = "purchase_invoices"
 
 

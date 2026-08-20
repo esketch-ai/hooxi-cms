@@ -1222,6 +1222,7 @@ class ProjectSaleIn(BaseModel):
     sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)  # 매출세금계산서 실발행액
     sale_invoice_date: Optional[date] = None  # 매출세금계산서 발행일
     sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
+    sale_approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     is_hold: str = Field(default="N", pattern="^[YN]$")  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
@@ -1239,6 +1240,7 @@ class ProjectSaleUpdate(BaseModel):
     sale_invoice_amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
     sale_invoice_date: Optional[date] = None
     sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
+    sale_approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     is_hold: Optional[str] = Field(default=None, pattern="^[YN]$")
     contract_date: Optional[date] = None
     memo: Optional[str] = Field(default=None, max_length=255)
@@ -1258,6 +1260,7 @@ class ProjectSaleOut(BaseModel):
     sale_invoice_amount: Optional[float] = None  # 🔒 매출세금계산서 실발행액(매출인식 기준)
     sale_invoice_date: Optional[date] = None
     sale_payment_date: Optional[date] = None  # 매출세금계산서 입금일(정보성)
+    sale_approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     is_hold: Optional[str] = None  # 후시보유 여부
     contract_date: Optional[date] = None
     memo: Optional[str] = None
@@ -1327,6 +1330,7 @@ class PurchaseInvoiceIn(BlankFKToNoneModel):
     issue_date: Optional[date] = None  # 발행일
     payment_date: Optional[date] = None  # 입금일(정보성)
     amount: float = Field(ge=0, le=_UNIT_PRICE_MAX)  # 금액(필수)
+    approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     memo: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -1339,6 +1343,7 @@ class PurchaseInvoiceUpdate(BlankFKToNoneModel):
     issue_date: Optional[date] = None
     payment_date: Optional[date] = None  # 입금일(정보성)
     amount: Optional[float] = Field(default=None, ge=0, le=_UNIT_PRICE_MAX)
+    approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     memo: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -1354,6 +1359,7 @@ class PurchaseInvoiceOut(BaseModel):
     issue_date: Optional[date] = None
     payment_date: Optional[date] = None  # 입금일(정보성)
     amount: Optional[float] = None  # 🔒
+    approval_no: Optional[str] = None  # 국세청 승인번호(HTML 자동반영 멱등키)
     memo: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

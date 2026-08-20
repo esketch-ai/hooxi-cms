@@ -150,6 +150,54 @@ def test_project_sale_payment_date_roundtrip(client, staff_headers):
     assert row2["sale_payment_date"] == "2026-05-20"
 
 
+def test_purchase_invoice_approval_no_roundtrip(client, staff_headers):
+    """매입세금계산서 국세청 승인번호(approval_no) create→get→update round-trip (HTML 자동반영 P1)."""
+    pid = _mk_project(client, staff_headers, "매입승인번호검증")
+    r = client.post(
+        f"{PROJECTS}/{pid}/purchase-invoices",
+        headers=staff_headers,
+        json={"operator_name": "운수사을", "amount": 700000, "approval_no": "202607081026070896455535"},
+    )
+    assert r.status_code == 201, r.text
+    inv_id = r.json()["invoice_id"]
+    got = client.get(f"{PROJECTS}/{pid}/purchase-invoices", headers=staff_headers).json()
+    row = next(i for i in got["items"] if i["invoice_id"] == inv_id)
+    assert row["approval_no"] == "202607081026070896455535"
+    u = client.put(
+        f"{PROJECTS}/{pid}/purchase-invoices/{inv_id}",
+        headers=staff_headers,
+        json={"approval_no": "202607081026070896999999"},
+    )
+    assert u.status_code == 200, u.text
+    got2 = client.get(f"{PROJECTS}/{pid}/purchase-invoices", headers=staff_headers).json()
+    row2 = next(i for i in got2["items"] if i["invoice_id"] == inv_id)
+    assert row2["approval_no"] == "202607081026070896999999"
+
+
+def test_project_sale_approval_no_roundtrip(client, staff_headers):
+    """거래계약 국세청 승인번호(sale_approval_no) create→get→update round-trip (HTML 자동반영 P1)."""
+    pid = _mk_project(client, staff_headers, "매출승인번호검증")
+    r = client.post(
+        f"{PROJECTS}/{pid}/sales",
+        headers=staff_headers,
+        json={"buyer_name": "증권Y", "sale_approval_no": "202607081026070896455535"},
+    )
+    assert r.status_code == 201, r.text
+    sale_id = r.json()["sale_id"]
+    got = client.get(f"{PROJECTS}/{pid}/sales", headers=staff_headers).json()
+    row = next(s for s in got["items"] if s["sale_id"] == sale_id)
+    assert row["sale_approval_no"] == "202607081026070896455535"
+    u = client.put(
+        f"{PROJECTS}/{pid}/sales/{sale_id}",
+        headers=staff_headers,
+        json={"sale_approval_no": "202607081026070896999999"},
+    )
+    assert u.status_code == 200, u.text
+    got2 = client.get(f"{PROJECTS}/{pid}/sales", headers=staff_headers).json()
+    row2 = next(s for s in got2["items"] if s["sale_id"] == sale_id)
+    assert row2["sale_approval_no"] == "202607081026070896999999"
+
+
 def test_accounting_none_without_payout(client, staff_headers):
     """예상지급액 미산출(단가 게이트) 시 지급률·매출인식 None 전파, 제품은 산출."""
     pid = _mk_project(client, staff_headers, "회계게이트검증")
