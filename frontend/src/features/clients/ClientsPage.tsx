@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Buildings, FileXls, PencilSimple, Phone, Plus } from '@phosphor-icons/react'
+import { Buildings, ChartBar, FileXls, PencilSimple, Phone, Plus } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -15,6 +15,7 @@ import { fmtDate, fmtMoney, telHref } from '../../lib/format'
 import type { Client } from '../../types'
 import { useClients } from './api'
 import { ClientFormModal } from './ClientFormModal'
+import { FleetStatusImportModal } from './FleetStatusImportModal'
 import { ExcelImportModal } from '../imports/ExcelImportModal'
 
 const PAGE_SIZE = 20
@@ -46,6 +47,7 @@ export function ClientsPage() {
   const [editing, setEditing] = useState<Client | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [transportOpen, setTransportOpen] = useState(false)
+  const [fleetStatusOpen, setFleetStatusOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -210,6 +212,14 @@ export function ClientsPage() {
             </button>
             <button
               type="button"
+              onClick={() => setFleetStatusOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+            >
+              <ChartBar size={16} />
+              계약대수 현황 업로드
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setEditing(null)
                 setFormOpen(true)
@@ -348,6 +358,10 @@ export function ClientsPage() {
         open={transportOpen}
         onClose={() => setTransportOpen(false)}
         onDone={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
+      />
+      <FleetStatusImportModal
+        open={fleetStatusOpen}
+        onClose={() => setFleetStatusOpen(false)}
       />
     </div>
   )

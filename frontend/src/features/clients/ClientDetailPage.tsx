@@ -44,20 +44,23 @@ import {
   useClientReports,
   useClientVehicles,
   useDeleteClient,
+  useFleetClientStatus,
   useRemoveRecipient,
+  useSaveFleetMgmt,
 } from './api'
 import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
 import { FleetImportModal } from './FleetImportModal'
 
-type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'chat'
+type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'status' | 'chat'
 
-const TABS: { key: TabKey; label: string }[] = [
+const TABS: { key: TabKey; label: string; transportOnly?: boolean }[] = [
   { key: 'overview', label: '개요' },
   { key: 'histories', label: '활동 이력' },
   { key: 'reports', label: '보고서·문서' },
   { key: 'assets', label: '자산 및 연동' },
   { key: 'vehicles', label: '보유 차량' },
+  { key: 'status', label: '계약대수 현황', transportOnly: true },
   { key: 'chat', label: '상담' },
 ]
 
@@ -193,9 +196,9 @@ export function ClientDetailPage() {
         </div>
       </div>
 
-      {/* 탭 */}
+      {/* 탭 — 계약대수 현황은 운수사(TRANSPORT)만 노출 */}
       <div className="flex gap-1 overflow-x-auto border-b border-hairline">
-        {TABS.map((t) => (
+        {TABS.filter((t) => !t.transportOnly || client.client_type === 'TRANSPORT').map((t) => (
           <button
             key={t.key}
             type="button"
@@ -218,6 +221,7 @@ export function ClientDetailPage() {
       {tab === 'reports' && <ReportsDocsTab clientId={client.client_id} />}
       {tab === 'assets' && <AssetsTab clientId={client.client_id} />}
       {tab === 'vehicles' && <VehiclesTab clientId={client.client_id} />}
+      {tab === 'status' && <FleetStatusTab clientId={client.client_id} />}
       {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
       <ClientFormModal open={editOpen} onClose={() => setEditOpen(false)} client={client} />
@@ -1006,6 +1010,200 @@ function VehiclesTab({ clientId }: { clientId: string }) {
           </div>
         </div>
       )}
+    </section>
+  )
+}
+
+// ── 계약대수 현황 탭 (F3) — 월별 대수 추이 + 수작업 관리(대상·계약 여부). 운수사 전용 ──
+const YN_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'Y', label: 'Y' },
+  { value: 'N', label: 'N' },
+]
+
+function FleetStatusTab({ clientId }: { clientId: string }) {
+  const { data, isLoading } = useFleetClientStatus(clientId)
+  const saveMgmt = useSaveFleetMgmt(clientId)
+  const { showToast } = useToast()
+  const { labelOf: targetLabel, options: targetOptions } = useCodes('FLEET_TARGET')
+  const { labelOf: industryLabel } = useCodes('FLEET_INDUSTRY')
+
+  const [form, setForm] = useState({
+    target_type: '',
+    contract_yn: '',
+    union_contract: '',
+    regulated_yn: '',
+    memo: '',
+  })
+
+  // 서버 값 로드 시 폼 동기화
+  useEffect(() => {
+    const m = data?.mgmt
+    setForm({
+      target_type: m?.target_type ?? '',
+      contract_yn: m?.contract_yn ?? '',
+      union_contract: m?.union_contract ?? '',
+      regulated_yn: m?.regulated_yn ?? '',
+      memo: m?.memo ?? '',
+    })
+  }, [data?.mgmt])
+
+  const trend = data?.trend ?? []
+  const evShare = (t: (typeof trend)[number]) =>
+    t.total_count && t.total_count > 0
+      ? Math.round(((t.electric ?? 0) / t.total_count) * 1000) / 10
+      : null
+
+  const handleSave = () => {
+    saveMgmt.mutate(
+      {
+        target_type: form.target_type || null,
+        contract_yn: form.contract_yn || null,
+        union_contract: form.union_contract || null,
+        regulated_yn: form.regulated_yn || null,
+        memo: form.memo || null,
+      },
+      {
+        onSuccess: () => showToast('수작업 관리를 저장했습니다.', 'success'),
+        onError: () => showToast('저장에 실패했습니다.', 'danger'),
+      },
+    )
+  }
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />
+
+  return (
+    <section className="space-y-5">
+      {/* 수작업 관리 — 업로드와 독립(재업로드가 덮지 않음) */}
+      <div className="rounded-2xl border border-hairline bg-elevate p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-bone">수작업 관리</h3>
+          <span className="text-xs text-slatey">대수 업로드와 독립 — 재업로드해도 유지</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-xs text-slatey">
+            대상여부
+            <select
+              value={form.target_type}
+              onChange={(e) => setForm((f) => ({ ...f, target_type: e.target.value }))}
+              className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+            >
+              <option value="">—</option>
+              {targetOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(
+            [
+              ['contract_yn', '계약여부'],
+              ['union_contract', '조합계약'],
+              ['regulated_yn', '규제여부'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} className="flex flex-col gap-1 text-xs text-slatey">
+              {label}
+              <select
+                value={form[key]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+              >
+                {YN_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+        <label className="mt-3 flex flex-col gap-1 text-xs text-slatey">
+          비고
+          <input
+            type="text"
+            value={form.memo}
+            onChange={(e) => setForm((f) => ({ ...f, memo: e.target.value }))}
+            className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+            placeholder="메모"
+          />
+        </label>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saveMgmt.isPending}
+            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+          >
+            {saveMgmt.isPending ? '저장 중…' : '저장'}
+          </button>
+        </div>
+        {form.target_type && (
+          <p className="mt-2 text-xs text-slatey">현재 대상: {targetLabel(form.target_type)}</p>
+        )}
+      </div>
+
+      {/* 월별 대수 추이 — 최신 월 우선 */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-bone">월별 대수 추이</h3>
+        {trend.length === 0 ? (
+          <EmptyState
+            icon={<Car size={36} />}
+            title="현황 데이터 없음"
+            description="고객사 마스터 화면의 '계약대수 현황 업로드'로 원본 엑셀을 올리면 월별 대수가 여기에 표시됩니다."
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-hairline">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="bg-elevate text-xs text-ash">
+                <tr>
+                  <th className="px-3 py-2 font-medium">월</th>
+                  <th className="px-3 py-2 font-medium">업종</th>
+                  <th className="px-3 py-2 text-right font-medium">면허대수</th>
+                  <th className="px-3 py-2 text-right font-medium">경유</th>
+                  <th className="px-3 py-2 text-right font-medium">CNG</th>
+                  <th className="px-3 py-2 text-right font-medium">HB</th>
+                  <th className="px-3 py-2 text-right font-medium">전기</th>
+                  <th className="px-3 py-2 text-right font-medium">수소</th>
+                  <th className="px-3 py-2 text-right font-medium">전기비중</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {trend.map((t) => (
+                  <tr key={t.period}>
+                    <td className="px-3 py-2 font-mono text-xs text-bone">{t.period}</td>
+                    <td className="px-3 py-2 text-xs text-slatey">
+                      {t.industry ? industryLabel(t.industry) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-bone">
+                      {t.license_count ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slatey">
+                      {t.diesel ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slatey">
+                      {t.cng ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slatey">
+                      {t.hybrid ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-emerald-500">
+                      {t.electric ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slatey">
+                      {t.hydrogen ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-ash">
+                      {evShare(t) != null ? `${evShare(t)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   )
 }

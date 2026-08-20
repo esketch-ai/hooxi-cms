@@ -12,8 +12,12 @@ import type {
   ClientVehicleList,
   ClientVehiclePayload,
   Document,
+  FleetClientStatus,
   FleetImportResult,
+  FleetMgmt,
   FleetPreviewResult,
+  FleetStatusCommitResult,
+  FleetStatusPreviewResult,
   Paginated,
   ReportDelivery,
   ReportRecipient,
@@ -249,6 +253,68 @@ export function useImportFleet(clientId?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       if (clientId) queryClient.invalidateQueries({ queryKey: ['clients', clientId] })
+    },
+  })
+}
+
+// ── 운수사 계약대수 현황(F2/F3) ──────────────────────────────────────────
+/** 계약대수 현황 미리보기 — 원본 엑셀+월(YYYY-MM), DB 무변경. 반영 시 같은 파일 재전송 */
+export function useFleetStatusPreview() {
+  return useMutation({
+    mutationFn: async ({ file, period }: { file: File; period: string }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('period', period)
+      const { data } = await api.post<FleetStatusPreviewResult>('/fleet-status/preview', fd)
+      return data
+    },
+  })
+}
+
+/** 계약대수 현황 반영 — (고객사×월) upsert. clients·현황 쿼리 무효화 */
+export function useFleetStatusCommit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ file, period }: { file: File; period: string }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('period', period)
+      const { data } = await api.post<FleetStatusCommitResult>('/fleet-status/commit', fd)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      queryClient.invalidateQueries({ queryKey: ['fleet-status'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+/** 고객사 현황 탭 — 월별 대수 추이 + 수작업 관리 */
+export function useFleetClientStatus(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['fleet-status', clientId],
+    queryFn: async () => {
+      const { data } = await api.get<FleetClientStatus>(`/fleet-status/client/${clientId}`)
+      return data
+    },
+    enabled: !!clientId,
+  })
+}
+
+/** 수작업 관리 저장(업로드와 독립) */
+export function useSaveFleetMgmt(clientId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: FleetMgmt) => {
+      const { data } = await api.put<FleetMgmt>(
+        `/fleet-status/client/${clientId}/mgmt`,
+        payload,
+      )
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fleet-status', clientId] })
     },
   })
 }

@@ -700,6 +700,72 @@ export interface FleetPreviewResult {
   rows: FleetPreviewRow[] // '건너뜀' 행만
 }
 
+// ── 운수사 계약대수 현황(F2/F3) ──────────────────────────────────────────
+export interface FleetStatusItem {
+  region?: string | null
+  industry?: string | null
+  company_name?: string | null
+  period?: string | null
+  matched: boolean
+  is_update: boolean
+  matched_client_id?: string | null
+  matched_client_name?: string | null
+  license: number
+  total: number
+  diesel: number
+  cng: number
+  hybrid: number
+  electric: number
+  hydrogen: number
+}
+
+export interface FleetStatusPreviewResult {
+  period: string
+  total_rows: number
+  aggregated: number
+  matched: number
+  unmatched: number
+  items: FleetStatusItem[]
+}
+
+export interface FleetStatusCommitResult {
+  period: string
+  total_rows: number
+  aggregated: number
+  created: number
+  updated: number
+  matched: number
+  unmatched: number
+}
+
+export interface FleetStatusTrendItem {
+  period: string
+  license_count?: number | null
+  total_count?: number | null
+  diesel?: number | null
+  cng?: number | null
+  hybrid?: number | null
+  electric?: number | null
+  hydrogen?: number | null
+  region?: string | null
+  industry?: string | null
+}
+
+export interface FleetMgmt {
+  client_id?: string
+  target_type?: string | null
+  contract_yn?: string | null
+  union_contract?: string | null
+  regulated_yn?: string | null
+  memo?: string | null
+}
+
+export interface FleetClientStatus {
+  client_id: string
+  trend: FleetStatusTrendItem[]
+  mgmt?: FleetMgmt | null
+}
+
 // tb_project_stage — 진행 단계·지연 관찰 (Phase 1)
 export interface ProjectStage {
   stage_code: string
