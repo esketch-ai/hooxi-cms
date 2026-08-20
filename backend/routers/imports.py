@@ -36,6 +36,7 @@ _ROW_FACTORY = {
     "clients": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "transport_roster": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "transport_info": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
+    "transport": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "assets": lambda p: Asset(**{f: getattr(p, f) for f in _ASSET_FIELDS}),
 }
 
@@ -120,7 +121,7 @@ async def commit_import(
     created_rows = []
     updated_count = 0
     # 운수사 정보(정본)은 회사명(정제) + TRANSPORT 매칭 upsert — 있으면 non-None 필드만 보강.
-    upsert = entity == "transport_info"
+    upsert = entity in ("transport_info", "transport")
     for parsed in valid:
         p = parsed.payload
         existing = None
@@ -159,7 +160,7 @@ async def commit_import(
     db.commit()
     # 고객사만 Dropbox 폴더 provision 대상 — 커밋 후 채워진 PK로 백그라운드 예약
     # (자산은 폴더 대상 아님). client_id 미확보 행은 방어적으로 스킵.
-    if entity in ("clients", "transport_roster", "transport_info"):
+    if entity in ("clients", "transport_roster", "transport_info", "transport"):
         for row in created_rows:
             client_id = getattr(row, "client_id", None)
             if client_id:

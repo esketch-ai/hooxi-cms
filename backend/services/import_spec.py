@@ -124,6 +124,30 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
             ImportColumn("bus_intercity", "시외", example="0"),
         ),
     ),
+    # ── 운수사(표준 통합 양식) — 명부+정보 통합. 회사명 매칭 upsert. 향후 표준 ──────
+    #    회사명·사업자/법인번호·지역·대표·전화·팩스·주소·면허일자·버스대수(시내/농어촌/시외).
+    #    변환은 멱등(이미 정제된 값도 안전). client_type=TRANSPORT 고정.
+    "transport": ImportSpec(
+        entity="transport",
+        label="운수사(표준)",
+        schema_cls=schemas.TransportRosterCreate,
+        filename="운수사_고객리스트_표준_양식.xlsx",
+        columns=(
+            ImportColumn("company_name", "회사명", required=True,
+                         transform="company_clean", example="강원고속"),
+            ImportColumn("biz_reg_no", "사업자등록번호", example="221-81-00682"),
+            ImportColumn("corp_reg_no", "법인등록번호", example="140111-0000105"),
+            ImportColumn("region", "지역", example="강원"),
+            ImportColumn("ceo_name", "대표자", example="이동진"),
+            ImportColumn("ceo_contact_phone", "전화", transform="phone_kr", example="033-254-8272"),
+            ImportColumn("fax", "팩스", transform="phone_kr", example="033-253-2304"),
+            ImportColumn("address", "주소", example="강원특별자치도 춘천시 ..."),
+            ImportColumn("license_date", "면허일자", transform="license_date_kr", example="1970-10-01"),
+            ImportColumn("bus_city", "시내", example="73"),
+            ImportColumn("bus_rural", "농어촌", example="0"),
+            ImportColumn("bus_intercity", "시외", example="0"),
+        ),
+    ),
     # ── 운수사 정보(정본) — 사업자/법인등록번호 포함, 회사명 매칭 upsert ──────
     #    회사명이 기존 운수사와 일치하면 사업자번호 등 보강(update), 없으면 신규 생성.
     "transport_info": ImportSpec(

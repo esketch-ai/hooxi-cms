@@ -296,27 +296,28 @@ class _Resolvers:
         return candidates[0]
 
 
-# 회사명에서 제거할 법인 표기(접두·접미). 괄호 표기((주)(유)(합)(합자)(자)(자동차))는
-# 괄호가 있을 때만 제거하고, 괄호 없는 '자동차'·'자'는 상호의 일부이므로 보존한다.
-# '(자'·'(합'처럼 닫는 괄호가 잘린 표기도 흡수한다.
-_COMPANY_AFFIX = (
+# 회사명 법인표기 정제.
+# - 닫힌 괄호 표기((주)(유)(합)(합자)(자)(자동차)(사)(재)(공사))·주식회사류는 앞뒤 모두 제거.
+# - 괄호 없는 '자동차'·'자'는 상호의 일부이므로 보존.
+# - '세일교통(자'처럼 닫는 괄호가 잘린 표기는 접두 과잉제거(예: '(사무국')를 피하려 끝에서만 제거.
+_AFFIX_CLOSED = (
     r"(?:주식회사|유한회사|합자회사|㈜|주\)"
-    r"|\(\s*(?:주|유|합|합자|자|자동차)\s*\)?)"
+    r"|\(\s*(?:주|유|합|합자|자|자동차|사|재|공사)\s*\))"
 )
-_COMPANY_AFFIX_RE = re.compile(
-    r"^\s*" + _COMPANY_AFFIX + r"\s*|\s*" + _COMPANY_AFFIX + r"\s*$"
-)
+_AFFIX_CLOSED_RE = re.compile(r"^\s*" + _AFFIX_CLOSED + r"\s*|\s*" + _AFFIX_CLOSED + r"\s*$")
+_AFFIX_TRAILING_OPEN_RE = re.compile(r"\(\s*(?:주|유|합|자)\s*$")  # 끝에 잘린 여는 괄호만
 
 
 def _tf_company_clean(raw: str) -> str:
     """회사명 법인표기 접두·접미 제거(양끝 반복). 예: '(주)남성버스'→'남성버스',
-    '경성여객(주)'→'경성여객', '신동아교통(합)'→'신동아교통', '세일교통(자'→'세일교통'.
-    괄호 없는 '다모아자동차'는 보존(자동차는 상호의 일부)."""
+    '경성여객(주)'→'경성여객', '신동아교통(합)'→'신동아교통', '세일교통(자'→'세일교통',
+    '(사)제주관광협회'→'제주관광협회'. 괄호 없는 '다모아자동차'는 보존."""
     name = raw.strip()
     prev = None
     while name and name != prev:  # 양쪽에 붙은 경우 반복 제거
         prev = name
-        name = _COMPANY_AFFIX_RE.sub("", name).strip()
+        name = _AFFIX_CLOSED_RE.sub("", name).strip()
+        name = _AFFIX_TRAILING_OPEN_RE.sub("", name).strip()
     return name or raw.strip()
 
 
