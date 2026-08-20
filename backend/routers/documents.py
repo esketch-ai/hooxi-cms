@@ -33,15 +33,28 @@ DOC_TYPE_TO_FOLDER_CODE = {
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
-def storage_folder(db: Session, client: Optional[Client], doc_type: str) -> str:
-    """업로드 저장 폴더(root 제외 상대경로) — 고객사 폴더(회사명_짧은ID)/매핑된 6구분 라벨.
+def storage_folder(
+    db: Session,
+    client: Optional[Client],
+    doc_type: str,
+    folder_code: Optional[str] = None,
+) -> str:
+    """업로드 저장 폴더(root 제외 상대경로) — 고객사 폴더(회사명_짧은ID)/6구분 라벨.
 
-    고객사 폴더(provision과 동일한 folder_name) 아래 매핑 라벨에 저장한다. 고객사 미지정
-    (공용 양식 등)은 _공용/{라벨}. 라벨은 tb_code CLIENT_FOLDER에서 해석.
+    저장 폴더 결정:
+    - folder_code가 주어지면 그 CLIENT_FOLDER **active** 코드의 라벨로 저장(정산·수집데이터
+      등 6구분 직접 선택). 비활성/미지정 코드면 422.
+    - 없으면 doc_type→폴더 코드 매핑으로 폴백(하위호환).
+    라벨은 tb_code CLIENT_FOLDER에서 해석(하드코딩 금지). 고객사 미지정(공용 양식 등)은
+    _공용/{라벨}. provision된 폴더(dropbox_folder) 기준 — 회사명 개명 후에도 같은 폴더로 저장.
     """
-    code = DOC_TYPE_TO_FOLDER_CODE.get(doc_type, "EVIDENCE")
-    label = client_folders.subfolder_label_for_code(db, code) or "증빙자료"
-    # provision된 폴더(dropbox_folder) 기준 — 회사명 개명 후에도 같은 폴더로 저장
+    if folder_code:
+        label = client_folders.active_subfolder_label_for_code(db, folder_code)
+        if not label:
+            raise HTTPException(status_code=422, detail="저장 폴더 코드가 유효하지 않습니다")
+    else:
+        code = DOC_TYPE_TO_FOLDER_CODE.get(doc_type, "EVIDENCE")
+        label = client_folders.subfolder_label_for_code(db, code) or "증빙자료"
     base = client_folders.upload_base(db, client)
     return "{0}/{1}".format(base, label)
 
@@ -99,6 +112,7 @@ async def upload_document(
     client_id: Optional[str] = Form(None),
     history_id: Optional[str] = Form(None),
     asset_id: Optional[str] = Form(None),
+    folder_code: Optional[str] = Form(None),
     user: User = Depends(require_permission("master.write")),
     db: Session = Depends(get_db),
 ):
@@ -107,8 +121,12 @@ async def upload_document(
     client_id = (client_id or "").strip() or None
     history_id = (history_id or "").strip() or None
     asset_id = (asset_id or "").strip() or None
+    folder_code = (folder_code or "").strip() or None
     if doc_type not in _DOC_TYPES:
         raise HTTPException(status_code=422, detail="doc_type은 CONTRACT/REPORT/FORM/PHOTO/SIGN/ETC 중 하나여야 합니다")
+    # 저장 폴더 코드는 파일 읽기 전에 선검증(무효 코드에 대용량 업로드 낭비 방지)
+    if folder_code and client_folders.active_subfolder_label_for_code(db, folder_code) is None:
+        raise HTTPException(status_code=422, detail="저장 폴더 코드가 유효하지 않습니다")
     client = None
     if client_id:
         client = common.get_or_404(db, Client, client_id, "고객사")
@@ -134,7 +152,7 @@ async def upload_document(
     file_url = storage.save_file(
         content,
         file.filename or "document",
-        folder=storage_folder(db, client, doc_type),
+        folder=storage_folder(db, client, doc_type, folder_code),
     )
 
     doc = Document(

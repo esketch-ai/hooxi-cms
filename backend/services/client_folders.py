@@ -53,6 +53,21 @@ def subfolder_label_for_code(db, code):
     return row.label if row else None
 
 
+def active_subfolder_label_for_code(db, code):
+    """CLIENT_FOLDER의 **active** 코드 → 라벨(=실제 폴더명). 없거나 비활성이면 None.
+
+    업로드 시 사용자가 직접 고른 저장 폴더 코드 검증용 — 비활성/미지정 코드로는
+    저장 폴더가 잡히지 않도록 active='Y'까지 확인한다(subfolder_label_for_code는
+    라벨 해석 전용이라 비활성 코드도 라벨을 반환).
+    """
+    row = (
+        db.query(Code)
+        .filter(Code.category == CATEGORY, Code.code == code, Code.active == "Y")
+        .first()
+    )
+    return row.label if row else None
+
+
 def resolve_recipient_file(db, client, folder_code, name_contains=None):
     """mail-merge용 — 고객사 자신의 {folder_code} 구분폴더에서 첨부할 파일 1개 해석.
 

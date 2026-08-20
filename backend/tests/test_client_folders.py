@@ -370,6 +370,58 @@ def test_storage_folder_uses_pinned_folder_after_rename(client):
         db.close()
 
 
+def test_storage_folder_uses_explicit_folder_code(client):
+    """folder_code를 직접 주면 6구분(정산 등) 폴더로 저장 — doc_type 매핑 무시."""
+    from routers.documents import storage_folder
+
+    db = models.SessionLocal()
+    try:
+        c = models.Client(
+            client_id="fc01aaaa", client_type="TRANSPORT", company_name="정산운수"
+        )
+        base = "지역미상_정산운수_운수"
+        # 세금계산서(ETC 유형)라도 SETTLEMENT 코드를 고르면 정산 폴더로 저장
+        assert storage_folder(db, c, "ETC", "SETTLEMENT") == base + "/정산"
+        assert storage_folder(db, c, "ETC", "COLLECTED_DATA") == base + "/수집데이터"
+    finally:
+        db.close()
+
+
+def test_storage_folder_rejects_invalid_folder_code(client):
+    """비활성/미지정 folder_code → 422."""
+    import pytest
+    from fastapi import HTTPException
+
+    from routers.documents import storage_folder
+
+    db = models.SessionLocal()
+    try:
+        c = models.Client(
+            client_id="fc02aaaa", client_type="TRANSPORT", company_name="오류운수"
+        )
+        with pytest.raises(HTTPException) as exc:
+            storage_folder(db, c, "ETC", "NOPE")
+        assert exc.value.status_code == 422
+    finally:
+        db.close()
+
+
+def test_storage_folder_falls_back_to_doc_type_when_no_code(client):
+    """folder_code 생략 시 기존 doc_type 매핑 경로(하위호환)."""
+    from routers.documents import storage_folder
+
+    db = models.SessionLocal()
+    try:
+        c = models.Client(
+            client_id="fc03aaaa", client_type="TRANSPORT", company_name="폴백운수"
+        )
+        base = "지역미상_폴백운수_운수"
+        assert storage_folder(db, c, "CONTRACT") == base + "/계약서"
+        assert storage_folder(db, c, "ETC") == base + "/증빙자료"
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # 조회 엔드포인트 GET /clients/{id}/dropbox/tree (라이브 브라우즈)
 # ---------------------------------------------------------------------------

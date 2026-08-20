@@ -26,6 +26,7 @@ import {
   unwrapList,
   useApplyReconcile,
   useClientOptions,
+  useCodes,
   useDeleteDocument,
   useDropboxTree,
   usePreviewReconcile,
@@ -754,12 +755,26 @@ function DocumentUploadModal({
 }) {
   const { showToast } = useToast()
   const { data: clients = [] } = useClientOptions()
+  // 저장 폴더(6구분) — tb_code CLIENT_FOLDER active 코드. 정산·수집데이터 등 직접 선택.
+  const { options: folderOptions } = useCodes('CLIENT_FOLDER')
   const queryClient = useQueryClient()
 
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [clientId, setClientId] = useState(defaultClientId)
   const [docType, setDocType] = useState<DocType>('ETC')
+  const [folderCode, setFolderCode] = useState('')
+
+  // 저장 폴더 기본값 = 문서 유형에 대응하는 폴더(오분류 방지). 사용자가 정산 등으로 직접 변경 가능.
+  useEffect(() => {
+    if (folderOptions.length === 0) return
+    const map: Record<string, string> = {
+      CONTRACT: 'CONTRACT', REPORT: 'REPORT', PHOTO: 'ASSET_AUTH',
+      SIGN: 'EVIDENCE', FORM: 'EVIDENCE', ETC: 'EVIDENCE',
+    }
+    const mapped = map[docType] ?? 'EVIDENCE'
+    setFolderCode(folderOptions.some((o) => o.value === mapped) ? mapped : folderOptions[0].value)
+  }, [docType, folderOptions])
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -767,6 +782,7 @@ function DocumentUploadModal({
       if (file) form.append('file', file)
       form.append('title', title.trim() || (file?.name ?? ''))
       form.append('doc_type', docType)
+      if (folderCode) form.append('folder_code', folderCode)
       if (clientId) form.append('client_id', clientId)
       const { data } = await api.post('/documents', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -784,6 +800,10 @@ function DocumentUploadModal({
     e.preventDefault()
     if (!file) {
       showToast('업로드할 파일을 선택해 주세요.', 'danger')
+      return
+    }
+    if (!folderCode) {
+      showToast('저장 폴더를 선택해 주세요.', 'danger')
       return
     }
     try {
@@ -840,6 +860,23 @@ function DocumentUploadModal({
               ))}
             </select>
           </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ash">저장 폴더</label>
+          <select
+            value={folderCode}
+            onChange={(e) => setFolderCode(e.target.value)}
+            className="h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone focus:border-white/30 focus:outline-none"
+          >
+            {folderOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slatey">
+            실제 저장되는 고객사 폴더(계약서·정산·보고서·자산·인증정보·수집데이터·증빙자료)입니다.
+          </p>
         </div>
         <div className="flex justify-end gap-2 border-t border-hairline pt-3">
           <button
