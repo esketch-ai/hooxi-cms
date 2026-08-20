@@ -24,6 +24,7 @@ import { unwrapList, useCodes } from '../../lib/api/queries'
 import { dday, fmtDate, fmtMonth, fmtTime } from '../../lib/format'
 import type {
   DashboardFleet,
+  DashboardFleetTables,
   DashboardStats,
   Paginated,
   ReportDelivery,
@@ -75,6 +76,20 @@ export function DashboardPage() {
     queryFn: async (): Promise<DashboardFleet | null> => {
       try {
         const { data } = await api.get<DashboardFleet>('/dashboard/fleet')
+        return data
+      } catch {
+        return null
+      }
+    },
+    retry: false,
+  })
+
+  // 운수사 지역별 통계표 (F6) — 현황 탭 6표 재현
+  const { data: fleetTables } = useQuery({
+    queryKey: ['dashboard', 'fleet-tables'],
+    queryFn: async (): Promise<DashboardFleetTables | null> => {
+      try {
+        const { data } = await api.get<DashboardFleetTables>('/dashboard/fleet-tables')
         return data
       } catch {
         return null
@@ -348,6 +363,11 @@ export function DashboardPage() {
       {/* 운수사 계약대수 현황 (F4) — 최신 월 집계 */}
       {fleet && fleet.period && <FleetSection fleet={fleet} />}
 
+      {/* 운수사 지역별 통계표 (F6) — 현황 탭 6표 */}
+      {fleetTables && fleetTables.period && fleetTables.tables.length > 0 && (
+        <FleetRegionTables data={fleetTables} />
+      )}
+
       {/* KPI 5카드 */}
       {isLoading ? (
         <SkeletonKpi count={5} />
@@ -603,6 +623,70 @@ function FleetSection({ fleet }: { fleet: DashboardFleet }) {
           </div>
         </div>
       )}
+    </section>
+  )
+}
+
+// ── 운수사 지역별 통계표 (F6) — 현황 탭 6표(대수 3 + 업체수 3) ──
+function FleetRegionTables({ data }: { data: DashboardFleetTables }) {
+  const fmt = (n: number) => n.toLocaleString()
+  return (
+    <section className="rounded-3xl border border-hairline bg-graphite p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <MapTrifold size={20} className="text-bone" weight="fill" />
+        <h2 className="text-base font-bold text-bone">운수사 지역별 통계</h2>
+        <span className="rounded-full bg-elevate px-2 py-0.5 text-xs font-medium text-slatey">
+          {data.period} 기준
+        </span>
+        <span className="ml-auto text-xs text-slatey">대수 3표 · 업체수 3표</span>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {data.tables.map((t) => (
+          <div key={t.key} className="rounded-2xl border border-hairline bg-elevate p-3.5">
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-bone">{t.title}</h3>
+              <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] text-slatey">
+                {t.basis === 'license' ? '대수' : '업체수'}
+              </span>
+            </div>
+            <div className="max-h-[280px] overflow-auto rounded-lg border border-hairline">
+              <table className="w-full text-right text-xs">
+                <thead className="sticky top-0 bg-graphite text-ash">
+                  <tr>
+                    <th className="px-2.5 py-1.5 text-left font-medium">지역</th>
+                    {t.columns.map((c) => (
+                      <th key={c} className="px-2.5 py-1.5 font-medium">
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* 전국 합계 — 상단 고정 강조 */}
+                  <tr className="border-y border-hairline bg-surface/60 font-semibold text-bone">
+                    <td className="px-2.5 py-1.5 text-left">{t.total.region}</td>
+                    <td className="px-2.5 py-1.5 font-mono tabular-nums">{fmt(t.total.c1)}</td>
+                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-emerald-500">
+                      {fmt(t.total.c2)}
+                    </td>
+                    <td className="px-2.5 py-1.5 font-mono tabular-nums">{fmt(t.total.c3)}</td>
+                  </tr>
+                  {t.rows.map((r) => (
+                    <tr key={r.region} className="border-b border-hairline/60 last:border-0">
+                      <td className="px-2.5 py-1.5 text-left text-slatey">{r.region}</td>
+                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-bone">{fmt(r.c1)}</td>
+                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-emerald-600 dark:text-emerald-500">
+                        {fmt(r.c2)}
+                      </td>
+                      <td className="px-2.5 py-1.5 font-mono tabular-nums text-bone">{fmt(r.c3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

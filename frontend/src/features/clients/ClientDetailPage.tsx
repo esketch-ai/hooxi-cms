@@ -1014,25 +1014,22 @@ function VehiclesTab({ clientId }: { clientId: string }) {
   )
 }
 
-// ── 계약대수 현황 탭 (F3) — 월별 대수 추이 + 수작업 관리(대상·계약 여부). 운수사 전용 ──
-const YN_OPTIONS = [
-  { value: '', label: '—' },
-  { value: 'Y', label: 'Y' },
-  { value: 'N', label: 'N' },
-]
-
+// ── 계약대수 현황 탭 (F3/F6) — 월별 대수 추이 + 수작업 관리(대상·계약·규제 분류). 운수사 전용 ──
 function FleetStatusTab({ clientId }: { clientId: string }) {
   const { data, isLoading } = useFleetClientStatus(clientId)
   const saveMgmt = useSaveFleetMgmt(clientId)
   const { showToast } = useToast()
-  const { labelOf: targetLabel, options: targetOptions } = useCodes('FLEET_TARGET')
+  const { options: targetOptions } = useCodes('FLEET_TARGET')
+  const { options: contractOptions } = useCodes('FLEET_CONTRACT')
+  const { options: unionOptions } = useCodes('FLEET_UNION')
+  const { options: regulatedOptions } = useCodes('FLEET_REGULATED')
   const { labelOf: industryLabel } = useCodes('FLEET_INDUSTRY')
 
   const [form, setForm] = useState({
     target_type: '',
-    contract_yn: '',
+    contract_status: '',
     union_contract: '',
-    regulated_yn: '',
+    regulated_type: '',
     memo: '',
   })
 
@@ -1041,9 +1038,9 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
     const m = data?.mgmt
     setForm({
       target_type: m?.target_type ?? '',
-      contract_yn: m?.contract_yn ?? '',
+      contract_status: m?.contract_status ?? '',
       union_contract: m?.union_contract ?? '',
-      regulated_yn: m?.regulated_yn ?? '',
+      regulated_type: m?.regulated_type ?? '',
       memo: m?.memo ?? '',
     })
   }, [data?.mgmt])
@@ -1058,9 +1055,9 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
     saveMgmt.mutate(
       {
         target_type: form.target_type || null,
-        contract_yn: form.contract_yn || null,
+        contract_status: form.contract_status || null,
         union_contract: form.union_contract || null,
-        regulated_yn: form.regulated_yn || null,
+        regulated_type: form.regulated_type || null,
         memo: form.memo || null,
       },
       {
@@ -1070,39 +1067,25 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
     )
   }
 
+  const MGMT_FIELDS: { key: keyof typeof form; label: string; opts: { value: string; label: string }[] }[] = [
+    { key: 'target_type', label: '대상여부', opts: targetOptions },
+    { key: 'contract_status', label: '계약여부', opts: contractOptions },
+    { key: 'union_contract', label: '조합계약', opts: unionOptions },
+    { key: 'regulated_type', label: '규제여부', opts: regulatedOptions },
+  ]
+
   if (isLoading) return <Skeleton className="h-40 w-full" />
 
   return (
     <section className="space-y-5">
-      {/* 수작업 관리 — 업로드와 독립(재업로드가 덮지 않음) */}
+      {/* 수작업 관리 — 업로드와 독립(재업로드가 덮지 않음). 현황 탭 업로드 시 자동 반영도 됨 */}
       <div className="rounded-2xl border border-hairline bg-elevate p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-bone">수작업 관리</h3>
-          <span className="text-xs text-slatey">대수 업로드와 독립 — 재업로드해도 유지</span>
+          <span className="text-xs text-slatey">현황 탭 업로드로 자동 반영 · 여기서 수정 가능</span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs text-slatey">
-            대상여부
-            <select
-              value={form.target_type}
-              onChange={(e) => setForm((f) => ({ ...f, target_type: e.target.value }))}
-              className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
-            >
-              <option value="">—</option>
-              {targetOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {(
-            [
-              ['contract_yn', '계약여부'],
-              ['union_contract', '조합계약'],
-              ['regulated_yn', '규제여부'],
-            ] as const
-          ).map(([key, label]) => (
+          {MGMT_FIELDS.map(({ key, label, opts }) => (
             <label key={key} className="flex flex-col gap-1 text-xs text-slatey">
               {label}
               <select
@@ -1110,7 +1093,8 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
                 onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                 className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
               >
-                {YN_OPTIONS.map((o) => (
+                <option value="">—</option>
+                {opts.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
@@ -1139,9 +1123,6 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
             {saveMgmt.isPending ? '저장 중…' : '저장'}
           </button>
         </div>
-        {form.target_type && (
-          <p className="mt-2 text-xs text-slatey">현재 대상: {targetLabel(form.target_type)}</p>
-        )}
       </div>
 
       {/* 월별 대수 추이 — 최신 월 우선 */}

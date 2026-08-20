@@ -370,10 +370,11 @@ class FleetMgmt(Base):
         ForeignKey("tb_client.client_id", ondelete="CASCADE"),
         primary_key=True,
     )
-    target_type = Column(String(20))  # 대상여부(FLEET_TARGET: 사업대상/규제대상)
-    contract_yn = Column(String(1))  # 계약여부 Y/N
-    union_contract = Column(String(1))  # 조합계약 Y/N
-    regulated_yn = Column(String(1))  # 규제여부 Y/N
+    # 분류값은 현황 탭에서 자동 반영 + 앱 편집. Y/N보다 풍부해 코드로 관리(tb_code, 하드코딩 금지).
+    target_type = Column(String(20))  # 대상여부 FLEET_TARGET: BIZ(사업대상)/REG(규제대상)
+    contract_status = Column(String(20))  # 계약여부 FLEET_CONTRACT: DONE/NONE/EXCLUDED/REVIEW
+    union_contract = Column(String(20))  # 조합계약 FLEET_UNION: REP(대표계약)/MOU
+    regulated_type = Column(String(20))  # 규제여부 FLEET_REGULATED: ALLOC(할당)/GOAL(목표)/PUBLIC(공공)
     memo = Column(String(255))
     updated_by = Column(String(50))
     created_at = Column(DateTime, default=utcnow)
@@ -1031,6 +1032,9 @@ def ensure_schema():
         # P4 정산 재건 — 스냅샷 확정 지표 동결(additive 재활용). 배포 PG 조회 500 방지.
         ("tb_settlement_snapshot", "vehicle_count", "INTEGER"),
         ("tb_settlement_snapshot", "effective_reduction", "NUMERIC(14,3)"),
+        # 운수사 계약대수 수작업 분류 확장(F6) — 현황 탭 자동 반영. 기존 Y/N 컬럼은 레거시로 잔존.
+        ("tb_fleet_mgmt", "contract_status", "VARCHAR(20)"),
+        ("tb_fleet_mgmt", "regulated_type", "VARCHAR(20)"),
     ]
     try:
         insp = _inspect(engine)
@@ -1169,6 +1173,17 @@ def ensure_schema():
             )
     except Exception as exc:
         print("⚠ ensure_schema drop legacy constraint skipped: {0}".format(exc))
+
+    # 운수사 조합계약 컬럼 폭 확대(F6) — 기존 VARCHAR(1)로 배포된 dev에서 '대표계약'(코드 REP는
+    # 짧지만 라벨/코드 확장 여지) 저장 가능하게 넓힘. PG 전용·멱등(빈 테이블 안전). SQLite는 길이 무시.
+    if engine.dialect.name == "postgresql":
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    _text("ALTER TABLE tb_fleet_mgmt ALTER COLUMN union_contract TYPE VARCHAR(20)")
+                )
+        except Exception as exc:
+            print("⚠ ensure_schema widen union_contract skipped: {0}".format(exc))
 
     _reconcile_fk_ondelete(engine)
 

@@ -57,12 +57,12 @@ def test_fleet_mgmt_separate_from_status(client):
         db.add(c)
         db.commit()
         cid = c.client_id
-        m = models.FleetMgmt(client_id=cid, target_type="BIZ", contract_yn="Y",
-                            union_contract="N", regulated_yn="N", memo="테스트")
+        m = models.FleetMgmt(client_id=cid, target_type="BIZ", contract_status="DONE",
+                            union_contract="MOU", regulated_type="ALLOC", memo="테스트")
         db.add(m)
         db.commit()
         got = db.get(models.FleetMgmt, cid)
-        assert got.target_type == "BIZ" and got.contract_yn == "Y"
+        assert got.target_type == "BIZ" and got.contract_status == "DONE"
     finally:
         if cid:
             db.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)

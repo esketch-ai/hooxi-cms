@@ -753,11 +753,33 @@ export interface FleetStatusTrendItem {
 
 export interface FleetMgmt {
   client_id?: string
-  target_type?: string | null
-  contract_yn?: string | null
-  union_contract?: string | null
-  regulated_yn?: string | null
+  target_type?: string | null // FLEET_TARGET: BIZ/REG
+  contract_status?: string | null // FLEET_CONTRACT: DONE/NONE/REVIEW/EXCLUDED
+  union_contract?: string | null // FLEET_UNION: REP/MOU
+  regulated_type?: string | null // FLEET_REGULATED: ALLOC/GOAL/PUBLIC
   memo?: string | null
+}
+
+// 지역별 통계표(F6)
+export interface FleetTableRow {
+  region: string
+  c1: number
+  c2: number
+  c3: number
+}
+
+export interface FleetTable {
+  key: string
+  title: string
+  basis: 'license' | 'count'
+  columns: string[]
+  total: FleetTableRow
+  rows: FleetTableRow[]
+}
+
+export interface DashboardFleetTables {
+  period?: string | null
+  tables: FleetTable[]
 }
 
 export interface FleetClientStatus {

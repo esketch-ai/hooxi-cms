@@ -119,6 +119,16 @@ def seed_codes():
         ("FLEET_INDUSTRY", "CITY", "시내", None, None, 10),
         ("FLEET_INDUSTRY", "RURAL", "농어촌", None, None, 20),
         ("FLEET_INDUSTRY", "INTERCITY", "시외", None, None, 30),
+        # 계약대수 수작업 분류(F6) — 현황 탭 자동 반영 + 앱 편집. 하드코딩 금지 규약.
+        ("FLEET_CONTRACT", "DONE", "계약완료", "emerald", None, 10),
+        ("FLEET_CONTRACT", "NONE", "미계약", "rose", None, 20),
+        ("FLEET_CONTRACT", "REVIEW", "계약검토", "amber", None, 30),
+        ("FLEET_CONTRACT", "EXCLUDED", "대상제외", "slate", None, 40),
+        ("FLEET_UNION", "REP", "대표계약", None, None, 10),
+        ("FLEET_UNION", "MOU", "MOU체결", None, None, 20),
+        ("FLEET_REGULATED", "ALLOC", "할당", "amber", None, 10),
+        ("FLEET_REGULATED", "GOAL", "목표", "amber", None, 20),
+        ("FLEET_REGULATED", "PUBLIC", "공공", "sky", None, 30),
         # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
         ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
         ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),

@@ -64,13 +64,20 @@ async def commit_fleet_status(
     period = _validate_period(period)
     content = await _read_upload(file)
     result = fleet_import.commit(db, content, period, actor_id=user.user_id)
+    # 현황 탭이 있으면 분류(대상·계약·규제)도 tb_fleet_mgmt에 반영(F6). 단일 원본 탭이면 0.
+    mgmt = fleet_import.commit_mgmt(db, content, actor_id=user.user_id)
+    result.update(mgmt)
     AuditLogger.log_action(
         db,
         user.user_id,
         "FLEET_STATUS_IMPORT",
         target_type="FLEET_STATUS",
-        new_value="운수사 계약대수 현황({0}) 업로드 — 생성 {1}건 / 갱신 {2}건 / 미매칭 {3}건".format(
-            period, result["created"], result["updated"], result["unmatched"]
+        new_value=(
+            "운수사 계약대수 현황({0}) 업로드 — 생성 {1}건 / 갱신 {2}건 / 미매칭 {3}건 · "
+            "분류반영 {4}건".format(
+                period, result["created"], result["updated"], result["unmatched"],
+                mgmt["mgmt_matched"],
+            )
         ),
     )
     db.commit()
@@ -104,8 +111,9 @@ def get_client_fleet_status(
     mgmt = db.get(FleetMgmt, client_id)
     mgmt_out = (
         schemas.FleetMgmtOut(
-            client_id=client_id, target_type=mgmt.target_type, contract_yn=mgmt.contract_yn,
-            union_contract=mgmt.union_contract, regulated_yn=mgmt.regulated_yn, memo=mgmt.memo,
+            client_id=client_id, target_type=mgmt.target_type,
+            contract_status=mgmt.contract_status, union_contract=mgmt.union_contract,
+            regulated_type=mgmt.regulated_type, memo=mgmt.memo,
         )
         if mgmt else None
     )
@@ -127,16 +135,17 @@ def update_client_fleet_mgmt(
     if mgmt is None:
         mgmt = FleetMgmt(client_id=client_id)
         db.add(mgmt)
-    for f in ("target_type", "contract_yn", "union_contract", "regulated_yn", "memo"):
+    for f in ("target_type", "contract_status", "union_contract", "regulated_type", "memo"):
         setattr(mgmt, f, getattr(payload, f))
     mgmt.updated_by = user.user_id
     AuditLogger.log_action(
         db, user.user_id, "FLEET_MGMT_UPDATE",
         target_type="FLEET_MGMT", target_id=client_id,
-        new_value="계약여부={0}/대상={1}".format(payload.contract_yn, payload.target_type),
+        new_value="계약={0}/대상={1}".format(payload.contract_status, payload.target_type),
     )
     db.commit()
     return schemas.FleetMgmtOut(
-        client_id=client_id, target_type=mgmt.target_type, contract_yn=mgmt.contract_yn,
-        union_contract=mgmt.union_contract, regulated_yn=mgmt.regulated_yn, memo=mgmt.memo,
+        client_id=client_id, target_type=mgmt.target_type,
+        contract_status=mgmt.contract_status, union_contract=mgmt.union_contract,
+        regulated_type=mgmt.regulated_type, memo=mgmt.memo,
     )

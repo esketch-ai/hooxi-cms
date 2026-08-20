@@ -156,10 +156,10 @@ def test_fleet_status_endpoints(client, admin_headers):
     assert r3.json()["trend"][0]["electric"] == 30
     # 수작업 관리 저장(업로드 독립)
     r4 = client.put(f"/api/v1/fleet-status/client/{cid}/mgmt", headers=h,
-                    json={"contract_yn": "Y", "target_type": "BIZ", "memo": "테스트"})
-    assert r4.status_code == 200 and r4.json()["contract_yn"] == "Y"
+                    json={"contract_status": "DONE", "target_type": "BIZ", "memo": "테스트"})
+    assert r4.status_code == 200 and r4.json()["contract_status"] == "DONE"
     r5 = client.get(f"/api/v1/fleet-status/client/{cid}", headers=h)
-    assert r5.json()["mgmt"]["contract_yn"] == "Y"
+    assert r5.json()["mgmt"]["contract_status"] == "DONE"
     db = models.SessionLocal()
     try:
         db.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)
@@ -189,7 +189,7 @@ def test_dashboard_fleet_aggregation(client, admin_headers):
             models.FleetStatus(client_id=None, region="경기", industry="RURAL",
                                company_name="TESTF보류대시", period="2026-06",
                                license_count=10, total_count=10, electric=1),
-            models.FleetMgmt(client_id=cid, target_type="BIZ", contract_yn="Y"),
+            models.FleetMgmt(client_id=cid, target_type="BIZ", contract_status="DONE"),
         ])
         db.commit()
     finally:
@@ -207,5 +207,110 @@ def test_dashboard_fleet_aggregation(client, admin_headers):
         db.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)
         db.commit()
         _cleanup(db)
+    finally:
+        db.close()
+
+
+def _make_excel_with_status(orig_rows, status_rows):
+    """원본 탭 + 현황 탭(분류 컬럼) 2탭 xlsx. status_rows: (지역,회사,대상,계약,조합,규제)."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "원본"
+    ws.append([])
+    ws.append(["조합", "업종", "회사명", None, "월", "면허대수", "계"])
+    ws.append([])
+    ws.append([None, None, None, None, None, None, None, "경유", "CNG", "HB", "전기", "수소"])
+    for r in orig_rows:
+        ws.append([r["region"], r["industry"], r["company"], f"{r['region']}{r['company']}",
+                   "6월", r["lic"], r["total"], r["diesel"], r["cng"], 0, r["ev"], 0])
+    st = wb.create_sheet("현황")
+    st.append(["조합", "코드", "업종", "회사명", "대상여부", "월", "면허대수", "계",
+               "경유", "CNG", "HB", "전기", "수소", "계약여부", "조합계약", "규제여부"])
+    for (region, company, target, contract, union, regulated) in status_rows:
+        st.append([region, 1, "시내", company, target, "6월", 0, 0, 0, 0, 0, 0, 0,
+                   contract, union, regulated])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_status_tab_ingests_mgmt(client, admin_headers):
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        c = models.Client(client_type="TRANSPORT", company_name="TESTF분류운수",
+                          region="서울", biz_reg_no="884-88-88884")
+        db.add(c)
+        db.commit()
+        cid = c.client_id
+    finally:
+        db.close()
+    xls = _make_excel_with_status(
+        [{"region": "서울", "industry": "시내", "company": "TESTF분류운수",
+          "lic": 50, "total": 50, "diesel": 0, "cng": 10, "ev": 40}],
+        [("서울", "TESTF분류운수", "사업대상", "계약완료", "MOU체결", "")],
+    )
+    r = client.post("/api/v1/fleet-status/commit", headers=admin_headers,
+                    data={"period": "2026-06"}, files={"file": ("f.xlsx", xls)})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["created"] == 1 and body["mgmt_matched"] == 1
+    # tb_fleet_mgmt에 코드로 반영됐는지
+    r2 = client.get(f"/api/v1/fleet-status/client/{cid}", headers=admin_headers)
+    m = r2.json()["mgmt"]
+    assert m["target_type"] == "BIZ" and m["contract_status"] == "DONE"
+    assert m["union_contract"] == "MOU"
+    db = models.SessionLocal()
+    try:
+        db.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)
+        db.commit()
+        _cleanup(db)
+    finally:
+        db.close()
+
+
+def test_dashboard_fleet_tables(client, admin_headers):
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        c1 = models.Client(client_type="TRANSPORT", company_name="TESTF표A", region="서울",
+                           biz_reg_no="885-88-88885")
+        c2 = models.Client(client_type="TRANSPORT", company_name="TESTF표B", region="부산",
+                           biz_reg_no="886-88-88886")
+        db.add_all([c1, c2]); db.commit()
+        a, b = c1.client_id, c2.client_id
+        db.add_all([
+            models.FleetStatus(client_id=a, region="서울", industry="CITY",
+                               company_name="TESTF표A", period="2026-06",
+                               license_count=100, total_count=100, electric=30, hydrogen=5),
+            models.FleetStatus(client_id=b, region="부산", industry="CITY",
+                               company_name="TESTF표B", period="2026-06",
+                               license_count=50, total_count=50, electric=10, hydrogen=0),
+            # A=외부사업 미계약, B=규제대상
+            models.FleetMgmt(client_id=a, target_type="BIZ", contract_status="NONE"),
+            models.FleetMgmt(client_id=b, target_type="REG", contract_status="DONE",
+                             regulated_type="ALLOC"),
+        ])
+        db.commit()
+    finally:
+        db.close()
+    r = client.get("/api/v1/dashboard/fleet-tables", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["period"] == "2026-06"
+    tbl = {t["key"]: t for t in d["tables"]}
+    # T1 전체현황(대수) 전국 = 면허 150 / 전기 40 / 수소 5
+    assert tbl["T1"]["total"]["c1"] == 150 and tbl["T1"]["total"]["c2"] == 40
+    # T2 외부사업 대상(할당/목표 제외) = A만(BIZ, 규제없음) → 면허 100
+    assert tbl["T2"]["total"]["c1"] == 100
+    # T3 외부사업 미계약 = A(미계약) → 100
+    assert tbl["T3"]["total"]["c1"] == 100
+    # T5 규제/비규제: 소계2 / 규제1(B) / 외부사업1(A)
+    assert tbl["T5"]["total"]["c1"] == 2 and tbl["T5"]["total"]["c2"] == 1 and tbl["T5"]["total"]["c3"] == 1
+    db = models.SessionLocal()
+    try:
+        db.query(models.FleetMgmt).filter(models.FleetMgmt.client_id.in_([a, b])).delete(synchronize_session=False)
+        db.commit(); _cleanup(db)
     finally:
         db.close()

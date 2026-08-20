@@ -178,7 +178,7 @@ def dashboard_fleet(
                 biz_target += 1
             elif m and m.target_type == "REG":
                 reg_target += 1
-            if m and m.contract_yn == "Y":
+            if m and m.contract_status == "DONE":
                 contracted += 1
             else:
                 uncontracted += 1
@@ -200,3 +200,104 @@ def dashboard_fleet(
         by_industry=_dist(FleetStatus.industry),
         by_region=_dist(FleetStatus.region),
     )
+
+
+# 지역(조합) 표시 순서 — 현황 엑셀 관례. 목록 밖 지역은 뒤에 가나다 순 부착.
+_REGION_ORDER = [
+    "서울", "부산", "대구", "인천", "광주", "대전", "울산", "경기", "강원",
+    "충북", "충남", "전북", "전남", "경북", "경남", "제주", "세종",
+]
+
+
+@router.get("/fleet-tables", response_model=schemas.DashboardFleetTables)
+def dashboard_fleet_tables(
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """운수사 지역별 통계표(F6) — 현황 탭 6표 재현(최신 월 대수 + 수작업 분류).
+
+    대수 기준 3표(전체/외부사업 대상(할당·목표 제외)/외부사업 미계약) +
+    업체수 기준 3표(전체/규제·비규제/외부사업 대상). 분류는 tb_fleet_mgmt(현황 탭 자동 반영).
+    """
+    period = db.query(func.max(FleetStatus.period)).scalar()
+    if not period:
+        return schemas.DashboardFleetTables()
+
+    rows = (
+        db.query(
+            FleetStatus.region,
+            FleetStatus.license_count,
+            FleetStatus.electric,
+            FleetStatus.hydrogen,
+            FleetMgmt.target_type,
+            FleetMgmt.contract_status,
+            FleetMgmt.regulated_type,
+        )
+        .outerjoin(FleetMgmt, FleetMgmt.client_id == FleetStatus.client_id)
+        .filter(FleetStatus.period == period)
+        .all()
+    )
+
+    def _blank():
+        return {"c1": 0, "c2": 0, "c3": 0}
+
+    # 6개 표의 지역별 누적기 — {region: {c1,c2,c3}}
+    acc = {k: {} for k in ("T1", "T2", "T3", "T4", "T5", "T6")}
+
+    def _add(tkey, region, c1=0, c2=0, c3=0):
+        d = acc[tkey].setdefault(region or "미상", _blank())
+        d["c1"] += c1
+        d["c2"] += c2
+        d["c3"] += c3
+
+    for region, lic, ev, h2, target, contract, regulated in rows:
+        lic = int(lic or 0)
+        ev = int(ev or 0)
+        h2 = int(h2 or 0)
+        is_biz = target == "BIZ"
+        is_reg = target == "REG"
+        # 외부사업 대상 = 사업대상 & 규제여부(할당/목표) 제외
+        ext = is_biz and regulated not in ("ALLOC", "GOAL")
+        done = contract == "DONE"
+        none = contract == "NONE"
+
+        # 대수 기준
+        _add("T1", region, lic, ev, h2)  # 전체 현황
+        if ext:
+            _add("T2", region, lic, ev, h2)  # 외부사업 대상(할당/목표 제외)
+            if none:
+                _add("T3", region, lic, ev, h2)  # 외부사업 미계약
+        # 업체수 기준
+        _add("T4", region, 1, 1 if done else 0, 1 if none else 0)  # 전체: 전체/계약완료/미계약
+        _add("T5", region, 1, 1 if is_reg else 0, 1 if is_biz else 0)  # 규제/비규제
+        if is_biz:
+            _add("T6", region, 1, 1 if done else 0, 1 if none else 0)  # 외부사업: 소계/계약/미계약
+
+    def _sorted_regions(regmap):
+        present = list(regmap.keys())
+        present.sort(key=lambda r: (_REGION_ORDER.index(r) if r in _REGION_ORDER else 999, r))
+        return present
+
+    def _build(tkey, title, basis, columns):
+        regmap = acc[tkey]
+        total = _blank()
+        rowlist = []
+        for r in _sorted_regions(regmap):
+            d = regmap[r]
+            rowlist.append(schemas.FleetTableRow(region=r, c1=d["c1"], c2=d["c2"], c3=d["c3"]))
+            for k in ("c1", "c2", "c3"):
+                total[k] += d[k]
+        return schemas.FleetTable(
+            key=tkey, title=title, basis=basis, columns=columns,
+            total=schemas.FleetTableRow(region="전국", **total), rows=rowlist,
+        )
+
+    tables = [
+        _build("T1", "전체 현황", "license", ["면허대수", "전기", "수소"]),
+        _build("T2", "외부사업 대상 (할당/목표 제외)", "license", ["면허대수", "전기", "수소"]),
+        _build("T3", "외부사업 미계약 현황", "license", ["면허대수", "전기", "수소"]),
+        _build("T4", "전체 현황 (업체수)", "count", ["전체", "계약완료", "미계약"]),
+        _build("T5", "규제/비규제 구분", "count", ["소계", "규제", "외부사업"]),
+        _build("T6", "외부사업 대상 (업체수)", "count", ["소계", "계약", "미계약"]),
+    ]
+    return schemas.DashboardFleetTables(period=period, tables=tables)

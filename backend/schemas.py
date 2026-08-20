@@ -2128,6 +2128,28 @@ class DashboardFleet(BaseModel):
     by_region: List[FleetDistItem] = []
 
 
+# 지역별 통계표(F6) — 현황 탭 6표 재현
+class FleetTableRow(BaseModel):
+    region: str
+    c1: int = 0
+    c2: int = 0
+    c3: int = 0
+
+
+class FleetTable(BaseModel):
+    key: str  # T1~T6
+    title: str
+    basis: str  # 'license'(대수) | 'count'(업체수)
+    columns: List[str]  # 3개 열 라벨
+    total: FleetTableRow  # 전국 합계
+    rows: List[FleetTableRow]  # 지역별
+
+
+class DashboardFleetTables(BaseModel):
+    period: Optional[str] = None
+    tables: List[FleetTable] = []
+
+
 # ---------------------------------------------------------------------------
 # 시스템 설정 (SCR-14 설정 탭 — tb_config, ADMIN 전용 §10.1)
 # ---------------------------------------------------------------------------
@@ -2731,6 +2753,11 @@ class FleetStatusCommitOut(BaseModel):
     updated: int
     matched: int
     unmatched: int
+    # 현황 탭 분류 반영(F6) — 현황 탭이 있을 때만(단일 원본 탭이면 0)
+    mgmt_rows: int = 0
+    mgmt_matched: int = 0
+    mgmt_updated: int = 0
+    mgmt_created: int = 0
 
 
 class FleetStatusTrendItem(BaseModel):
@@ -2749,12 +2776,12 @@ class FleetStatusTrendItem(BaseModel):
 
 
 class FleetMgmtIn(BaseModel):
-    """수작업 관리 저장 — 계약여부 등(업로드 무영향)."""
+    """수작업 관리 저장 — 대상·계약·조합·규제 분류(코드값, 업로드 무영향)."""
 
-    target_type: Optional[str] = None
-    contract_yn: Optional[str] = None
-    union_contract: Optional[str] = None
-    regulated_yn: Optional[str] = None
+    target_type: Optional[str] = None  # FLEET_TARGET: BIZ/REG
+    contract_status: Optional[str] = None  # FLEET_CONTRACT: DONE/NONE/REVIEW/EXCLUDED
+    union_contract: Optional[str] = None  # FLEET_UNION: REP/MOU
+    regulated_type: Optional[str] = None  # FLEET_REGULATED: ALLOC/GOAL/PUBLIC
     memo: Optional[str] = None
 
 

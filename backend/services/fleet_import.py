@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 
 from openpyxl import load_workbook
 
-from models import Client, Code, FleetStatus
+from models import Client, Code, FleetMgmt, FleetStatus
 from services.excel_import import _tf_company_clean
 
 # 원본 탭 고정 컬럼(0-base) — 실측: A조합 B업종 C회사명 E월 F면허대수 G계 H경유 I CNG J HB K전기 L수소
@@ -28,6 +28,21 @@ _MODEL_COL = {"license": "license_count", "total": "total_count"}
 
 # 업종 라벨 → FLEET_INDUSTRY 코드
 _INDUSTRY_CODE = {"시내": "CITY", "농어촌": "RURAL", "시외": "INTERCITY"}
+
+# ── 현황 탭 수작업 분류(F6) — 라벨 → 코드(tb_code) ──
+_STATUS_TAB = "현황"
+# 현황 탭 고정 컬럼(0-base): 0조합 2업종 3회사명 4대상여부 13계약여부 14조합계약 15규제여부
+_MGMT_COL = {"region": 0, "company": 3, "target": 4, "contract": 13, "union": 14, "regulated": 15}
+_TARGET_CODE = {"사업대상": "BIZ", "규제대상": "REG"}
+_CONTRACT_CODE = {"계약완료": "DONE", "미계약": "NONE", "계약검토": "REVIEW", "대상제외": "EXCLUDED"}
+_UNION_CODE = {"대표계약": "REP", "MOU체결": "MOU"}
+_REGULATED_CODE = {"할당": "ALLOC", "목표": "GOAL", "공공": "PUBLIC"}
+
+
+def _code(mapping: dict, raw) -> Optional[str]:
+    if raw is None:
+        return None
+    return mapping.get(str(raw).strip()) or None
 
 
 def _to_int(v) -> int:
@@ -193,3 +208,71 @@ def commit(db, file_bytes: bytes, period: str, actor_id: Optional[str] = None) -
         "matched": matched,
         "unmatched": len(items) - matched,
     }
+
+
+def parse_mgmt_rows(file_bytes: bytes) -> List[dict]:
+    """현황 탭의 수작업 분류(대상여부·계약여부·조합계약·규제여부) → 행 목록.
+
+    현황 탭이 없으면 빈 목록(앞으로 단일 '원본' 탭만 올리는 경우 분류 미반영, 기존 유지).
+    """
+    try:
+        wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception:
+        return []
+    if _STATUS_TAB not in wb.sheetnames:
+        return []
+    ws = wb[_STATUS_TAB]
+    out: List[dict] = []
+    for values in ws.iter_rows(values_only=True):
+        if values is None:
+            continue
+        company = values[_MGMT_COL["company"]] if len(values) > _MGMT_COL["company"] else None
+        if not (isinstance(company, str) and company.strip()):
+            continue
+        target = _code(_TARGET_CODE, values[_MGMT_COL["target"]] if len(values) > _MGMT_COL["target"] else None)
+        contract = _code(_CONTRACT_CODE, values[_MGMT_COL["contract"]] if len(values) > _MGMT_COL["contract"] else None)
+        union = _code(_UNION_CODE, values[_MGMT_COL["union"]] if len(values) > _MGMT_COL["union"] else None)
+        regulated = _code(_REGULATED_CODE, values[_MGMT_COL["regulated"]] if len(values) > _MGMT_COL["regulated"] else None)
+        # 분류가 하나라도 있는 데이터 행만(헤더/집계표 영역 제외)
+        if not any([target, contract, union, regulated]):
+            continue
+        out.append({
+            "region": (str(values[_MGMT_COL["region"]]).strip() if values[_MGMT_COL["region"]] else ""),
+            "company_name": company.strip(),
+            "target_type": target,
+            "contract_status": contract,
+            "union_contract": union,
+            "regulated_type": regulated,
+        })
+    return out
+
+
+def commit_mgmt(db, file_bytes: bytes, actor_id: Optional[str] = None) -> dict:
+    """현황 탭 분류 → tb_fleet_mgmt upsert(고객사 1:1). 매칭된 운수사만 반영, 엑셀이 정본이라 덮어씀.
+
+    미매칭(지역+회사명으로 고객사 못 찾음)은 건너뛴다(대수와 달리 분류는 고객사 단위라 보류행 없음).
+    """
+    rows = parse_mgmt_rows(file_bytes)
+    if not rows:
+        return {"mgmt_rows": 0, "mgmt_matched": 0, "mgmt_updated": 0, "mgmt_created": 0}
+    lookup = _client_lookup(db)
+    matched = created = updated = 0
+    for r in rows:
+        client = lookup.get((r["region"], _tf_company_clean(r["company_name"])))
+        if client is None:
+            continue
+        matched += 1
+        m = db.get(FleetMgmt, client.client_id)
+        if m is None:
+            m = FleetMgmt(client_id=client.client_id)
+            db.add(m)
+            created += 1
+        else:
+            updated += 1
+        m.target_type = r["target_type"]
+        m.contract_status = r["contract_status"]
+        m.union_contract = r["union_contract"]
+        m.regulated_type = r["regulated_type"]
+        m.updated_by = actor_id
+    db.commit()
+    return {"mgmt_rows": len(rows), "mgmt_matched": matched, "mgmt_updated": updated, "mgmt_created": created}
