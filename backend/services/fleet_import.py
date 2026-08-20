@@ -45,6 +45,21 @@ def _code(mapping: dict, raw) -> Optional[str]:
     return mapping.get(str(raw).strip()) or None
 
 
+# ── 매칭 전용 정규화(저장·표시는 원문 유지) ──
+# 지역: 원본은 광주/전남 분리, 마스터 조합은 '전남광주' 통합 → 매칭 시 동일 버킷으로.
+_REGION_CANON = {"광주": "전남광주", "전남": "전남광주"}
+
+
+def _canon_region(r) -> str:
+    r = (r or "").strip()
+    return _REGION_CANON.get(r, r)
+
+
+def _match_key(region, name) -> tuple:
+    """(지역 정규화, 정제+공백제거 회사명) — 원본의 줄바꿈·다중공백·조합 지역표기 흡수."""
+    return (_canon_region(region), _tf_company_clean(name or "").replace(" ", ""))
+
+
 def _to_int(v) -> int:
     if v is None:
         return 0
@@ -89,11 +104,10 @@ def parse_rows(file_bytes: bytes) -> List[dict]:
 
 
 def _client_lookup(db) -> Dict[tuple, Client]:
-    """(지역, 정제 회사명) → 운수사(TRANSPORT). 매칭 인덱스 1회 로드."""
+    """(정규화 지역, 정제 회사명) → 운수사(TRANSPORT). 매칭 인덱스 1회 로드."""
     idx: Dict[tuple, Client] = {}
     for c in db.query(Client).filter(Client.client_type == "TRANSPORT").all():
-        key = ((c.region or "").strip(), _tf_company_clean(c.company_name or ""))
-        idx.setdefault(key, c)
+        idx.setdefault(_match_key(c.region, c.company_name), c)
     return idx
 
 
@@ -116,9 +130,9 @@ def _aggregate(db, rows: List[dict]) -> List[dict]:
     lookup = _client_lookup(db)
     agg: Dict[tuple, dict] = {}
     for r in rows:
-        clean = _tf_company_clean(r["company_name"])
-        client = lookup.get((r["region"], clean))
-        key = ("cid", client.client_id) if client else ("rc", r["region"], clean)
+        mk = _match_key(r["region"], r["company_name"])
+        client = lookup.get(mk)
+        key = ("cid", client.client_id) if client else ("rc", mk[0], mk[1])
         cur = agg.get(key)
         if cur is None:
             cur = {
@@ -261,7 +275,7 @@ def commit_mgmt(db, file_bytes: bytes, actor_id: Optional[str] = None) -> dict:
     # tb_fleet_mgmt(PK=client_id)에 두 번 INSERT돼 유니크 위반. 같은 고객사는 한 객체에 마지막 값 반영.
     seen: Dict[str, FleetMgmt] = {}
     for r in rows:
-        client = lookup.get((r["region"], _tf_company_clean(r["company_name"])))
+        client = lookup.get(_match_key(r["region"], r["company_name"]))
         if client is None:
             continue
         matched += 1

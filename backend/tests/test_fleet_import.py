@@ -351,3 +351,37 @@ def test_status_tab_dedup_same_client_no_violation(client, admin_headers):
     finally:
         db2.close()
     db.close()
+
+
+def test_match_key_normalizes_region_and_whitespace():
+    """매칭 정규화 — 광주/전남↔전남광주 지역, 회사명 줄바꿈·다중공백 흡수(저장은 원문)."""
+    mk = fleet_import._match_key
+    # 지역 정규화: 원본 광주/전남 → 마스터 전남광주 버킷
+    assert mk("광주", "대창운수") == mk("전남광주", "대창운수")
+    assert mk("전남", "나주교통") == mk("전남광주", "나주교통")
+    # 회사명 공백/줄바꿈 제거
+    assert mk("경북", "새천년\n미소") == mk("경북", "새천년미소")
+    assert mk("전북", "무진장     여객") == mk("전북", "무진장여객")
+    # 다른 지역은 그대로(오병합 방지)
+    assert mk("부산", "삼성여객") != mk("서울", "삼성여객")
+
+
+def test_fleet_status_match_region_alias(client):
+    """원본 지역이 광주여도 마스터 전남광주 운수사에 매칭된다."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        c = models.Client(client_type="TRANSPORT", company_name="TESTF대창운수",
+                          region="전남광주", biz_reg_no="889-88-88889")
+        db.add(c); db.commit()
+        cid = c.client_id
+        xls = _make_excel([
+            {"region": "광주", "industry": "시내", "company": "TESTF대창운수",
+             "lic": 50, "total": 50, "diesel": 0, "cng": 0, "ev": 20},
+        ])
+        res = fleet_import.analyze(db, xls, "2026-06")
+        assert res["matched"] == 1
+        assert res["items"][0]["matched_client_id"] == cid
+    finally:
+        _cleanup(db)
+        db.close()
