@@ -1,12 +1,21 @@
 // Phase 4 포털 셸 — 내부 사이드바/네비 없이 상단 헤더 + <Outlet/>만. 내부 AppShell과 완전 분리.
-import { Link, Navigate, Outlet } from 'react-router-dom'
-import { CircleNotch, Leaf, SignOut } from '@phosphor-icons/react'
+// P1: PARTNER(운수사)에게만 계약대수·보고서·정산 탭 노출(INVESTOR는 사업 조회만 — 종전 그대로).
+import { Link, Navigate, NavLink, Outlet } from 'react-router-dom'
+import { Bus, CircleNotch, FileText, Leaf, SignOut, TreeStructure, Wallet } from '@phosphor-icons/react'
 import { usePortalAuth } from './PortalAuthProvider'
 
 const ROLE_BADGE: Record<string, string> = {
   PARTNER: '운수사',
   INVESTOR: '투자·금융사',
 }
+
+// PARTNER 전용 탭 — 백엔드도 PARTNER 게이트라 INVESTOR에겐 렌더하지 않는다
+const PARTNER_TABS = [
+  { label: '참여 사업', path: '/portal', icon: TreeStructure, end: true },
+  { label: '계약대수 현황', path: '/portal/fleet', icon: Bus },
+  { label: '월간 보고서', path: '/portal/reports', icon: FileText },
+  { label: '정산 내역', path: '/portal/settlements', icon: Wallet },
+]
 
 /** 포털 미인증(me 없음) 접근 시 /portal/login 리다이렉트 */
 export function RequirePortal() {
@@ -61,6 +70,28 @@ function PortalShell() {
             </button>
           </div>
         </div>
+        {/* PARTNER 탭 — 운수사 전용 메뉴(INVESTOR는 기존처럼 사업 조회만) */}
+        {me?.role === 'PARTNER' && (
+          <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 sm:px-6">
+            {PARTNER_TABS.map((t) => (
+              <NavLink
+                key={t.path}
+                to={t.path}
+                end={t.end}
+                className={({ isActive }) =>
+                  `flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-snow text-bone'
+                      : 'border-transparent text-slatey hover:text-ash'
+                  }`
+                }
+              >
+                <t.icon size={15} />
+                {t.label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <Outlet />

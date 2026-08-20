@@ -11,6 +11,9 @@ import { RequirePortal } from '../features/portal/PortalShell'
 import { PortalLoginPage } from '../features/portal/PortalLoginPage'
 import { PortalProjectsPage } from '../features/portal/PortalProjectsPage'
 import { PortalProjectDetailPage } from '../features/portal/PortalProjectDetailPage'
+import { PortalFleetPage } from '../features/portal/PortalFleetPage'
+import { PortalReportsPage } from '../features/portal/PortalReportsPage'
+import { PortalSettlementsPage } from '../features/portal/PortalSettlementsPage'
 import { LoginPage } from '../features/auth/LoginPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { IssuesPage } from '../features/issues/IssuesPage'
@@ -100,6 +103,10 @@ const portalRoute: RouteObject = {
       children: [
         { path: '/portal', element: <PortalProjectsPage /> },
         { path: '/portal/projects/:projectId', element: <PortalProjectDetailPage /> },
+        // P1 운수사(PARTNER) 전용 — 백엔드 게이트가 본질, 프론트는 탭도 PARTNER만 노출
+        { path: '/portal/fleet', element: <PortalFleetPage /> },
+        { path: '/portal/reports', element: <PortalReportsPage /> },
+        { path: '/portal/settlements', element: <PortalSettlementsPage /> },
       ],
     },
   ],

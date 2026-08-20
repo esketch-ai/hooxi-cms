@@ -70,3 +70,38 @@ export interface PortalTimelinePoint {
   effective_reduction: number | null
   expected_payout?: number | null
 }
+
+// ── P1 운수사(PARTNER) 확장 ──
+export interface PortalFleetItem {
+  period: string
+  license_count?: number | null
+  total_count?: number | null
+  diesel?: number | null
+  cng?: number | null
+  hybrid?: number | null
+  electric?: number | null
+  hydrogen?: number | null
+  region?: string | null
+  industry?: string | null
+}
+
+export interface PortalReportItem {
+  report_id: string
+  period: string
+  report_type: string
+  status: 'SENT' | 'CONFIRMED'
+  sent_at?: string | null
+  has_file: boolean
+}
+
+export interface PortalSettlementItem {
+  settlement_id: string
+  project_name?: string | null
+  period?: string | null
+  status: string
+  confirmed_amount?: number | null
+  vehicle_count?: number | null
+  confirmed_at?: string | null
+  completed_at?: string | null
+  paid_amount?: number | null
+}

@@ -238,3 +238,136 @@ def get_project_timeline(
         }
         for r in rows
     ]
+
+
+# ── P1 운수사(PARTNER) 확장 — 계약대수 현황·보고서 열람·정산 내역 (ACCESS_CONTROL_PLAN §3) ──
+# 전부 read-only + 자기 client_id 스코프 강제. INVESTOR는 403(운수사 전용 데이터).
+_partner = require_external_role("PARTNER")
+
+
+def _require_client_id(user: User) -> str:
+    if not user.client_id:
+        raise HTTPException(status_code=403, detail="연결된 고객사가 없습니다")
+    return user.client_id
+
+
+@router.get("/fleet-status", response_model=List[schemas.FleetStatusTrendItem])
+def portal_fleet_status(
+    user: User = Depends(_partner),
+    db: Session = Depends(get_db),
+):
+    """내 회사 계약대수 월별 추이 — 대수·차종 구성만(내부 분류·타사 데이터 미노출)."""
+    from models import FleetStatus
+
+    client_id = _require_client_id(user)
+    rows = (
+        db.query(FleetStatus)
+        .filter(FleetStatus.client_id == client_id)
+        .order_by(FleetStatus.period.desc())
+        .all()
+    )
+    return [
+        schemas.FleetStatusTrendItem(
+            period=r.period, license_count=r.license_count, total_count=r.total_count,
+            diesel=r.diesel, cng=r.cng, hybrid=r.hybrid, electric=r.electric,
+            hydrogen=r.hydrogen, region=r.region, industry=r.industry,
+        )
+        for r in rows
+    ]
+
+
+# 발송 완료된 보고서만 노출(작성중·검토중 내부 상태 비노출)
+_PORTAL_REPORT_STATUSES = ("SENT", "CONFIRMED")
+
+
+@router.get("/reports", response_model=List[schemas.PortalReportItem])
+def portal_reports(
+    user: User = Depends(_partner),
+    db: Session = Depends(get_db),
+):
+    """내 회사 월간 보고서 — 발송 완료분만(파일 있으면 다운로드 가능)."""
+    from models import ReportDelivery
+
+    client_id = _require_client_id(user)
+    rows = (
+        db.query(ReportDelivery)
+        .filter(
+            ReportDelivery.client_id == client_id,
+            ReportDelivery.status.in_(_PORTAL_REPORT_STATUSES),
+        )
+        .order_by(ReportDelivery.period.desc())
+        .all()
+    )
+    return [
+        schemas.PortalReportItem(
+            report_id=r.report_id, period=r.period, report_type=r.report_type,
+            status=r.status, sent_at=r.sent_at,
+            has_file=bool(r.pinned_doc_id or r.doc_id),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/reports/{report_id}/download")
+def portal_report_download(
+    report_id: str,
+    user: User = Depends(_partner),
+    db: Session = Depends(get_db),
+):
+    """보고서 파일 다운로드 — 자기 회사 + 발송 완료분만. PORTAL 감사 로그."""
+    from fastapi.responses import FileResponse, RedirectResponse
+
+    from models import Document, ReportDelivery
+    from services import storage
+
+    client_id = _require_client_id(user)
+    r = db.get(ReportDelivery, report_id)
+    if r is None or r.client_id != client_id or r.status not in _PORTAL_REPORT_STATUSES:
+        raise HTTPException(status_code=404, detail="보고서를 찾을 수 없습니다")
+    doc_id = r.pinned_doc_id or r.doc_id
+    doc = db.get(Document, doc_id) if doc_id else None
+    if doc is None:
+        raise HTTPException(status_code=404, detail="보고서 파일이 없습니다")
+    try:
+        url = storage.get_url(doc.file_url)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if not url:
+        raise HTTPException(status_code=404, detail="저장소에서 파일을 찾을 수 없습니다")
+    AuditLogger.log_action(
+        db, user.user_id, "PORTAL_REPORT_DOWNLOAD",
+        target_type="REPORT", target_id=report_id, new_value=user.role,
+    )
+    db.commit()
+    if url.startswith("http://") or url.startswith("https://"):
+        return RedirectResponse(url)
+    return FileResponse(url, filename=doc.title or "report")
+
+
+@router.get("/settlements", response_model=List[schemas.PortalSettlementItem])
+def portal_settlements(
+    user: User = Depends(_partner),
+    db: Session = Depends(get_db),
+):
+    """내 회사 정산 내역 — 확정 이후 헤더만(내부 스냅샷·타사 미노출)."""
+    from models import Project, Settlement
+
+    client_id = _require_client_id(user)
+    rows = (
+        db.query(Settlement, Project.project_name)
+        .join(Project, Project.project_id == Settlement.project_id)
+        .filter(Settlement.client_id == client_id)
+        .order_by(Settlement.confirmed_at.desc())
+        .all()
+    )
+    return [
+        schemas.PortalSettlementItem(
+            settlement_id=s.settlement_id, project_name=pname, period=s.period or None,
+            status=s.status,
+            confirmed_amount=float(s.confirmed_amount) if s.confirmed_amount is not None else None,
+            vehicle_count=s.vehicle_count,
+            confirmed_at=s.confirmed_at, completed_at=s.completed_at,
+            paid_amount=float(s.paid_amount) if s.paid_amount is not None else None,
+        )
+        for s, pname in rows
+    ]
