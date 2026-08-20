@@ -9,6 +9,7 @@
 - preview·commit이 같은 parse_and_validate를 공유 — 결과 일관성 보장(무상태).
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from io import BytesIO
@@ -295,11 +296,65 @@ class _Resolvers:
         return candidates[0]
 
 
+# 회사명에서 제거할 법인 표기(접두·접미) — (주)·㈜·주)·주식회사·(유)·유한회사
+_COMPANY_AFFIX_RE = re.compile(
+    r"^\s*(?:\(주\)|㈜|주\)|주식회사|\(유\)|유한회사)\s*|\s*(?:\(주\)|㈜|주\)|주식회사|\(유\)|유한회사)\s*$"
+)
+
+
+def _tf_company_clean(raw: str) -> str:
+    """회사명 법인표기 접두·접미 제거(양끝 반복). 예: '(주)남성버스'→'남성버스', '경성여객(주)'→'경성여객'."""
+    name = raw.strip()
+    prev = None
+    while name and name != prev:  # 양쪽에 붙은 경우 반복 제거
+        prev = name
+        name = _COMPANY_AFFIX_RE.sub("", name).strip()
+    return name or raw.strip()
+
+
+def _tf_phone_kr(raw: str) -> str:
+    """전화/팩스 정규화 — '02)435-5158'→'02-435-5158'. ')'→'-', 공백 제거, 중복 '-' 축약.
+
+    한 셀에 번호가 여러 개면(콤마·슬래시 구분, 예: '041)544-5141,545-3141')
+    첫 번째(주) 번호만 취한다. 지역국번은 첫 번호에만 있으므로 앞 조각을 대표로 저장.
+    """
+    first = re.split(r"[,/·]|\s{2,}", raw.strip(), maxsplit=1)[0]
+    s = first.replace(")", "-").replace(" ", "")
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s
+
+
+def _tf_license_date_kr(raw: str) -> str:
+    """면허일자 'YY.MM.DD'|'YYYY.MM.DD' → ISO 'YYYY-MM-DD'. 2자리 연도 피벗 30(<=30→2000년대)."""
+    m = re.match(r"^\s*(\d{2,4})[.\-/](\d{1,2})[.\-/](\d{1,2})\s*$", raw)
+    if not m:
+        raise ValueError("면허일자 형식이 올바르지 않습니다(YY.MM.DD): '{0}'".format(raw))
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if y < 100:
+        y = 2000 + y if y <= 30 else 1900 + y
+    return "{0:04d}-{1:02d}-{2:02d}".format(y, mo, d)
+
+
+_TRANSFORMS = {
+    "company_clean": _tf_company_clean,
+    "phone_kr": _tf_phone_kr,
+    "license_date_kr": _tf_license_date_kr,
+}
+
+
 def _normalize_cell(
     db: Session, spec: ImportSpec, col: ImportColumn, value, resolvers: _Resolvers
 ):
     """컬럼 규격에 따른 셀 정규화 — 반환 None이면 payload에서 생략(스키마 기본값)."""
     kind = _field_kind(spec, col.field)
+    if col.transform:
+        raw = _cell_to_str(value)
+        if raw is None:
+            return None
+        fn = _TRANSFORMS.get(col.transform)
+        if fn is None:
+            raise ValueError("알 수 없는 변환: {0}".format(col.transform))
+        return fn(raw)
     if col.yn:
         raw = _cell_to_str(value)
         if raw is None:

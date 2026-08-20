@@ -35,6 +35,7 @@ class ImportColumn:
     required: bool = False                    # 필수 여부 — 양식 헤더에 * 표시
     code_category: Optional[str] = None       # tb_code 카테고리 — 라벨/코드 양방향 수용
     resolver: Optional[str] = None            # "user_by_name" | "client_by_name"
+    transform: Optional[str] = None           # 값 변환 훅 — "company_clean"|"phone_kr"|"license_date_kr"
     yn: bool = False                          # Y/N 컬럼 (예/아니오·O/X 등 정규화)
     fixed_values: Optional[Dict[str, str]] = None  # 코드 마스터가 아닌 고정값 매핑 (표기→저장값)
     # 양식 예시 행 값. code_category 컬럼은 **불변 코드값**으로 적는다 —
@@ -98,6 +99,28 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
                 "manager_id", "담당 PM", resolver="user_by_name", example="관리자",
             ),
             ImportColumn("report_yn", "월간 보고서 수신", yn=True, example="Y"),
+        ),
+    ),
+    # ── 운수사 명부 (민원대응 회원명부 양식 그대로 — client_type=TRANSPORT 고정) ──────
+    #    회사명 (주)/㈜/주식회사/(유) 접두·접미 제거, 전화/팩스 형식 정규화, 면허일자 YY.MM.DD 파싱.
+    #    조합=지역(자유 텍스트), 대표자 최대 3인(콤마 유지). 시/도·시군구 이하 컬럼은 무시(미매칭).
+    "transport_roster": ImportSpec(
+        entity="transport_roster",
+        label="운수사 명부",
+        schema_cls=schemas.TransportRosterCreate,
+        filename="운수사_명부_일괄등록_양식.xlsx",
+        columns=(
+            ImportColumn("company_name", "회사명", required=True,
+                         transform="company_clean", example="경성여객"),
+            ImportColumn("region", "조합", example="서울"),
+            ImportColumn("ceo_name", "대표자", example="김대표, 이대표"),
+            ImportColumn("ceo_contact_phone", "전 화", transform="phone_kr", example="02)435-5158"),
+            ImportColumn("fax", "FAX", transform="phone_kr", example="02)495-0293"),
+            ImportColumn("address", "업체 주소", example="서울특별시 중랑구 용마산로 376"),
+            ImportColumn("license_date", "면허일자", transform="license_date_kr", example="70.10.01"),
+            ImportColumn("bus_city", "시내", example="73"),
+            ImportColumn("bus_rural", "농어촌", example="0"),
+            ImportColumn("bus_intercity", "시외", example="0"),
         ),
     ),
     # ── 자산 (SCR-04 단건 등록과 동일 효과 — 인증 비밀값 없이 생성) ──────

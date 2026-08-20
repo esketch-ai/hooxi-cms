@@ -111,6 +111,12 @@ class Client(Base):
     report_yn = Column(String(1), default="N")  # 보고서 대상 여부 (GAN A7)
     lat = Column(Numeric(10, 7))  # 지오코딩 — 결정 3호
     lng = Column(Numeric(10, 7))
+    # 운수사 명부(민원대응 회원명부) 추가 정보 — 팩스·면허일자·버스 대수(시내/농어촌/시외, 변경 잦음)
+    fax = Column(String(20))
+    license_date = Column(Date)  # 면허일자
+    bus_city = Column(Integer)  # 시내버스 대수
+    bus_rural = Column(Integer)  # 농어촌버스 대수
+    bus_intercity = Column(Integer)  # 시외버스 대수
     dropbox_folder = Column(String(255))  # provision된 Dropbox 전용 폴더 경로(없으면 미생성)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -925,6 +931,12 @@ def ensure_schema():
         ("tb_report_subscription", "mail_subject", "VARCHAR(200)"),
         ("tb_report_subscription", "mail_body", "TEXT"),
         ("tb_client", "dropbox_folder", "VARCHAR(255)"),
+        # 운수사 명부(민원대응 회원명부) 추가 정보
+        ("tb_client", "fax", "VARCHAR(20)"),
+        ("tb_client", "license_date", "DATE"),
+        ("tb_client", "bus_city", "INTEGER"),
+        ("tb_client", "bus_rural", "INTEGER"),
+        ("tb_client", "bus_intercity", "INTEGER"),
         ("tb_segment_send", "merge_rule", "TEXT"),
         ("tb_project", "max_payment", "NUMERIC(15,2)"),
         ("tb_project", "base_reduction", "NUMERIC(10,3)"),

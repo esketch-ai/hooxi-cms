@@ -45,6 +45,7 @@ export function ClientsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -191,6 +192,14 @@ export function ClientsPage() {
             </button>
             <button
               type="button"
+              onClick={() => setRosterOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate sm:flex"
+            >
+              <FileXls size={16} />
+              운수사 명부 등록
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setEditing(null)
                 setFormOpen(true)
@@ -322,6 +331,12 @@ export function ClientsPage() {
         entity="clients"
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        onDone={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
+      />
+      <ExcelImportModal
+        entity="transport_roster"
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
         onDone={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
       />
     </div>

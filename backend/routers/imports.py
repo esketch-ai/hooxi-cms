@@ -34,6 +34,7 @@ _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.
 # 생성 효과 동일 보장 (고객사=구독 없이 기본 생성, 자산=인증값 없이 생성)
 _ROW_FACTORY = {
     "clients": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
+    "transport_roster": lambda p: Client(**{f: getattr(p, f) for f in _CLIENT_FIELDS}),
     "assets": lambda p: Asset(**{f: getattr(p, f) for f in _ASSET_FIELDS}),
 }
 
@@ -133,7 +134,7 @@ async def commit_import(
     db.commit()
     # 고객사만 Dropbox 폴더 provision 대상 — 커밋 후 채워진 PK로 백그라운드 예약
     # (자산은 폴더 대상 아님). client_id 미확보 행은 방어적으로 스킵.
-    if entity == "clients":
+    if entity in ("clients", "transport_roster"):
         for row in created_rows:
             client_id = getattr(row, "client_id", None)
             if client_id:

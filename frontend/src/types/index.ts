@@ -963,7 +963,7 @@ export interface SegmentSendDetailOut extends SegmentSend {
 
 // ── 엑셀 일괄 등록 (SCR-03/04 imports) — backend schemas.Import* 대응 ──
 
-export type ImportEntity = 'clients' | 'assets'
+export type ImportEntity = 'clients' | 'assets' | 'transport_roster'
 
 /** 컬럼 안내 (schemas.ImportColumnOut) — 업로드 가이드·양식 설명용 */
 export interface ImportColumn {

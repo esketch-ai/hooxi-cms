@@ -298,6 +298,12 @@ class ClientCreate(BaseModel):
     report_yn: str = Field(default="N", pattern="^[YN]$")
     lat: Optional[float] = None
     lng: Optional[float] = None
+    # 운수사 명부 추가 정보(선택)
+    fax: Optional[str] = Field(default=None, max_length=20)
+    license_date: Optional[date] = None  # 면허일자
+    bus_city: Optional[int] = None
+    bus_rural: Optional[int] = None
+    bus_intercity: Optional[int] = None
     subscription: Optional[ReportSubscriptionIn] = None  # 월간 보고서 설정
 
     @model_validator(mode="before")
@@ -376,6 +382,16 @@ class ClientUpdate(BaseModel):
         return reject_tz_aware(v)
 
 
+class TransportRosterCreate(ClientCreate):
+    """운수사 명부(민원대응 회원명부) 일괄등록 — client_type 기본 TRANSPORT.
+
+    ClientCreate를 상속해 검증·정규화를 그대로 재사용하고, 구분 컬럼이 없는
+    운수사 명부용으로 client_type만 기본값(운수사)으로 완화한다.
+    """
+
+    client_type: str = Field(default="TRANSPORT", min_length=1, max_length=20)
+
+
 class ClientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -399,6 +415,11 @@ class ClientOut(BaseModel):
     report_yn: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    fax: Optional[str] = None
+    license_date: Optional[date] = None
+    bus_city: Optional[int] = None
+    bus_rural: Optional[int] = None
+    bus_intercity: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     # 고객사별 참여 집계 — ProjectVehicle(참여 차량, v19.3 정본) group_by 파생(목록·상세 공통)
