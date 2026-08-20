@@ -1062,6 +1062,17 @@ def ensure_schema():
         # 7) 변동 이력 스냅샷(append-only, INC-3) — 타임라인 조회 대비(project·client 그레인)
         ("ix_ppsnap_project_client", "tb_project_participation_snapshot", ["project_id", "client_id"]),
         ("ix_pssnap_project", "tb_project_sale_snapshot", ["project_id"]),
+        # 8) 세금계산서 원장(홈택스 HTML) — 방향/기간 조회·매칭 조인 (DBA P1)
+        ("ix_ti_direction_date", "tb_tax_invoice", ["direction", "issue_date"]),
+        ("ix_ti_client", "tb_tax_invoice", ["matched_client_id"]),
+        ("ix_ti_buyer", "tb_tax_invoice", ["matched_buyer_id"]),
+        ("ix_ti_project", "tb_tax_invoice", ["project_id"]),
+        # 9) 고객사 upsert·대기/정식 판정 후보 축소 — 사업자번호·회사명 (DBA P1)
+        ("ix_client_biz", "tb_client", ["biz_reg_no"]),
+        ("ix_client_company", "tb_client", ["company_name"]),
+        # 10) 정산 헤더 조회 — 고객사·사업 필터 (DBA P1)
+        ("ix_settlement_client", "tb_settlement", ["client_id"]),
+        ("ix_settlement_project", "tb_settlement", ["project_id"]),
     ]
     try:
         insp = _inspect(engine)
@@ -1093,6 +1104,70 @@ def ensure_schema():
             )
     except Exception as exc:
         print("⚠ ensure_schema drop legacy constraint skipped: {0}".format(exc))
+
+    _reconcile_fk_ondelete(engine)
+
+
+# FK ondelete 정책표(정본) — 모델 정의와 동일. 구(舊) 배포 DB가 이 규칙 이전에 생성돼
+# NO ACTION으로 남은 FK를 배포 시 자동 교정한다(DBA P0). (table, col, ref_table, ref_col, ondelete)
+_FK_ONDELETE_SPECS = [
+    ("tb_project_vehicle", "project_id", "tb_project", "project_id", "CASCADE"),
+    ("tb_project_vehicle", "client_id", "tb_client", "client_id", "SET NULL"),
+    ("tb_project_vehicle", "asset_id", "tb_asset", "asset_id", "SET NULL"),
+    ("tb_project_vehicle", "client_vehicle_id", "tb_client_vehicle", "vehicle_id", "SET NULL"),
+    ("tb_project_sale", "project_id", "tb_project", "project_id", "CASCADE"),
+    ("tb_project_sale", "buyer_id", "tb_buyer", "buyer_id", "SET NULL"),
+    ("tb_purchase_invoice", "project_id", "tb_project", "project_id", "CASCADE"),
+    ("tb_purchase_invoice", "client_id", "tb_client", "client_id", "SET NULL"),
+    ("tb_project_stage", "project_id", "tb_project", "project_id", "CASCADE"),
+    ("tb_client_vehicle", "client_id", "tb_client", "client_id", "SET NULL"),
+    ("tb_client_vehicle", "asset_id", "tb_asset", "asset_id", "SET NULL"),
+    ("tb_user", "client_id", "tb_client", "client_id", "SET NULL"),
+    ("tb_user", "buyer_id", "tb_buyer", "buyer_id", "SET NULL"),
+]
+
+
+def _reconcile_fk_ondelete(engine):
+    """구 배포 DB의 FK ondelete를 정책표에 맞게 멱등 교정(PostgreSQL 전용).
+
+    현재 ondelete를 inspector로 확인해 **불일치일 때만** 제약을 DROP 후 재생성한다.
+    이미 정합이면 no-op. SQLite는 ALTER로 FK 변경이 불가하므로 통째로 건너뛴다(no-op).
+    실패는 삼켜 부팅을 막지 않는다(다른 ensure_schema 단계와 동일 규약).
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as _inspect, text as _text
+    _NORM = {"CASCADE": "CASCADE", "SET NULL": "SET NULL", "SETNULL": "SET NULL", None: "NO ACTION", "NO ACTION": "NO ACTION"}
+    try:
+        insp = _inspect(engine)
+        tables = set(insp.get_table_names())
+    except Exception as exc:
+        print("⚠ ensure_schema fk reconcile inspect skipped: {0}".format(exc))
+        return
+    for table, col, rt, rc, want in _FK_ONDELETE_SPECS:
+        if table not in tables or rt not in tables:
+            continue
+        try:
+            fks = insp.get_foreign_keys(table)
+            match = next((fk for fk in fks if fk.get("constrained_columns") == [col]), None)
+            if match is None:
+                continue  # FK 자체가 없으면 건드리지 않음(모델/마이그레이션 소관)
+            cur = (match.get("options") or {}).get("ondelete")
+            cur_norm = _NORM.get((cur or "").upper() if cur else None, "NO ACTION")
+            if cur_norm == want:
+                continue  # 이미 정합 — no-op(멱등)
+            name = match.get("name")
+            if not name:
+                continue
+            with engine.begin() as conn:
+                conn.execute(_text('ALTER TABLE {0} DROP CONSTRAINT IF EXISTS "{1}"'.format(table, name)))
+                conn.execute(_text(
+                    'ALTER TABLE {0} ADD CONSTRAINT "{1}" FOREIGN KEY ("{2}") '
+                    'REFERENCES {3} ("{4}") ON DELETE {5}'.format(table, name, col, rt, rc, want)
+                ))
+            print("✓ Reconciled FK {0}.{1} -> ON DELETE {2}".format(table, col, want))
+        except Exception as exc:
+            print("⚠ ensure_schema fk reconcile skipped ({0}.{1}): {2}".format(table, col, exc))
 
 
 def init_db():
