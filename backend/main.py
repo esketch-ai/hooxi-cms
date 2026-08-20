@@ -112,6 +112,12 @@ def seed_codes():
         ("CLIENT_TYPE", "ETC", "기타", None, None, 50),
         # 구(舊) 통합 구분 — 기존 데이터 하위호환용으로만 유지(신규 선택 지양), 정렬 뒤로
         ("CLIENT_TYPE", "FACILITY", "건물·농장", None, None, 90),
+        # 운수사 계약대수 현황 — 대상여부/업종(계약대수 원본·현황 관리)
+        ("FLEET_TARGET", "BIZ", "사업대상", "emerald", None, 10),
+        ("FLEET_TARGET", "REG", "규제대상", "amber", None, 20),
+        ("FLEET_INDUSTRY", "CITY", "시내", None, None, 10),
+        ("FLEET_INDUSTRY", "RURAL", "농어촌", None, None, 20),
+        ("FLEET_INDUSTRY", "INTERCITY", "시외", None, None, 30),
         # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
         ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
         ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),

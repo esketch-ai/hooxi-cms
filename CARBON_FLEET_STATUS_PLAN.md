@@ -15,8 +15,15 @@
 |---|---|
 | 월별 데이터 | **월별 스냅샷 누적**(client×월 upsert, 추이 보존). 같은 월 재업로드는 덮어쓰기 |
 | 매칭 기준 | **지역(조합)+회사명(정제)** → 고객사(TRANSPORT). 미매칭은 보류(client_id NULL) |
-| 수작업 관리 편집 | **고객사 페이지 '현황' 탭** |
+| 다중 사업장 행 | **client×월 합산**(같은 회사 여러 행은 한 행으로 합산) |
+| 계약여부/조합계약/규제여부 | **Y/N** |
+| 수작업 관리 편집 | **고객사 상세 '현황' 탭**(새 메뉴 아님 — 기존 6탭에 추가, 운수사만) |
+| 원본 업로드 | **고객사 마스터 화면 버튼**('운수사 일괄 등록(표준)' 옆) — 새 메뉴 아님 |
+| 집계 | **통합 현황판(대시보드) 운수사 섹션** — 기존 화면 내 위젯 |
 | 노출 | **순수 CMS**(운영 노출) — 재무 은닉과 무관 |
+
+> 메뉴 방침: **새 메뉴 0개**. 현황 탭은 `ClientDetailPage`의 TABS에 항목 1개 추가,
+> 업로드는 `ClientsPage` 버튼, 집계는 `DashboardPage` 섹션 — 전부 기존 화면 확장.
 
 ---
 
@@ -42,8 +49,10 @@
 - `period`(YYYY-MM, 예 '2026-06') · `license_count`(면허대수) · `total_count`(계)
 - 차종별: `diesel`(경유) · `cng` · `hybrid`(HB) · `electric`(전기) · `hydrogen`(수소)
 - `source`(EXCEL) · `created_by` · `created_at`
-- **UNIQUE(client_id, period, company_name)** — client×월 upsert(미매칭은 company_name로 구분).
-  다중 사업장(같은 회사 여러 행)은 company_name 원문이 같으면 합산 or 행 유지 — **§5 결정**.
+- **UNIQUE(client_id, period, company_name)** — 매칭 건(client_id 有) upsert 유일.
+  ⚠️ SQL상 NULL≠NULL이라 **미매칭(client_id NULL)은 DB 유니크가 안 걸림 → 앱 레벨 dedup**
+  (region+company_name+period)을 F2 파서에서 처리해야 함.
+- 다중 사업장(같은 회사 여러 행)은 업로드 시 **합산**해 1행(확정).
 - 인덱스: (period), (client_id), (region)
 
 ### 2.2 `tb_fleet_mgmt` — 수작업 관리(고객사 단위, 업로드 무영향)
@@ -89,12 +98,11 @@
 - **F5** 검증: 실파일 e2e·매칭·집계·재업로드(수작업 보존)·미매칭 보류.
 
 ## 6. 미결(착수 시 확정)
-1. **다중 사업장 행**(같은 회사 여러 행): 합산 1행 vs 원문 행 유지(company_name 구분). → 데이터
-   정합·화면 단순성 위해 **client×period 합산** 권고, 필요 시 industry별 분리.
+1. ✅ **다중 사업장 행**: **client×period 합산**(확정).
 2. **period 연도**: 업로드 월 지정 UI(기본값 파일명/현재). 파일에 연도 없음.
-3. **계약여부/조합계약/규제여부** 값 형식(Y/N vs 코드) — 실제 값 분포 재확인 후 확정.
-4. 현황 탭을 **모든 고객사**에 둘지, 운수사(TRANSPORT)만 둘지(권고: 운수사만).
-5. 원본 파서 컬럼 매핑 확정(2~4행 병합 헤더 실측 후 고정 위치표).
+3. ✅ **계약여부/조합계약/규제여부**: **Y/N**(확정).
+4. ✅ 현황 탭: **운수사(TRANSPORT)만**(확정).
+5. 원본 파서 컬럼 매핑 확정(2~4행 병합 헤더 실측 후 고정 위치표) — F2 착수 시.
 
 ## 7. 재사용 체크리스트
 - 회사명 정제 `_tf_company_clean` · 지역 매칭(정규화) · import preview/commit 패턴 ·

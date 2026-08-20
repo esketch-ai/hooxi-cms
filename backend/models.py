@@ -318,6 +318,68 @@ class ClientVehicle(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class FleetStatus(Base):
+    """운수사 계약대수 월별 현황(원본 엑셀 유래) — 매월 발행 데이터 업로드로 갱신.
+
+    (고객사 × 월) 단위 스냅샷. 같은 회사 다중 사업장 행은 업로드 시 합산해 1행으로 저장한다.
+    미매칭(지역+회사명으로 고객사 못 찾음)은 client_id NULL로 보류. 수작업 관리(대상여부·
+    계약여부 등)는 tb_fleet_mgmt에 분리 저장돼 이 테이블 재업로드에 영향받지 않는다.
+    """
+
+    __tablename__ = "tb_fleet_status"
+
+    fleet_status_id = Column(String(50), primary_key=True, default=gen_uuid)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )  # 운수사(지역+회사명 매칭, 미매칭이면 NULL)
+    region = Column(String(20))  # 조합(지역)
+    industry = Column(String(20))  # 업종(FLEET_INDUSTRY: 시내/농어촌/시외)
+    company_name = Column(String(100))  # 원본 회사명(정제 전 원문 보존)
+    period = Column(String(7))  # 대상 월 'YYYY-MM'
+    license_count = Column(Integer)  # 면허대수
+    total_count = Column(Integer)  # 계
+    diesel = Column(Integer)  # 경유
+    cng = Column(Integer)  # CNG
+    hybrid = Column(Integer)  # HB(하이브리드)
+    electric = Column(Integer)  # 전기
+    hydrogen = Column(Integer)  # 수소
+    source = Column(String(20), default="EXCEL")
+    created_by = Column(String(50))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        # (고객사, 월) upsert 유일 — 미매칭(client_id NULL)은 회사명으로 구분
+        UniqueConstraint(
+            "client_id", "period", "company_name", name="uq_fleet_status_client_period"
+        ),
+    )
+
+
+class FleetMgmt(Base):
+    """운수사 계약대수 수작업 관리(고객사 1:1) — 대상여부·계약여부 등. 업로드 무영향.
+
+    원본 대수(tb_fleet_status)와 분리해 매월 재업로드가 수작업을 덮지 않게 한다.
+    고객사 상세 '현황' 탭에서 편집한다.
+    """
+
+    __tablename__ = "tb_fleet_mgmt"
+
+    client_id = Column(
+        String(50),
+        ForeignKey("tb_client.client_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    target_type = Column(String(20))  # 대상여부(FLEET_TARGET: 사업대상/규제대상)
+    contract_yn = Column(String(1))  # 계약여부 Y/N
+    union_contract = Column(String(1))  # 조합계약 Y/N
+    regulated_yn = Column(String(1))  # 규제여부 Y/N
+    memo = Column(String(255))
+    updated_by = Column(String(50))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class Buyer(Base):
     """매수자 마스터(증권/투자/금융사) — 투자·금융사 신원의 근본(Phase 4 INC-1, 부록 N.8 D1).
 
@@ -1073,6 +1135,9 @@ def ensure_schema():
         # 10) 정산 헤더 조회 — 고객사·사업 필터 (DBA P1)
         ("ix_settlement_client", "tb_settlement", ["client_id"]),
         ("ix_settlement_project", "tb_settlement", ["project_id"]),
+        # 11) 운수사 계약대수 현황 — 고객사별 추이·월별 집계
+        ("ix_fleet_status_client", "tb_fleet_status", ["client_id"]),
+        ("ix_fleet_status_period", "tb_fleet_status", ["period"]),
     ]
     try:
         insp = _inspect(engine)
