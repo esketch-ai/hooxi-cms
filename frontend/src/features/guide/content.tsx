@@ -482,23 +482,35 @@ export const TOPICS: GuideTopic[] = [
     categoryId: 'comm',
     eyebrow: 'SCR-13',
     title: '문서 아카이브',
-    summary: '고객사별 자동 분류·미리보기·Dropbox 연동',
+    summary: '저장 폴더 선택(정산 등)·Dropbox 라이브 브라우즈·폴더명 교정',
     featureRoute: '/documents',
-    related: ['reports', 'segments', 'clients'],
+    related: ['reports', 'segments', 'clients', 'tax-invoices'],
     Body: () => (
       <>
         <ul>
           <li>
-            모든 파일은 고객사별 폴더(계약서·보고서·현장사진·서명·양식·기타)로 자동 분류됩니다.
-            폴더를 만들 일이 없습니다.
+            업로드 시 <b>저장 폴더를 직접 선택</b>합니다 — 계약서·<b>정산</b>·보고서·자산·인증정보·
+            수집데이터·증빙자료(공통 코드 기준). 세금계산서 등은 <b>정산</b> 폴더로 올리세요.
           </li>
           <li>
             <b>이미지·PDF는 제목 클릭으로 바로 미리보기</b> — 다운로드는 오른쪽 아이콘. 여러
-            페이지 PDF는 미리보기에서 "새 탭에서 열기"가 편합니다.
+            페이지 PDF는 "새 탭에서 열기"가 편합니다.
           </li>
           <li>
-            Dropbox 연동 후에는 회사 Dropbox에서도 같은 폴더 구조로 열람할 수 있습니다. 단 파일
-            추가·이동은 반드시 CMS를 통해서 — Dropbox에 직접 넣은 파일은 CMS가 알지 못합니다.
+            좌측 트리에서 고객사(또는 공용)를 고르면 <b>문서 대장 ↔ Dropbox 폴더</b> 뷰를 토글해
+            실제 Dropbox 폴더를 <b>라이브 브라우즈</b>하고 파일을 열람할 수 있습니다(읽기 전용).
+          </li>
+        </ul>
+        <Note title="폴더는 자동 생성 · 규칙에 맞게 교정">
+          고객사 등록 시 Dropbox 전용 폴더(<Kbd>지역_고객사명_분류</Kbd>)가 자동 생성됩니다.
+          폴더가 없는 고객사는 <Kbd>환경설정 → 연동 → Dropbox</Kbd>의 <b>폴더 일괄 생성</b>으로
+          소급 생성하고, 이름이 규칙과 다르면 이 화면 상단 <b>폴더명 규칙 점검</b>(ADMIN)으로
+          파일 손실 없이 안전하게 이동·교정합니다(삭제 없음).
+        </Note>
+        <ul>
+          <li>
+            Dropbox에 직접 넣은 파일도 위 브라우즈로 열람됩니다. 다만 <b>CMS 문서 대장</b>에
+            잡히려면 이 화면에서 업로드하세요.
           </li>
         </ul>
       </>
