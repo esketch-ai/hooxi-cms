@@ -105,7 +105,7 @@
 
 - ✅ **[해소] HTML 샘플·암호 메커니즘·값→필드 매핑** — 샘플 9건 확보(`Docs/세금계산서(html)/`), 복호화 실증 완료(부록 A). 홈택스 보안메일 SEED-CBC, 키=MD5(사업자번호), 데이터=표준 TaxInvoice XML 첨부. 매입/매출 방향·필드 매핑 확정.
 - 남은 결정(구현 중 확정 가능):
-  1. **금액 매핑**: 매입 `amount` ← 공급가액(ChargeTotalAmount) vs 합계(GrandTotalAmount)? (부가세 포함 여부) — 회계상 `product`=매입원가 정의와 맞춰 확정 필요. 매출 `sale_invoice_amount`도 동일.
+  1. ✅ **금액 매핑 확정**: 매입 `amount` ← **공급가액(부가세 제외, `ChargeTotalAmount`)**, 매출 `sale_invoice_amount` ← 동일 기준(공급가액). (합계 GrandTotalAmount 아님)
   2. **project 매칭(스캔 경로)**: 정산 폴더가 고객사 폴더 밑이면 사업↔고객사 다대다에서 project 추론 단서 필요(승인번호·품목·기간·수동 지정 중).
   3. 투자사/자사 Dropbox 폴더 체계 신설 여부(매출/자사 파일 위치). 업로드 경로는 무관.
   4. ARIA(alg 3) 파일 등장 시 복호화 경로 추가(현재 샘플 전부 SEED).
