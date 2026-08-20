@@ -174,6 +174,11 @@ def get_current_user(
         )
     if user.role == "OBSERVER" and not _observer_allowed(request.url.path):
         raise HTTPException(status_code=403, detail="관찰 권한 범위를 벗어난 접근입니다")
+    # G2 그룹 접근 강제(ACCESS_CONTROL_PLAN) — tb_config access_control_mode 스위치:
+    # off(기본)=무동작 / monitor=감사로그만 / enforce=403. ADMIN·OBSERVER는 내부에서 제외.
+    from access_control import check_request_access
+
+    check_request_access(db, user, request.method, request.url.path)
     return user
 
 
