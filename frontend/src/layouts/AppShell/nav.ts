@@ -86,6 +86,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: '감축 사업 관리', path: '/projects', icon: TreeStructure },
       {
+        label: '세금계산서 원장',
+        path: '/tax-invoices',
+        icon: Receipt,
+        roles: ['ADMIN', 'MANAGER', 'STAFF'],
+      },
+      {
         label: '전기버스 자산',
         path: '/asset-vehicles',
         icon: Bus,

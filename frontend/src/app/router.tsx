@@ -32,6 +32,7 @@ import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
 import { FinanceLedgerPage } from '../features/finance-ledger/FinanceLedgerPage'
 import { AssetReportPage } from '../features/asset-report/AssetReportPage'
+import { TaxInvoicesPage } from '../features/tax-invoices/TaxInvoicesPage'
 import { SettlementsPage } from '../features/settlements/SettlementsPage'
 import { ChatPage } from '../features/chat/ChatPage'
 import { MapPage } from '../features/map/MapPage'
@@ -127,6 +128,7 @@ const appRoutes: RouteObject[] = [
   { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
   { path: '/projects', element: <ProjectsPage /> }, // SCR-06
   { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세
+  { path: '/tax-invoices', element: <TaxInvoicesPage /> }, // 세금계산서 원장(홈택스 HTML 자동반영)
   { path: '/finance-ledger', element: <FinanceLedgerPage /> }, // FL-3 재무 원장(사업 grain)
   { path: '/asset-report', element: <AssetReportPage /> }, // P2 자산관리 보고(고객사 grain)
   { path: '/settlements', element: <SettlementsPage /> }, // P4 정산 관리(SCR-07) — 내부 전용, OBSERVER 접근 불가

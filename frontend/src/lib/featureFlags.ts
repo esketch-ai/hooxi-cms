@@ -19,6 +19,7 @@ export const FINANCE_HIDDEN_PATHS = [
   '/observe',
   '/buyers',
   '/portal-accounts',
+  '/tax-invoices',
 ] as const
 
 /** pathname이 재무 은닉 대상인지 — 정확 매칭 우선, 하위 경로(startsWith 경계 '/')만 허용 */
