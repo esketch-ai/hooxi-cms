@@ -26,7 +26,7 @@ def test_provision_writes_audit(client, monkeypatch):
     db = models.SessionLocal()
     try:
         c = models.Client(client_id="audprv01", client_type="TRANSPORT",
-                          company_name="감사프로비전운수", region="서울")
+                          company_name="감사프로비전운수", region="서울", biz_reg_no="661-66-66661")
         db.add(c)
         db.commit()
         client_folders.provision(db, c, actor_id="u-admin")
@@ -96,7 +96,7 @@ def test_backfill_writes_summary_and_per_client_audit(client, admin_headers, mon
     db = models.SessionLocal()
     try:
         db.add(models.Client(client_id="audbf001", client_type="TRANSPORT",
-                            company_name="백필감사운수", region="서울"))
+                            company_name="백필감사운수", region="서울", biz_reg_no="662-66-66662"))
         db.commit()
     finally:
         db.close()

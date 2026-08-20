@@ -120,6 +120,7 @@ async def commit_import(
 
     valid = result.valid_rows
     created_rows = []
+    promoted_ids = []  # 대기→정식 승격(사업자번호 새로 채워진 기존 건) — 커밋 후 폴더 provision
     updated_count = 0
     # 운수사 표준/정보 upsert — 중복 제거 키 = 사업자번호(정규화) 우선, 없으면 회사명.
     # 사업자번호가 있으면 그 기준으로 기존 운수사를 찾아 보강(회사명 표기가 달라도 동일 법인으로 병합),
@@ -155,16 +156,25 @@ async def commit_import(
         p = parsed.payload
         existing = _find_existing(p) if upsert else None
         if existing is not None:
-            # 기존 건 보강 — 전달된(비어있지 않은) 값만 덮어써 기존 데이터 유실 방지
+            # 중복 병합 — 기존에 '비어있는' 필드만 새 값으로 채운다(덮어쓰기 없음, 기존 유지).
+            # 사업자번호가 새로 채워지면 승격 대상으로 표시(정식 전환 + 폴더 provision).
+            had_biz = bool(common.normalize_biz_no(existing.biz_reg_no))
+            changed = False
             for f in _CLIENT_FIELDS:
-                val = getattr(p, f, None)
                 if f == "client_type":
                     continue
-                if val is not None:
-                    setattr(existing, f, val)
+                new_val = getattr(p, f, None)
+                cur = getattr(existing, f, None)
+                cur_empty = cur is None or (isinstance(cur, str) and not cur.strip())
+                if new_val is not None and cur_empty:
+                    setattr(existing, f, new_val)
+                    changed = True
+            now_biz = bool(common.normalize_biz_no(existing.biz_reg_no))
+            if now_biz and not had_biz and not existing.dropbox_folder:
+                promoted_ids.append(existing)  # 커밋 후 client_id로 provision 예약
             if upsert:
                 _remember(p, existing)
-            updated_count += 1
+            updated_count += 1 if changed else 0
         else:
             row = factory(p)
             db.add(row)
@@ -182,10 +192,10 @@ async def commit_import(
         ),
     )
     db.commit()
-    # 고객사만 Dropbox 폴더 provision 대상 — 커밋 후 채워진 PK로 백그라운드 예약
-    # (자산은 폴더 대상 아님). client_id 미확보 행은 방어적으로 스킵.
+    # Dropbox 폴더 provision — 신규 생성분 + 대기→정식 승격분. 사업자번호 게이트는 provision
+    # 내부에서 최종 확인하므로, 사업자번호 없는 '대기' 건은 예약돼도 폴더가 만들어지지 않는다.
     if entity in ("clients", "transport_roster", "transport_info", "transport"):
-        for row in created_rows:
+        for row in list(created_rows) + list(promoted_ids):
             client_id = getattr(row, "client_id", None)
             if client_id:
                 background_tasks.add_task(

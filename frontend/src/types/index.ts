@@ -79,6 +79,7 @@ export interface Client {
   client_type: ClientType
   company_name: string
   biz_reg_no?: string | null
+  reg_status?: 'VERIFIED' | 'PENDING' // 등록 상태(파생) — 사업자번호 있으면 정식, 없으면 대기
   region?: string | null
   address?: string | null
   ceo_name?: string | null

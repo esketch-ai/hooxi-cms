@@ -399,6 +399,7 @@ def update_client(
     # 지오코딩 재계산 판단용 — 실제 주소·지역 변경 여부를 이전 값과 비교(프론트가 값을 항상
     # 실어보내므로 'data에 키 존재'만으론 부족). setattr 전에 스냅샷.
     prev_address, prev_region = client.address, client.region
+    prev_biz = _normalize_biz_no(client.biz_reg_no)
     for field in _CLIENT_FIELDS:
         if field in data:
             setattr(client, field, data[field])
@@ -410,6 +411,11 @@ def update_client(
     addr_changed = client.address != prev_address or client.region != prev_region
     if addr_changed and not ("lat" in data or "lng" in data):
         background_tasks.add_task(_geocode_client_bg, client.client_id, True)
+    # 승격: 대기(사업자번호 없음)였다가 이제 사업자번호가 채워졌고 폴더가 없으면 정식 전환 →
+    # Dropbox 폴더 provision(사업자번호 게이트는 provision 내부에서 최종 확인).
+    now_biz = _normalize_biz_no(client.biz_reg_no)
+    if now_biz and not prev_biz and not client.dropbox_folder:
+        background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id, user.user_id)
     return _client_detail(db, client)
 
 

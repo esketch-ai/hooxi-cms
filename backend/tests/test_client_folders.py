@@ -163,7 +163,7 @@ def test_provision_creates_root_and_subfolders(client, monkeypatch):
     try:
         c = models.Client(
             client_id="prov0002abcd", client_type="BUILDING",
-            company_name="테스트빌딩", region="서울",
+            company_name="테스트빌딩", region="서울", biz_reg_no="111-11-11111",
         )
         db.add(c)
         db.commit()
@@ -188,9 +188,9 @@ def test_provision_collision_appends_suffix(client, monkeypatch):
     db = models.SessionLocal()
     try:
         a = models.Client(client_id="colaaaa1", client_type="TRANSPORT",
-                          company_name="충돌운수", region="서울")
+                          company_name="충돌운수", region="서울", biz_reg_no="222-22-22222")
         b = models.Client(client_id="colbbbb2", client_type="TRANSPORT",
-                          company_name="충돌운수", region="서울")
+                          company_name="충돌운수", region="서울", biz_reg_no="333-33-33333")
         db.add_all([a, b])
         db.commit()
         client_folders.provision(db, a)
@@ -251,12 +251,12 @@ def test_create_client_provisions_when_configured(client, admin_headers, monkeyp
     )
     resp = client.post(
         API + "/clients",
-        json={"client_type": "TRANSPORT", "company_name": "훅운수"},
+        json={"client_type": "TRANSPORT", "company_name": "훅운수", "biz_reg_no": "444-44-44444"},
         headers=admin_headers,
     )
     assert resp.status_code == 201, resp.text
     folder = _created_client_folder(resp.json()["client_id"])
-    # region 미지정 → 지역미상, TRANSPORT → 운수
+    # region 미지정 → 지역미상, TRANSPORT → 운수 (사업자번호 있어 정식→폴더 생성)
     assert folder is not None and folder.startswith("/Hooxi-CMS/지역미상_훅운수_운수")
     assert any(p.endswith("/계약서") for p in created)
 
@@ -312,6 +312,7 @@ def test_backfill_provisions_missing_and_is_idempotent(client, admin_headers, mo
                     client_id="bf000{0}".format(i),
                     client_type="TRANSPORT",
                     company_name="백필운수{0}".format(i),
+                    biz_reg_no="55{0}-55-5555{0}".format(i),  # 정식(사업자번호 보유) → 백필 대상
                 )
             )
         db.commit()

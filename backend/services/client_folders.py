@@ -203,6 +203,13 @@ def provision(db, client, actor_id=None):
     if not dropbox_storage.is_configured():
         return {"skipped": True, "reason": "dropbox_unconfigured"}
 
+    # 정식(사업자번호 보유)만 폴더 생성 — 사업자번호 없는 '대기' 고객사는 폴더를 만들지 않고,
+    # 차후 사업자번호가 채워지면 그때 provision된다(승격). 이미 폴더가 있으면 게이트를 건너뛴다.
+    if not getattr(client, "dropbox_folder", None):
+        import re as _re
+        if not _re.sub(r"\D", "", str(getattr(client, "biz_reg_no", "") or "")):
+            return {"skipped": True, "reason": "pending_no_biz_reg_no"}
+
     if getattr(client, "dropbox_folder", None):
         # 이미 provision됨 — 저장 경로를 재사용해 누락 서브폴더만 멱등 복구한다.
         # 이름을 재계산하지 않으므로 회사명 개명·규칙 변경 후 재실행해도 폴더 orphan/이중생성이 없다.

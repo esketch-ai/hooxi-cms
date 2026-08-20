@@ -83,7 +83,16 @@ export function ClientsPage() {
             >
               {c.company_name}
             </Link>
-            <p className="text-xs text-slatey">{c.biz_reg_no ?? '—'}</p>
+            {c.reg_status === 'PENDING' ? (
+              <span
+                className="mt-0.5 inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                title="사업자번호 미확보 — 대기(폴더 미생성). 사업자번호가 입력되면 정식 전환됩니다."
+              >
+                대기
+              </span>
+            ) : (
+              <p className="text-xs text-slatey">{c.biz_reg_no ?? '—'}</p>
+            )}
           </div>
         </div>
       ),

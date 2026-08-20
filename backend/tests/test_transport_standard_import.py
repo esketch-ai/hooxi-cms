@@ -67,8 +67,9 @@ def test_transport_standard_full_columns_and_upsert(client, staff_headers):
 
         db.expire_all()
         a = db.query(models.Client).filter_by(company_name="표준운수A").first()
-        assert a.biz_reg_no == "221-81-00682"  # 보강
-        assert a.region == "강원" and str(a.license_date) == "1970-10-01" and a.bus_city == 73
+        assert a.biz_reg_no == "221-81-00682"  # 빈 칸 보강
+        assert a.region == "서울"  # 기존 값 유지(덮어쓰기 없음)
+        assert str(a.license_date) == "1970-10-01" and a.bus_city == 73  # 비어있던 칸만 채움
         b = db.query(models.Client).filter_by(company_name="표준운수B").first()
         assert b is not None and b.biz_reg_no == "111-11-11111" and b.bus_rural == 5
     finally:
@@ -101,9 +102,9 @@ def test_upsert_dedup_by_biz_reg_no(client, staff_headers):
         rows = db.query(models.Client).filter(
             models.Client.biz_reg_no.in_(["888-88-88888", "8888888888"])
         ).all()
-        assert len(rows) == 1  # 단 한 건(병합)
-        assert rows[0].corp_reg_no == "111111-0000000"  # 2차 값 보강
-        assert rows[0].bus_city == 20
+        assert len(rows) == 1  # 단 한 건(병합, 중복/신규 없음)
+        assert rows[0].corp_reg_no == "111111-0000000"  # 비어있던 법인번호 보강
+        assert rows[0].bus_city == 10  # 기존 10 유지(2차 20으로 덮어쓰지 않음)
     finally:
         db.query(models.Client).filter(
             models.Client.company_name.in_(["가나여객", "가나여객자동차"])

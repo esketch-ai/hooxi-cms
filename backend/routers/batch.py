@@ -537,7 +537,12 @@ def provision_dropbox_folders(
         )
 
     actor_id = (actor.user_id if actor else None) or _seed_admin_id(db)
-    targets = db.query(Client).filter(Client.dropbox_folder.is_(None)).all()
+    # 폴더 없는 고객사 중 '정식'(사업자번호 보유)만 대상 — 대기(사업자번호 없음)는 제외.
+    # 사업자번호가 채워지면 그때 provision된다(승격). NULL·빈 문자열 모두 대기로 간주.
+    targets = [
+        c for c in db.query(Client).filter(Client.dropbox_folder.is_(None)).all()
+        if (c.biz_reg_no or "").strip()
+    ]
     provisioned = 0
     failed = 0
     for c in targets:

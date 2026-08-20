@@ -6,7 +6,14 @@ import re
 from datetime import date, datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 # 간단 이메일 형식 검증 — email-validator 의존성 없이 정규식만 (P1-C).
 # RFC 완전 준수가 목적이 아니라 오타(@ 누락·공백 등) 조기 차단이 목적.
@@ -424,6 +431,11 @@ class ClientOut(BaseModel):
     bus_intercity: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @computed_field  # 등록 상태(파생) — 사업자번호 있으면 정식(VERIFIED), 없으면 대기(PENDING)
+    @property
+    def reg_status(self) -> str:
+        return "VERIFIED" if (self.biz_reg_no or "").strip() else "PENDING"
     # 고객사별 참여 집계 — ProjectVehicle(참여 차량, v19.3 정본) group_by 파생(목록·상세 공통)
     participating_vehicle_count: Optional[int] = None
     participating_project_count: Optional[int] = None
