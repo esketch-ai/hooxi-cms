@@ -393,6 +393,9 @@ class AccessGroup(Base):
 
     group_id = Column(String(50), primary_key=True, default=gen_uuid)
     name = Column(String(50), nullable=False, unique=True)
+    # 부서 코드(tb_code DEPT, nullable) — 지정 시 표시명은 코드 라벨을 따른다(부서명 변경은
+    # 공통코드 관리 한 곳에서). 미지정이면 name 자유 텍스트(전사 등 비부서 그룹).
+    dept_code = Column(String(30))
     home_path = Column(String(50), default="/dashboard")  # 로그인 자동 랜딩 경로
     is_default = Column(Boolean, nullable=False, default=False)  # 전사(기본) 여부
     memo = Column(String(200))
@@ -1082,6 +1085,8 @@ def ensure_schema():
         # 운수사 계약대수 수작업 분류 확장(F6) — 현황 탭 자동 반영. 기존 Y/N 컬럼은 레거시로 잔존.
         ("tb_fleet_mgmt", "contract_status", "VARCHAR(20)"),
         ("tb_fleet_mgmt", "regulated_type", "VARCHAR(20)"),
+        # 접근 그룹 부서코드 연동 — 부서명은 공통코드(DEPT)에서 관리
+        ("tb_access_group", "dept_code", "VARCHAR(30)"),
     ]
     try:
         insp = _inspect(engine)

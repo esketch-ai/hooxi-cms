@@ -2818,6 +2818,7 @@ class FleetClientStatusOut(BaseModel):
 # ── 접근 그룹 관리(G3) ──────────────────────────────────────────────────
 class AccessGroupIn(BaseModel):
     name: str
+    dept_code: Optional[str] = None  # 공통코드 DEPT — 지정 시 표시명이 코드 라벨을 따름
     home_path: Optional[str] = None
     memo: Optional[str] = None
     menus: List[str] = []
@@ -2825,7 +2826,8 @@ class AccessGroupIn(BaseModel):
 
 class AccessGroupOut(BaseModel):
     group_id: str
-    name: str
+    name: str  # dept_code 지정 시 공통코드(DEPT) 라벨로 라이브 해석된 표시명
+    dept_code: Optional[str] = None
     home_path: Optional[str] = None
     is_default: bool = False
     memo: Optional[str] = None
@@ -2845,3 +2847,25 @@ class AccessModeIn(BaseModel):
 
 class UserGroupsIn(BaseModel):
     group_ids: List[str] = []
+
+
+# ── 포털 P1 — 운수사(PARTNER) 확장 ──────────────────────────────────────
+class PortalReportItem(BaseModel):
+    report_id: str
+    period: str
+    report_type: str
+    status: str  # SENT/CONFIRMED
+    sent_at: Optional[datetime] = None
+    has_file: bool = False
+
+
+class PortalSettlementItem(BaseModel):
+    settlement_id: str
+    project_name: Optional[str] = None
+    period: Optional[str] = None
+    status: str  # SETTLEMENT_STATUS 코드
+    confirmed_amount: Optional[float] = None
+    vehicle_count: Optional[int] = None
+    confirmed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    paid_amount: Optional[float] = None

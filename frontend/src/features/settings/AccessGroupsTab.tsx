@@ -8,6 +8,7 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { useToast } from '../../components/Toast'
 import { NAV_GROUPS } from '../../layouts/AppShell/nav'
+import { useCodes } from '../../lib/api/queries'
 import type { AccessGroupAdmin, AccessGroupMeta, AccessMode, User } from '../../types'
 
 const MODE_LABEL: Record<AccessMode, { label: string; desc: string; cls: string }> = {
@@ -52,6 +53,7 @@ function useInternalUsers() {
 interface EditState {
   group?: AccessGroupAdmin // 없으면 신규
   name: string
+  dept_code: string // 공통코드 DEPT — 지정 시 이름은 코드 라벨을 따름(부서명 변경은 공통코드 관리에서)
   home_path: string
   memo: string
   menus: Set<string>
@@ -64,6 +66,7 @@ export function AccessGroupsTab() {
   const { data: meta } = useAccessMeta()
   const { data: groups = [], isLoading } = useAccessGroups()
   const { data: users = [] } = useInternalUsers()
+  const { options: deptOptions } = useCodes('DEPT')
 
   const [edit, setEdit] = useState<EditState | null>(null)
   const [deleting, setDeleting] = useState<AccessGroupAdmin | null>(null)
@@ -88,6 +91,7 @@ export function AccessGroupsTab() {
     mutationFn: async (st: EditState) => {
       const payload = {
         name: st.name.trim(),
+        dept_code: st.dept_code || null,
         home_path: st.home_path,
         memo: st.memo || null,
         menus: Array.from(st.menus),
@@ -139,11 +143,12 @@ export function AccessGroupsTab() {
   })
 
   const openCreate = () =>
-    setEdit({ name: '', home_path: '/dashboard', memo: '', menus: new Set(['/dashboard', '/guide']), members: new Set() })
+    setEdit({ name: '', dept_code: '', home_path: '/dashboard', memo: '', menus: new Set(['/dashboard', '/guide']), members: new Set() })
   const openEdit = (g: AccessGroupAdmin) =>
     setEdit({
       group: g,
       name: g.name,
+      dept_code: g.dept_code ?? '',
       home_path: g.home_path ?? '/dashboard',
       memo: g.memo ?? '',
       menus: new Set(g.menus),
@@ -300,14 +305,37 @@ export function AccessGroupsTab() {
       >
         {edit && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="flex flex-col gap-1 text-xs text-slatey">
-                그룹명 *
+                부서 코드(공통코드 DEPT)
+                <select
+                  value={edit.dept_code}
+                  onChange={(e) => {
+                    const code = e.target.value
+                    const label = deptOptions.find((o) => o.value === code)?.label ?? ''
+                    setEdit({ ...edit, dept_code: code, name: code ? label : edit.name })
+                  }}
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+                >
+                  <option value="">— (직접 입력)</option>
+                  {deptOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-slatey">
+                그룹명 *{' '}
+                {edit.dept_code && (
+                  <span className="text-sky-500">부서 코드 라벨 사용 — 변경은 공통코드 관리에서</span>
+                )}
                 <input
                   type="text"
                   value={edit.name}
+                  disabled={!!edit.dept_code}
                   onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone disabled:opacity-60"
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs text-slatey">

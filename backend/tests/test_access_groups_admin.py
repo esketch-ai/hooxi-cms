@@ -99,3 +99,45 @@ def test_mode_switch_and_meta(client, admin_headers, staff_headers):
     finally:
         _cleanup(db)
         db.close()
+
+
+def test_dept_code_label_drives_group_name(client, admin_headers):
+    """부서명은 공통코드(DEPT)에서 관리 — 라벨 변경이 그룹 표시명에 즉시 반영."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        # DEPT 코드 라벨 확인 후 그룹 목록의 표시명과 일치
+        asset = db.query(models.Code).filter_by(category="DEPT", code="ASSET").first()
+        assert asset is not None
+        orig_label = asset.label
+        groups = client.get("/api/v1/access-groups", headers=admin_headers).json()
+        g = [x for x in groups if x.get("dept_code") == "ASSET"][0]
+        assert g["name"] == orig_label
+        # 라벨 변경(부서 개명) → 그룹 표시명 라이브 반영
+        asset.label = "자산관리본부"
+        db.commit()
+        groups2 = client.get("/api/v1/access-groups", headers=admin_headers).json()
+        g2 = [x for x in groups2 if x.get("dept_code") == "ASSET"][0]
+        assert g2["name"] == "자산관리본부"
+        # /users/me 그룹명도 라벨 반영
+        u = models.User(user_id="t-ga-dept", email="t-ga-dept@hooxi.kr",
+                        role="STAFF", status="ACTIVE")
+        db.add(u)
+        db.commit()
+        client.put(f"/api/v1/access-groups/users/t-ga-dept", headers=admin_headers,
+                   json={"group_ids": [g2["group_id"]]})
+        from access_control import resolve_user_access
+        acc = resolve_user_access(db, u)
+        assert acc["groups"][0]["name"] == "자산관리본부"
+        # 없는 부서 코드로 생성 → 422
+        bad = client.post("/api/v1/access-groups", headers=admin_headers,
+                          json={"name": "x", "dept_code": "NOPE", "menus": []})
+        assert bad.status_code == 422
+        # 원복
+        asset.label = orig_label
+        db.query(models.UserGroup).filter_by(user_id="t-ga-dept").delete(synchronize_session=False)
+        db.query(models.User).filter_by(user_id="t-ga-dept").delete(synchronize_session=False)
+        db.commit()
+    finally:
+        _cleanup(db)
+        db.close()

@@ -42,26 +42,26 @@ ACCESS_CONTROL_MODES = ("off", "monitor", "enforce")
 SEED_GROUPS: List[Dict] = [
     {"name": "전사", "is_default": True, "home_path": "/dashboard", "menus": list(MENU_KEYS),
      "memo": "기본 그룹 — 그룹 미배정 사용자는 자동으로 이 그룹 권한(전 메뉴)"},
-    {"name": "경영진", "is_default": False, "home_path": "/dashboard", "menus": [
+    {"name": "경영진", "dept_code": "EXEC", "is_default": False, "home_path": "/dashboard", "menus": [
         "/dashboard", "/observe", "/projects", "/finance-ledger", "/asset-report",
         "/asset-vehicles", "/settlements", "/reports", "/guide",
     ], "memo": "경영진 — 현황·재무·사업 중심(쓰기 권한은 직급으로)"},
-    {"name": "경영전략실", "is_default": False, "home_path": "/observe", "menus": [
+    {"name": "경영전략실", "dept_code": "STRATEGY", "is_default": False, "home_path": "/observe", "menus": [
         "/observe", "/dashboard", "/finance-ledger", "/asset-report", "/asset-vehicles", "/guide",
     ], "memo": "경영전략실 — OBSERVER 화이트리스트와 동일 스코프(전환기 공존)"},
-    {"name": "자산관리", "is_default": False, "home_path": "/assets", "menus": [
+    {"name": "자산관리", "dept_code": "ASSET", "is_default": False, "home_path": "/assets", "menus": [
         "/dashboard", "/assets", "/accounts", "/asset-vehicles", "/asset-report",
         "/clients", "/documents", "/guide",
     ], "memo": "자산관리 부서 — 자산·연동·계정점검·자산보고"},
-    {"name": "정산재무", "is_default": False, "home_path": "/settlements", "menus": [
+    {"name": "정산재무", "dept_code": "FINANCE", "is_default": False, "home_path": "/settlements", "menus": [
         "/dashboard", "/settlements", "/finance-ledger", "/tax-invoices",
         "/projects", "/buyers", "/documents", "/guide",
     ], "memo": "정산·재무 부서 — 정산·원장·세금계산서·매수자"},
-    {"name": "사업운영", "is_default": False, "home_path": "/dashboard", "menus": [
+    {"name": "사업운영", "dept_code": "BIZOPS", "is_default": False, "home_path": "/dashboard", "menus": [
         "/dashboard", "/issues", "/calendar", "/clients", "/histories", "/chat",
         "/reports", "/documents", "/projects", "/guide",
     ], "memo": "사업운영(고객·CRM) 부서 — 고객사·이력·상담·보고서"},
-    {"name": "시스템관리", "is_default": False, "home_path": "/settings", "menus": [
+    {"name": "시스템관리", "dept_code": "SYSTEM", "is_default": False, "home_path": "/settings", "menus": [
         "/dashboard", "/settings", "/portal-accounts", "/accounts", "/guide",
     ], "memo": "시스템 관리 — 설정·외부계정·계정점검"},
 ]
@@ -80,7 +80,7 @@ def resolve_user_access(db, user) -> dict:
     - allowed_menus = 소속 그룹 허용 메뉴의 합집합. ADMIN은 전체(락아웃 방지 우회).
     - home_path = 명시 그룹이 1개면 그 그룹 홈, 여럿이면 /dashboard(중립), 암묵이면 기본그룹 홈.
     """
-    from models import AccessGroup, GroupMenu, UserGroup
+    from models import AccessGroup, Code, GroupMenu, UserGroup
 
     rows = (
         db.query(AccessGroup)
@@ -118,10 +118,23 @@ def resolve_user_access(db, user) -> dict:
     else:
         home = "/dashboard"
 
+    # 부서명 라이브 해석 — dept_code가 있으면 공통코드(DEPT) 라벨을 표시명으로(부서명 변경은
+    # 공통코드 관리 한 곳에서 끝나게). 코드가 없거나 미지정이면 저장된 name 사용.
+    dept_codes = [g.dept_code for g in rows if getattr(g, "dept_code", None)]
+    labels = {}
+    if dept_codes:
+        labels = {
+            c.code: c.label
+            for c in db.query(Code).filter(
+                Code.category == "DEPT", Code.code.in_(dept_codes)
+            ).all()
+        }
+
     return {
         "groups": [
-            {"group_id": g.group_id, "name": g.name, "home_path": g.home_path,
-             "implicit": implicit}
+            {"group_id": g.group_id,
+             "name": labels.get(getattr(g, "dept_code", None), g.name),
+             "home_path": g.home_path, "implicit": implicit}
             for g in rows
         ],
         "allowed_menus": allowed,

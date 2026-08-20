@@ -130,6 +130,15 @@ def seed_codes():
         ("FLEET_REGULATED", "ALLOC", "할당", "amber", None, 10),
         ("FLEET_REGULATED", "GOAL", "목표", "amber", None, 20),
         ("FLEET_REGULATED", "PUBLIC", "공공", "sky", None, 30),
+        # 부서명(DEPT) — 접근 그룹이 참조(dept_code). 부서명 변경은 여기(공통코드 관리)에서:
+        # 라벨을 바꾸면 그룹·화면 표시가 즉시 따라간다. 신규 부서는 코드 추가(비내장, 전체 CRUD),
+        # 은퇴는 active=N. 내장 6종은 이름변경·비활성 가능(삭제만 불가 — 공통코드 관용구).
+        ("DEPT", "EXEC", "경영진", None, None, 10),
+        ("DEPT", "STRATEGY", "경영전략실", None, None, 20),
+        ("DEPT", "ASSET", "자산관리", None, None, 30),
+        ("DEPT", "FINANCE", "정산재무", None, None, 40),
+        ("DEPT", "BIZOPS", "사업운영", None, None, 50),
+        ("DEPT", "SYSTEM", "시스템관리", None, None, 60),
         # 고객사 계약 상태 (ACTIVE/HOLD는 로직 참조 — codes.LOGIC_LOCKED_CODES)
         ("CONTRACT_STATUS", "ACTIVE", "계약중", "emerald", None, 10),
         ("CONTRACT_STATUS", "HOLD", "보류", "amber", None, 20),
@@ -302,6 +311,7 @@ def seed_access_groups():
                 grp = AccessGroup(
                     name=g["name"], home_path=g["home_path"],
                     is_default=g["is_default"], memo=g.get("memo"),
+                    dept_code=g.get("dept_code"),
                 )
                 db.add(grp)
                 db.flush()  # group_id 확보

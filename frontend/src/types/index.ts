@@ -36,7 +36,8 @@ export interface User {
 // 접근 그룹 관리(G3 — 설정 화면)
 export interface AccessGroupAdmin {
   group_id: string
-  name: string
+  name: string // dept_code 지정 시 공통코드(DEPT) 라벨로 해석된 표시명
+  dept_code?: string | null
   home_path?: string | null
   is_default: boolean
   memo?: string | null

@@ -19,7 +19,7 @@ from access_control import (
     valid_menu_keys,
 )
 from auth import require_permission
-from models import AccessGroup, Config, GroupMenu, User, UserGroup, get_db
+from models import AccessGroup, Code, Config, GroupMenu, User, UserGroup, get_db
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/access-groups", tags=["access-groups"])
@@ -27,14 +27,34 @@ router = APIRouter(prefix="/access-groups", tags=["access-groups"])
 _admin = require_permission("admin.users_config_backup")
 
 
+def _dept_label(db: Session, dept_code) -> str:
+    """DEPT 코드 라벨 — 부서명 변경은 공통코드 관리에서 하면 그룹 표시명이 즉시 따라간다."""
+    if not dept_code:
+        return ""
+    row = db.query(Code).filter(Code.category == "DEPT", Code.code == dept_code).first()
+    return row.label if row else ""
+
+
 def _group_out(db: Session, g: AccessGroup) -> schemas.AccessGroupOut:
     menus = [m.menu_key for m in db.query(GroupMenu).filter_by(group_id=g.group_id).all()]
     member_ids = [ug.user_id for ug in db.query(UserGroup).filter_by(group_id=g.group_id).all()]
     return schemas.AccessGroupOut(
-        group_id=g.group_id, name=g.name, home_path=g.home_path,
+        group_id=g.group_id,
+        name=_dept_label(db, g.dept_code) or g.name,  # 라이브 라벨 우선
+        dept_code=g.dept_code, home_path=g.home_path,
         is_default=bool(g.is_default), memo=g.memo,
         menus=[k for k in MENU_KEYS if k in set(menus)], member_ids=member_ids,
     )
+
+
+def _resolve_name(db: Session, payload: schemas.AccessGroupIn) -> str:
+    """저장할 name 결정 — dept_code가 있으면 코드 검증 후 라벨로 동기화, 없으면 자유 텍스트."""
+    if payload.dept_code:
+        label = _dept_label(db, payload.dept_code)
+        if not label:
+            raise HTTPException(status_code=422, detail="존재하지 않는 부서 코드입니다(공통코드 DEPT)")
+        return label
+    return (payload.name or "").strip()
 
 
 @router.get("/meta", response_model=schemas.AccessGroupMeta)
@@ -81,12 +101,13 @@ def create_group(
     user: User = Depends(_admin),
     db: Session = Depends(get_db),
 ):
-    name = (payload.name or "").strip()
+    name = _resolve_name(db, payload)
     if not name:
         raise HTTPException(status_code=422, detail="그룹명은 필수입니다")
     if db.query(AccessGroup).filter_by(name=name).first():
         raise HTTPException(status_code=409, detail="같은 이름의 그룹이 이미 있습니다")
-    g = AccessGroup(name=name, home_path=payload.home_path or "/dashboard", memo=payload.memo)
+    g = AccessGroup(name=name, dept_code=payload.dept_code,
+                    home_path=payload.home_path or "/dashboard", memo=payload.memo)
     db.add(g)
     db.flush()
     for key in valid_menu_keys(payload.menus or []):
@@ -108,7 +129,7 @@ def update_group(
     g = db.get(AccessGroup, group_id)
     if g is None:
         raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
-    name = (payload.name or "").strip()
+    name = _resolve_name(db, payload)
     if not name:
         raise HTTPException(status_code=422, detail="그룹명은 필수입니다")
     dup = db.query(AccessGroup).filter(AccessGroup.name == name,
@@ -116,6 +137,7 @@ def update_group(
     if dup:
         raise HTTPException(status_code=409, detail="같은 이름의 그룹이 이미 있습니다")
     g.name = name
+    g.dept_code = payload.dept_code
     g.home_path = payload.home_path or g.home_path or "/dashboard"
     g.memo = payload.memo
     # 메뉴 전체 교체 — 기본(전사) 그룹은 전 메뉴 고정(축소 금지: fail-safe 훼손 방지)
