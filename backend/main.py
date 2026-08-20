@@ -52,6 +52,7 @@ from routers import finance_ledger as finance_ledger_router
 from routers import histories as histories_router
 from routers import imports as imports_router
 from routers import integrations as integrations_router
+from routers import tax_invoices as tax_invoices_router
 from routers import kakao as kakao_router
 from routers import market_rates as market_rates_router
 from routers import portal as portal_router
@@ -327,6 +328,7 @@ app.include_router(schedules_router.router, prefix=API_V1_PREFIX)
 app.include_router(reports_router.router, prefix=API_V1_PREFIX)
 app.include_router(documents_router.router, prefix=API_V1_PREFIX)
 app.include_router(imports_router.router, prefix=API_V1_PREFIX)
+app.include_router(tax_invoices_router.router, prefix=API_V1_PREFIX)
 app.include_router(dashboard_router.router, prefix=API_V1_PREFIX)
 app.include_router(assets_router.router, prefix=API_V1_PREFIX)
 app.include_router(asset_vehicles_router.router, prefix=API_V1_PREFIX)

@@ -1404,6 +1404,51 @@ class TaxInvoiceListResponse(BaseModel):
     total: int
 
 
+class TaxInvoicePreviewItem(BaseModel):
+    filename: Optional[str] = None
+    ok: bool
+    reason: Optional[str] = None  # 실패 사유(password_unresolved 등)
+    approval_no: Optional[str] = None
+    direction: Optional[str] = None
+    issue_date: Optional[str] = None  # 'YYYY-MM-DD'
+    invoicer_reg_no: Optional[str] = None
+    invoicee_reg_no: Optional[str] = None
+    invoicer_name: Optional[str] = None
+    invoicee_name: Optional[str] = None
+    counterpart_reg_no: Optional[str] = None
+    counterpart_name: Optional[str] = None
+    supply_amount: Optional[int] = None
+    tax_amount: Optional[int] = None
+    total_amount: Optional[int] = None
+    type_code: Optional[str] = None
+    purpose_code: Optional[str] = None
+    matched_client_id: Optional[str] = None
+    matched_client_name: Optional[str] = None
+    matched_buyer_id: Optional[str] = None
+    matched_buyer_name: Optional[str] = None
+    is_duplicate: Optional[bool] = None
+
+
+class TaxInvoicePreviewResponse(BaseModel):
+    items: List[TaxInvoicePreviewItem]
+
+
+class TaxInvoiceCommitDetail(BaseModel):
+    filename: Optional[str] = None
+    result: str  # created / duplicate / held
+    reason: Optional[str] = None
+    approval_no: Optional[str] = None
+    tax_invoice_id: Optional[str] = None
+
+
+class TaxInvoiceCommitResponse(BaseModel):
+    total: int
+    created: int
+    duplicate: int
+    held: int
+    details: List[TaxInvoiceCommitDetail]
+
+
 # 운수사 보유 차량(fleet) 마스터 — 부록 M. BUS_Info_list.xlsx 컬럼 반영 --------------
 class ClientVehicleIn(BlankFKToNoneModel):
     """차량 마스터 등록 — vehicle_no 필수(전국 유일). operator_name은 업체명 원문(운수사 매칭)."""
