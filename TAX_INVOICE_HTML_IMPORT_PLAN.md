@@ -4,7 +4,10 @@
 > 파악하고 내부 값을 추출해 **감축사업 관리(정산)에 자동 반영**한다. 암호(대부분 사업자번호)가 걸린
 > 파일은 시스템이 보관 중인 사업자번호(고객사/투자사/자사)로 자동 해제한다.
 >
-> 작성: 2026-08-20. 상태: **계획 확정 · 코딩 착수는 실제 HTML 샘플 확보 후**.
+> 작성: 2026-08-20. 상태: **계획 확정 · 복호화 기술 실증(POC) 완료 → 코딩 착수 가능**.
+>
+> ⚠️ 반전: 파일은 평문 HTML이 아니라 **홈택스 보안메일(암호화)** 이며, 계산서 데이터는
+> 암호화된 **국세청 표준 전자세금계산서 XML 첨부**다. HTML 스크래핑이 아니라 복호화+XML 파싱.
 
 ---
 
@@ -69,10 +72,12 @@
 - [ ] 계산서 **고유키(승인번호) 컬럼** — `tb_purchase_invoice.approval_no`, `tb_project_sale.sale_approval_no`(nullable String) 추가 + `ensure_schema` 반영. 재반영 멱등·중복 방지.
 - [ ] HTML 파서 라이브러리 도입(샘플 보고 확정).
 
-### P2 — 파서 (⚠️ 실제 HTML 샘플 필요)
-- [ ] HTML → 구조값 추출: 공급자·공급받는자 사업자번호, 작성일자, 공급가액·세액·합계, 승인번호, 품목/비고.
-- [ ] **암호 해제**: 메커니즘(JS 복호화 / zip·pdf 내장 / 평문)은 실물 확인 후 확정. 사업자번호(자사·고객사·투자사 후보군)로 시도.
-- [ ] `parse_and_validate` 동형: 파일별 파싱 결과 + 검증 오류/경고.
+### P2 — 파서 (✅ 복호화 레시피 실증 완료 — 아래 부록)
+- [ ] 홈택스 보안메일 복호화 서비스: 헤더 해독(base64→XOR 0x6b) → 알고리즘 판정 → `MD5(사업자번호)` 키 → SEED/AES-CBC(IV=0,PKCS7) 복호화.
+- [ ] **비번 자동판별**: HashKey 검증 오라클로, 보관 중인 사업자번호(자사 config·`Client.biz_reg_no`·`Buyer.biz_reg_no`) 후보를 시도해 정답 키 선택.
+- [ ] 첨부(`idCriAttachContents{n}`) 복호화 → base64 디코드 → **국세청 표준 TaxInvoice XML** 파싱.
+- [ ] `parse_and_validate` 동형: 파일별 추출값 + 검증(오류/경고/보류).
+- 라이브러리: `cryptography>=43`(`hazmat.decrepit.SEED`). ARIA(alg 3)는 향후 필요 시 추가.
 
 ### P3 — 매칭·매핑
 - [ ] 사업자번호 → 자사(config)/고객사(`Client.biz_reg_no`)/투자사(`Buyer.biz_reg_no`) 판정 → **매입/매출 방향** 결정
@@ -96,14 +101,14 @@
 
 ---
 
-## 3. 미결/블로커 (코딩 착수 전 해소)
+## 3. 미결/블로커
 
-1. **[하드 블로커] 실제 세금계산서 HTML 샘플** — (a) 평문 1개, (b) 암호 걸린 1개(가능하면 매입·매출 각 1). 파서 셀렉터·암호 메커니즘·값→필드 매핑을 실물로 확정. 로컬에서만 분석(외부 전송·게시 없음).
-2. 암호 방식 정체(JS 복호화 replicate 필요 시 리스크 큼) — 샘플로 판정.
-3. 값→필드 매핑(부가세 포함/제외) — 샘플로 확정.
-4. 매칭 방향 규칙 세부(공급자/공급받는자 ↔ 자사/상대) — 샘플 필드로 확정.
-5. project 매칭(스캔 경로): 정산 폴더가 고객사 폴더 밑이면 project 추론 단서 필요(사업↔고객사 다대다 가능성).
-6. 투자사/자사 Dropbox 폴더 체계 신설 여부(매출/자사 파일 위치).
+- ✅ **[해소] HTML 샘플·암호 메커니즘·값→필드 매핑** — 샘플 9건 확보(`Docs/세금계산서(html)/`), 복호화 실증 완료(부록 A). 홈택스 보안메일 SEED-CBC, 키=MD5(사업자번호), 데이터=표준 TaxInvoice XML 첨부. 매입/매출 방향·필드 매핑 확정.
+- 남은 결정(구현 중 확정 가능):
+  1. **금액 매핑**: 매입 `amount` ← 공급가액(ChargeTotalAmount) vs 합계(GrandTotalAmount)? (부가세 포함 여부) — 회계상 `product`=매입원가 정의와 맞춰 확정 필요. 매출 `sale_invoice_amount`도 동일.
+  2. **project 매칭(스캔 경로)**: 정산 폴더가 고객사 폴더 밑이면 사업↔고객사 다대다에서 project 추론 단서 필요(승인번호·품목·기간·수동 지정 중).
+  3. 투자사/자사 Dropbox 폴더 체계 신설 여부(매출/자사 파일 위치). 업로드 경로는 무관.
+  4. ARIA(alg 3) 파일 등장 시 복호화 경로 추가(현재 샘플 전부 SEED).
 
 ---
 
@@ -113,5 +118,35 @@
 ---
 
 ## 5. 다음 액션
-1. 사용자: 위 3-1 **HTML 샘플** 제공(스크래치패드 또는 저장소 경로).
-2. 개발: 샘플 분석 → P2 확정 → **P1(config·승인번호 컬럼)부터 4원칙 루프(planner→implementer→verifier→reviewer)로 착수**. 각 증분 로컬 커밋, 배포는 사용자 "배포" 명시 시.
+1. ✅ 샘플 확보·복호화 실증 완료(부록 A).
+2. 개발 착수: **P1(cryptography>=43 업그레이드 · config `company_biz_reg_no` · 승인번호 고유키 컬럼+ensure_schema)** → P2 복호화·XML 파서 → P3 매칭 → P4 미리보기/적용 → P5 트리거/UI → P6 검증. 4원칙 루프, 각 증분 로컬 커밋. 배포는 "배포" 명시 시.
+
+---
+
+## 부록 A — 복호화 실증(POC) 결과 (2026-08-20)
+
+샘플 `Docs/세금계산서(html)/` 9건 = **홈택스 보안메일**(암호화 이메일). 외부스크립트 `srtk.hometax.go.kr`의 seed.js/aes.js/md5.js/cri_ems_nt.js(CryptoJS). 전 파일 SEED(alg 2).
+
+**복호화 절차(파이썬 재현 확인)**:
+1. `<input id="idCriHeader" value="B">` → `base64decode(B)`의 각 바이트 `^ 0x6b` → 헤더텍스트(`\r\n`→`||`). `키:값` 파싱: `ContentEncryptionAlgorithm`(1=AES/2=SEED/3=ARIA), `HashKey`, `AttachFileName`, `AttachFileTagID`, `AttachFileSize`.
+2. `key = MD5(비밀번호)` (16B). 비밀번호 = **사업자등록번호(숫자 10자리)**. IV = 16×0x00. 모드 CBC, 패딩 PKCS7.
+3. **비번 검증 오라클**: `SEED_decrypt(base64decode(HashKey), key, iv)` 의 UTF-8 문자열 == `key.hex()` 이면 정답. → 보관 사업자번호(자사·Client·Buyer) 후보를 순회 시도해 자동 선택.
+4. 본문/첨부: `<input id="idCriAttachContents0" value="C">` → `SEED_decrypt(base64decode(C), key, iv)` → 결과가 **다시 base64** → 디코드하면 **표준 TaxInvoice XML**(`urn:kr:or:kec:standard:Tax:...`).
+
+**XML 필드 매핑(KEC 표준)**:
+| 논리 | XML 리프 | 비고 |
+|---|---|---|
+| 공급자 사업자번호 | 첫 party `ID` (Invoicer) | 자사면 매출 |
+| 공급받는자 사업자번호 | 둘째 party `ID` (Invoicee) | 자사면 매입 |
+| 상호 | `NameText`(party 순서) | |
+| 작성일자 | `IssueDateTime`(YYYYMMDDHHMMSS) | → issue_date/sale_invoice_date |
+| **승인번호(고유키)** | `IssueID` | → 중복방지/멱등 신규 컬럼 |
+| 공급가액 | `ChargeTotalAmount` | |
+| 세액 | `TaxTotalAmount` | |
+| 합계 | `GrandTotalAmount` = 공급가액+세액 | |
+| 종류/용도 | `TypeCode`(0101 일반), `PurposeCode`(02 청구 등) | 수정취소 판별 검토 |
+| 품목 | 명세 `NameText`/`CalculatedAmount` | |
+
+**검증 실값**(리빌벨류→후시파트너스, 매입, 비번 후시 5298102298): 공급자 3541601931 / 공급받는자 5298102298 / 작성 20260708215746 / 승인 202607081026070896455535 / 공급가액 16,200,000 / 세액 1,620,000 / 합계 17,820,000. 매입 4건 동일 방식 성공. HashKey 검증 True.
+
+**주의**: 파일명(`공급자 → 공급받는자`)은 사용자 라벨일 뿐, 방향·값은 XML 내부로 판정. 수정/취소분(`(수정취소)`) 별도 처리 필요(TypeCode/PurposeCode로).
