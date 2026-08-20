@@ -89,13 +89,18 @@
 - 지역(조합)·업종 분포 미니 요약.
 
 ## 5. 단계(초안, 각 4원칙 루프)
-- **F1** 데이터모델: tb_fleet_status·tb_fleet_mgmt + ensure_schema(컬럼·인덱스·유니크) +
-  tb_code FLEET_TARGET/FLEET_INDUSTRY 시드. 스키마·라운드트립 테스트.
-- **F2** 원본 파서 + 업로드 preview/commit(지역+회사명 매칭·period upsert·미매칭 보류). 실파일
-  541행 파싱·매칭 테스트.
-- **F3** 고객사 현황 탭(월별 추이 조회 API + 수작업 관리 편집 API/UI).
-- **F4** 대시보드 운수사 섹션 위젯(집계·전월 대비).
-- **F5** 검증: 실파일 e2e·매칭·집계·재업로드(수작업 보존)·미매칭 보류.
+- ✅ **F1** 데이터모델: tb_fleet_status·tb_fleet_mgmt + ensure_schema(인덱스·유니크) +
+  tb_code FLEET_TARGET/FLEET_INDUSTRY 시드. 스키마·라운드트립 테스트. (커밋 208a74d)
+- ✅ **F2** 원본 파서(services/fleet_import.py, 고정 컬럼 A조합 B업종 C회사명 E월 F면허 G계
+  H경유 I CNG J HB K전기 L수소, '원본' 탭 우선) + 업로드 preview/commit(지역+정제회사명
+  매칭·다중 사업장 합산·period upsert·미매칭 앱-dedup) + 현황/수작업 API
+  (routers/fleet_status.py). 실파일 545행 파싱 검증·pytest 5종. (커밋 a7187bf)
+- ✅ **F3** 고객사 '계약대수 현황' 탭(운수사만): 월별 추이 조회 + 수작업 관리 편집. 고객사
+  마스터 화면 '계약대수 현황 업로드' 버튼(월 선택+미리보기). (커밋 0ac60b9)
+- ✅ **F4** 대시보드 운수사 섹션(GET /dashboard/fleet): 최신 월 집계·전월 대비 전기·대상/
+  계약 카운트·업종 분포. (커밋 6536809)
+- ⏳ **F5** 검증: **dev 배포 후** 실파일(2탭 정본) 업로드 e2e — 실제 운수사 마스터와의 매칭률·
+  집계·재업로드(수작업 보존)·미매칭 보류 확인. 로컬은 파서·합산·upsert·집계 pytest 완료.
 
 ## 6. 미결(착수 시 확정)
 1. ✅ **다중 사업장 행**: **client×period 합산**(확정).
