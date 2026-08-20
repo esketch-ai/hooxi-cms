@@ -157,7 +157,8 @@ MENU_API_REGISTRY: Dict[str, List] = {
     "/portal-accounts": [(None, "/api/v1/external-accounts"),
                          ("GET", "/api/v1/buyers"), ("GET", "/api/v1/clients")],
     "/settings": [(None, "/api/v1/users"), (None, "/api/v1/config"),
-                  (None, "/api/v1/backups"), (None, "/api/v1/audit-logs")],
+                  (None, "/api/v1/backups"), (None, "/api/v1/audit-logs"),
+                  (None, "/api/v1/access-groups")],  # 접근그룹 관리(실사용은 ADMIN 우회, 정합용)
     "/guide": [],  # 프론트 전용(API 없음)
 }
 

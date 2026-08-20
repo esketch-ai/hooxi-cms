@@ -143,7 +143,11 @@ def delete_group(
         raise HTTPException(status_code=422, detail="기본(전사) 그룹은 삭제할 수 없습니다")
     AuditLogger.log_action(db, user.user_id, "ACCESS_GROUP_DELETE",
                            target_type="ACCESS_GROUP", target_id=group_id, old_value=g.name)
-    db.delete(g)  # tb_group_menu·tb_user_group은 FK CASCADE
+    # 자식 행 명시 삭제 — PG는 FK CASCADE로도 지워지지만, SQLite(FK 미강제 기본)에서도
+    # 고아 행이 남지 않게 방어적으로 정리한다.
+    db.query(GroupMenu).filter_by(group_id=group_id).delete(synchronize_session=False)
+    db.query(UserGroup).filter_by(group_id=group_id).delete(synchronize_session=False)
+    db.delete(g)
     db.commit()
 
 

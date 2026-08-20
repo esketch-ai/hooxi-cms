@@ -40,9 +40,16 @@ describe('isPathAllowedForUser', () => {
 })
 
 describe('groupHome', () => {
-  it('enforce + 허용 홈이면 그룹 홈, 아니면 /dashboard', () => {
+  it('enforce + 허용 홈이면 그룹 홈, 비허용이면 허용 경로로 폴백', () => {
     expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/assets'], home_path: '/assets' })).toBe('/assets')
-    expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/clients'], home_path: '/assets' })).toBe('/dashboard')
+    // home(/assets) 비허용·/dashboard도 비허용 → 첫 허용 메뉴(/clients). 반환은 항상 허용 경로(루프 방지)
+    expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/clients'], home_path: '/assets' })).toBe('/clients')
+    expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/dashboard', '/clients'], home_path: '/assets' })).toBe('/dashboard')
     expect(groupHome({ ...base, access_mode: 'off', home_path: '/assets' })).toBe('/dashboard')
+  })
+  it('무한 루프 방지 — /dashboard도 비허용이면 첫 허용 메뉴로', () => {
+    const u = { ...base, access_mode: 'enforce' as const, allowed_menus: ['/assets', '/guide'], home_path: '/settlements' }
+    expect(groupHome(u)).toBe('/assets') // home도 /dashboard도 비허용 → 첫 허용 메뉴
+    expect(isPathAllowedForUser(u, groupHome(u), ['/dashboard', '/assets', '/settlements'])).toBe(true)
   })
 })

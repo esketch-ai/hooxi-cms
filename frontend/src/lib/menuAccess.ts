@@ -28,9 +28,16 @@ export function isPathAllowedForUser(
   return isMenuAllowed(user, base)
 }
 
-/** enforce에서의 로그인 홈 — 그룹 home_path(허용 메뉴 안일 때), 아니면 /dashboard */
+/**
+ * enforce에서의 로그인 홈 — 그룹 home_path(허용 메뉴 안일 때).
+ * home이 비허용이면 /dashboard, 그것도 비허용이면 첫 허용 메뉴로 —
+ * 가드(비허용 → groupHome 리다이렉트)와 조합될 때 무한 루프가 나지 않게
+ * 반환 경로는 반드시 '허용된' 경로여야 한다.
+ */
 export function groupHome(user: User | null | undefined): string {
   if (!user || user.access_mode !== 'enforce') return '/dashboard'
   const home = user.home_path || '/dashboard'
-  return isMenuAllowed(user, home) ? home : '/dashboard'
+  if (isMenuAllowed(user, home)) return home
+  if (isMenuAllowed(user, '/dashboard')) return '/dashboard'
+  return user.allowed_menus?.[0] ?? '/dashboard'
 }
