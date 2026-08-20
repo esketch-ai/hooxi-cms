@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import require_permission
 from models import Asset, Client, User, get_db
+from routers import common
 from routers.assets import _ASSET_FIELDS
 from routers.clients import _CLIENT_FIELDS, _provision_dropbox_folder_bg
 from services import excel_import
@@ -120,33 +121,56 @@ async def commit_import(
     valid = result.valid_rows
     created_rows = []
     updated_count = 0
-    # 운수사 정보(정본)은 회사명(정제) + TRANSPORT 매칭 upsert — 있으면 non-None 필드만 보강.
+    # 운수사 표준/정보 upsert — 중복 제거 키 = 사업자번호(정규화) 우선, 없으면 회사명.
+    # 사업자번호가 있으면 그 기준으로 기존 운수사를 찾아 보강(회사명 표기가 달라도 동일 법인으로 병합),
+    # 없으면 회사명(정제)으로 매칭. 파일 내 중복도 같은 키로 하나에 병합한다.
     upsert = entity in ("transport_info", "transport")
+    # 기존 운수사 인덱스를 1회 로드(사업자번호 정규화·회사명) — 행마다 전체스캔 방지.
+    by_biz: dict = {}
+    by_name: dict = {}
+    if upsert:
+        for c in db.query(Client).filter(Client.client_type == "TRANSPORT").all():
+            nb = common.normalize_biz_no(c.biz_reg_no)
+            if nb:
+                by_biz.setdefault(nb, c)
+            by_name.setdefault((c.company_name or "").strip(), c)
+
+    def _find_existing(p):
+        norm = common.normalize_biz_no(getattr(p, "biz_reg_no", None))
+        if norm and norm in by_biz:
+            return by_biz[norm]
+        name = (p.company_name or "").strip()
+        if norm:
+            # 사업자번호는 있으나 아직 미매칭 — 이름으로도 확인(이름 매칭 후 번호 보강 케이스)
+            return by_name.get(name)
+        return by_name.get(name)
+
+    def _remember(p, obj):
+        norm = common.normalize_biz_no(getattr(p, "biz_reg_no", None))
+        if norm:
+            by_biz[norm] = obj
+        by_name[(p.company_name or "").strip()] = obj
+
     for parsed in valid:
         p = parsed.payload
-        existing = None
-        if upsert:
-            existing = (
-                db.query(Client)
-                .filter(
-                    Client.client_type == "TRANSPORT",
-                    Client.company_name == p.company_name,
-                )
-                .first()
-            )
+        existing = _find_existing(p) if upsert else None
         if existing is not None:
             # 기존 건 보강 — 전달된(비어있지 않은) 값만 덮어써 기존 데이터 유실 방지
             for f in _CLIENT_FIELDS:
                 val = getattr(p, f, None)
-                if f in ("client_type", "company_name"):
+                if f == "client_type":
                     continue
                 if val is not None:
                     setattr(existing, f, val)
+            if upsert:
+                _remember(p, existing)
             updated_count += 1
         else:
             row = factory(p)
             db.add(row)
             created_rows.append(row)
+            if upsert:
+                _remember(p, row)
     error_rows = [r for r in result.rows if r.errors]
     AuditLogger.log_action(
         db,

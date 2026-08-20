@@ -296,28 +296,30 @@ class _Resolvers:
         return candidates[0]
 
 
-# 회사명 법인표기 정제.
-# - 닫힌 괄호 표기((주)(유)(합)(합자)(자)(자동차)(사)(재)(공사))·주식회사류는 앞뒤 모두 제거.
-# - 괄호 없는 '자동차'·'자'는 상호의 일부이므로 보존.
-# - '세일교통(자'처럼 닫는 괄호가 잘린 표기는 접두 과잉제거(예: '(사무국')를 피하려 끝에서만 제거.
-_AFFIX_CLOSED = (
-    r"(?:주식회사|유한회사|합자회사|㈜|주\)"
-    r"|\(\s*(?:주|유|합|합자|자|자동차|사|재|공사)\s*\))"
-)
-_AFFIX_CLOSED_RE = re.compile(r"^\s*" + _AFFIX_CLOSED + r"\s*|\s*" + _AFFIX_CLOSED + r"\s*$")
-_AFFIX_TRAILING_OPEN_RE = re.compile(r"\(\s*(?:주|유|합|자)\s*$")  # 끝에 잘린 여는 괄호만
+# 회사명 정제 — 괄호 안 부가표기((주)·(목포시)·(구○○)·(협)·(자. 등)는 종류 불문 모두 제거하고,
+# 괄호 밖 법인표기(㈜·주식회사·유한회사·합자회사·주))만 추가로 제거한다.
+# 괄호 없는 '자동차'·'사' 등 상호 일부는 보존한다(예: '다모아자동차').
+_PAREN_GROUP_RE = re.compile(r"[\(（][^\)）]*[\)）]")       # 닫힌 괄호 그룹 (전각·반각)
+_PAREN_TRAILING_RE = re.compile(r"[\(（][^\)）]*$")         # 끝에 잘린 여는 괄호(닫힘 없음)
+_PAREN_LEADING_RE = re.compile(r"^[^\(（]{0,4}[\)）]\s*")    # 앞에 잘린 닫는 괄호(예: '명)진성…')
+_LEGAL_WORD_RE = re.compile(r"㈜|주식회사|유한회사|합자회사|주\)")
 
 
 def _tf_company_clean(raw: str) -> str:
-    """회사명 법인표기 접두·접미 제거(양끝 반복). 예: '(주)남성버스'→'남성버스',
-    '경성여객(주)'→'경성여객', '신동아교통(합)'→'신동아교통', '세일교통(자'→'세일교통',
-    '(사)제주관광협회'→'제주관광협회'. 괄호 없는 '다모아자동차'는 보존."""
+    """회사명 정제 — 괄호 부가표기 전부 제거 + 괄호 밖 법인표기 제거, 공백 정리.
+
+    예: '경성여객(주)'→'경성여객', '(주)남성버스'→'남성버스', '공영버스(목포시)'→'공영버스',
+    '경기버스(구선진상운)'→'경기버스', '서흥여객(자.'→'서흥여객', '㈜금강고속'→'금강고속',
+    '명)진성모빌리티DRT'→'진성모빌리티DRT'. '다모아자동차'는 보존."""
     name = raw.strip()
     prev = None
-    while name and name != prev:  # 양쪽에 붙은 경우 반복 제거
+    while name and name != prev:
         prev = name
-        name = _AFFIX_CLOSED_RE.sub("", name).strip()
-        name = _AFFIX_TRAILING_OPEN_RE.sub("", name).strip()
+        name = _PAREN_GROUP_RE.sub("", name)      # (…) 그룹 제거
+        name = _PAREN_TRAILING_RE.sub("", name)   # 끝 잘린 (…  제거
+        name = _PAREN_LEADING_RE.sub("", name)    # 앞 잘린 …) 제거
+        name = _LEGAL_WORD_RE.sub("", name)       # ㈜·주식회사 등 제거
+        name = re.sub(r"\s+", " ", name).strip()
     return name or raw.strip()
 
 

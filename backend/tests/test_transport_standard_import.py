@@ -26,14 +26,19 @@ def _xlsx(rows):
     return buf.getvalue()
 
 
-def test_company_clean_no_overstrip():
+def test_company_clean_strips_all_parens():
     c = excel_import._tf_company_clean
+    # 괄호 안 부가표기는 종류 불문 모두 제거
     assert c("(사)제주관광협회") == "제주관광협회"
     assert c("(재)차세대융합기술원") == "차세대융합기술원"
-    assert c("다모아자동차(주)") == "다모아자동차"  # 자동차 보존
-    assert c("세일교통(자") == "세일교통"  # 잘린 괄호(끝) 제거
-    assert c("(사무국)운영") == "(사무국)운영"  # 접두 과잉제거 없음
-    assert c("자동차공업사") == "자동차공업사"  # 괄호 없는 '사' 보존
+    assert c("공영버스(목포시)") == "공영버스"
+    assert c("경기버스(구선진상운)") == "경기버스"
+    assert c("서울(강남)버스(주)") == "서울버스"
+    assert c("세일교통(자") == "세일교통"  # 끝에 잘린 여는 괄호
+    assert c("명)진성모빌리티DRT") == "진성모빌리티DRT"  # 앞에 잘린 닫는 괄호
+    # 괄호 밖 상호는 보존
+    assert c("다모아자동차(주)") == "다모아자동차"
+    assert c("자동차공업사") == "자동차공업사"
 
 
 def test_transport_standard_full_columns_and_upsert(client, staff_headers):
@@ -69,6 +74,39 @@ def test_transport_standard_full_columns_and_upsert(client, staff_headers):
     finally:
         db.query(models.Client).filter(
             models.Client.company_name.in_(["표준운수A", "표준운수B"])
+        ).delete(synchronize_session=False)
+        db.commit()
+        db.close()
+
+
+def test_upsert_dedup_by_biz_reg_no(client, staff_headers):
+    """중복 제거 키 = 사업자번호 — 회사명 표기가 달라도 같은 번호면 동일 운수사로 병합."""
+    api = "/api/v1/imports/transport/commit"
+    db = models.SessionLocal()
+    try:
+        db.query(models.Client).filter(
+            models.Client.biz_reg_no == "888-88-88888"
+        ).delete(synchronize_session=False)
+        db.commit()
+        # 1차: 사업자번호로 신규 생성
+        d1 = _xlsx([["가나여객", "888-88-88888", None, "서울", "김", "02-1-1", None, None, None, 10, 0, 0]])
+        r1 = client.post(api, headers=staff_headers,
+                         files={"file": ("a.xlsx", d1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+        assert r1.json()["created"] == 1
+        # 2차: 회사명 다르지만 같은 사업자번호(하이픈 표기 상이) → 갱신(중복 생성 안 함)
+        d2 = _xlsx([["가나여객자동차", "8888888888", "111111-0000000", "서울", "이", "02-2-2", None, None, None, 20, 0, 0]])
+        r2 = client.post(api, headers=staff_headers,
+                         files={"file": ("b.xlsx", d2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+        assert r2.json()["updated"] == 1 and r2.json()["created"] == 0
+        rows = db.query(models.Client).filter(
+            models.Client.biz_reg_no.in_(["888-88-88888", "8888888888"])
+        ).all()
+        assert len(rows) == 1  # 단 한 건(병합)
+        assert rows[0].corp_reg_no == "111111-0000000"  # 2차 값 보강
+        assert rows[0].bus_city == 20
+    finally:
+        db.query(models.Client).filter(
+            models.Client.company_name.in_(["가나여객", "가나여객자동차"])
         ).delete(synchronize_session=False)
         db.commit()
         db.close()
