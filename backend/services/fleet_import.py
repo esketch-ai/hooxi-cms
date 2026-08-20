@@ -257,18 +257,25 @@ def commit_mgmt(db, file_bytes: bytes, actor_id: Optional[str] = None) -> dict:
         return {"mgmt_rows": 0, "mgmt_matched": 0, "mgmt_updated": 0, "mgmt_created": 0}
     lookup = _client_lookup(db)
     matched = created = updated = 0
+    # 실행 내 client_id 중복 제거 — 지역+정제명이 겹쳐 여러 현황 행이 같은 고객사에 매칭되면
+    # tb_fleet_mgmt(PK=client_id)에 두 번 INSERT돼 유니크 위반. 같은 고객사는 한 객체에 마지막 값 반영.
+    seen: Dict[str, FleetMgmt] = {}
     for r in rows:
         client = lookup.get((r["region"], _tf_company_clean(r["company_name"])))
         if client is None:
             continue
         matched += 1
-        m = db.get(FleetMgmt, client.client_id)
+        cid = client.client_id
+        m = seen.get(cid)
         if m is None:
-            m = FleetMgmt(client_id=client.client_id)
-            db.add(m)
-            created += 1
-        else:
-            updated += 1
+            m = db.get(FleetMgmt, cid)
+            if m is None:
+                m = FleetMgmt(client_id=cid)
+                db.add(m)
+                created += 1
+            else:
+                updated += 1
+            seen[cid] = m
         m.target_type = r["target_type"]
         m.contract_status = r["contract_status"]
         m.union_contract = r["union_contract"]

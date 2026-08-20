@@ -314,3 +314,40 @@ def test_dashboard_fleet_tables(client, admin_headers):
         db.commit(); _cleanup(db)
     finally:
         db.close()
+
+
+def test_status_tab_dedup_same_client_no_violation(client, admin_headers):
+    """현황 탭에서 여러 행이 같은 고객사에 매칭돼도 tb_fleet_mgmt PK 위반 없이 1건으로 병합."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        c = models.Client(client_type="TRANSPORT", company_name="TESTF중복운수",
+                          region="서울", biz_reg_no="887-88-88887")
+        db.add(c)
+        db.commit()
+        cid = c.client_id
+    finally:
+        db.close()
+    # 같은 (지역+회사명) 현황 행 2개 → 같은 고객사 매칭
+    xls = _make_excel_with_status(
+        [{"region": "서울", "industry": "시내", "company": "TESTF중복운수",
+          "lic": 10, "total": 10, "diesel": 0, "cng": 0, "ev": 10}],
+        [("서울", "TESTF중복운수", "사업대상", "미계약", "", ""),
+         ("서울", "TESTF중복운수", "사업대상", "계약완료", "MOU체결", "")],
+    )
+    r = client.post("/api/v1/fleet-status/commit", headers=admin_headers,
+                    data={"period": "2026-06"}, files={"file": ("dup.xlsx", xls)})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["mgmt_matched"] == 2 and body["mgmt_created"] == 1  # 2행 매칭 → 1건 병합
+    cnt = db.query(models.FleetMgmt).filter_by(client_id=cid).count()
+    assert cnt == 1  # PK 위반 없이 단일 행
+    m = db.get(models.FleetMgmt, cid)
+    assert m.contract_status == "DONE"  # 마지막 행 반영
+    db2 = models.SessionLocal()
+    try:
+        db2.query(models.FleetMgmt).filter_by(client_id=cid).delete(synchronize_session=False)
+        db2.commit(); _cleanup(db2)
+    finally:
+        db2.close()
+    db.close()
