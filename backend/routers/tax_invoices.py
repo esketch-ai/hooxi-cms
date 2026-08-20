@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission
 from models import TaxInvoice, User, get_db
-from services import tax_invoice_import
+from services import dropbox_storage, tax_invoice_import
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/tax-invoices", tags=["tax-invoices"])
@@ -106,6 +106,59 @@ async def commit_tax_invoices(
         "TAX_INVOICE_IMPORT",
         target_type="TAX_INVOICE",
         new_value="total={0}, created={1}, duplicate={2}, held={3}".format(
+            result["total"], result["created"], result["duplicate"], result["held"]
+        ),
+    )
+    db.commit()
+    return schemas.TaxInvoiceCommitResponse(**result)
+
+
+def _resolve_scan_folder(db: Session, folder: Optional[str]) -> str:
+    f = (folder or "").strip() or tax_invoice_import.scan_folder_default(db)
+    if not f:
+        raise HTTPException(status_code=422, detail="스캔할 Dropbox 폴더가 지정되지 않았습니다")
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다")
+    return f
+
+
+@router.post("/scan/preview", response_model=schemas.TaxInvoicePreviewResponse)
+def scan_preview_tax_invoices(
+    folder: Optional[str] = Query(None, description="스캔 Dropbox 폴더(미지정 시 config 기본값)"),
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """Dropbox 정산 폴더(하위 포함) .html 스캔 → 미리보기(DB 무변경)."""
+    f = _resolve_scan_folder(db, folder)
+    try:
+        files = tax_invoice_import.scan_dropbox_html(f)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return schemas.TaxInvoicePreviewResponse(items=tax_invoice_import.analyze_files(db, files))
+
+
+@router.post("/scan/commit", response_model=schemas.TaxInvoiceCommitResponse)
+def scan_commit_tax_invoices(
+    folder: Optional[str] = Query(None),
+    project_id: Optional[str] = Query(None),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """Dropbox 정산 폴더 .html 스캔 → 원장 적재(승인번호 멱등)."""
+    f = _resolve_scan_folder(db, folder)
+    try:
+        files = tax_invoice_import.scan_dropbox_html(f)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    result = tax_invoice_import.commit_files(
+        db, files, actor_id=user.user_id, project_id=(project_id or None)
+    )
+    AuditLogger.log_action(
+        db,
+        user.user_id,
+        "TAX_INVOICE_SCAN_IMPORT",
+        target_type="TAX_INVOICE",
+        new_value="folder scan — total={0}, created={1}, duplicate={2}, held={3}".format(
             result["total"], result["created"], result["duplicate"], result["held"]
         ),
     )

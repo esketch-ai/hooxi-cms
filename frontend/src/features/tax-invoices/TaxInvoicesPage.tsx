@@ -3,7 +3,9 @@ import { useMemo, useState } from 'react'
 import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import {
+  useCommitScan,
   useCommitTaxInvoices,
+  usePreviewScan,
   usePreviewTaxInvoices,
   useTaxInvoices,
 } from './api'
@@ -44,9 +46,14 @@ export function TaxInvoicesPage() {
   const { showToast } = useToast()
   const [files, setFiles] = useState<File[]>([])
   const [preview, setPreview] = useState<TaxInvoicePreviewItem[] | null>(null)
+  const [source, setSource] = useState<'upload' | 'scan'>('upload')
+  const [scanFolder, setScanFolder] = useState('')
 
   const previewM = usePreviewTaxInvoices()
   const commitM = useCommitTaxInvoices()
+  const previewScanM = usePreviewScan()
+  const commitScanM = useCommitScan()
+  const committing = commitM.isPending || commitScanM.isPending
 
   // 원장 조회
   const [direction, setDirection] = useState('')
@@ -65,25 +72,46 @@ export function TaxInvoicesPage() {
     [preview],
   )
 
+  const showErr = (e: unknown, fallback: string) => {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    showToast(detail ?? fallback, 'danger')
+  }
+
   const onSelectFiles = async (selected: FileList | null) => {
     if (!selected || selected.length === 0) return
     const arr = Array.from(selected)
     setFiles(arr)
+    setSource('upload')
     setPreview(null)
     try {
       const res = await previewM.mutateAsync(arr)
       setPreview(res.items)
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      showToast(detail ?? '미리보기에 실패했습니다.', 'danger')
+      showErr(e, '미리보기에 실패했습니다.')
+    }
+  }
+
+  const onScan = async () => {
+    setSource('scan')
+    setFiles([])
+    setPreview(null)
+    try {
+      const res = await previewScanM.mutateAsync(scanFolder.trim())
+      setPreview(res.items)
+      if (res.items.length === 0) showToast('폴더에서 HTML을 찾지 못했습니다.', 'info')
+    } catch (e) {
+      showErr(e, '폴더 스캔에 실패했습니다.')
     }
   }
 
   const onCommit = async () => {
-    if (files.length === 0) return
+    if (!preview || applicable === 0) return
     if (!window.confirm(`적용 대상 ${applicable}건을 세금계산서 원장에 반영합니다. 진행할까요?`)) return
     try {
-      const r = await commitM.mutateAsync(files)
+      const r =
+        source === 'scan'
+          ? await commitScanM.mutateAsync(scanFolder.trim())
+          : await commitM.mutateAsync(files)
       const kind = r.held > 0 ? 'danger' : r.duplicate > 0 ? 'info' : 'success'
       showToast(
         `적용 완료 — 생성 ${r.created} · 중복 ${r.duplicate} · 보류 ${r.held} (총 ${r.total})`,
@@ -92,8 +120,7 @@ export function TaxInvoicesPage() {
       setFiles([])
       setPreview(null)
     } catch (e) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      showToast(detail ?? '적용에 실패했습니다.', 'danger')
+      showErr(e, '적용에 실패했습니다.')
     }
   }
 
@@ -129,6 +156,23 @@ export function TaxInvoicesPage() {
           )}
           {previewM.isPending && <span className="text-xs text-slatey">미리보기 생성 중…</span>}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+          <span className="text-xs font-medium text-ash">또는 Dropbox 정산 폴더 스캔:</span>
+          <input
+            value={scanFolder}
+            onChange={(e) => setScanFolder(e.target.value)}
+            placeholder="/세금계산서 (비우면 기본 폴더)"
+            className="h-9 w-64 rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={onScan}
+            disabled={previewScanM.isPending}
+            className="rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+          >
+            {previewScanM.isPending ? '스캔 중…' : '폴더 스캔'}
+          </button>
+        </div>
       </section>
 
       {/* 미리보기 */}
@@ -152,10 +196,10 @@ export function TaxInvoicesPage() {
               <button
                 type="button"
                 onClick={onCommit}
-                disabled={applicable === 0 || commitM.isPending}
+                disabled={applicable === 0 || committing}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {commitM.isPending ? '적용 중…' : `적용 ${applicable}건`}
+                {committing ? '적용 중…' : `적용 ${applicable}건`}
               </button>
             </div>
           </div>

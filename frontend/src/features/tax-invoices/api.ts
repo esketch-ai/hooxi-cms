@@ -56,3 +56,32 @@ export function useCommitTaxInvoices() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-invoices'] }),
   })
 }
+
+// Dropbox 정산 폴더 스캔 — folder 비우면 백엔드 config 기본값 사용
+export function usePreviewScan() {
+  return useMutation({
+    mutationFn: async (folder: string) => {
+      const { data } = await api.post<TaxInvoicePreviewResponse>(
+        '/tax-invoices/scan/preview',
+        null,
+        { params: folder ? { folder } : {} },
+      )
+      return data
+    },
+  })
+}
+
+export function useCommitScan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (folder: string) => {
+      const { data } = await api.post<TaxInvoiceCommitResponse>(
+        '/tax-invoices/scan/commit',
+        null,
+        { params: folder ? { folder } : {} },
+      )
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-invoices'] }),
+  })
+}

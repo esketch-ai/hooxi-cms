@@ -76,3 +76,38 @@ def test_tax_invoice_api_preview_commit_list_idempotent(client, staff_headers):
 def test_tax_invoice_preview_requires_auth(client):
     r = client.post(API + "/preview", files=[_file("<html></html>")])
     assert r.status_code in (401, 403)
+
+
+def test_tax_invoice_scan_dropbox(client, staff_headers, monkeypatch):
+    import services.dropbox_storage as ds
+
+    html = _build_secure_mail(SAMPLE_XML, COMPANY)
+    monkeypatch.setattr(ds, "is_configured", lambda: True)
+    monkeypatch.setattr(ds, "root", lambda: "")
+    monkeypatch.setattr(
+        ds, "list_folder",
+        lambda p: [{"name": "t.html", "path_display": "/정산/t.html", "is_dir": False}],
+    )
+    monkeypatch.setattr(ds, "download", lambda p: html.encode("utf-8"))
+
+    db = models.SessionLocal()
+    cid = None
+    try:
+        _cleanup(db, None)
+        db.merge(models.Config(config_key="company_biz_reg_no", config_value=COMPANY))
+        c = models.Client(client_type="TRANSPORT", company_name="스캔운수", biz_reg_no=COUNTERPART)
+        db.add(c)
+        db.commit()
+        cid = c.client_id
+
+        r = client.post(API + "/scan/preview", headers=staff_headers, params={"folder": "/정산"})
+        assert r.status_code == 200, r.text
+        items = r.json()["items"]
+        assert len(items) == 1 and items[0]["ok"] and items[0]["direction"] == "매입"
+
+        r = client.post(API + "/scan/commit", headers=staff_headers, params={"folder": "/정산"})
+        assert r.status_code == 200, r.text
+        assert r.json()["created"] == 1
+    finally:
+        _cleanup(db, cid)
+        db.close()

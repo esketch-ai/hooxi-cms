@@ -14,9 +14,45 @@ from typing import List, Optional, Tuple
 
 from models import Buyer, Client, Config, TaxInvoice
 from routers.common import normalize_biz_no
-from services import tax_invoice
+from services import client_folders, dropbox_storage, tax_invoice
 
 _COMPANY_CONFIG_KEY = "company_biz_reg_no"
+_SCAN_FOLDER_CONFIG_KEY = "tax_invoice_dropbox_folder"
+
+
+def scan_folder_default(db) -> str:
+    """스캔 기본 Dropbox 폴더(config tax_invoice_dropbox_folder). 미설정 시 ''."""
+    row = db.get(Config, _SCAN_FOLDER_CONFIG_KEY)
+    return ((row.config_value if row else "") or "").strip()
+
+
+def scan_dropbox_html(folder_path: str, max_files: int = 500, max_depth: int = 6) -> List[Tuple[str, str]]:
+    """Dropbox 폴더(하위 포함)에서 .html 파일을 내려받아 [(name, html)]. 저장소 루트 밖은 차단.
+
+    Dropbox 미설정 시 dropbox_storage.DropboxConfigError를 상위로 전파(엔드포인트가 503).
+    """
+    root = dropbox_storage.root()
+    base = client_folders.normalize_dropbox_path(folder_path)
+    if root and not client_folders.is_within_folder(root, base):
+        raise ValueError("스캔 폴더가 저장소 루트 밖입니다")
+
+    files: List[Tuple[str, str]] = []
+
+    def walk(path: str, depth: int) -> None:
+        if depth > max_depth or len(files) >= max_files:
+            return
+        for e in dropbox_storage.list_folder(path):
+            if len(files) >= max_files:
+                break
+            if e.get("is_dir"):
+                walk(e["path_display"], depth + 1)
+            elif str(e.get("name", "")).lower().endswith(".html"):
+                content = dropbox_storage.download(e["path_display"])
+                if content:
+                    files.append((e["name"], content.decode("utf-8", errors="replace")))
+
+    walk(base, 0)
+    return files
 
 
 def company_biznos(db) -> List[str]:
