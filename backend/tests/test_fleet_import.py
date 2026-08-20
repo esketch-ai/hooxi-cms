@@ -385,3 +385,35 @@ def test_fleet_status_match_region_alias(client):
     finally:
         _cleanup(db)
         db.close()
+
+
+def test_unmatched_export_xlsx(client, admin_headers):
+    from openpyxl import load_workbook
+    from io import BytesIO as _B
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        # 매칭 없는 미매칭 대수행 1건
+        db.add(models.FleetStatus(client_id=None, region="경기", industry="CITY",
+                                  company_name="TESTF미매칭여객", period="2026-06",
+                                  license_count=99, total_count=99, electric=10))
+        db.commit()
+    finally:
+        db.close()
+    r = client.get("/api/v1/fleet-status/unmatched-export?period=2026-06", headers=admin_headers)
+    assert r.status_code == 200
+    assert "spreadsheetml" in r.headers["content-type"]
+    wb = load_workbook(_B(r.content))
+    ws = wb.active
+    headers = [c.value for c in ws[1]]
+    assert "회사명 *" in headers and "지역" in headers and "시내" in headers
+    # 데이터 행에 미매칭 회사가 표준 양식으로 들어갔는지
+    data = [[c.value for c in row] for row in ws.iter_rows(min_row=2)]
+    hit = [d for d in data if d[0] == "TESTF미매칭여객"]
+    assert hit and hit[0][headers.index("지역")] == "경기"
+    assert hit[0][headers.index("시내")] == 99  # CITY→시내 칸
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+    finally:
+        db.close()

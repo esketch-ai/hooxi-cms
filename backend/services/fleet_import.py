@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import Dict, List, Optional
 
 from openpyxl import load_workbook
+from sqlalchemy import func
 
 from models import Client, Code, FleetMgmt, FleetStatus
 from services.excel_import import _tf_company_clean
@@ -297,3 +298,53 @@ def commit_mgmt(db, file_bytes: bytes, actor_id: Optional[str] = None) -> dict:
         m.updated_by = actor_id
     db.commit()
     return {"mgmt_rows": len(rows), "mgmt_matched": matched, "mgmt_updated": updated, "mgmt_created": created}
+
+
+# ── 미매칭 운수사 → 표준(transport) 양식 엑셀 내보내기 ──
+# 계약대수 현황에 있으나 고객사 마스터에 매칭 안 된 운수사를, 운수사 표준 업로드 양식으로
+# 그대로 내보내 마스터에 추가(검토 후 업로드)할 수 있게 한다. 컬럼은 import_spec.transport 재사용.
+_INDUSTRY_TO_FIELD = {"CITY": "bus_city", "RURAL": "bus_rural", "INTERCITY": "bus_intercity"}
+
+
+def unmatched_export_period(db, period: Optional[str] = None) -> Optional[str]:
+    """대상 월 결정 — 지정 없으면 데이터 있는 최신 월."""
+    if period:
+        return period
+    return db.query(func.max(FleetStatus.period)).scalar()
+
+
+def build_unmatched_export(db, period: Optional[str] = None) -> bytes:
+    """미매칭(client_id NULL) 운수사를 표준 양식(transport) xlsx로. 대수는 업종별 시내/농어촌/시외 칸에."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    from services.excel_import import get_spec
+
+    spec = get_spec("transport")
+    period = unmatched_export_period(db, period)
+    rows = []
+    if period:
+        rows = (
+            db.query(FleetStatus)
+            .filter(FleetStatus.period == period, FleetStatus.client_id.is_(None))
+            .order_by(FleetStatus.region, FleetStatus.company_name)
+            .all()
+        )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = spec.label
+    for idx, col in enumerate(spec.columns, start=1):
+        cell = ws.cell(row=1, column=idx, value=col.label + (" *" if col.required else ""))
+        cell.font = Font(bold=True)
+    for r in rows:
+        vals = {"company_name": r.company_name, "region": r.region}
+        field = _INDUSTRY_TO_FIELD.get(r.industry)
+        if field:
+            vals[field] = r.license_count
+        else:  # 업종 미상 → 시내 칸에 면허대수 seed
+            vals["bus_city"] = r.license_count
+        ws.append([vals.get(col.field, "") for col in spec.columns])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

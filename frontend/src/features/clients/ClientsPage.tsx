@@ -2,7 +2,15 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Buildings, ChartBar, FileXls, PencilSimple, Phone, Plus } from '@phosphor-icons/react'
+import {
+  Buildings,
+  ChartBar,
+  DownloadSimple,
+  FileXls,
+  PencilSimple,
+  Phone,
+  Plus,
+} from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -10,10 +18,11 @@ import { Pagination } from '../../components/Pagination'
 import { StatusBadge } from '../../components/StatusBadge'
 import { SensitiveData } from '../../components/SensitiveData'
 import { EmptyState } from '../../components/EmptyState'
+import { useToast } from '../../components/Toast'
 import { useCodes, useUserOptions } from '../../lib/api/queries'
 import { fmtDate, fmtMoney, telHref } from '../../lib/format'
 import type { Client } from '../../types'
-import { useClients } from './api'
+import { useClients, useExportUnmatchedTransport } from './api'
 import { ClientFormModal } from './ClientFormModal'
 import { FleetStatusImportModal } from './FleetStatusImportModal'
 import { ExcelImportModal } from '../imports/ExcelImportModal'
@@ -48,6 +57,16 @@ export function ClientsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [transportOpen, setTransportOpen] = useState(false)
   const [fleetStatusOpen, setFleetStatusOpen] = useState(false)
+  const { showToast } = useToast()
+  const exportUnmatched = useExportUnmatchedTransport()
+
+  const handleExportUnmatched = () => {
+    exportUnmatched.mutate(undefined, {
+      onSuccess: () => showToast('미매칭 운수사 표준 양식을 내려받았습니다.', 'success'),
+      onError: (err) =>
+        showToast(err instanceof Error ? err.message : '내보내기에 실패했습니다.', 'danger'),
+    })
+  }
 
   const filters = useMemo(
     () => ({
@@ -217,6 +236,16 @@ export function ClientsPage() {
             >
               <ChartBar size={16} />
               계약대수 현황 업로드
+            </button>
+            <button
+              type="button"
+              onClick={handleExportUnmatched}
+              disabled={exportUnmatched.isPending}
+              title="계약대수 현황엔 있으나 마스터에 없는 운수사를 표준 양식으로 내려받아 검토·추가"
+              className="hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50 sm:flex"
+            >
+              <DownloadSimple size={16} />
+              미매칭 운수사 내보내기
             </button>
             <button
               type="button"

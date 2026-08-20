@@ -290,6 +290,19 @@ export function useFleetStatusCommit() {
   })
 }
 
+/** 미매칭 운수사(계약대수엔 있으나 마스터에 없음) → 운수사 표준 양식 xlsx 다운로드 */
+export function useExportUnmatchedTransport() {
+  return useMutation({
+    mutationFn: async (period?: string) => {
+      await downloadExport(
+        '/fleet-status/unmatched-export',
+        period ? { period } : {},
+        '미매칭_운수사_표준양식.xlsx',
+      )
+    },
+  })
+}
+
 /** 고객사 현황 탭 — 월별 대수 추이 + 수작업 관리 */
 export function useFleetClientStatus(clientId: string | undefined) {
   return useQuery({

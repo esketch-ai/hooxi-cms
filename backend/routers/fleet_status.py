@@ -8,8 +8,10 @@
 """
 
 import re
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 import schemas
@@ -82,6 +84,33 @@ async def commit_fleet_status(
     )
     db.commit()
     return result
+
+
+_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@router.get("/unmatched-export")
+def export_unmatched_transport(
+    period: str = "",
+    _: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """미매칭 운수사(계약대수엔 있으나 고객사 마스터에 없음)를 운수사 표준 양식 xlsx로 내보낸다.
+
+    검토 후 사업자번호 등을 채워 '운수사 일괄 등록(표준)'으로 올리면 마스터에 추가되고,
+    다음 계약대수 업로드부터 자동 매칭된다. period 미지정 시 데이터 있는 최신 월.
+    """
+    period = period.strip()
+    if period and not _PERIOD_RE.match(period):
+        raise HTTPException(status_code=422, detail="대상 월 형식은 YYYY-MM 입니다 (예: 2026-06)")
+    used = fleet_import.unmatched_export_period(db, period or None)
+    content = fleet_import.build_unmatched_export(db, period or None)
+    fname = "미매칭_운수사_표준양식_{0}.xlsx".format(used or "전체")
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''{0}".format(quote(fname))},
+    )
 
 
 @router.get("/client/{client_id}", response_model=schemas.FleetClientStatusOut)
