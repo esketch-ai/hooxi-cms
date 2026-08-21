@@ -234,6 +234,7 @@ export interface ActivityHistory {
   next_action?: string | null
   next_action_done?: string | null
   related_history_id?: string | null
+  chat_thread_id?: string | null // 카카오 상담에서 승격된 이슈(K3) — 원 스레드 딥링크
   title: string
   content?: string | null
   main_needs?: string | null

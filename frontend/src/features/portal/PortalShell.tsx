@@ -3,6 +3,7 @@
 import { Link, Navigate, NavLink, Outlet } from 'react-router-dom'
 import { Bus, CircleNotch, FileText, Leaf, SignOut, TreeStructure, Wallet } from '@phosphor-icons/react'
 import { usePortalAuth } from './PortalAuthProvider'
+import { useLoginConfig } from '../../lib/api/queries'
 
 const ROLE_BADGE: Record<string, string> = {
   PARTNER: '운수사',
@@ -38,6 +39,8 @@ export function RequirePortal() {
 
 function PortalShell() {
   const { me, logout } = usePortalAuth()
+  const { data: loginConfig } = useLoginConfig()
+  const kakaoUrl = loginConfig?.kakao_channel_url ?? null
 
   return (
     <div className="min-h-dvh bg-void">
@@ -52,6 +55,18 @@ function PortalShell() {
             </span>
           </Link>
           <div className="flex items-center gap-3">
+            {/* 카카오 문의(K2) — 문의는 카카오 채널 채팅으로(상담 관제 연동) */}
+            {kakaoUrl && (
+              <a
+                href={kakaoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#FEE500] px-3 py-1.5 text-xs font-bold text-[#191919] hover:brightness-95"
+                title="카카오톡 채널에서 문의하기"
+              >
+                💬 카카오톡 문의
+              </a>
+            )}
             <div className="hidden text-right sm:block">
               {me?.org_name && (
                 <p className="text-sm font-medium text-bone">{me.org_name}</p>

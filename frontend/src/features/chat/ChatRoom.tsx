@@ -6,6 +6,7 @@ import {
   AddressBook,
   ArrowLeft,
   CircleNotch,
+  Kanban,
   PaperPlaneRight,
   Robot,
   WarningCircle,
@@ -18,7 +19,7 @@ import { BADGE_DICTIONARY } from '../../components/StatusBadge'
 import { fmtServerDate, parseServerUtc } from '../../lib/format'
 import { useClient, useClientAssets } from '../clients/api'
 import type { ChatMessage, ChatThread } from '../../types'
-import { useChatMessages, useReplyThread, useUpdateThread } from './api'
+import { useChatMessages, useEscalateThread, useReplyThread, useUpdateThread } from './api'
 import { threadTitle } from './ThreadList'
 
 const MAX_LEN = 1000
@@ -55,6 +56,7 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
   const { data: messages = [], isLoading } = useChatMessages(thread.thread_id)
   const reply = useReplyThread(thread.thread_id)
   const update = useUpdateThread(thread.thread_id)
+  const escalate = useEscalateThread()
 
   // 컨텍스트 라인(계약 상태 | 자산 요약) — 스레드 조인 필드 우선, 없으면 고객사 조회 폴백
   const { data: client } = useClient(thread.client_id ?? undefined)
@@ -228,6 +230,23 @@ export function ChatRoom({ thread, onBack }: ChatRoomProps) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {/* 상담 → 이슈 승격(K3) — 미해결 문의를 이슈 보드로 */}
+          <button
+            type="button"
+            disabled={escalate.isPending || closed}
+            onClick={() =>
+              escalate.mutate(thread.thread_id, {
+                onSuccess: (issue) =>
+                  showToast(`이슈로 등록되었습니다 — ${issue.title}`, 'success'),
+                onError: () => showToast('이슈 등록에 실패했습니다.', 'danger'),
+              })
+            }
+            className="hidden items-center gap-1 rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate disabled:opacity-50 sm:flex"
+            title="해결이 어려운 문의를 이슈 보드로 승격(중복 승격 방지)"
+          >
+            <Kanban size={13} />
+            이슈로 등록
+          </button>
           {/* AI↔직원 모드 토글 (세그먼트) */}
           <div
             className="hidden items-center rounded-full border border-hairline bg-graphite-2 p-1 sm:flex"

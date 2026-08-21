@@ -1,5 +1,6 @@
 // SCR-02 이슈 보드 — 팀 공용 칸반 (접수→처리중→보류→완료)
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarCheck, Buildings, Fire, Kanban, Plus, Spinner } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
@@ -283,6 +284,16 @@ function IssueCard({ issue }: { issue: ActivityHistory }) {
         <p className="min-w-0 flex-1 truncate text-xs font-semibold text-ash">
           {issue.client_name ?? (issue.client_id ? '고객사' : '미지정 고객')}
         </p>
+        {issue.chat_thread_id && (
+          <Link
+            to={`/chat?thread=${issue.chat_thread_id}`}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            className="shrink-0 rounded-full bg-yellow-400/15 px-1.5 py-0.5 text-[10px] font-bold text-yellow-700 hover:underline dark:text-yellow-300"
+            title="카카오 상담에서 승격된 이슈 — 원 상담으로 이동해 답변"
+          >
+            💬 상담
+          </Link>
+        )}
         {urgent && (
           <span className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
             긴급

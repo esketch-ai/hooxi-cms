@@ -26,6 +26,7 @@ from models import (
 )
 from routers import common
 from services import integration_config, kakao_service
+from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -298,3 +299,64 @@ def update_thread(
     db.commit()
     db.refresh(thread)
     return _thread_out(db, thread)
+
+
+@router.post("/threads/{thread_id}/escalate", response_model=schemas.HistoryOut)
+def escalate_thread_to_issue(
+    thread_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """상담 미해결 → 이슈 승격(K3) — 스레드↔이슈 양방향 연결.
+
+    이미 이 스레드에 연결된 미종결 이슈가 있으면 새로 만들지 않고 그 이슈를 반환(중복 방지).
+    담당자는 고객사 담당 PM 기본(없으면 승격한 사람). 내용은 최근 고객 메시지 3건 요약.
+    스레드에는 SYSTEM 메시지를 남기고 모드는 그대로(WAITING 유지 — 답변 의무는 상담에 남음).
+    """
+    thread = common.get_or_404(db, ChatThread, thread_id, "상담 스레드")
+    existing = (
+        db.query(ActivityHistory)
+        .filter(
+            ActivityHistory.chat_thread_id == thread_id,
+            ActivityHistory.activity_type == "ISSUE",
+            ActivityHistory.issue_status != "CLOSED",
+        )
+        .first()
+    )
+    if existing is not None:
+        return common.build_history_outs(db, [existing])[0]
+
+    client = db.get(Client, thread.client_id) if thread.client_id else None
+    recent = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.thread_id == thread_id, ChatMessage.sender_type == "CUSTOMER")
+        .order_by(ChatMessage.created_at.desc())
+        .limit(3)
+        .all()
+    )
+    summary = "\n".join("· {0}".format((m.content or "")[:120]) for m in reversed(recent))
+    issue = ActivityHistory(
+        client_id=thread.client_id,
+        manager_id=(client.manager_id if client and client.manager_id else user.user_id),
+        created_by=user.user_id,
+        activity_date=common.now_kst(),
+        activity_type="ISSUE",
+        issue_status="OPEN",
+        priority="NORMAL",
+        title="[상담] {0} 카카오 문의".format(client.company_name if client else "미지정 고객"),
+        content="카카오 상담에서 승격된 이슈입니다.\n최근 문의:\n{0}".format(summary or "· (메시지 없음)"),
+        chat_thread_id=thread_id,
+    )
+    db.add(issue)
+    db.add(ChatMessage(
+        thread_id=thread_id, sender_type="SYSTEM",
+        content="이슈로 등록됨 — 이슈 보드에서 처리 후 이 상담으로 답변해 주세요.",
+    ))
+    db.flush()
+    AuditLogger.log_action(
+        db, user.user_id, "CHAT_ESCALATE_ISSUE",
+        target_type="CHAT_THREAD", target_id=thread_id, new_value=issue.history_id,
+    )
+    db.commit()
+    db.refresh(issue)
+    return common.build_history_outs(db, [issue])[0]

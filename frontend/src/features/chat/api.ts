@@ -185,3 +185,22 @@ export function useUpdateKakaoContact() {
     },
   })
 }
+
+
+/** 상담 → 이슈 승격(K3) — 스레드에 연결된 미종결 이슈가 있으면 그 이슈를 반환(중복 방지) */
+export function useEscalateThread() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (threadId: string) => {
+      const { data } = await api.post<{ history_id: string; title: string }>(
+        `/chat/threads/${threadId}/escalate`,
+      )
+      return data
+    },
+    onSuccess: (_d, threadId) => {
+      queryClient.invalidateQueries({ queryKey: ['chat'] })
+      queryClient.invalidateQueries({ queryKey: ['histories'] })
+      void threadId
+    },
+  })
+}

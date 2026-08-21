@@ -1758,6 +1758,7 @@ class HistoryOut(BaseModel):
     next_action: Optional[str] = None
     next_action_done: Optional[str] = None
     related_history_id: Optional[str] = None
+    chat_thread_id: Optional[str] = None  # 상담 스레드에서 승격된 이슈(K3) — 원 스레드 링크
     title: str
     content: Optional[str] = None
     main_needs: Optional[str] = None

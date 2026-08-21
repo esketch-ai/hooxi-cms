@@ -169,6 +169,8 @@ class ActivityHistory(Base):
     due_date = Column(Date)  # 이슈 마감일 (GAN A2)
     next_action = Column(String(200))  # GAN A3
     next_action_done = Column(String(1), default="N")
+    # 상담 스레드 연결(K3) — 카카오 상담에서 승격된 이슈의 원 스레드(양방향 이동용)
+    chat_thread_id = Column(String(50))
     related_history_id = Column(
         String(50), ForeignKey("tb_activity_history.history_id"), nullable=True
     )  # 이슈 승격 원 이력 링크 (R2-D6)
@@ -1095,6 +1097,8 @@ def ensure_schema():
         ("tb_access_group", "dept_code", "VARCHAR(30)"),
         # 외부 포털 이용권 만료(1일/1주/1개월/연간권)
         ("tb_user", "portal_expires_at", "TIMESTAMP"),
+        # 상담→이슈 승격 연결(K3)
+        ("tb_activity_history", "chat_thread_id", "VARCHAR(50)"),
     ]
     try:
         insp = _inspect(engine)

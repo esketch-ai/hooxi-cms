@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission, require_role
 from models import (
+    ActivityHistory,
     ChatMessage,
     ChatThread,
     Client,
@@ -35,6 +36,94 @@ DEFAULT_SENSITIVE_KEYWORDS = ["수수료", "단가", "계약금액", "보수율"
 
 # 담당자 연결(핸드오프) 트리거 발화 키워드
 HANDOFF_KEYWORDS = ("상담", "담당자")
+
+# 포털 셀프 서비스 트리거 발화 키워드 (K1) — 승인+고객사 매칭 연락처만 자동 발급
+PORTAL_KEYWORDS = ("포털", "포탈")
+
+
+def _portal_self_service(db: Session, contact: KakaoContact, thread: "ChatThread") -> str:
+    """챗봇 '포털' 셀프 발급(K1) — 승인·매칭된 연락처에 이용권 링크를 채팅으로 회신.
+
+    - 계정이 없으면 PARTNER 자동 provision(연락처당 1계정 — 플레이스홀더 이메일
+      kakao-{contact_id}@portal.local, 발송 채널은 이 채팅 응답 자체).
+    - 기본 이용권 1개월권(Q1 확정). 만료 후 다시 '포털' 발화로 재발급.
+    - 링크는 응답 텍스트로만 전달(챗봇 응답은 DB 미저장) — 스레드에는 링크 없는 SYSTEM
+      메시지만 적재(R2-E6: 로그인 링크 저장 금지).
+    - 비활성(INACTIVE) 계정은 자동 재발급하지 않는다(차단 권위 유지).
+    """
+    from routers.batch import _seed_admin_id
+    from routers.external_accounts import _apply_pass, _issue_magic
+
+    if not contact.client_id:
+        return (
+            "고객사 연결 확인이 아직 완료되지 않았습니다.\n"
+            "담당자가 확인 후 포털 링크를 안내드리겠습니다."
+        )
+
+    placeholder = "kakao-{0}@portal.local".format(contact.contact_id)
+    account = (
+        db.query(User)
+        .filter(User.role == "PARTNER", User.client_id == contact.client_id,
+                User.email == placeholder)
+        .first()
+    )
+    if account is None and contact.phone:
+        account = (
+            db.query(User)
+            .filter(User.role == "PARTNER", User.client_id == contact.client_id,
+                    User.phone == contact.phone)
+            .first()
+        )
+    if account is not None and account.status == "INACTIVE":
+        return "포털 이용이 제한된 계정입니다. 담당자에게 문의해 주세요."
+
+    actor_id = _seed_admin_id(db)
+    created = account is None
+    if created:
+        account = User(
+            email=placeholder,
+            name=contact.name or "카카오 고객",
+            role="PARTNER",
+            status="ACTIVE",
+            auth_provider="PORTAL",
+            token_version=0,
+            client_id=contact.client_id,
+            phone=contact.phone,
+        )
+        db.add(account)
+        db.flush()
+
+    ttl = _apply_pass(db, account, "30d")  # Q1: 셀프 발급 기본 1개월권
+    if actor_id:
+        if created:
+            AuditLogger.external_account_create(db, actor_id, account.user_id, "PARTNER")
+        else:
+            AuditLogger.external_account_resend(db, actor_id, account.user_id)
+    # 스레드 흔적(링크 미포함) + 활동 이력 [자동]
+    db.add(ChatMessage(
+        thread_id=thread.thread_id, sender_type="SYSTEM",
+        content="포털 이용권 링크 발급(챗봇 셀프, 1개월권)",
+    ))
+    client = db.get(Client, contact.client_id)
+    db.add(ActivityHistory(
+        client_id=contact.client_id,
+        manager_id=(client.manager_id if client and client.manager_id else actor_id),
+        created_by=actor_id,
+        activity_date=common.now_kst(),
+        activity_type="PORTAL",
+        title="{0} 포털 초대 링크 발급(챗봇) — {1}".format(
+            common.AUTO_PREFIX, client.company_name if client else ""),
+        content="역할 PARTNER · 채널 카카오 챗봇 · 이용권 1개월",
+    ))
+    db.commit()
+    db.refresh(account)
+    magic_link, _abs = _issue_magic(account, ttl)
+    until = account.portal_expires_at.strftime("%Y-%m-%d") if account.portal_expires_at else ""
+    return (
+        "전용 포털 접속 링크입니다 (1개월권, {until}까지).\n{link}\n\n"
+        "링크를 누르면 별도 비밀번호 없이 접속됩니다. 만료 후에는 다시 '포털'이라고 "
+        "입력해 주세요."
+    ).format(until=until, link=magic_link)
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +256,14 @@ def kakao_webhook(
                 content="민감 키워드 감지: {0}".format(", ".join(matched)),
             )
         )
+
+    # 포털 셀프 서비스(K1) — '포털' 발화 또는 clientExtra.action=portal
+    portal_req = (
+        any(kw in utterance for kw in PORTAL_KEYWORDS)
+        or client_extra.get("action") == "portal"
+    )
+    if portal_req:
+        return _skill_response(_portal_self_service(db, contact, thread))
 
     # 담당자 연결(핸드오프) — 발화 키워드 또는 clientExtra.action=handoff
     handoff = (
