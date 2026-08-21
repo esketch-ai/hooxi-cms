@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CaretDown,
+  CircleNotch,
   ClockCounterClockwise,
   DownloadSimple,
   Plus,
@@ -20,6 +21,7 @@ import { Modal } from '../../components/Modal'
 import { SignaturePad } from '../../components/SignaturePad'
 import { DocumentPreviewModal } from '../../components/DocumentPreviewModal'
 import { useToast } from '../../components/Toast'
+import { downloadExport } from '../../lib/export'
 import { api } from '../../lib/api/client'
 import {
   unwrapList,
@@ -63,6 +65,34 @@ export function HistoriesPage() {
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const { showToast } = useToast()
+
+  // 엑셀 내보내기 — 현재 필터 결과만(전체 다운로드는 서버가 400으로 거부)
+  const exportParams = {
+    activity_type: activityType || undefined,
+    created_by: createdBy || undefined,
+    retention_stage: retention || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    search: debouncedSearch || undefined,
+  }
+  const hasFilter = Object.values(exportParams).some(Boolean)
+  const handleExport = async () => {
+    if (!hasFilter) {
+      showToast('전체 다운로드는 허용되지 않습니다 — 유형·기간 등 필터를 먼저 지정하세요.', 'danger')
+      return
+    }
+    setExporting(true)
+    try {
+      await downloadExport('/histories/export', exportParams, '활동이력.xlsx')
+      showToast('활동 이력을 내려받았습니다.', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '내보내기에 실패했습니다.', 'danger')
+    } finally {
+      setExporting(false)
+    }
+  }
   const [signTarget, setSignTarget] = useState<ActivityHistory | null>(null)
 
   const params = useMemo(() => {
@@ -114,14 +144,36 @@ export function HistoriesPage() {
         title="영업 활동 이력"
         subtitle="컨택·활동·이슈 통합 기록 — 부서 공동 관리"
         actions={
-          <button
-            type="button"
-            onClick={() => setFormOpen(true)}
-            className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
-          >
-            <Plus size={16} weight="bold" />
-            이력 등록
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              title={
+                hasFilter
+                  ? '현재 필터 결과를 엑셀로 내려받기'
+                  : '전체 다운로드 불가 — 필터를 먼저 지정하세요'
+              }
+              className={`hidden items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium sm:flex ${
+                hasFilter ? 'text-bone hover:bg-elevate' : 'cursor-not-allowed text-slatey/60'
+              } disabled:opacity-50`}
+            >
+              {exporting ? (
+                <CircleNotch size={16} className="animate-spin" />
+              ) : (
+                <DownloadSimple size={16} />
+              )}
+              엑셀 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormOpen(true)}
+              className="hidden items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-on-primary hover:opacity-90 sm:flex"
+            >
+              <Plus size={16} weight="bold" />
+              이력 등록
+            </button>
+          </>
         }
       />
 

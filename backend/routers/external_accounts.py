@@ -337,6 +337,27 @@ def deactivate_external_account(
     user.token_version = (user.token_version or 0) + 1
     AuditLogger.external_account_deactivate(db, manager.user_id, user.user_id, old_status)
     db.commit()
+    # 비활성화도 고객사/투자사와의 직접 관계 액션 — 활동 이력에 남긴다(내부 처리는 감사 로그).
+    try:
+        org = ""
+        if user.role == "PARTNER" and user.client_id:
+            c = db.get(Client, user.client_id)
+            org = c.company_name if c else ""
+        elif user.role == "INVESTOR" and user.buyer_id:
+            b = db.get(Buyer, user.buyer_id)
+            org = b.name if b else ""
+        db.add(ActivityHistory(
+            client_id=user.client_id,
+            manager_id=manager.user_id,
+            created_by=manager.user_id,
+            activity_date=common.now_kst(),
+            activity_type="PORTAL",
+            title="{0} 포털 계정 비활성화 — {1}".format(common.AUTO_PREFIX, org or user.email),
+            content="역할 {0} · 대상 {1} · 즉시 로그인 차단".format(user.role, user.email),
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
     db.refresh(user)
     return _account_out(user)
 

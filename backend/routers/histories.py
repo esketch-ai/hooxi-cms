@@ -9,33 +9,33 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import ActivityHistory, Client, IssueComment, User, get_db, utcnow
+from models import ActivityHistory, Client, Code, IssueComment, User, get_db, utcnow
 from routers import common
 from routers.codes import validate_active_code
+from services.excel_export import (
+    DAILY_EXPORT_LIMIT,
+    ColumnSpec,
+    build_watermark,
+    build_workbook,
+    check_export_quota,
+    enforce_row_limit,
+    export_filename,
+    xlsx_response,
+)
+
+# 활동 이력 내보내기 행 상한 — 컴플레인 대응용 조회 범위(전체 반출 아님)
+HISTORY_EXPORT_MAX_ROWS = 2000
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/histories", tags=["histories"])
 
 
-@router.get("", response_model=schemas.HistoryListResponse)
-def list_histories(
-    client_id: Optional[str] = Query(None, description="고객사"),
-    activity_type: Optional[str] = Query(None, description="CALL/MEETING/SITE_VISIT/EMAIL/ISSUE/KAKAO"),
-    created_by: Optional[str] = Query(None, description="작성자"),
-    manager_id: Optional[str] = Query(None, description="담당자"),
-    retention_stage: Optional[str] = Query(None, description="리텐션 단계"),
-    issue_status: Optional[str] = Query(None, description="OPEN/IN_PROGRESS/HOLD/CLOSED — 콤마 구분 다중 값 허용"),
-    closed_since: Optional[date] = Query(None, description="이 날짜(포함) 이후 갱신분만 — issue_status=CLOSED와 조합해 최근 완료분 조회"),
-    priority: Optional[str] = Query(None, description="URGENT/NORMAL"),
-    date_from: Optional[date] = Query(None, description="기간 시작"),
-    date_to: Optional[date] = Query(None, description="기간 끝"),
-    search: Optional[str] = Query(None, description="고객사명·제목 검색"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
-    _: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+def _filtered_history_query(
+    db: Session, *, client_id=None, activity_type=None, created_by=None, manager_id=None,
+    retention_stage=None, issue_status=None, closed_since=None, priority=None,
+    date_from=None, date_to=None, search=None,
 ):
-    """활동 이력 목록 (SCR-05) — 고객사·유형·작성자·기간·리텐션 필터 + 검색."""
+    """목록·엑셀 내보내기 공용 필터 — 두 경로의 결과 동일성을 한 곳에서 보장."""
     query = db.query(ActivityHistory)
     if search and search.strip():
         # 고객사명·제목 부분일치 — client_id가 없는 이력도 제목으로 히트되도록 outerjoin
@@ -77,6 +77,34 @@ def list_histories(
     if date_to:
         query = query.filter(ActivityHistory.activity_date <= datetime.combine(date_to, datetime.max.time()))
 
+    return query
+
+
+@router.get("", response_model=schemas.HistoryListResponse)
+def list_histories(
+    client_id: Optional[str] = Query(None, description="고객사"),
+    activity_type: Optional[str] = Query(None, description="CALL/MEETING/SITE_VISIT/EMAIL/ISSUE/KAKAO"),
+    created_by: Optional[str] = Query(None, description="작성자"),
+    manager_id: Optional[str] = Query(None, description="담당자"),
+    retention_stage: Optional[str] = Query(None, description="리텐션 단계"),
+    issue_status: Optional[str] = Query(None, description="OPEN/IN_PROGRESS/HOLD/CLOSED — 콤마 구분 다중 값 허용"),
+    closed_since: Optional[date] = Query(None, description="이 날짜(포함) 이후 갱신분만 — issue_status=CLOSED와 조합해 최근 완료분 조회"),
+    priority: Optional[str] = Query(None, description="URGENT/NORMAL"),
+    date_from: Optional[date] = Query(None, description="기간 시작"),
+    date_to: Optional[date] = Query(None, description="기간 끝"),
+    search: Optional[str] = Query(None, description="고객사명·제목 검색"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """활동 이력 목록 (SCR-05) — 고객사·유형·작성자·기간·리텐션 필터 + 검색."""
+    query = _filtered_history_query(
+        db, client_id=client_id, activity_type=activity_type, created_by=created_by,
+        manager_id=manager_id, retention_stage=retention_stage, issue_status=issue_status,
+        closed_since=closed_since, priority=priority, date_from=date_from, date_to=date_to,
+        search=search,
+    )
     total = query.count()
     rows = (
         query.order_by(ActivityHistory.activity_date.desc())
@@ -85,6 +113,91 @@ def list_histories(
         .all()
     )
     return schemas.HistoryListResponse(items=common.build_history_outs(db, rows), total=total)
+
+
+@router.get("/export")
+def export_histories(
+    client_id: Optional[str] = Query(None),
+    activity_type: Optional[str] = Query(None),
+    created_by: Optional[str] = Query(None),
+    manager_id: Optional[str] = Query(None),
+    retention_stage: Optional[str] = Query(None),
+    issue_status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    search: Optional[str] = Query(None),
+    user: User = Depends(require_permission("crm.read_write")),
+    db: Session = Depends(get_db),
+):
+    """활동 이력 엑셀 내보내기 — 화면과 동일 필터의 결과만(.xlsx).
+
+    담당자가 이력 근거로 고객 컴플레인에 대응할 수 있게 실무자(STAFF)도 허용하되,
+    - **전체 다운로드 금지**: 필터를 최소 1개 지정해야 한다(무필터 400).
+    - 행 상한 2,000·일일 반출 한도(DATA_EXPORT 감사 카운터)·워터마크로 대량 유출 억제.
+    - 감사 로그에는 건수·필터 요약만(내용 원문 미기록).
+    """
+    filters = {
+        "client_id": client_id, "activity_type": activity_type, "created_by": created_by,
+        "manager_id": manager_id, "retention_stage": retention_stage,
+        "issue_status": issue_status, "priority": priority,
+        "date_from": date_from, "date_to": date_to,
+        "search": (search or "").strip() or None,
+    }
+    if not any(v for v in filters.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="전체 다운로드는 허용되지 않습니다 — 고객사·기간 등 필터를 최소 1개 지정하세요",
+        )
+    check_export_quota(db, user, daily_limit=DAILY_EXPORT_LIMIT)
+    q = _filtered_history_query(db, closed_since=None, **filters)
+    total = q.count()
+    enforce_row_limit(total, max_rows=HISTORY_EXPORT_MAX_ROWS)
+    rows = q.order_by(ActivityHistory.activity_date.desc()).all()
+    outs = common.build_history_outs(db, rows)
+    type_labels = {
+        c.code: c.label
+        for c in db.query(Code).filter(Code.category == "ACTIVITY_TYPE").all()
+    }
+    data = [
+        {
+            "activity_date": o.activity_date,
+            "client_name": o.client_name or "",
+            "activity_type": type_labels.get(o.activity_type, o.activity_type),
+            "title": o.title,
+            "content": o.content or "",
+            "manager_name": o.manager_name or "",
+            "created_by_name": o.created_by_name or "",
+            "retention_stage": o.retention_stage or "",
+            "issue_status": o.issue_status or "",
+            "priority": o.priority or "",
+            "due_date": o.due_date,
+            "next_action": o.next_action or "",
+        }
+        for o in outs
+    ]
+    columns = [
+        ColumnSpec("activity_date", "활동일", "date"),
+        ColumnSpec("client_name", "고객사"),
+        ColumnSpec("activity_type", "유형"),
+        ColumnSpec("title", "제목"),
+        ColumnSpec("content", "내용"),
+        ColumnSpec("manager_name", "담당자"),
+        ColumnSpec("created_by_name", "작성자"),
+        ColumnSpec("retention_stage", "리텐션 단계"),
+        ColumnSpec("issue_status", "이슈 상태"),
+        ColumnSpec("priority", "우선순위"),
+        ColumnSpec("due_date", "마감일", "date"),
+        ColumnSpec("next_action", "다음 액션"),
+    ]
+    content = build_workbook(columns, data, "활동이력", build_watermark(user))
+    applied = ",".join(k for k, v in filters.items() if v)
+    AuditLogger.log_action(
+        db, user.user_id, "DATA_EXPORT", target_type="HISTORY",
+        new_value="활동 이력 내보내기 — {0}건 (필터: {1})".format(total, applied),
+    )
+    db.commit()
+    return xlsx_response(content, export_filename("활동이력"))
 
 
 @router.post("", response_model=schemas.HistoryOut, status_code=201)
