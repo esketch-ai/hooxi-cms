@@ -237,3 +237,21 @@ export function useApplyReconcile() {
     },
   })
 }
+
+
+/** 로그인 화면 공개 설정(무인증) — 카카오 채널 URL 등. 실패 시 null(버튼 숨김) */
+export function useLoginConfig() {
+  return useQuery({
+    queryKey: ['auth', 'login-config'],
+    queryFn: async () => {
+      try {
+        const { data } = await api.get<{ kakao_channel_url?: string | null }>('/auth/login-config')
+        return data
+      } catch {
+        return { kakao_channel_url: null }
+      }
+    },
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+}

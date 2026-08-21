@@ -239,6 +239,24 @@ def _token_response(user: User) -> schemas.TokenResponse:
 # 로그인 — 이메일+PIN 단일 경로 (네이버웍스 OAuth는 2026-08 은퇴: 미사용 확정)
 # 외부(고객사·투자사)는 카카오 비즈니스 채널 → 담당자 발급 매직링크로만 포털 이용.
 # ---------------------------------------------------------------------------
+@router.get("/login-config")
+def login_config(db: Session = Depends(get_db)):
+    """로그인 화면 공개 설정(무인증) — 카카오 채널 URL 등 비민감 화이트리스트 키만 노출.
+
+    비밀값·내부 설정은 절대 포함하지 않는다(공개 엔드포인트). 값이 비어 있으면 프론트가
+    해당 버튼을 숨긴다.
+    """
+    from models import Config
+
+    row = db.get(Config, "kakao_channel_url")
+    url = ""
+    if row and row.config_value:
+        url = (row.config_value or "").strip().strip('"')
+    if url and not url.startswith("https://"):
+        url = ""  # https 외 값은 노출하지 않음(오설정 방어)
+    return {"kakao_channel_url": url or None}
+
+
 @router.post("/email-login", response_model=schemas.EmailLoginResponse)
 def email_login(payload: schemas.EmailLoginRequest, db: Session = Depends(get_db)):
     """@ALLOWED_EMAIL_DOMAIN 계정 로그인.

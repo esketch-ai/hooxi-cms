@@ -26,6 +26,11 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 # 알려진 키의 코드 기본값 — key: (기본값 객체, 설명)
 KNOWN_DEFAULTS = {
+    "kakao_channel_url": (
+        "",
+        "카카오 비즈니스 채널 추가 링크(예: https://pf.kakao.com/_xxxxx) — 로그인 화면의 "
+        "'카카오톡 채널 추가' 버튼에 사용. 비우면 버튼 숨김",
+    ),
     "sensitive_keywords": (
         DEFAULT_SENSITIVE_KEYWORDS,
         "카카오 AI 응대 민감 키워드 — 감지 시 담당자 연결 (CR-3)",

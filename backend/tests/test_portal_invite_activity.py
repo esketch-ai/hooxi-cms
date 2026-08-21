@@ -161,3 +161,37 @@ def test_pass_duration_and_expiry(client, manager_headers, staff_headers):
         _cleanup(db)
     finally:
         db.close()
+
+
+def test_login_config_public_endpoint(client, admin_headers):
+    """무인증 로그인 설정 — kakao_channel_url 화이트리스트만, https 외 값 은닉."""
+    import models as m
+    # 무인증 호출 가능
+    r = client.get("/api/v1/auth/login-config")
+    assert r.status_code == 200
+    db = m.SessionLocal()
+    try:
+        row = db.get(m.Config, "kakao_channel_url")
+        if row is None:
+            row = m.Config(config_key="kakao_channel_url")
+            db.add(row)
+        row.config_value = '"https://pf.kakao.com/_testch"'
+        db.commit()
+    finally:
+        db.close()
+    r2 = client.get("/api/v1/auth/login-config")
+    assert r2.json()["kakao_channel_url"] == "https://pf.kakao.com/_testch"
+    # https 아닌 값은 노출 금지
+    db = m.SessionLocal()
+    try:
+        db.get(m.Config, "kakao_channel_url").config_value = '"javascript:alert(1)"'
+        db.commit()
+    finally:
+        db.close()
+    assert client.get("/api/v1/auth/login-config").json()["kakao_channel_url"] is None
+    db = m.SessionLocal()
+    try:
+        db.get(m.Config, "kakao_channel_url").config_value = '""'
+        db.commit()
+    finally:
+        db.close()

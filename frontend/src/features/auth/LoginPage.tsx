@@ -16,10 +16,12 @@ import {
   Truck,
 } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
+import { useLoginConfig } from '../../lib/api/queries'
 import { useToast } from '../../components/Toast'
 
 export function LoginPage() {
   const { user, isLoading, isAuthenticated, isPending, pinSet, loginEmail, logout } = useAuth()
+  const { data: loginConfig } = useLoginConfig()
   const { showToast } = useToast()
   const navigate = useNavigate()
 
@@ -286,26 +288,50 @@ export function LoginPage() {
             )}
           </div>
 
-          {/* 고객사·투자사 — 카카오 비즈니스 채널 안내(여기서 로그인하지 않음) */}
+          {/* 고객사·투자사 — 카카오 채널 가입·포털 접속(행동 버튼 포함) */}
           {!isPending && !(isAuthenticated && !pinSet) && (
-            <div className="rounded-[24px] border border-hairline bg-graphite p-6">
-              <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEE500]">
-                  <ChatCircleDots size={20} weight="fill" className="text-[#191919]" />
+            <div className="rounded-[24px] border border-hairline bg-graphite p-7">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FEE500]">
+                  <ChatCircleDots size={22} weight="fill" className="text-[#191919]" />
                 </span>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-bone">고객사·투자사이신가요?</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-ash">
-                    카카오톡에서 <b className="text-bone">후시파트너스 비즈니스 채널</b>을 추가해
-                    주세요. 담당자 확인 후 <b className="text-bone">카카오 알림톡으로 전용 포털
-                    이용권 링크</b>를 보내드립니다 — 별도 아이디·비밀번호 없이 링크로 바로
-                    접속합니다.
-                  </p>
-                  <p className="mt-2 text-[11px] text-slatey">
-                    이미 링크를 받으셨다면 알림톡(또는 메일)의 [포털 접속하기] 버튼을 눌러주세요.
-                  </p>
-                </div>
+                <h3 className="text-base font-bold text-bone">고객사·투자사이신가요?</h3>
               </div>
+              <ol className="mb-4 space-y-1.5 text-sm leading-relaxed text-ash">
+                <li>
+                  <b className="text-bone">1.</b> 카카오톡에서{' '}
+                  <b className="text-bone">후시파트너스 채널</b>을 추가합니다.
+                </li>
+                <li>
+                  <b className="text-bone">2.</b> 담당자 확인 후 <b className="text-bone">알림톡으로
+                  포털 이용권 링크</b>를 보내드립니다.
+                </li>
+                <li>
+                  <b className="text-bone">3.</b> 링크를 누르면 끝 — 아이디·비밀번호가 없습니다.
+                </li>
+              </ol>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {loginConfig?.kakao_channel_url && (
+                  <a
+                    href={loginConfig.kakao_channel_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#FEE500] text-sm font-bold text-[#191919] hover:brightness-95"
+                  >
+                    <ChatCircleDots size={18} weight="fill" />
+                    카카오톡 채널 추가하기
+                  </a>
+                )}
+                <a
+                  href="/portal/login"
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-hairline text-sm font-semibold text-bone hover:bg-elevate"
+                >
+                  포털 접속하기
+                </a>
+              </div>
+              <p className="mt-3 text-center text-xs text-slatey">
+                이미 링크를 받으셨다면 알림톡(또는 메일)의 버튼으로 바로 접속됩니다.
+              </p>
             </div>
           )}
         </div>
