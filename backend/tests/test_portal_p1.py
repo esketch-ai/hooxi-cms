@@ -173,3 +173,38 @@ def test_external_account_preview(client, admin_headers):
         _cleanup(db)
     finally:
         db.close()
+
+
+def test_buyer_list_project_count(client, admin_headers, staff_headers):
+    """매수자 목록의 참여 사업 수 — 거래계약 distinct 사업 집계."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        b = models.Buyer(name="TESTP1투자", buyer_type="투자사")
+        p1 = models.Project(project_name="TESTP1사업A", project_status="추진")
+        p2 = models.Project(project_name="TESTP1사업B", project_status="추진")
+        db.add_all([b, p1, p2]); db.commit()
+        db.add_all([
+            models.ProjectSale(project_id=p1.project_id, buyer_id=b.buyer_id,
+                               buyer_name="TESTP1투자"),
+            models.ProjectSale(project_id=p2.project_id, buyer_id=b.buyer_id,
+                               buyer_name="TESTP1투자"),
+            models.ProjectSale(project_id=p2.project_id, buyer_id=b.buyer_id,
+                               buyer_name="TESTP1투자"),  # 같은 사업 중복 계약 → distinct 1
+        ])
+        db.commit()
+        bid = b.buyer_id
+    finally:
+        db.close()
+    r = client.get("/api/v1/buyers?q=TESTP1투자", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    row = [x for x in r.json()["items"] if x["buyer_id"] == bid][0]
+    assert row["project_count"] == 2
+    db = models.SessionLocal()
+    try:
+        db.query(models.ProjectSale).filter_by(buyer_id=bid).delete(synchronize_session=False)
+        db.query(models.Buyer).filter_by(buyer_id=bid).delete(synchronize_session=False)
+        db.commit()
+        _cleanup(db)
+    finally:
+        db.close()

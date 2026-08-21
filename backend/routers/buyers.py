@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import Buyer, User, get_db
+from sqlalchemy import distinct, func
+
+from models import Buyer, ProjectSale, User, get_db
 from routers import common
 from routers.codes import validate_active_code
 from services.audit_logger import AuditLogger
@@ -67,8 +69,24 @@ def list_buyers(
         .limit(limit)
         .all()
     )
+    # 참여 사업 수 — 거래계약(ProjectSale.buyer_id) distinct 사업 집계(1쿼리, N+1 방지).
+    # "매수자는 거래계약으로 사업에 참여한다"는 흐름을 목록에서 바로 인지시키는 용도.
+    ids = [b.buyer_id for b in rows]
+    counts = {}
+    if ids:
+        counts = dict(
+            db.query(ProjectSale.buyer_id, func.count(distinct(ProjectSale.project_id)))
+            .filter(ProjectSale.buyer_id.in_(ids))
+            .group_by(ProjectSale.buyer_id)
+            .all()
+        )
     return schemas.BuyerListResponse(
-        items=[schemas.BuyerOut.model_validate(b, from_attributes=True) for b in rows],
+        items=[
+            schemas.BuyerOut.model_validate(b, from_attributes=True).model_copy(
+                update={"project_count": int(counts.get(b.buyer_id, 0))}
+            )
+            for b in rows
+        ],
         total=total,
     )
 

@@ -127,6 +127,21 @@ export function BuyersPage() {
         ),
     },
     {
+      key: 'projects',
+      header: '참여 사업',
+      render: (b) =>
+        (b.project_count ?? 0) > 0 ? (
+          <span className="font-mono text-sm tabular-nums text-bone">{b.project_count}</span>
+        ) : (
+          <span
+            className="text-xs text-slatey"
+            title="아직 어떤 사업에도 연결되지 않았습니다 — 사업 상세의 '거래계약 추가'에서 이 매수자를 선택하면 참여됩니다"
+          >
+            미참여
+          </span>
+        ),
+    },
+    {
       key: 'contact',
       header: '담당자',
       render: (b) => (
@@ -186,6 +201,14 @@ export function BuyersPage() {
           </button>
         }
       />
+
+      {/* 참여 흐름 안내 — 매수자는 '거래계약'으로 사업에 참여한다(등록만으로는 미연결) */}
+      <div className="rounded-2xl border border-hairline bg-elevate px-4 py-3 text-xs leading-relaxed text-ash">
+        <b className="text-bone">투자사 참여 흐름</b> — ① 여기서 매수자 등록(명부) → ② 감축
+        사업 상세의 <b>거래계약 추가</b>에서 이 매수자를 선택(이것이 '참여') → ③ 재무
+        원장·세금계산서가 자동 연동 → ④ 필요 시 <b>외부 포털 계정</b>에서 INVESTOR 발급(자기
+        매수 사업만 열람). 등록만 하면 '미참여' 상태입니다.
+      </div>
 
       <FilterBar>
         <FilterSearch

@@ -2,6 +2,7 @@
 // buyer_type은 공통 코드 마스터(tb_code, category=SALE_BUYER_TYPE)로 관리 → 문자열.
 
 export interface Buyer {
+  project_count?: number // 참여 사업 수(거래계약 보유 distinct 사업)
   buyer_id: string
   name: string
   buyer_type?: string | null // SALE_BUYER_TYPE: 증권사/투자사/금융사/기타

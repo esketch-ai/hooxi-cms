@@ -1255,6 +1255,8 @@ class BuyerOut(BaseModel):
     memo: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # 참여 사업 수(거래계약 보유 distinct 사업) — 목록 조인 보강 필드
+    project_count: int = 0
 
 
 class BuyerListResponse(BaseModel):
