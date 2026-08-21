@@ -1,5 +1,6 @@
 // SCR-03 고객사 마스터 목록 — 기본 필터 '전체 고객사' (공동 관리)
 import { useMemo, useState } from 'react'
+import { Num } from '../../components/Num'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -147,7 +148,7 @@ export function ClientsPage() {
             사업 {c.participating_project_count ?? 0} · 차량 {c.participating_vehicle_count ?? 0}
           </p>
           <p className="text-slatey">
-            {(c.total_reduction ?? 0).toLocaleString()} tCO₂
+            <Num value={c.total_reduction ?? 0} unit="tCO₂" />
           </p>
         </div>
       ),
@@ -346,7 +347,7 @@ export function ClientsPage() {
                   <p className="mt-2 text-xs text-slatey">
                     참여 사업 {c.participating_project_count ?? 0} · 차량{' '}
                     {c.participating_vehicle_count ?? 0} ·{' '}
-                    {(c.total_reduction ?? 0).toLocaleString()} tCO₂
+                    <Num value={c.total_reduction ?? 0} unit="tCO₂" />
                   </p>
                 )}
                 <div className="mt-3 flex gap-2">

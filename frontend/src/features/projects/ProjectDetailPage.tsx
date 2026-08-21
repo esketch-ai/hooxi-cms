@@ -1,5 +1,6 @@
 // SCR-06 사업 상세 — 개요 + 진행 단계 + 참여 운수사·차량 + 회계 원장층
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { fmt2, Num } from '../../components/Num'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -386,7 +387,7 @@ function OverviewSection({
           {project.expected_credits != null ? (
             <SensitiveData
               type="text"
-              value={`${Number(project.expected_credits).toLocaleString('ko-KR')} tCO₂`}
+              value={`${fmt2(project.expected_credits)} tCO₂`}
             />
           ) : (
             '—'
@@ -396,7 +397,7 @@ function OverviewSection({
           <OverviewItem label="확정 발급량">
             <SensitiveData
               type="text"
-              value={`${Number(project.issued_credits).toLocaleString('ko-KR')} tCO₂`}
+              value={`${fmt2(project.issued_credits)} tCO₂`}
             />
             {project.issued_at && (
               <span className="ml-1.5 text-xs text-slatey">({fmtDate(project.issued_at)})</span>
@@ -938,7 +939,7 @@ function VehiclesSection({ projectId }: { projectId: string }) {
           {data && (
             <span className="text-xs text-slatey">
               {debouncedSearch ? '검색 ' : ''}
-              {data.total.toLocaleString()}대 · 총감축량 {data.total_reduction.toLocaleString()} tCO₂
+              {data.total.toLocaleString()}대 · 총감축량 <Num value={data.total_reduction} unit="tCO₂" />
             </span>
           )}
         </div>

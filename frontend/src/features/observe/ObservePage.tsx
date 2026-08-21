@@ -3,6 +3,7 @@
 //   GET /dashboard/stats · GET /projects/stage-delays · GET /finance-ledger · GET /asset-vehicles
 // 편집 어포던스 0 — 링크는 읽기 화면(재무 원장·전기버스 자산)으로만. 금액은 SensitiveData money 마스킹.
 import { useQuery } from '@tanstack/react-query'
+import { Num } from '../../components/Num'
 import {
   Buildings,
   Bus,
@@ -28,10 +29,9 @@ import { useStageDelays } from '../projects/api'
 import { useFinanceLedger } from '../finance-ledger/api'
 import { useAssetVehicles } from '../asset-vehicles/api'
 
-/** 감축량 포맷 'N tCO₂' — nullable (AssetVehiclesPage와 동일 관용구) */
-function fmtReduction(value?: number | null): string {
-  if (value === null || value === undefined) return '—'
-  return `${Number(value).toLocaleString('ko-KR')} tCO₂`
+/** 감축량 표기 — 소수 2자리·단위 축소(공용 Num 규격, AssetVehiclesPage와 동일 관용구) */
+function fmtReduction(value?: number | null) {
+  return <Num value={value} unit="tCO₂" />
 }
 
 export function ObservePage() {

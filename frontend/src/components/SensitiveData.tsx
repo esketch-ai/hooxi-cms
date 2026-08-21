@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { usePrivacy } from '../app/PrivacyProvider'
 
 export type SensitiveType = 'money' | 'rate' | 'secret' | 'text'
 
 interface SensitiveDataProps {
   type: SensitiveType
-  value: string | number
+  value: ReactNode
   className?: string
 }
 

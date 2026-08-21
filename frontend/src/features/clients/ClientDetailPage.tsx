@@ -1,5 +1,6 @@
 // SCR-03D 고객사 상세 360° 뷰 — 상담 전화 응대를 이 화면 하나로 완결
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { Num } from '../../components/Num'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -342,7 +343,7 @@ function OverviewTab({ client }: { client: Client }) {
           <div>
             <dt className="text-xs text-slatey">총감축량 (tCO₂)</dt>
             <dd className="mt-1 text-lg font-semibold text-bone">
-              {(client.total_reduction ?? 0).toLocaleString()}
+              <Num value={client.total_reduction ?? 0} />
             </dd>
           </div>
           <div>
@@ -1176,7 +1177,7 @@ function FleetStatusTab({ clientId }: { clientId: string }) {
                       {t.hydrogen ?? '—'}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-ash">
-                      {evShare(t) != null ? `${evShare(t)}%` : '—'}
+                      {evShare(t) != null ? <Num value={evShare(t)} unit="%" /> : '—'}
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,6 @@
 // AV-3 전기버스 자산 — 자산관리 크로스-프로젝트 차량 목록 + 필터 + KPI
 import { useMemo, useState } from 'react'
+import { Num } from '../../components/Num'
 import { Link } from 'react-router-dom'
 import { Bus, ChartLineUp, Coins, DownloadSimple, Gauge } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
@@ -43,10 +44,9 @@ export function visibleAssetVehicleColumns<T extends { key: string }>(
   return financeEnabled ? cols : cols.filter((c) => !FINANCE_COLUMN_KEYS.includes(c.key))
 }
 
-/** 감축량 포맷 'N tCO₂' — nullable */
-function fmtReduction(value?: number | null): string {
-  if (value === null || value === undefined) return '—'
-  return `${Number(value).toLocaleString('ko-KR')} tCO₂`
+/** 감축량 표기 — 소수 2자리·단위(tCO₂)는 축소 폰트(공용 Num 규격) */
+function fmtReduction(value?: number | null) {
+  return <Num value={value} unit="tCO₂" />
 }
 
 /** 정수(대·년 등) 포맷 — nullable */
@@ -531,7 +531,7 @@ function VehicleDetailPanel({ row, isObserver }: { row: AssetVehicleRow; isObser
               <div className="mt-0.5 text-xs font-medium text-bone">
                 {val === null || val === undefined
                   ? '—'
-                  : `${Number(val).toLocaleString('ko-KR')} tCO₂`}
+                  : <Num value={Number(val)} unit="tCO₂" />}
               </div>
             </div>
           ))}

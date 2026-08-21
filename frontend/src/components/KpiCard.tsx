@@ -46,8 +46,9 @@ export function KpiCard({
           </span>
         )}
       </div>
+      {/* 긴 숫자 오버플로 방지 — min-w-0 + 단어 단위 줄바꿈 허용(숫자 자체는 Num이 nowrap 유지) */}
       <div
-        className={`font-bold tracking-tight ${compact ? 'mt-1.5 text-xl' : 'mt-2 text-2xl'} ${valueColor}`}
+        className={`min-w-0 break-words font-bold tracking-tight ${compact ? 'mt-1.5 text-xl' : 'mt-2 text-2xl'} ${valueColor}`}
       >
         {value}
       </div>

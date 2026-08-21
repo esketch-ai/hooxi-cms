@@ -1,6 +1,7 @@
 // FL-3 재무 원장 — 재무·회계(카본크레딧실)가 전 감축사업을 '사업 grain'으로 보는 원장.
 // 엑셀(재고자산·미착품 관리)의 시스템 대체. cf. 전기버스 자산(AV-3)은 '차량 grain' — subtitle로 구분.
 import { useMemo, useState } from 'react'
+import { Num } from '../../components/Num'
 import { Link } from 'react-router-dom'
 import { Coins, DownloadSimple, Package, Receipt, TrendUp, Warehouse } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
@@ -234,12 +235,12 @@ export function FinanceLedgerPage() {
             <Coins size={18} />
           </span>
           <span className="text-sm text-ash">현재 매출단가 시세</span>
-          <span className="text-lg font-bold tracking-tight text-bone">{fmtWon(marketRate)}</span>
+          <span className="text-lg font-bold tracking-tight text-bone"><Num value={marketRate} unit="원" /></span>
           <span className="text-xs text-slatey">/ tCO₂</span>
           {/* 예상수익 기준 — 직전 6개월 평균시세(B2). 현재시세와 구분해 병기 */}
           <span className="ml-3 text-xs text-slatey">
             예상수익 기준(직전 6개월 평균){' '}
-            <span className="font-medium text-ash">{fmtWon(marketRateAvg6)} / tCO₂</span>
+            <span className="font-medium text-ash"><Num value={marketRateAvg6} unit="원 / tCO₂" /></span>
           </span>
         </div>
         <Link
@@ -427,13 +428,13 @@ function LedgerDetailPanel({
           <div className="rounded-lg border border-hairline bg-elevate px-3 py-2">
             <div className="text-[10px] text-slatey">후시 보유량</div>
             <div className="mt-0.5 text-xs font-medium text-bone">
-              {fmtQty(row.held_qty, ' tCO₂')}
+              <Num value={row.held_qty} unit="tCO₂" />
             </div>
           </div>
           <div className="rounded-lg border border-hairline bg-elevate px-3 py-2">
             <div className="text-[10px] text-slatey">계약 판매량</div>
             <div className="mt-0.5 text-xs font-medium text-bone">
-              {fmtQty(row.sold_qty, ' tCO₂')}
+              <Num value={row.sold_qty} unit="tCO₂" />
             </div>
           </div>
           <div className="rounded-lg border border-hairline bg-elevate px-3 py-2">

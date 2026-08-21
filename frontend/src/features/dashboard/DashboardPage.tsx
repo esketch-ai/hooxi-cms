@@ -1,6 +1,7 @@
 // SCR-01 통합 현황판 — 오늘의 액션 + KPI 카드 + 이달 보고서 진행 + 최근 활동
 // 데이터: GET /dashboard/stats (routers/dashboard.py — 일괄 조회)
 import { useMemo, useState } from 'react'
+import { Num } from '../../components/Num'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -572,7 +573,7 @@ function FleetSection({ fleet }: { fleet: DashboardFleet }) {
             {fleet.total_electric.toLocaleString()}
           </p>
           <p className="mt-0.5 text-xs text-slatey">
-            비중 {fleet.ev_share}%
+            비중 <Num value={fleet.ev_share} unit="%" />
             {fleet.prev_period && (
               <span
                 className={

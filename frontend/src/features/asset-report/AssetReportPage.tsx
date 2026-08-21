@@ -1,6 +1,7 @@
 // P2 자산관리 보고 — 운수사(고객사)별 정산 예정 요약. 부서 엑셀 보고의 시스템 대체.
 // cf. FL-3 재무 원장은 '사업 grain', 여기는 '고객사 grain' — 참여사업·차량·예상지급액 집계(subtitle로 구분).
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Num } from '../../components/Num'
 import {
   ChatCircleDots,
   CheckCircle,
@@ -139,13 +140,13 @@ export function AssetReportPage() {
       key: 'total_reduction',
       header: '총감축량',
       className: 'text-right',
-      render: (v) => <span className="text-sm text-ash">{fmtQty(v.total_reduction, ' tCO₂')}</span>,
+      render: (v) => <span className="text-sm text-ash"><Num value={v.total_reduction} unit="tCO₂" /></span>,
     },
     {
       key: 'effective_reduction',
       header: '잔여반영감축량',
       className: 'text-right',
-      render: (v) => <span className="text-sm text-ash">{fmtQty(v.effective_reduction, ' tCO₂')}</span>,
+      render: (v) => <span className="text-sm text-ash"><Num value={v.effective_reduction} unit="tCO₂" /></span>,
     },
     {
       key: 'expected_payout',
@@ -226,8 +227,8 @@ export function AssetReportPage() {
         />
         <KpiCard
           title="잔여반영감축량"
-          value={fmtQty(totals?.effective_reduction, ' tCO₂')}
-          sub={`총감축량 ${fmtQty(totals?.total_reduction, ' tCO₂')}`}
+          value={<Num value={totals?.effective_reduction} unit="tCO₂" />}
+          sub={<>총감축량 <Num value={totals?.total_reduction} unit="tCO₂" /></>}
           icon={<CheckCircle size={18} />}
           variant="dark"
         />
@@ -741,9 +742,9 @@ function ProjectBreakdownPanel({ row }: { row: SettlementSummaryRow }) {
               <tr key={p.project_id} className="border-b border-hairline/60">
                 <td className="py-1.5 pr-4 text-bone">{p.project_name ?? '—'}</td>
                 <td className="py-1.5 pr-4 text-right text-ash">{fmtQty(p.vehicle_count)}</td>
-                <td className="py-1.5 pr-4 text-right text-ash">{fmtQty(p.total_reduction, ' tCO₂')}</td>
+                <td className="py-1.5 pr-4 text-right text-ash"><Num value={p.total_reduction} unit="tCO₂" /></td>
                 <td className="py-1.5 pr-4 text-right text-ash">
-                  {fmtQty(p.effective_reduction, ' tCO₂')}
+                  <Num value={p.effective_reduction} unit="tCO₂" />
                 </td>
                 <td className="py-1.5 pr-4 text-right">
                   <MoneyCell value={p.expected_payout} />

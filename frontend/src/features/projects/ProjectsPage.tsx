@@ -1,5 +1,6 @@
 // SCR-06 감축 사업 관리 목록 — "돈이 언제 들어오는가" 즉답 화면
 import { useMemo, useState } from 'react'
+import { Num } from '../../components/Num'
 import { Link, useNavigate } from 'react-router-dom'
 import { CaretRight, Plus, TreeEvergreen } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
@@ -134,7 +135,7 @@ export function ProjectsPage() {
         p.expected_credits != null ? (
           <SensitiveData
             type="text"
-            value={`${Number(p.expected_credits).toLocaleString('ko-KR')} tCO₂`}
+            value={<Num value={p.expected_credits} unit="tCO₂" />}
           />
         ) : (
           <span className="text-smoke">—</span>

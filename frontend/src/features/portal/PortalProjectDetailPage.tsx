@@ -1,6 +1,7 @@
 // Phase 4 포털 — 프로젝트 상세(역할별 분기).
 // 필드 가시성: PARTNER는 본인 차량·감축·수혜금액만. INVESTOR는 감축량·자기 계약분만(지급·원가·지급률 금지).
 import type { ReactNode } from 'react'
+import { Num } from '../../components/Num'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, WarningCircle } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
@@ -19,10 +20,10 @@ import type {
   PortalTimelinePoint,
 } from './types'
 
-/** 감축량 표기 (tCO₂) — null이면 '산정 중' */
-function reductionText(value: number | null | undefined): string {
+/** 감축량 표기 (tCO₂) — null이면 '산정 중'. 소수 2자리·단위 축소(공용 Num 규격) */
+function reductionText(value: number | null | undefined) {
   if (value === null || value === undefined) return '산정 중'
-  return `${value.toLocaleString('ko-KR')} tCO₂`
+  return <Num value={value} unit="tCO₂" />
 }
 
 /** 값이 없을 때 '산정 중' 배지, 있으면 자식 렌더 */
@@ -176,7 +177,7 @@ function InvestorDetail({
         </SummaryCard>
         <SummaryCard label="계약 수량">
           {view.my_contract && view.my_contract.quantity != null
-            ? `${view.my_contract.quantity.toLocaleString('ko-KR')} tCO₂`
+            ? <Num value={view.my_contract.quantity} unit="tCO₂" />
             : '—'}
         </SummaryCard>
         <SummaryCard label="계약 금액">

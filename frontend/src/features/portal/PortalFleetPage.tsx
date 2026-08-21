@@ -1,5 +1,6 @@
 // 포털 P1 — 내 회사 계약대수 월별 추이 (PARTNER 전용, read-only)
 import { Bus, CircleNotch } from '@phosphor-icons/react'
+import { Num } from '../../components/Num'
 import { usePortalFleet } from './api'
 
 const INDUSTRY_LABEL: Record<string, string> = { CITY: '시내', RURAL: '농어촌', INTERCITY: '시외' }
@@ -79,7 +80,7 @@ export function PortalFleetPage() {
                     {t.hydrogen ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums text-ash">
-                    {evShare(t) != null ? `${evShare(t)}%` : '—'}
+                    {evShare(t) != null ? <Num value={evShare(t)} unit="%" /> : '—'}
                   </td>
                 </tr>
               ))}
