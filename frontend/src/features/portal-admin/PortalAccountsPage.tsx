@@ -3,12 +3,15 @@
 import { useMemo, useState } from 'react'
 import {
   ArrowsClockwise,
+  CircleNotch,
   Copy,
+  Eye,
   IdentificationCard,
   LinkSimple,
   Plus,
   Prohibit,
   ShieldCheck,
+  WarningCircle,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -25,9 +28,11 @@ import {
   useCreateExternalAccount,
   useDeactivateExternalAccount,
   useExternalAccounts,
+  usePreviewExternalAccount,
   useResendMagicLink,
   type ExternalAccount,
   type ExternalAccountIn,
+  type ExternalAccountPreview,
   type ExternalRole,
 } from './api'
 
@@ -111,11 +116,14 @@ export function PortalAccountsPage() {
   const { data: accounts = [], isLoading, isError, refetch } = useExternalAccounts({ enabled: canManage })
   const createAccount = useCreateExternalAccount()
   const resendLink = useResendMagicLink()
+  const previewAccount = usePreviewExternalAccount()
   const deactivate = useDeactivateExternalAccount()
 
   const [issueOpen, setIssueOpen] = useState(false)
   const [form, setForm] = useState<IssueForm>(EMPTY_FORM)
   const [linkResult, setLinkResult] = useState<ExternalAccount | null>(null)
+  // 발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용(검증 후 발급 진행)
+  const [preview, setPreview] = useState<ExternalAccountPreview | null>(null)
   const [deactivateTarget, setDeactivateTarget] = useState<ExternalAccount | null>(null)
 
   // 소속 표시용 id→이름 매핑
@@ -258,6 +266,25 @@ export function PortalAccountsPage() {
         <div className="flex justify-end gap-1">
           {a.status !== 'INACTIVE' && (
             <>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setPreview(await previewAccount.mutateAsync(a.user_id))
+                  } catch {
+                    showToast('미리보기를 불러오지 못했습니다.', 'danger')
+                  }
+                }}
+                className="flex items-center gap-1 rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
+                title="발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용"
+              >
+                {previewAccount.isPending ? (
+                  <CircleNotch size={13} className="animate-spin" />
+                ) : (
+                  <Eye size={13} />
+                )}
+                미리보기
+              </button>
               <button
                 type="button"
                 onClick={() =>
@@ -535,6 +562,147 @@ export function PortalAccountsPage() {
         }
         onCancel={() => setDeactivateTarget(null)}
       />
+
+      {/* 발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용 검증 후 발급/재발급 진행 */}
+      <Modal
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        title={preview ? `포털 미리보기 — ${preview.org_name ?? preview.email}` : ''}
+        size="xl"
+        footer={
+          preview ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                disabled={resendLink.isPending || preview.status === 'INACTIVE'}
+                onClick={() =>
+                  run(
+                    async () => {
+                      const res = await resendLink.mutateAsync(preview.user_id)
+                      setLinkResult(res)
+                      setPreview(null)
+                    },
+                    '매직링크를 재발급했습니다.',
+                    () => undefined,
+                  )
+                }
+                className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+              >
+                {resendLink.isPending && <CircleNotch size={15} className="animate-spin" />}
+                확인 완료 — 링크 발급/재발급
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {preview && (
+          <div className="space-y-4 text-sm">
+            {/* 계정 요약 */}
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-elevate px-3.5 py-2.5">
+              <span className="font-semibold text-bone">{preview.org_name ?? '—'}</span>
+              <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-bold text-slatey">
+                {roleLabel(preview.role as ExternalRole)}
+              </span>
+              <span className="text-xs text-slatey">{preview.email}</span>
+              <span className="ml-auto text-xs text-slatey">계정 상태: {preview.status}</span>
+            </div>
+
+            {/* 발급 전 확인 사항 */}
+            {preview.warnings.length > 0 && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-500/15 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                <WarningCircle size={15} weight="fill" className="mt-0.5 shrink-0" />
+                <span>{preview.warnings.join(' · ')}</span>
+              </div>
+            )}
+
+            {/* 참여 사업 */}
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-ash">
+                참여 사업 ({preview.projects.length}건)
+              </p>
+              {preview.projects.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-hairline px-3 py-3 text-xs text-slatey">
+                  표시될 사업이 없습니다.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {preview.projects.slice(0, 6).map((pj) => (
+                    <li
+                      key={pj.project_id}
+                      className="flex items-center justify-between rounded-lg border border-hairline bg-elevate px-3 py-1.5 text-xs"
+                    >
+                      <span className="truncate text-bone">{pj.project_name}</span>
+                      <span className="shrink-0 text-slatey">{pj.project_status ?? ''}</span>
+                    </li>
+                  ))}
+                  {preview.projects.length > 6 && (
+                    <li className="px-1 text-[11px] text-slatey">
+                      외 {preview.projects.length - 6}건
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            {/* PARTNER 전용 섹션 — 계약대수·보고서·정산 */}
+            {preview.role === 'PARTNER' && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-hairline bg-elevate p-3">
+                  <p className="text-xs text-slatey">계약대수 현황</p>
+                  <p className="mt-1 text-lg font-bold tabular-nums text-bone">
+                    {preview.fleet_status.length}
+                    <span className="ml-1 text-[0.67em] font-normal opacity-80">개월</span>
+                  </p>
+                  {preview.fleet_status[0] && (
+                    <p className="mt-0.5 text-[11px] text-slatey">
+                      최신 {preview.fleet_status[0].period} · 면허{' '}
+                      {preview.fleet_status[0].license_count ?? '—'}대 · 전기{' '}
+                      {preview.fleet_status[0].electric ?? '—'}대
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-hairline bg-elevate p-3">
+                  <p className="text-xs text-slatey">월간 보고서(발송 완료)</p>
+                  <p className="mt-1 text-lg font-bold tabular-nums text-bone">
+                    {preview.reports.length}
+                    <span className="ml-1 text-[0.67em] font-normal opacity-80">건</span>
+                  </p>
+                  {preview.reports[0] && (
+                    <p className="mt-0.5 text-[11px] text-slatey">
+                      최신 {preview.reports[0].period}
+                      {preview.reports[0].has_file ? ' · 파일 있음' : ' · 파일 없음'}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-hairline bg-elevate p-3">
+                  <p className="text-xs text-slatey">정산 내역</p>
+                  <p className="mt-1 text-lg font-bold tabular-nums text-bone">
+                    {preview.settlements.length}
+                    <span className="ml-1 text-[0.67em] font-normal opacity-80">건</span>
+                  </p>
+                  {preview.settlements[0] && (
+                    <p className="mt-0.5 text-[11px] text-slatey">
+                      최신 {preview.settlements[0].period ?? '—'} · {preview.settlements[0].status}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] leading-relaxed text-slatey">
+              위 내용은 이 계정이 포털 로그인 후 실제로 보게 되는 데이터와 동일합니다(자기
+              회사·자기 거래 범위만). 내용이 맞으면 아래에서 링크 발급을 진행하세요.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

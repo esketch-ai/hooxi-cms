@@ -90,3 +90,31 @@ export function absoluteMagicLink(link?: string | null): string {
   if (!link) return ''
   return link.startsWith('http') ? link : window.location.origin + link
 }
+
+// ── 발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용(read-only, PORTAL_PREVIEW 감사) ──
+import type { PortalFleetItem, PortalReportItem, PortalSettlementItem } from '../portal/types'
+
+export interface ExternalAccountPreview {
+  user_id: string
+  name?: string | null
+  email: string
+  role: string
+  status: string
+  org_name?: string | null
+  projects: { project_id: string; project_name: string; project_status?: string | null }[]
+  fleet_status: PortalFleetItem[]
+  reports: PortalReportItem[]
+  settlements: PortalSettlementItem[]
+  warnings: string[]
+}
+
+export function usePreviewExternalAccount() {
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const { data } = await api.get<ExternalAccountPreview>(
+        `/external-accounts/${userId}/preview`,
+      )
+      return data
+    },
+  })
+}

@@ -277,3 +277,57 @@ def deactivate_external_account(
     db.commit()
     db.refresh(user)
     return _account_out(user)
+
+
+@router.get("/{user_id}/preview", response_model=schemas.ExternalAccountPreview)
+def preview_external_account(
+    user_id: str,
+    manager: User = Depends(require_role("MANAGER")),
+    db: Session = Depends(get_db),
+):
+    """발급 전 미리보기 — 이 외부 계정이 포털에서 보게 될 내용을 관리자가 검증(read-only).
+
+    포털 라우트 함수(자기 스코프 필터 내장)를 그대로 호출해 실제 포털 응답과 1:1 동일함을
+    보장한다(격리는 유지 — 관리자 세션·토큰 전환 없음, 내부 API로만 조회).
+    감사 로그 PORTAL_PREVIEW(값 미기록 — R2-E6).
+    """
+    target = db.get(User, user_id)
+    if target is None or target.role not in EXTERNAL_ROLES:
+        raise HTTPException(status_code=404, detail="외부 계정을 찾을 수 없습니다")
+
+    from routers import portal as portal_routes
+
+    org_name = None
+    if target.role == "PARTNER" and target.client_id:
+        c = db.get(Client, target.client_id)
+        org_name = c.company_name if c else None
+    elif target.role == "INVESTOR" and target.buyer_id:
+        b = db.get(Buyer, target.buyer_id)
+        org_name = b.name if b else None
+
+    warnings = []
+    if target.role == "PARTNER" and not target.client_id:
+        warnings.append("연결된 고객사가 없어 포털에 아무것도 표시되지 않습니다")
+    if target.role == "INVESTOR" and not target.buyer_id:
+        warnings.append("연결된 매수자가 없어 포털에 아무것도 표시되지 않습니다")
+    if target.status != "ACTIVE":
+        warnings.append("비활성 계정 — 링크를 발급해도 로그인할 수 없습니다")
+
+    projects = portal_routes.list_projects(user=target, db=db)
+    fleet = reports = settlements = []
+    if target.role == "PARTNER" and target.client_id:
+        fleet = portal_routes.portal_fleet_status(user=target, db=db)
+        reports = portal_routes.portal_reports(user=target, db=db)
+        settlements = portal_routes.portal_settlements(user=target, db=db)
+
+    AuditLogger.log_action(
+        db, manager.user_id, "PORTAL_PREVIEW",
+        target_type="USER", target_id=user_id, new_value=target.role,
+    )
+    db.commit()
+    return schemas.ExternalAccountPreview(
+        user_id=target.user_id, name=target.name, email=target.email,
+        role=target.role, status=target.status, org_name=org_name,
+        projects=projects, fleet_status=fleet, reports=reports,
+        settlements=settlements, warnings=warnings,
+    )

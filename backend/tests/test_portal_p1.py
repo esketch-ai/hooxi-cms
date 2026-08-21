@@ -133,3 +133,43 @@ def test_p1_role_gates(client, admin_headers):
         _cleanup(db)
     finally:
         db.close()
+
+
+def test_external_account_preview(client, admin_headers):
+    """발급 전 미리보기 — 관리자에게 그 계정의 포털 데이터 그대로 + 경고. 스코프·격리 유지."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        a_id, _ = _setup(db)
+    finally:
+        db.close()
+    partner = _external_user("t-p1-pv", "p1pv@ext.kr", "PARTNER", client_id=a_id)
+    r = client.get(f"/api/v1/external-accounts/{partner.user_id}/preview", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["role"] == "PARTNER" and d["org_name"] == "TESTP1운수A"
+    assert len(d["fleet_status"]) == 1 and d["fleet_status"][0]["license_count"] == 80
+    assert [x["period"] for x in d["reports"]] == ["2026-06"]  # 발송 완료분만
+    assert len(d["settlements"]) == 1
+    assert d["warnings"] == []
+    # 미연결 PARTNER — 경고 + 빈 목록(403 아님: 관리자 검증용)
+    orphan = _external_user("t-p1-pv2", "p1pv2@ext.kr", "PARTNER", client_id=None)
+    r2 = client.get(f"/api/v1/external-accounts/{orphan.user_id}/preview", headers=admin_headers)
+    assert r2.status_code == 200
+    assert r2.json()["warnings"] and r2.json()["projects"] == []
+    # 내부 계정 미리보기 → 404 (외부 계정 전용)
+    db = models.SessionLocal()
+    try:
+        internal = db.query(models.User).filter(models.User.role == "ADMIN").first()
+        r3 = client.get(f"/api/v1/external-accounts/{internal.user_id}/preview",
+                        headers=admin_headers)
+        assert r3.status_code == 404
+        # 감사 로그 PORTAL_PREVIEW 기록
+        log = (db.query(models.AuditLog)
+               .filter_by(action="PORTAL_PREVIEW", target_id=partner.user_id).first())
+        assert log is not None
+        db.query(models.AuditLog).filter_by(action="PORTAL_PREVIEW").delete(synchronize_session=False)
+        db.commit()
+        _cleanup(db)
+    finally:
+        db.close()

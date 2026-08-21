@@ -2869,3 +2869,19 @@ class PortalSettlementItem(BaseModel):
     confirmed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     paid_amount: Optional[float] = None
+
+
+class ExternalAccountPreview(BaseModel):
+    """발급 전 미리보기 — 이 외부 계정이 포털에서 보게 될 내용(관리자 검증용, read-only)."""
+
+    user_id: str
+    name: Optional[str] = None
+    email: str
+    role: str  # PARTNER/INVESTOR
+    status: str
+    org_name: Optional[str] = None
+    projects: List[dict] = []  # 포털 /projects와 동일 형태
+    fleet_status: List[FleetStatusTrendItem] = []  # PARTNER만
+    reports: List[PortalReportItem] = []  # PARTNER만
+    settlements: List[PortalSettlementItem] = []  # PARTNER만
+    warnings: List[str] = []  # 미연결·비활성 등 발급 전 확인 사항
