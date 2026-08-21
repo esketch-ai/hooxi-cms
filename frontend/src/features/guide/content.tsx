@@ -455,7 +455,7 @@ export const TOPICS: GuideTopic[] = [
           </li>
         </ul>
         <Note title="[자동] 표식 이력">
-          보고서 발송·정산 통지·포털 초대(발급/재발급/비활성화)·카카오 상담처럼 고객사·투자사를
+          보고서 발송·정산 통지·포털 초대(발급/재발급/비활성화)·카카오 상담처럼 파트너사를
           향한 발송은 시스템이 <b>[자동]</b> 표식으로 이력에 적재합니다. 내부 처리(설정·상태
           변경 등)는 이력이 아니라 감사 로그에 남습니다.
         </Note>
@@ -1228,7 +1228,7 @@ export const TOPICS: GuideTopic[] = [
     categoryId: 'admin',
     eyebrow: 'INC',
     title: '외부 포털 계정',
-    summary: '고객·투자사에게 제한된 열람 링크(매직링크)를 내주는 화면',
+    summary: '파트너사(운수사·투자금융사)에게 제한된 열람 링크를 내주는 화면',
     featureRoute: '/portal-accounts',
     accessLabel: '팀장 이상',
     related: ['buyers', 'settings', 'projects'],

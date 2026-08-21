@@ -1,6 +1,6 @@
 // 로그인 — 이메일+PIN 단일 경로(네이버웍스 SSO 은퇴, 2026-08).
-// 좌측 브랜드 패널(데스크톱) + 우측: 내부 직원 로그인 카드 / 고객사·투자사 카카오 채널 안내.
-// 외부(고객사·투자사)는 여기서 로그인하지 않는다 — 카카오 비즈니스 채널 가입 → 담당자 발급
+// 좌측 브랜드 패널(데스크톱) + 우측: 내부 직원 로그인 카드 / 파트너사 카카오 채널 안내.
+// 외부(파트너사=운수사·투자금융사)는 여기서 로그인하지 않는다 — 카카오 채널 가입 → 담당자 발급
 // 매직링크(알림톡)로 전용 포털에 접속한다.
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -288,14 +288,14 @@ export function LoginPage() {
             )}
           </div>
 
-          {/* 고객사·투자사 — 카카오 채널 가입·포털 접속(행동 버튼 포함) */}
+          {/* 파트너사 — 카카오 채널 가입·포털 접속(행동 버튼 포함) */}
           {!isPending && !(isAuthenticated && !pinSet) && (
             <div className="rounded-[24px] border border-hairline bg-graphite p-7">
               <div className="mb-3 flex items-center gap-3">
                 <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FEE500]">
                   <ChatCircleDots size={22} weight="fill" className="text-[#191919]" />
                 </span>
-                <h3 className="text-base font-bold text-bone">고객사·투자사이신가요?</h3>
+                <h3 className="text-base font-bold text-bone">파트너사이신가요?</h3>
               </div>
               <ol className="mb-4 space-y-1.5 text-sm leading-relaxed text-ash">
                 <li>

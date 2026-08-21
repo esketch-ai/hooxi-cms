@@ -105,16 +105,18 @@ def _portal_self_service(db: Session, contact: KakaoContact, thread: "ChatThread
         content="포털 이용권 링크 발급(챗봇 셀프, 1개월권)",
     ))
     client = db.get(Client, contact.client_id)
-    db.add(ActivityHistory(
-        client_id=contact.client_id,
-        manager_id=(client.manager_id if client and client.manager_id else actor_id),
-        created_by=actor_id,
+    history_manager = client.manager_id if client and client.manager_id else actor_id
+    if history_manager:  # manager_id NOT NULL — 담당자·admin 모두 부재(비정상 시드)면 이력 생략
+        db.add(ActivityHistory(
+            client_id=contact.client_id,
+            manager_id=history_manager,
+            created_by=actor_id,
         activity_date=common.now_kst(),
         activity_type="PORTAL",
-        title="{0} 포털 초대 링크 발급(챗봇) — {1}".format(
-            common.AUTO_PREFIX, client.company_name if client else ""),
-        content="역할 PARTNER · 채널 카카오 챗봇 · 이용권 1개월",
-    ))
+            title="{0} 포털 초대 링크 발급(챗봇) — {1}".format(
+                common.AUTO_PREFIX, client.company_name if client else ""),
+            content="역할 PARTNER · 채널 카카오 챗봇 · 이용권 1개월",
+        ))
     db.commit()
     db.refresh(account)
     magic_link, _abs = _issue_magic(account, ttl)

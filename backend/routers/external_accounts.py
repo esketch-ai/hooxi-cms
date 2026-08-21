@@ -143,7 +143,7 @@ def _send_portal_invite_email(user: User, abs_link: str) -> str:
 def _deliver_magic_link(user: User, abs_link: str) -> str:
     """매직링크 발송 오케스트레이션 — **카카오 알림톡(주)** → 이메일(폴백).
 
-    고객사·투자사 접점은 카카오 비즈니스 채널이 기본 채널(2026-08 정책) — 채널 가입자
+    파트너사 접점은 카카오 비즈니스 채널이 기본 채널(2026-08 정책) — 채널 가입자
     (전화번호)에게 알림톡으로 먼저 발송하고, 불가할 때만 이메일로 폴백한다.
     반환: KAKAO_SENT / EMAIL_SENT / KAKAO_FAILED / EMAIL_FAILED / NOT_CONFIGURED.
     어떤 채널도 발송 불가하면 NOT_CONFIGURED — magic_link 수동 전달 폴백.
@@ -170,7 +170,7 @@ def _deliver_magic_link(user: User, abs_link: str) -> str:
 def _log_portal_invite_activity(
     db: Session, manager: User, target: User, delivery: str, resend: bool
 ) -> None:
-    """포털 초대 링크 발송을 영업활동 이력에 자동 적재(고객사·투자사별 발송 관리).
+    """포털 초대 링크 발송을 영업활동 이력에 자동 적재(파트너사별 발송 관리).
 
     PARTNER는 해당 고객사 이력으로(상세 활동 이력 탭에 노출), INVESTOR는 고객사 미지정
     이력으로 매수자명을 제목에 남긴다. 매직링크 원문은 절대 기록하지 않는다(R2-E6 —
