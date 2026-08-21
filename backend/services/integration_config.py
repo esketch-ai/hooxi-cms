@@ -102,15 +102,8 @@ REGISTRY: Dict[str, dict] = {
             IntegrationField("GMAIL_APP_PASSWORD", "앱 비밀번호", secret=True),
         ],
     },
-    "naver_works": {
-        "label": "네이버웍스 SSO",
-        "fields": [
-            IntegrationField("NW_CLIENT_ID", "클라이언트 ID"),
-            IntegrationField("NW_CLIENT_SECRET", "클라이언트 시크릿", secret=True),
-            IntegrationField("NW_REDIRECT_URI", "리다이렉트 URI"),
-        ],
-    },
 }
+# (네이버웍스 SSO 연동은 2026-08 은퇴 — 로그인은 이메일+PIN 단일 경로)
 
 # env_key → (연동 이름, 필드) 역인덱스
 _FIELD_INDEX: Dict[str, tuple] = {

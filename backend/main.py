@@ -84,7 +84,7 @@ def seed_admin():
                 admin = User(
                     email=seed_email,
                     name="관리자",
-                    auth_provider="NAVER_WORKS",
+                    auth_provider="EMAIL",
                     role="ADMIN",
                     status="ACTIVE",
                 )

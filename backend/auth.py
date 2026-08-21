@@ -13,16 +13,13 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import bcrypt
-import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 import schemas
 from models import User, get_db
-from services.integration_config import resolve
 
 # --- JWT 설정 ---
 _DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
@@ -38,12 +35,7 @@ REFRESH_TOKEN_TTL = timedelta(days=7)
 #   증가로 후속 강화 가능(현재는 UX·다중세션 고려로 미적용). 노출 데이터는 수신자 본인 스코프 한정.
 MAGIC_TOKEN_TTL = timedelta(hours=24)
 
-# --- 네이버웍스 OAuth (CR-1) ---
-# NW_CLIENT_ID / NW_CLIENT_SECRET / NW_REDIRECT_URI는 연동 설정(DB 우선 + env 폴백)
-# — 호출 시점에 resolve()로 해석한다 (_require_works_config).
-NW_AUTHORIZE_URL = "https://auth.worksmobile.com/oauth2/v2.0/authorize"
-NW_TOKEN_URL = "https://auth.worksmobile.com/oauth2/v2.0/token"
-NW_USERINFO_URL = "https://www.worksapis.com/v1.0/users/me"
+# 내부 로그인 허용 도메인 — 이메일+PIN 로그인(JIT 가입→관리자 승인)
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "hooxipartners.com")
 # OAuth 콜백 후 브라우저를 돌려보낼 프론트 오리진 — 프로덕션은 동일 오리진이라 기본 ""
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "")
@@ -244,153 +236,8 @@ def _token_response(user: User) -> schemas.TokenResponse:
 
 
 # ---------------------------------------------------------------------------
-# 네이버웍스 OAuth (CR-1)
-# ---------------------------------------------------------------------------
-def _require_works_config():
-    """네이버웍스 OAuth 설정 해석(DB 우선 + env 폴백) — 미설정 시 501.
-
-    반환: (client_id, client_secret, redirect_uri)
-    """
-    client_id = resolve("NW_CLIENT_ID")
-    client_secret = resolve("NW_CLIENT_SECRET")
-    redirect_uri = resolve("NW_REDIRECT_URI")
-    if not (client_id and client_secret and redirect_uri):
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                "네이버웍스 OAuth가 설정되지 않았습니다. "
-                "NW_CLIENT_ID / NW_CLIENT_SECRET / NW_REDIRECT_URI 환경변수를 설정하세요. "
-                "(네이버웍스 Developer Console 앱 등록 필요 — CR-1)"
-            ),
-        )
-    return client_id, client_secret, redirect_uri
-
-
-def _create_state_token() -> str:
-    now = datetime.now(timezone.utc)
-    payload = {
-        "type": "oauth_state",
-        "nonce": secrets.token_urlsafe(16),
-        "iat": now,
-        "exp": now + timedelta(minutes=10),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-
-def _verify_state_token(state: str):
-    try:
-        payload = jwt.decode(state, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=400, detail="유효하지 않은 state 파라미터입니다 (CSRF 방지)")
-    if payload.get("type") != "oauth_state":
-        raise HTTPException(status_code=400, detail="유효하지 않은 state 파라미터입니다 (CSRF 방지)")
-
-
-@router.get("/works/authorize", response_model=schemas.AuthorizeResponse)
-def works_authorize():
-    """네이버웍스 OAuth 시작 — 프론트가 리다이렉트할 URL 반환."""
-    client_id, _, redirect_uri = _require_works_config()
-    state = _create_state_token()
-    params = httpx.QueryParams(
-        {
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": "user",
-            "state": state,
-        }
-    )
-    return schemas.AuthorizeResponse(authorize_url=f"{NW_AUTHORIZE_URL}?{params}", state=state)
-
-
-@router.get("/works/callback")
-async def works_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """code→token→userinfo → 도메인 검증 → 계정 매칭/JIT → 자체 JWT 발급."""
-    client_id, client_secret, redirect_uri = _require_works_config()
-    _verify_state_token(state)
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        token_resp = await client.post(
-            NW_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "redirect_uri": redirect_uri,
-            },
-        )
-        if token_resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="네이버웍스 토큰 발급에 실패했습니다")
-        works_access_token = token_resp.json().get("access_token")
-        if not works_access_token:
-            raise HTTPException(status_code=502, detail="네이버웍스 토큰 응답이 올바르지 않습니다")
-
-        userinfo_resp = await client.get(
-            NW_USERINFO_URL, headers={"Authorization": f"Bearer {works_access_token}"}
-        )
-        if userinfo_resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="네이버웍스 사용자 정보 조회에 실패했습니다")
-        info = userinfo_resp.json()
-
-    email = (info.get("email") or "").strip().lower()
-    works_user_id = str(info.get("userId") or info.get("userExternalKey") or "")
-    user_name = info.get("userName") or {}
-    if isinstance(user_name, dict):
-        name = f"{user_name.get('lastName', '')}{user_name.get('firstName', '')}".strip()
-    else:
-        name = str(user_name)
-
-    # 도메인 검증 (CR-1): @hooxipartners.com 외 거부
-    if not email or not email.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
-        raise HTTPException(status_code=403, detail="회사 계정으로만 로그인할 수 있습니다")
-
-    user = None
-    if works_user_id:
-        user = db.query(User).filter(User.works_user_id == works_user_id).first()
-    if user is None:
-        # 내부 역할만 매칭 — 같은 이메일의 외부 포털 계정이 있어도 내부 JIT/로그인과 무관
-        user = (
-            db.query(User)
-            .filter(User.email == email, User.role.notin_(EXTERNAL_ROLES))
-            .first()
-        )
-
-    if user is None:
-        # JIT 가입: status=PENDING, role=STAFF (ADMIN 승인 시 ACTIVE)
-        user = User(
-            email=email,
-            works_user_id=works_user_id or None,
-            auth_provider="NAVER_WORKS",
-            name=name or email.split("@")[0],
-            role="STAFF",
-            status="PENDING",
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    elif works_user_id and not user.works_user_id:
-        user.works_user_id = works_user_id
-        db.commit()
-
-    # 브라우저 리다이렉트 플로우 — 토큰은 URL fragment(#)로 전달해 서버 로그에 남지 않게 함
-    if user.status == "PENDING":
-        return RedirectResponse(
-            f"{FRONTEND_ORIGIN}/login#works=pending&email={quote(email)}", status_code=302
-        )
-    if user.status != "ACTIVE":
-        return RedirectResponse(f"{FRONTEND_ORIGIN}/login#works=inactive", status_code=302)
-
-    tokens = _token_response(user)
-    fragment = (
-        f"access_token={quote(tokens.access_token)}"
-        f"&refresh_token={quote(tokens.refresh_token)}"
-    )
-    return RedirectResponse(f"{FRONTEND_ORIGIN}/login#{fragment}", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# 이메일+PIN 로그인 — 도메인 제한 (네이버웍스 미연동 기간의 기본 로그인 수단)
+# 로그인 — 이메일+PIN 단일 경로 (네이버웍스 OAuth는 2026-08 은퇴: 미사용 확정)
+# 외부(고객사·투자사)는 카카오 비즈니스 채널 → 담당자 발급 매직링크로만 포털 이용.
 # ---------------------------------------------------------------------------
 @router.post("/email-login", response_model=schemas.EmailLoginResponse)
 def email_login(payload: schemas.EmailLoginRequest, db: Session = Depends(get_db)):

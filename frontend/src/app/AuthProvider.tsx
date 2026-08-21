@@ -7,9 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { isAxiosError } from 'axios'
 import { api, tokenStore } from '../lib/api/client'
-import type { AuthorizeResponse, TokenPair, User } from '../types'
+import type { TokenPair, User } from '../types'
 
 interface AuthContextValue {
   user: User | null
@@ -28,42 +27,13 @@ interface AuthContextValue {
     email: string,
     pin?: string,
   ) => Promise<{ status: 'OK' | 'PIN_REQUIRED' | 'PENDING'; me?: User }>
-  /** 네이버웍스 SSO — authorize URL로 리다이렉트. 501이면 NotImplemented 에러 */
-  loginWithWorks: () => Promise<void>
   /** PIN 설정 (POST /auth/pin) */
   setPin: (pin: string) => Promise<void>
   logout: () => void
   refetchMe: () => Promise<User | null>
 }
 
-export class WorksNotReadyError extends Error {
-  constructor() {
-    super('네이버웍스 연동 준비 중입니다')
-    this.name = 'WorksNotReadyError'
-  }
-}
-
 const AuthContext = createContext<AuthContextValue | null>(null)
-
-/** 네이버웍스 콜백 리다이렉트(fragment) 처리 — 토큰 저장 후 URL에서 즉시 제거 */
-function consumeWorksCallbackHash(): { pendingEmail?: string; inactive?: boolean } {
-  const hash = window.location.hash.slice(1)
-  if (!hash) return {}
-  const params = new URLSearchParams(hash)
-  const access = params.get('access_token')
-  const refresh = params.get('refresh_token')
-  const works = params.get('works')
-  if (!access && !works) return {}
-
-  window.history.replaceState(null, '', window.location.pathname + window.location.search)
-  if (access && refresh) {
-    tokenStore.set({ access_token: access, refresh_token: refresh })
-    return {}
-  }
-  if (works === 'pending') return { pendingEmail: params.get('email') ?? undefined }
-  if (works === 'inactive') return { inactive: true }
-  return {}
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -85,20 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const result = consumeWorksCallbackHash()
-    if (result.pendingEmail !== undefined || result.inactive) {
-      // PENDING·비활성 계정은 토큰이 없으므로 표시용 유저 상태만 구성
-      setUser({
-        user_id: '',
-        email: result.pendingEmail ?? '',
-        name: '',
-        role: 'STAFF',
-        status: result.inactive ? 'INACTIVE' : 'PENDING',
-        pin_set: false,
-      } as User)
-      setIsLoading(false)
-      return
-    }
     fetchMe().finally(() => setIsLoading(false))
   }, [fetchMe])
 
@@ -152,20 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [fetchMe],
   )
 
-  const loginWithWorks = useCallback(async () => {
-    try {
-      const { data } = await api.get<AuthorizeResponse>('/auth/works/authorize')
-      const authorizeUrl = data?.authorize_url ?? data?.url
-      if (!authorizeUrl) throw new WorksNotReadyError()
-      window.location.href = authorizeUrl
-    } catch (error) {
-      if (isAxiosError(error) && error.response?.status === 501) {
-        throw new WorksNotReadyError()
-      }
-      throw error
-    }
-  }, [])
-
   const setPin = useCallback(async (pin: string) => {
     await api.post('/auth/pin', { pin })
     setUser((prev) => (prev ? { ...prev, pin_set: true } : prev))
@@ -185,12 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pinSet: !!user?.pin_set,
       loginDev,
       loginEmail,
-      loginWithWorks,
       setPin,
       logout,
       refetchMe: fetchMe,
     }),
-    [user, isLoading, loginDev, loginEmail, loginWithWorks, setPin, logout, fetchMe],
+    [user, isLoading, loginDev, loginEmail, setPin, logout, fetchMe],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -865,7 +865,7 @@ export const TOPICS: GuideTopic[] = [
           </li>
           <li>
             <b>연동 관리</b>: Gmail(발송)·Dropbox(파일)·SOLAPI(알림톡)·카카오 챗봇·카카오
-            지도(지오코딩)·네이버웍스 자격증명 입력과 <Kbd>테스트</Kbd> 버튼. Dropbox는 OAuth
+            지도(지오코딩) 자격증명 입력과 <Kbd>테스트</Kbd> 버튼. Dropbox는 OAuth
             마법사가 안내하며, <b>폴더 일괄 생성</b>(사업자번호 보유 고객사에 폴더 소급 생성) 버튼도
             여기 있습니다. <i>Gmail이 설정되지 않으면 모든 발송이 안전하게 차단됩니다.</i>
           </li>

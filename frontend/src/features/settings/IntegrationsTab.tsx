@@ -31,7 +31,7 @@ import {
 } from './api'
 
 // 카드 표시 순서 (미등록 연동은 뒤에 이름순) — backend/services/integration_config.py REGISTRY 기준
-const INTEGRATION_ORDER = ['dropbox', 'solapi', 'kakao_bot', 'gmail', 'naver_works']
+const INTEGRATION_ORDER = ['dropbox', 'solapi', 'kakao_bot', 'gmail'] // 네이버웍스 SSO 은퇴(2026-08)
 
 // 각 연동별 도움말 1줄 + 발급처 링크
 const HELP_LINKS: Record<string, { text: string; href: string; linkLabel: string }> = {
@@ -54,11 +54,6 @@ const HELP_LINKS: Record<string, { text: string; href: string; linkLabel: string
     text: 'Google 계정 2단계 인증 활성화 후 앱 비밀번호를 생성해 입력하세요.',
     href: 'https://myaccount.google.com/apppasswords',
     linkLabel: 'Google 앱 비밀번호',
-  },
-  naver_works: {
-    text: '네이버웍스 개발자 콘솔에서 앱을 등록하고 인증 정보를 발급받으세요.',
-    href: 'https://dev.worksmobile.com',
-    linkLabel: '네이버웍스 개발자 콘솔',
   },
 }
 

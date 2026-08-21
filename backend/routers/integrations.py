@@ -279,7 +279,7 @@ def test_integration(name: str, _: User = Depends(require_role("ADMIN"))):
         return _test_gmail()
     if name == "solapi":
         return _test_solapi()
-    return _test_required_fields(name)  # kakao_bot · naver_works
+    return _test_required_fields(name)  # kakao_bot
 
 
 # ---------------------------------------------------------------------------

@@ -125,9 +125,12 @@ def _send_portal_invite_email(user: User, abs_link: str) -> str:
         "포털 접속하기</a></p>"
         "<p style=\"font-size:12px;color:#666\">버튼이 열리지 않으면 아래 주소를 복사해 "
         "브라우저에 붙여넣어 주세요.<br><a href=\"{link}\">{link}</a></p>"
-        "<p style=\"font-size:12px;color:#666\">본 링크는 발송 시점부터 <b>24시간</b> 동안 유효합니다.</p>"
+        "<p style=\"font-size:12px;color:#666\">본 링크는 <b>{until}</b>까지 유효합니다.</p>"
         "</div>"
-    ).format(name=name, link=abs_link)
+    ).format(
+        name=name, link=abs_link,
+        until=(user.portal_expires_at.strftime("%Y-%m-%d") if user.portal_expires_at else "발급 시 안내된 기간"),
+    )
     try:
         email_service.send_mail(to=[user.email], subject=subject, body=body, html=True)
         return "SENT"
@@ -138,25 +141,25 @@ def _send_portal_invite_email(user: User, abs_link: str) -> str:
 
 
 def _deliver_magic_link(user: User, abs_link: str) -> str:
-    """매직링크 발송 오케스트레이션 — 이메일(주) → 카카오(폴백). 정규화 결과 문자열.
+    """매직링크 발송 오케스트레이션 — **카카오 알림톡(주)** → 이메일(폴백).
 
-    반환: EMAIL_SENT / KAKAO_SENT / EMAIL_FAILED / KAKAO_FAILED / NOT_CONFIGURED.
-    이메일이 성공하면 카카오는 시도하지 않는다(중복 발송 방지). 어떤 채널도 설정/발송
-    불가하면 NOT_CONFIGURED — 이때도 magic_link 문자열 폴백으로 수동 전달이 가능하다.
+    고객사·투자사 접점은 카카오 비즈니스 채널이 기본 채널(2026-08 정책) — 채널 가입자
+    (전화번호)에게 알림톡으로 먼저 발송하고, 불가할 때만 이메일로 폴백한다.
+    반환: KAKAO_SENT / EMAIL_SENT / KAKAO_FAILED / EMAIL_FAILED / NOT_CONFIGURED.
+    어떤 채널도 발송 불가하면 NOT_CONFIGURED — magic_link 수동 전달 폴백.
     전 과정을 try로 감싸 설정 조회(resolve) 예외까지 흡수한다(best-effort 완전 격리).
     """
     try:
-        # _send_portal_invite_email 자체가 미설정 시 NOT_CONFIGURED를 반환(is_configured 중복 제거)
-        email_status = _send_portal_invite_email(user, abs_link)  # SENT/FAILED/NOT_CONFIGURED
-        if email_status == "SENT":
-            return "EMAIL_SENT"
-        kakao_status = _send_portal_invite(user, abs_link)  # 기존 카카오 헬퍼(설정 시 발송)
+        kakao_status = _send_portal_invite(user, abs_link)  # 카카오(주) — 채널 가입 전제
         if kakao_status == "SENT":
             return "KAKAO_SENT"
-        if email_status == "FAILED":
-            return "EMAIL_FAILED"
+        email_status = _send_portal_invite_email(user, abs_link)  # 이메일(폴백)
+        if email_status == "SENT":
+            return "EMAIL_SENT"
         if kakao_status == "FAILED":
             return "KAKAO_FAILED"
+        if email_status == "FAILED":
+            return "EMAIL_FAILED"
         return "NOT_CONFIGURED"  # 어떤 채널도 발송 불가 — magic_link 수동 전달 폴백
     except Exception as exc:
         # 설정 조회 등 예상 밖 오류도 발급을 깨지 않는다(토큰·링크 미로깅, 유형명만)

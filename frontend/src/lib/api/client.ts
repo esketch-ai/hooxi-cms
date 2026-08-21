@@ -56,7 +56,7 @@ api.interceptors.response.use(
     const isAuthEndpoint =
       url.includes('/auth/refresh') ||
       url.includes('/auth/dev-login') ||
-      url.includes('/auth/works/')
+      url.includes('/auth/email-login')
 
     if (status === 401 && config && !config._retried && !isAuthEndpoint) {
       config._retried = true

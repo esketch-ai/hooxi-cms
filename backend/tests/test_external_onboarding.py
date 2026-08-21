@@ -450,24 +450,23 @@ def test_send_portal_invite_email_failed_is_swallowed(monkeypatch):
     assert ea._send_portal_invite_email(user, "https://app.example/x") == "FAILED"
 
 
-def test_deliver_prefers_email_over_kakao(monkeypatch):
-    """이메일 성공하면 카카오는 시도하지 않는다(중복 발송 방지) → EMAIL_SENT."""
+def test_deliver_prefers_kakao_over_email(monkeypatch):
+    """카카오 비즈니스 채널이 기본 접점(2026-08) — 카카오 성공 시 이메일은 시도하지 않는다."""
     from routers import external_accounts as ea
 
-    monkeypatch.setattr(ea.email_service, "is_configured", lambda: True)
-    monkeypatch.setattr(ea.email_service, "send_mail", lambda **kw: {"recipients": kw["to"]})
+    monkeypatch.setattr(ea, "_send_portal_invite", lambda user, link: "SENT")
 
     def must_not_call(user, abs_link):  # pragma: no cover - 호출되면 실패
-        raise AssertionError("이메일 성공 시 카카오는 시도하지 않아야 한다")
+        raise AssertionError("카카오 성공 시 이메일은 시도하지 않아야 한다")
 
-    monkeypatch.setattr(ea, "_send_portal_invite", must_not_call)
+    monkeypatch.setattr(ea, "_send_portal_invite_email", must_not_call)
 
     user = models.User(name="갑", email="pref@portal.example", phone="010-0000-0000")
-    assert ea._deliver_magic_link(user, "https://app.example/x") == "EMAIL_SENT"
+    assert ea._deliver_magic_link(user, "https://app.example/x") == "KAKAO_SENT"
 
 
 def test_deliver_falls_back_to_kakao(monkeypatch):
-    """이메일 미설정 + 카카오 SENT → KAKAO_SENT(폴백)."""
+    """(카카오 우선 체계에서) 이메일 미설정 + 카카오 SENT → KAKAO_SENT."""
     from routers import external_accounts as ea
 
     monkeypatch.setattr(ea.email_service, "is_configured", lambda: False)

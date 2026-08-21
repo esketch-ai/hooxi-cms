@@ -70,8 +70,8 @@ class User(Base):
     # 있고, 내부 계정과 같은 이메일의 외부 계정도 허용한다. 로그인 경로는 전부 스코프 조회
     # (내부 JIT/dev-login=내부 역할만, 포털=user_id 토큰)라 이메일 중복이 안전하다.
     email = Column(String(100), nullable=False, index=True)
-    works_user_id = Column(String(100), index=True)  # 네이버웍스 사용자 ID(OAuth 매칭)
-    auth_provider = Column(String(20), default="NAVER_WORKS")
+    works_user_id = Column(String(100), index=True)  # (레거시) 舊 네이버웍스 ID — 연동 은퇴, 데이터 보존용
+    auth_provider = Column(String(20), default="EMAIL")  # EMAIL(내부)/PORTAL(외부). NAVER_WORKS는 레거시
     name = Column(String(50))
     position = Column(String(50))
     role = Column(String(20), nullable=False, default="STAFF")  # 내부 ADMIN/MANAGER/STAFF (§10.1) / 외부 PARTNER·INVESTOR(부록 N.8 D3, 격리)

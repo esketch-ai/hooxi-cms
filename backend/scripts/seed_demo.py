@@ -282,7 +282,7 @@ def seed():
                 User, u["user_id"],
                 lambda u=u: User(
                     user_id=u["user_id"], email=u["email"], name=u["name"],
-                    role=u["role"], status="ACTIVE", auth_provider="NAVER_WORKS",
+                    role=u["role"], status="ACTIVE", auth_provider="EMAIL",
                 ),
             )
         db.flush()
