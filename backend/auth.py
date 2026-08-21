@@ -68,7 +68,7 @@ OBSERVER_SCOPE_EXACT = {
     "/api/v1/asset-vehicles", "/api/v1/asset-report/settlement-summary",
     "/api/v1/chat/badge",
 }
-OBSERVER_SCOPE_PREFIX = ("/api/v1/auth/",)
+OBSERVER_SCOPE_PREFIX = ("/api/v1/auth/", "/api/v1/observe")
 
 
 def _observer_allowed(path: str) -> bool:

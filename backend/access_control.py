@@ -147,7 +147,8 @@ def resolve_user_access(db, user) -> dict:
 MENU_API_REGISTRY: Dict[str, List] = {
     "/dashboard": [(None, "/api/v1/dashboard"), (None, "/api/v1/projects/stage-delays"),
                    ("GET", "/api/v1/reports"), ("GET", "/api/v1/schedules")],
-    "/observe": [(None, "/api/v1/dashboard"), (None, "/api/v1/projects/stage-delays"),
+    "/observe": [(None, "/api/v1/observe"), (None, "/api/v1/dashboard"),
+                 (None, "/api/v1/projects/stage-delays"),
                  ("GET", "/api/v1/finance-ledger"), ("GET", "/api/v1/asset-vehicles"),
                  ("GET", "/api/v1/asset-report")],
     "/issues": [(None, "/api/v1/histories"), (None, "/api/v1/schedules")],
