@@ -69,7 +69,10 @@ def create_user(
             status_code=422,
             detail="회사 도메인(@{0}) 이메일만 등록할 수 있습니다".format(ALLOWED_EMAIL_DOMAIN),
         )
-    if db.query(User).filter(User.email == email).first():
+    # 내부 계정끼리만 이메일 유일 — 같은 이메일의 외부 포털 계정은 별개(격리·다중 발급 허용)
+    from auth import EXTERNAL_ROLES
+
+    if db.query(User).filter(User.email == email, User.role.notin_(EXTERNAL_ROLES)).first():
         raise HTTPException(status_code=409, detail="이미 등록된 이메일입니다")
 
     user = User(

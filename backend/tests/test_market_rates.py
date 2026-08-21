@@ -27,9 +27,16 @@ def _ensure_external_user(user_id, email, role):
 
 
 def _login(client, email):
-    r = client.post(API + "/auth/dev-login", json={"email": email})
-    assert r.status_code == 200, r.text
-    return {"Authorization": "Bearer {0}".format(r.json()["access_token"])}
+    # dev-login은 내부 전용(외부는 매직링크 전용) — 테스트 토큰은 직접 발급
+    from auth import create_access_token
+
+    db = models.SessionLocal()
+    try:
+        u = db.query(models.User).filter(models.User.email == email).first()
+        assert u is not None, email
+        return {"Authorization": "Bearer {0}".format(create_access_token(u))}
+    finally:
+        db.close()
 
 
 def test_current_rate_is_latest_past(client, admin_headers):

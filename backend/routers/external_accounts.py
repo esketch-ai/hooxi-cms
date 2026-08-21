@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import EXTERNAL_ROLES, FRONTEND_ORIGIN, create_magic_token, require_role
-from models import Buyer, Client, KakaoContact, User, get_db
+from models import ActivityHistory, Buyer, Client, KakaoContact, User, get_db
 from routers import common
 from services import email_service, kakao_service
 from services.audit_logger import AuditLogger
@@ -141,6 +141,42 @@ def _deliver_magic_link(user: User, abs_link: str) -> str:
         return "NOT_CONFIGURED"
 
 
+def _log_portal_invite_activity(
+    db: Session, manager: User, target: User, delivery: str, resend: bool
+) -> None:
+    """포털 초대 링크 발송을 영업활동 이력에 자동 적재(고객사·투자사별 발송 관리).
+
+    PARTNER는 해당 고객사 이력으로(상세 활동 이력 탭에 노출), INVESTOR는 고객사 미지정
+    이력으로 매수자명을 제목에 남긴다. 매직링크 원문은 절대 기록하지 않는다(R2-E6 —
+    링크는 로그인 수단). 실패해도 발급 자체에는 영향 없음(best-effort).
+    """
+    try:
+        org = ""
+        if target.role == "PARTNER" and target.client_id:
+            c = db.get(Client, target.client_id)
+            org = c.company_name if c else ""
+        elif target.role == "INVESTOR" and target.buyer_id:
+            b = db.get(Buyer, target.buyer_id)
+            org = b.name if b else ""
+        action = "재발급" if resend else "발급"
+        db.add(
+            ActivityHistory(
+                client_id=target.client_id,  # INVESTOR는 None(미지정 이력)
+                manager_id=manager.user_id,
+                created_by=manager.user_id,
+                activity_date=common.now_kst(),
+                activity_type="PORTAL",
+                title="{0} 포털 초대 링크 {1} — {2}".format(common.AUTO_PREFIX, action, org or target.email),
+                content="역할 {0} · 수신 {1} · 발송 {2}".format(
+                    target.role, target.email, delivery
+                ),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 def _account_out(
     user: User,
     magic_link: Optional[str] = None,
@@ -161,11 +197,12 @@ def create_external_account(
     - PARTNER: client_id 필수(Client 존재·TRANSPORT). kakao_contact_id 주어지면 그
       승인 연락처의 client_id로 보강(명시 client_id 우선).
     - INVESTOR: buyer_id 필수(Buyer 존재).
-    - 이메일 중복 409. 역할별 필수 필드 누락 422.
+    - 이메일 중복 허용: 대표·임원이 같은 이메일로 여러 고객사/투자사 포털 계정을 요청하는
+      현실 반영. 같은 (이메일×역할×조직)의 활성 계정이 이미 있으면 새로 만들지 않고
+      매직링크 재발급으로 처리한다(중복 행 방지). 내부 계정과 같은 이메일도 허용 —
+      내부 로그인(JIT·dev-login)은 내부 역할만 조회하므로 충돌 없음.
     """
     email = payload.email.strip().lower()
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(status_code=409, detail="이미 등록된 이메일입니다")
 
     client_id: Optional[str] = None
     buyer_id: Optional[str] = None
@@ -200,6 +237,29 @@ def create_external_account(
         common.get_or_404(db, Buyer, payload.buyer_id, "매수자")
         buyer_id = payload.buyer_id
 
+    # 같은 (이메일×역할×조직) 계정이 이미 있으면 — 중복 생성 대신 그 계정으로 재발급
+    existing = (
+        db.query(User)
+        .filter(
+            User.email == email,
+            User.role == payload.role,
+            User.client_id == client_id if payload.role == "PARTNER" else User.buyer_id == buyer_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        if existing.status != "ACTIVE":
+            existing.status = "ACTIVE"  # 비활성이었다면 재활성 후 발급(재초대)
+        if phone and not existing.phone:
+            existing.phone = phone
+        AuditLogger.external_account_resend(db, manager.user_id, existing.user_id)
+        db.commit()
+        db.refresh(existing)
+        magic_link, abs_link = _issue_magic(existing)
+        delivery = _deliver_magic_link(existing, abs_link)
+        _log_portal_invite_activity(db, manager, existing, delivery, resend=True)
+        return _account_out(existing, magic_link, delivery)
+
     user = User(
         email=email,
         name=payload.name or email.split("@")[0],
@@ -219,6 +279,7 @@ def create_external_account(
     db.refresh(user)
     magic_link, abs_link = _issue_magic(user)  # 토큰 1회 발급(원문 미기록) → 표시·발송 공용
     delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort
+    _log_portal_invite_activity(db, manager, user, delivery, resend=False)
     return _account_out(user, magic_link, delivery)
 
 
@@ -240,6 +301,7 @@ def resend_magic_link(
     db.commit()  # 감사 확정 후 발송 — 트랜잭션 밖에서 best-effort 재발송
     magic_link, abs_link = _issue_magic(user)
     delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort 재발송
+    _log_portal_invite_activity(db, manager, user, delivery, resend=True)
     return _account_out(user, magic_link, delivery)
 
 

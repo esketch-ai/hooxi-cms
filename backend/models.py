@@ -66,7 +66,10 @@ class User(Base):
     __tablename__ = "tb_user"
 
     user_id = Column(String(50), primary_key=True, default=gen_uuid)
-    email = Column(String(100), unique=True, nullable=False, index=True)
+    # 이메일 유니크 해제 — 같은 사람(대표·임원)이 여러 고객사·투자사 외부 포털 계정을 가질 수
+    # 있고, 내부 계정과 같은 이메일의 외부 계정도 허용한다. 로그인 경로는 전부 스코프 조회
+    # (내부 JIT/dev-login=내부 역할만, 포털=user_id 토큰)라 이메일 중복이 안전하다.
+    email = Column(String(100), nullable=False, index=True)
     works_user_id = Column(String(100), index=True)  # 네이버웍스 사용자 ID(OAuth 매칭)
     auth_provider = Column(String(20), default="NAVER_WORKS")
     name = Column(String(50))
@@ -1225,6 +1228,30 @@ def ensure_schema():
             )
     except Exception as exc:
         print("⚠ ensure_schema drop legacy constraint skipped: {0}".format(exc))
+
+    # 사용자 이메일 유니크 해제 — 배포 DB의 유니크 인덱스를 일반 인덱스로 재생성(멱등:
+    # 유니크일 때만 수행). 외부 포털 다중 계정(같은 이메일) 허용의 전제.
+    try:
+        insp2 = _inspect(engine)
+        for ix in insp2.get_indexes("tb_user"):
+            if ix.get("column_names") == ["email"] and ix.get("unique"):
+                with engine.begin() as conn:
+                    conn.execute(_text('DROP INDEX IF EXISTS "{0}"'.format(ix["name"])))
+                    conn.execute(_text(
+                        'CREATE INDEX IF NOT EXISTS ix_tb_user_email ON tb_user (email)'
+                    ))
+                print("✓ tb_user.email unique index → non-unique 재생성")
+        # 컬럼 유니크 제약으로 배포된 경우(tb_user_email_key)도 제거 (PG 전용 구문은 방언 가드)
+        if engine.dialect.name == "postgresql":
+            for uc in insp2.get_unique_constraints("tb_user"):
+                if uc.get("column_names") == ["email"]:
+                    with engine.begin() as conn:
+                        conn.execute(_text(
+                            'ALTER TABLE tb_user DROP CONSTRAINT IF EXISTS "{0}"'.format(uc["name"])
+                        ))
+                    print("✓ tb_user.email unique constraint 제거")
+    except Exception as exc:
+        print("⚠ ensure_schema email unique 하향 skipped: {0}".format(exc))
 
     # 운수사 조합계약 컬럼 폭 확대(F6) — 기존 VARCHAR(1)로 배포된 dev에서 '대표계약'(코드 REP는
     # 짧지만 라벨/코드 확장 여지) 저장 가능하게 넓힘. PG 전용·멱등(빈 테이블 안전). SQLite는 길이 무시.

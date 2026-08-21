@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import schemas
-from auth import ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payload
+from auth import EXTERNAL_ROLES, ROLE_LEVEL, bearer_scheme, decode_token, _verify_user_from_payload
 from models import (
     ActivityHistory,
     Asset,
@@ -151,7 +151,7 @@ def _seed_admin_id(db: Session) -> Optional[str]:
     email = os.getenv("SEED_ADMIN_EMAIL", "hooxi006@hooxipartners.com").strip().lower()
     admin = (
         db.query(User)
-        .filter(User.email == email)
+        .filter(User.email == email, User.role.notin_(EXTERNAL_ROLES))
         .first()
         or db.query(User).filter(User.role == "ADMIN", User.status == "ACTIVE").first()
     )

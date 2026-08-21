@@ -74,9 +74,16 @@ def _login(client, user_id, email, role):
         db.commit()
     finally:
         db.close()
-    tok = client.post(API + "/auth/dev-login", json={"email": email})
-    assert tok.status_code == 200, tok.text
-    return {"Authorization": "Bearer {0}".format(tok.json()["access_token"])}
+    # dev-login은 내부 전용(외부는 매직링크 전용)이므로 테스트 토큰은 직접 발급
+    from auth import create_access_token
+
+    db2 = models.SessionLocal()
+    try:
+        u2 = db2.query(models.User).filter(models.User.email == email).first()
+        assert u2 is not None, email
+        return {"Authorization": "Bearer {0}".format(create_access_token(u2))}
+    finally:
+        db2.close()
 
 
 def _row_for(items, project_id):

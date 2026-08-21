@@ -340,7 +340,12 @@ async def works_callback(code: str, state: str, db: Session = Depends(get_db)):
     if works_user_id:
         user = db.query(User).filter(User.works_user_id == works_user_id).first()
     if user is None:
-        user = db.query(User).filter(User.email == email).first()
+        # 내부 역할만 매칭 — 같은 이메일의 외부 포털 계정이 있어도 내부 JIT/로그인과 무관
+        user = (
+            db.query(User)
+            .filter(User.email == email, User.role.notin_(EXTERNAL_ROLES))
+            .first()
+        )
 
     if user is None:
         # JIT 가입: status=PENDING, role=STAFF (ADMIN 승인 시 ACTIVE)
@@ -390,7 +395,12 @@ def email_login(payload: schemas.EmailLoginRequest, db: Session = Depends(get_db
     if not email.endswith(f"@{ALLOWED_EMAIL_DOMAIN}"):
         raise HTTPException(status_code=403, detail="회사 계정으로만 로그인할 수 있습니다")
 
-    user = db.query(User).filter(User.email == email).first()
+    # 내부 역할만 매칭 — 같은 이메일의 외부 포털 계정 무관(구글 JIT)
+    user = (
+        db.query(User)
+        .filter(User.email == email, User.role.notin_(EXTERNAL_ROLES))
+        .first()
+    )
     if user is None:
         # JIT 가입: status=PENDING, role=STAFF (네이버웍스 JIT와 동일 정책)
         user = User(
@@ -435,7 +445,15 @@ def email_login(payload: schemas.EmailLoginRequest, db: Session = Depends(get_db
 def dev_login(payload: schemas.DevLoginRequest, db: Session = Depends(get_db)):
     if os.getenv("ENABLE_DEV_LOGIN", "false").lower() != "true":
         raise HTTPException(status_code=404, detail="Not Found")
-    user = db.query(User).filter(User.email == payload.email.strip().lower()).first()
+    # dev-login도 내부 역할만 — 외부 계정은 매직링크 전용(포털 격리)
+    user = (
+        db.query(User)
+        .filter(
+            User.email == payload.email.strip().lower(),
+            User.role.notin_(EXTERNAL_ROLES),
+        )
+        .first()
+    )
     if not user or user.status != "ACTIVE":
         raise HTTPException(status_code=401, detail="ACTIVE 상태의 등록된 사용자가 아닙니다")
     return _token_response(user)

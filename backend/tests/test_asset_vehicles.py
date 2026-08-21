@@ -247,8 +247,13 @@ def _ensure_external_user(user_id, email, role):
 
 def test_external_role_blocked(client):
     _ensure_external_user("u-av-partner", "av-partner@carrier.example", "PARTNER")
-    tok = client.post("/api/v1/auth/dev-login", json={"email": "av-partner@carrier.example"})
-    assert tok.status_code == 200, tok.text
-    headers = {"Authorization": "Bearer {0}".format(tok.json()["access_token"])}
+    from auth import create_access_token
+
+    db = models.SessionLocal()
+    try:
+        u = db.query(models.User).filter(models.User.email == "av-partner@carrier.example").first()
+        headers = {"Authorization": "Bearer {0}".format(create_access_token(u))}
+    finally:
+        db.close()
     r = client.get(ASSET_VEHICLES, headers=headers)
     assert r.status_code == 403, r.text  # 포털 격리

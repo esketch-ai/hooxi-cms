@@ -321,8 +321,13 @@ def test_split_is_read_only(client, staff_headers, admin_headers):
 
 def test_external_role_blocked(client):
     _ensure_external_user("u-fl-partner", "fl-partner@carrier.example", "PARTNER")
-    tok = client.post("/api/v1/auth/dev-login", json={"email": "fl-partner@carrier.example"})
-    assert tok.status_code == 200, tok.text
-    headers = {"Authorization": "Bearer {0}".format(tok.json()["access_token"])}
+    from auth import create_access_token
+
+    db = models.SessionLocal()
+    try:
+        u = db.query(models.User).filter(models.User.email == "fl-partner@carrier.example").first()
+        headers = {"Authorization": "Bearer {0}".format(create_access_token(u))}
+    finally:
+        db.close()
     r = client.get(LEDGER, headers=headers)
     assert r.status_code == 403, r.text  # 포털 격리

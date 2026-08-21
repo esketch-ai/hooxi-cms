@@ -181,6 +181,7 @@ def seed_codes():
         ("ACTIVITY_TYPE", "EMAIL", "이메일", "gray", None, 40),
         ("ACTIVITY_TYPE", "ISSUE", "이슈", "rose", None, 50),
         ("ACTIVITY_TYPE", "KAKAO", "카카오", "yellow", None, 60),
+        ("ACTIVITY_TYPE", "PORTAL", "포털", "sky", None, 70),  # 포털 초대 발송 자동 이력
         # 자산 대분류
         ("ASSET_GROUP", "MOBILITY", "모빌리티", "blue", None, 10),
         ("ASSET_GROUP", "FACILITY", "설비", "teal", None, 20),

@@ -128,13 +128,29 @@ def test_provision_staff_forbidden(client, staff_headers):
     assert r.status_code == 403, r.text
 
 
-def test_provision_duplicate_email_conflict(client, manager_headers, staff_headers):
+def test_provision_duplicate_email_same_org_reissues(client, manager_headers, staff_headers):
+    """같은 (이메일×역할×조직) 재요청 — 중복 생성 대신 그 계정으로 매직링크 재발급."""
     ca = _mk_client(client, staff_headers, "온보딩운수사중복")
     payload = {"email": "dup-onboard@portal.example", "role": "PARTNER", "client_id": ca}
     r1 = client.post(EXTERNAL, headers=manager_headers, json=payload)
     assert r1.status_code == 201, r1.text
     r2 = client.post(EXTERNAL, headers=manager_headers, json=payload)
-    assert r2.status_code == 409, r2.text
+    assert r2.status_code == 201, r2.text
+    assert r2.json()["user_id"] == r1.json()["user_id"]  # 새 행 없이 동일 계정
+    assert r2.json()["magic_link"]  # 새 링크 발급
+
+
+def test_provision_same_email_other_org_allowed(client, manager_headers, staff_headers):
+    """같은 이메일이라도 다른 조직(운수사/매수자)이면 별도 계정 발급 — 대표·임원 다중 요청."""
+    ca = _mk_client(client, staff_headers, "온보딩운수사다중갑")
+    cb = _mk_client(client, staff_headers, "온보딩운수사다중을")
+    email = "multi-exec@portal.example"
+    r1 = client.post(EXTERNAL, headers=manager_headers,
+                     json={"email": email, "role": "PARTNER", "client_id": ca})
+    r2 = client.post(EXTERNAL, headers=manager_headers,
+                     json={"email": email, "role": "PARTNER", "client_id": cb})
+    assert r1.status_code == 201 and r2.status_code == 201
+    assert r1.json()["user_id"] != r2.json()["user_id"]  # 조직별 별도 계정
 
 
 # ---------------------------------------------------------------------------
