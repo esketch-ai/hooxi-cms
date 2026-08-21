@@ -1,10 +1,10 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { SignOut, X } from '@phosphor-icons/react'
 import { useAuth } from '../../app/AuthProvider'
 import { useChatBadge } from '../../lib/api/queries'
 import { roleLabel } from '../../lib/roles'
 import { FINANCE_FEATURES } from '../../lib/featureFlags'
-import { visibleNavGroups } from './nav'
+import { collapseHubs, visibleNavGroups } from './nav'
 import { isObserverAllowed } from './observerAccess'
 import { isMenuAllowed } from '../../lib/menuAccess'
 
@@ -17,6 +17,7 @@ interface SidebarProps {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
   const { data: chatBadge } = useChatBadge()
+  const { pathname } = useLocation()
   const waiting = chatBadge?.waiting ?? 0
 
   // OBSERVER(경영 관찰)는 화이트리스트 경로 항목만 노출 — 기존 3역할 로직은 불변(회귀 0)
@@ -37,6 +38,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     }))
     .filter((group) => group.items.length > 0)
 
+  // 허브 축약(A안) — 필터 통과 후 재무/자산 묶음을 항목 1개로(표시만, URL·권한 불변)
+  const hubbedGroups = collapseHubs(groups)
+
   const initial = user?.name?.charAt(0) ?? '?'
 
   return (
@@ -55,7 +59,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* 메뉴 트리 */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {groups.map((group) => (
+        {hubbedGroups.map((group) => (
           <div key={group.label} className="mb-5">
             <p className="mb-1.5 px-2 text-xs font-semibold tracking-wider text-slatey uppercase">
               {group.label}
@@ -66,13 +70,18 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   <NavLink
                     to={item.path}
                     onClick={onNavigate}
-                    className={({ isActive }) =>
-                      `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors pointer-coarse:py-3 ${
-                        isActive
+                    className={({ isActive }) => {
+                      // 허브 항목은 소속 경로 어디에 있어도 활성(서브탭 전환 시 하이라이트 유지)
+                      const hubActive =
+                        item.matchPaths?.some(
+                          (p) => pathname === p || pathname.startsWith(`${p}/`),
+                        ) ?? false
+                      return `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors pointer-coarse:py-3 ${
+                        isActive || hubActive
                           ? 'bg-elevate-strong font-semibold text-bone'
                           : 'text-ash hover:bg-elevate hover:text-bone'
                       }`
-                    }
+                    }}
                   >
                     <item.icon size={18} />
                     <span className="truncate">{item.label}</span>

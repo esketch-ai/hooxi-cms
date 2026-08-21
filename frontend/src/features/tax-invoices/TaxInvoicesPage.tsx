@@ -1,5 +1,6 @@
 // 세금계산서 원장 — 홈택스 보안메일 HTML 자동반영(업로드→미리보기→적용) + 원장 조회
 import { useMemo, useState } from 'react'
+import { SectionTabs } from '../../components/SectionTabs'
 import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import {
@@ -129,6 +130,8 @@ export function TaxInvoicesPage() {
 
   return (
     <div className="space-y-6">
+      {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
+      <SectionTabs />
       <PageHeader title="세금계산서 원장" subtitle="홈택스 보안메일 HTML 자동반영 (매입·매출)" />
 
       {/* 업로드 */}

@@ -136,6 +136,51 @@ export const NAV_GROUPS: NavGroup[] = [
 /** 전체 메뉴 경로(정본) — 그룹 접근 가드(G4)의 판정 대상 목록 */
 export const ALL_MENU_PATHS: string[] = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.path))
 
+// ── LNB 허브(A안) — PROJECT & FINANCE 6메뉴를 3항목으로 표시 축약. URL·권한 키는 불변:
+//    개별 화면 경로가 그대로 살아있고(서브탭으로 전환), 접근 그룹 매트릭스도 종전 세분 단위.
+export interface NavHub {
+  label: string
+  icon: Icon
+  /** 이 허브로 묶이는 메뉴 경로들 — 첫 '표시 가능' 경로가 허브의 링크가 된다 */
+  paths: string[]
+}
+
+export const NAV_HUBS: NavHub[] = [
+  { label: '재무 관리', icon: Receipt, paths: ['/finance-ledger', '/settlements', '/tax-invoices'] },
+  { label: '자산 관리', icon: Bus, paths: ['/asset-vehicles', '/asset-report'] },
+]
+
+/** 필터(재무 OFF·role·observer·그룹허용)를 통과하고 남은 항목에 적용 — 시각 축약만 담당 */
+export interface NavItemView extends NavItem {
+  /** 허브 항목일 때 — 활성 하이라이트 판정용 소속 경로 목록 */
+  matchPaths?: string[]
+}
+
+export function collapseHubs(groups: { label: string; items: NavItem[] }[]): {
+  label: string
+  items: NavItemView[]
+}[] {
+  return groups.map((group) => {
+    const out: NavItemView[] = []
+    const consumed = new Set<string>()
+    for (const item of group.items) {
+      const hub = NAV_HUBS.find((h) => h.paths.includes(item.path))
+      if (!hub) {
+        out.push(item)
+        continue
+      }
+      if (consumed.has(hub.label)) continue // 이미 허브로 접힘
+      consumed.add(hub.label)
+      // 생존 항목 중 허브 소속만 — 순서·대표 링크는 허브 정의(paths) 순서를 따른다
+      // (예: '재무 관리'는 재무 원장이 대표 — NAV 정의 순서와 무관하게 일관)
+      const present = new Set(group.items.map((i) => i.path))
+      const survivors = hub.paths.filter((p) => present.has(p))
+      out.push({ ...item, label: hub.label, icon: hub.icon, path: survivors[0], matchPaths: survivors })
+    }
+    return { ...group, items: out }
+  })
+}
+
 /**
  * 재무 기능 OFF 시 은닉 경로 항목을 제거한 nav 그룹(항목이 모두 사라진 그룹도 제거).
  * financeEnabled=true(ON)면 원본 NAV_GROUPS를 그대로 반환(회귀 0).

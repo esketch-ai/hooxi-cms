@@ -1,5 +1,6 @@
 // AV-3 전기버스 자산 — 자산관리 크로스-프로젝트 차량 목록 + 필터 + KPI
 import { useMemo, useState } from 'react'
+import { SectionTabs } from '../../components/SectionTabs'
 import { Num } from '../../components/Num'
 import { Link } from 'react-router-dom'
 import { Bus, ChartLineUp, Coins, DownloadSimple, Gauge } from '@phosphor-icons/react'
@@ -275,6 +276,8 @@ export function AssetVehiclesPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
+      <SectionTabs />
       <PageHeader
         title="전기버스 자산"
         subtitle="자산관리 관점의 크로스-프로젝트 전기버스 차량 현황"

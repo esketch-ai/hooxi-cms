@@ -1,6 +1,7 @@
 // P2 자산관리 보고 — 운수사(고객사)별 정산 예정 요약. 부서 엑셀 보고의 시스템 대체.
 // cf. FL-3 재무 원장은 '사업 grain', 여기는 '고객사 grain' — 참여사업·차량·예상지급액 집계(subtitle로 구분).
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { SectionTabs } from '../../components/SectionTabs'
 import { Num } from '../../components/Num'
 import {
   ChatCircleDots,
@@ -164,6 +165,8 @@ export function AssetReportPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
+      <SectionTabs />
       <PageHeader
         title="자산관리 보고"
         subtitle="운수사별 정산 예정 요약 — 고객사 단위 (cf. 재무 원장은 사업 단위)"

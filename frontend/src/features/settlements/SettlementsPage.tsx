@@ -2,6 +2,7 @@
 // 내부 전용(OBSERVER·외부역할 제외 — nav roles + 백엔드 403). 전이는 settlement.change(MANAGER↑),
 // 청구취소(BILLED→CONFIRMED)만 ADMIN 전용. 예정→확정은 [정산 확정] 진입점으로 생성한다.
 import { type ReactNode, useMemo, useState } from 'react'
+import { SectionTabs } from '../../components/SectionTabs'
 import {
   ArrowUUpLeft,
   CheckCircle,
@@ -60,6 +61,8 @@ export function SettlementsPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
+      <SectionTabs />
       <PageHeader
         title="정산 관리"
         subtitle="정산 헤더 상태전이·이력 + 부서 워크플로우 파이프라인 — 내부 전용"

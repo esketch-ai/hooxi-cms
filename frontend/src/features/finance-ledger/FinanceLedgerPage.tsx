@@ -1,6 +1,7 @@
 // FL-3 재무 원장 — 재무·회계(카본크레딧실)가 전 감축사업을 '사업 grain'으로 보는 원장.
 // 엑셀(재고자산·미착품 관리)의 시스템 대체. cf. 전기버스 자산(AV-3)은 '차량 grain' — subtitle로 구분.
 import { useMemo, useState } from 'react'
+import { SectionTabs } from '../../components/SectionTabs'
 import { Num } from '../../components/Num'
 import { Link } from 'react-router-dom'
 import { Coins, DownloadSimple, Package, Receipt, TrendUp, Warehouse } from '@phosphor-icons/react'
@@ -198,6 +199,8 @@ export function FinanceLedgerPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
+      <SectionTabs />
       <PageHeader
         title="재무 원장"
         subtitle="전 감축사업 재무 집계 — 사업 단위 (cf. 전기버스 자산은 차량 단위)"
