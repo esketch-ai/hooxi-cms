@@ -2885,3 +2885,14 @@ class ExternalAccountPreview(BaseModel):
     reports: List[PortalReportItem] = []  # PARTNER만
     settlements: List[PortalSettlementItem] = []  # PARTNER만
     warnings: List[str] = []  # 미연결·비활성 등 발급 전 확인 사항
+
+
+class ClientOptionOut(BaseModel):
+    """드롭다운·이름 맵용 경량 고객사 옵션 — 집계 없는 최소 필드(전건)."""
+
+    client_id: str
+    client_type: str
+    company_name: str
+    region: Optional[str] = None
+    biz_reg_no: Optional[str] = None
+    contract_status: Optional[str] = None

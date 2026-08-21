@@ -361,6 +361,32 @@ def geocode_missing_clients(
     )
 
 
+@router.get("/options", response_model=List[schemas.ClientOptionOut])
+def client_options(
+    client_type: Optional[str] = Query(None, description="구분 필터(예: TRANSPORT)"),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """드롭다운·이름 맵용 경량 전건 목록 — 집계 없는 최소 필드, 페이지네이션 없음.
+
+    고객사가 200곳을 넘으면서 목록 API(page_size≤200) 기반 옵션 훅이 뒷번호 고객사를
+    누락해 화면에 client_id(UUID)가 노출되던 문제의 근본 해결. /{client_id}보다 먼저
+    선언되어야 경로가 잡힌다(선언 순서 매칭).
+    """
+    q = db.query(Client)
+    if client_type:
+        q = q.filter(Client.client_type == client_type)
+    rows = q.order_by(Client.company_name).all()
+    return [
+        schemas.ClientOptionOut(
+            client_id=c.client_id, client_type=c.client_type,
+            company_name=c.company_name, region=c.region,
+            biz_reg_no=c.biz_reg_no, contract_status=c.contract_status,
+        )
+        for c in rows
+    ]
+
+
 @router.get("/{client_id}", response_model=schemas.ClientDetailOut)
 def get_client(
     client_id: str,

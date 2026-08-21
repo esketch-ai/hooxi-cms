@@ -180,6 +180,7 @@ GLOBAL_ALLOW: List = [
     (None, "/api/v1/auth"),
     (None, "/api/v1/users/me"),
     ("GET", "/api/v1/users"),   # 담당자 필터 옵션(전 화면) — 변경류는 /settings 메뉴 + ADMIN role
+    ("GET", "/api/v1/clients/options"),  # 고객사 옵션(전 화면 드롭다운·이름 맵) — 경량 전건
     (None, "/api/v1/codes"),
     (None, "/api/v1/health"),
 ]

@@ -83,10 +83,10 @@ export function useClientOptions(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['clients', 'options'],
     queryFn: async () => {
-      const { data } = await api.get<Client[] | Paginated<Client>>('/clients', {
-        params: { page_size: 200 },
-      })
-      return unwrapList(data).items
+      // 경량 전건 옵션 API — 고객사 200곳 초과 시 뒷번호가 누락돼 UUID가 노출되던 문제의
+      // 근본 해결(집계 없는 최소 필드, 페이지네이션 없음). enforce 모드에서도 전역 허용.
+      const { data } = await api.get<Client[]>('/clients/options')
+      return data
     },
     staleTime: 60_000,
     enabled: opts?.enabled ?? true, // OBSERVER 등 /clients 차단 역할은 enabled:false로 호출 자체 억제
