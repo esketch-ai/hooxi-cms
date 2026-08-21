@@ -419,7 +419,19 @@ export function PortalAccountsPage() {
               </label>
               <select
                 value={form.client_id}
-                onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
+                onChange={(e) => {
+                  const id = e.target.value
+                  // 마스터의 주 담당자 연락처 자동 채움 — 선택 시 덮어쓰되 수정 가능.
+                  // 마스터에 값이 없으면 기존 입력 유지(지우지 않음).
+                  const c = transportClients.find((x) => x.client_id === id)
+                  setForm((f) => ({
+                    ...f,
+                    client_id: id,
+                    email: c?.main_contact_email || f.email,
+                    name: c?.main_contact_name || f.name,
+                    phone: c?.main_contact_phone || f.phone,
+                  }))
+                }}
                 className={inputCls}
               >
                 <option value="">운수사 선택</option>
@@ -437,7 +449,17 @@ export function PortalAccountsPage() {
               </label>
               <select
                 value={form.buyer_id}
-                onChange={(e) => setForm((f) => ({ ...f, buyer_id: e.target.value }))}
+                onChange={(e) => {
+                  const id = e.target.value
+                  const b = buyers.find((x) => x.buyer_id === id)
+                  setForm((f) => ({
+                    ...f,
+                    buyer_id: id,
+                    email: b?.contact_email || f.email,
+                    name: b?.contact_name || f.name,
+                    phone: b?.contact_phone || f.phone,
+                  }))
+                }}
                 className={inputCls}
               >
                 <option value="">매수자 선택</option>

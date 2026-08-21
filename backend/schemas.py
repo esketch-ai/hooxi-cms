@@ -2896,3 +2896,7 @@ class ClientOptionOut(BaseModel):
     region: Optional[str] = None
     biz_reg_no: Optional[str] = None
     contract_status: Optional[str] = None
+    # 주 담당자 연락처 — 포털 계정 발급 자동 채움 등 폼 프리필용
+    main_contact_name: Optional[str] = None
+    main_contact_email: Optional[str] = None
+    main_contact_phone: Optional[str] = None

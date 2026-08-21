@@ -382,6 +382,9 @@ def client_options(
             client_id=c.client_id, client_type=c.client_type,
             company_name=c.company_name, region=c.region,
             biz_reg_no=c.biz_reg_no, contract_status=c.contract_status,
+            main_contact_name=c.main_contact_name,
+            main_contact_email=c.main_contact_email,
+            main_contact_phone=c.main_contact_phone,
         )
         for c in rows
     ]

@@ -21,7 +21,9 @@ def test_client_options_returns_all_min_fields(client, admin_headers):
         assert {"TESTOPT운수", "TESTOPT빌딩"} <= names
         row = [x for x in r.json() if x["company_name"] == "TESTOPT운수"][0]
         assert set(row.keys()) == {"client_id", "client_type", "company_name",
-                                   "region", "biz_reg_no", "contract_status"}
+                                   "region", "biz_reg_no", "contract_status",
+                                   "main_contact_name", "main_contact_email",
+                                   "main_contact_phone"}
         # 구분 필터
         r2 = client.get("/api/v1/clients/options?client_type=TRANSPORT", headers=admin_headers)
         n2 = {x["company_name"] for x in r2.json()}
