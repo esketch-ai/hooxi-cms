@@ -8,6 +8,7 @@
 
 import os
 import secrets
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
@@ -115,9 +116,13 @@ def create_refresh_token(user: User) -> str:
     return _create_token(user, "refresh", REFRESH_TOKEN_TTL)
 
 
-def create_magic_token(user: User) -> str:
-    """포털 매직링크 토큰 — verify(/portal/auth/verify)에서 access+refresh로 교환."""
-    return _create_token(user, "magic", MAGIC_TOKEN_TTL)
+def create_magic_token(user: User, ttl: Optional[timedelta] = None) -> str:
+    """포털 매직링크 토큰 — verify(/portal/auth/verify)에서 access+refresh로 교환.
+
+    ttl 미지정 시 기본 24h. 이용권 발급(1일/1주/1개월/연간권)은 이용권 기간을 ttl로 넘겨
+    링크 유효기간 = 이용권 기간이 되게 한다(계정 만료 portal_expires_at가 이중 방어).
+    """
+    return _create_token(user, "magic", ttl or MAGIC_TOKEN_TTL)
 
 
 def decode_token(token: str, expected_type: str) -> dict:
@@ -141,6 +146,10 @@ def _verify_user_from_payload(payload: dict, db: Session) -> User:
         raise HTTPException(status_code=401, detail="비활성 또는 승인 대기 계정입니다")
     if (user.token_version or 0) != payload.get("token_version"):
         raise HTTPException(status_code=401, detail="토큰이 무효화되었습니다. 다시 로그인하세요")
+    # 외부 포털 이용권 만료 — 매 요청 재검증(링크·기존 세션 모두 즉시 차단). 내부 계정 무관.
+    if user.role in EXTERNAL_ROLES and user.portal_expires_at is not None:
+        if datetime.utcnow() > user.portal_expires_at:
+            raise HTTPException(status_code=401, detail="포털 이용 기간이 만료되었습니다. 담당자에게 재발급을 요청하세요")
     return user
 
 

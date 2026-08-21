@@ -195,10 +195,18 @@ class ExternalAccountIn(BaseModel):
     email: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     name: Optional[str] = Field(default=None, max_length=50)
     role: str = Field(pattern="^(PARTNER|INVESTOR)$")
+    # 이용권 기간 — 1d(1일권)/7d(1주권)/30d(1개월권)/365d(연간권). 링크 유효기간=이용권 기간.
+    duration: str = Field(default="30d", pattern="^(1d|7d|30d|365d)$")
     client_id: Optional[str] = None  # PARTNER 필수 — 운수사(TRANSPORT)
     buyer_id: Optional[str] = None  # INVESTOR 필수 — 매수자
     kakao_contact_id: Optional[str] = None  # 주어지면 KakaoContact.client_id로 보강(브릿지)
     phone: Optional[str] = Field(default=None, max_length=20)  # 매직링크 알림톡 발송 대상(INC-9)
+
+
+class ExternalAccountResendIn(BaseModel):
+    """재발급 입력 — 이용권 기간 재설정(기본 1개월권)."""
+
+    duration: str = Field(default="30d", pattern="^(1d|7d|30d|365d)$")
 
 
 class ExternalAccountOut(BaseModel):
@@ -214,6 +222,7 @@ class ExternalAccountOut(BaseModel):
     buyer_id: Optional[str] = None
     status: str
     phone: Optional[str] = None
+    portal_expires_at: Optional[datetime] = None  # 이용권 만료(만료 후 로그인 차단)
     magic_link: Optional[str] = None
     # 매직링크 발송 결과(발급/재발급 응답에만, INC-10 정규화): EMAIL_SENT / EMAIL_FAILED /
     # KAKAO_SENT / KAKAO_FAILED / NOT_CONFIGURED. 목록은 None

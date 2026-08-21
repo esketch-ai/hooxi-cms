@@ -28,12 +28,14 @@ import {
   useCreateExternalAccount,
   useDeactivateExternalAccount,
   useExternalAccounts,
+  PASS_OPTIONS,
   usePreviewExternalAccount,
   useResendMagicLink,
   type ExternalAccount,
   type ExternalAccountIn,
   type ExternalAccountPreview,
   type ExternalRole,
+  type PassDuration,
 } from './api'
 
 // 배지 색/구조는 유지하고 라벨 텍스트만 공용 roleLabel로 수렴(중복 해소)
@@ -88,6 +90,7 @@ const inputCls =
   'h-10 w-full rounded-lg border border-hairline bg-graphite px-3 text-sm text-bone placeholder:text-slatey focus:border-white/30 focus:outline-none'
 
 interface IssueForm {
+  duration: PassDuration
   role: ExternalRole
   email: string
   name: string
@@ -103,6 +106,7 @@ const EMPTY_FORM: IssueForm = {
   phone: '',
   client_id: '',
   buyer_id: '',
+  duration: '30d',
 }
 
 export function PortalAccountsPage() {
@@ -124,6 +128,9 @@ export function PortalAccountsPage() {
   const [linkResult, setLinkResult] = useState<ExternalAccount | null>(null)
   // 발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용(검증 후 발급 진행)
   const [preview, setPreview] = useState<ExternalAccountPreview | null>(null)
+  // 재발급 — 이용권 기간을 고른 뒤 진행(1일/1주/1개월/연간권)
+  const [resendTarget, setResendTarget] = useState<{ user_id: string; email: string } | null>(null)
+  const [resendDuration, setResendDuration] = useState<PassDuration>('30d')
   const [deactivateTarget, setDeactivateTarget] = useState<ExternalAccount | null>(null)
 
   // 소속 표시용 id→이름 매핑
@@ -175,6 +182,7 @@ export function PortalAccountsPage() {
       client_id: form.role === 'PARTNER' ? form.client_id || null : null,
       buyer_id: form.role === 'INVESTOR' ? form.buyer_id || null : null,
       phone: form.phone.trim() || undefined,
+      duration: form.duration,
     }
     run(
       async () => {
@@ -245,6 +253,27 @@ export function PortalAccountsPage() {
       ),
     },
     {
+      key: 'expires',
+      header: '이용권 만료',
+      render: (a) => {
+        if (!a.portal_expires_at) return <span className="text-xs text-slatey">—</span>
+        const exp = new Date(a.portal_expires_at)
+        const days = Math.ceil((exp.getTime() - Date.now()) / 86400000)
+        if (days < 0)
+          return (
+            <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-300">
+              만료됨
+            </span>
+          )
+        return (
+          <div className="text-xs">
+            <p className="font-mono tabular-nums text-bone">{exp.toLocaleDateString('ko-KR')}</p>
+            <p className={days <= 7 ? 'font-semibold text-amber-500' : 'text-slatey'}>D-{days}</p>
+          </div>
+        )
+      },
+    },
+    {
       key: 'status',
       header: '상태',
       render: (a) => {
@@ -287,18 +316,12 @@ export function PortalAccountsPage() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  run(
-                    async () => {
-                      const res = await resendLink.mutateAsync(a.user_id)
-                      setLinkResult(res)
-                    },
-                    '매직링크를 재발급했습니다.',
-                    () => undefined,
-                  )
-                }
+                onClick={() => {
+                  setResendDuration('30d')
+                  setResendTarget({ user_id: a.user_id, email: a.email })
+                }}
                 className="flex items-center gap-1 rounded-full border border-hairline px-2.5 py-1.5 text-xs font-medium text-bone hover:bg-elevate"
-                title="매직링크 재발급"
+                title="이용권 기간을 골라 매직링크 재발급"
               >
                 <ArrowsClockwise size={13} />
                 재발급
@@ -410,6 +433,29 @@ export function PortalAccountsPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ash">이용 기간</label>
+            <div className="flex flex-wrap gap-1.5">
+              {PASS_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, duration: o.value }))}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                    form.duration === o.value
+                      ? 'border-snow bg-elevate-strong text-bone'
+                      : 'border-hairline text-slatey hover:text-ash'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-slatey">
+              초대 링크와 포털 이용이 이 기간 동안 유효합니다. 만료 후엔 재발급으로 연장하세요.
+            </p>
           </div>
 
           {form.role === 'PARTNER' ? (
@@ -585,6 +631,68 @@ export function PortalAccountsPage() {
         onCancel={() => setDeactivateTarget(null)}
       />
 
+      {/* 재발급 — 이용권 기간 선택 후 진행 */}
+      <Modal
+        open={!!resendTarget}
+        onClose={() => setResendTarget(null)}
+        title={resendTarget ? `링크 재발급 — ${resendTarget.email}` : ''}
+        footer={
+          resendTarget ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setResendTarget(null)}
+                className="rounded-full border border-hairline px-4 py-2 text-sm font-medium text-bone hover:bg-elevate"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={resendLink.isPending}
+                onClick={() =>
+                  resendTarget &&
+                  run(
+                    async () => {
+                      const res = await resendLink.mutateAsync({
+                        userId: resendTarget.user_id,
+                        duration: resendDuration,
+                      })
+                      setLinkResult(res)
+                      setResendTarget(null)
+                    },
+                    '매직링크를 재발급했습니다.',
+                    () => undefined,
+                  )
+                }
+                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+              >
+                재발급
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-ash">이용권 기간을 선택하세요 — 링크·포털 이용이 이 기간 동안 유효합니다.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {PASS_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setResendDuration(o.value)}
+                className={`rounded-full border px-3.5 py-2 text-sm font-semibold ${
+                  resendDuration === o.value
+                    ? 'border-snow bg-elevate-strong text-bone'
+                    : 'border-hairline text-slatey hover:text-ash'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
       {/* 발급 전 미리보기 — 이 계정이 포털에서 보게 될 내용 검증 후 발급/재발급 진행 */}
       <Modal
         open={!!preview}
@@ -604,17 +712,11 @@ export function PortalAccountsPage() {
               <button
                 type="button"
                 disabled={resendLink.isPending || preview.status === 'INACTIVE'}
-                onClick={() =>
-                  run(
-                    async () => {
-                      const res = await resendLink.mutateAsync(preview.user_id)
-                      setLinkResult(res)
-                      setPreview(null)
-                    },
-                    '매직링크를 재발급했습니다.',
-                    () => undefined,
-                  )
-                }
+                onClick={() => {
+                  setResendDuration('30d')
+                  setResendTarget({ user_id: preview.user_id, email: preview.email })
+                  setPreview(null)
+                }}
                 className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
               >
                 {resendLink.isPending && <CircleNotch size={15} className="animate-spin" />}

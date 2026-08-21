@@ -21,6 +21,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
+from datetime import timedelta
+
 from auth import EXTERNAL_ROLES, FRONTEND_ORIGIN, create_magic_token, require_role
 from models import ActivityHistory, Buyer, Client, KakaoContact, User, get_db
 from routers import common
@@ -33,14 +35,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/external-accounts", tags=["external-accounts"])
 
 
-def _issue_magic(user: User) -> Tuple[str, str]:
+# 이용권 기간(사용자 선택) — 링크 유효기간 = 이용권 기간, 계정 만료(portal_expires_at) 동시 설정
+PASS_DURATIONS = {
+    "1d": timedelta(days=1),      # 1일권
+    "7d": timedelta(days=7),      # 1주권
+    "30d": timedelta(days=30),    # 1개월권
+    "365d": timedelta(days=365),  # 연간권
+}
+DEFAULT_PASS = "30d"
+
+
+def _apply_pass(db, user: User, duration: str) -> timedelta:
+    """이용권 적용 — 만료일 갱신(now+기간) 후 커밋 전 상태로 반환. 잘못된 값 422."""
+    ttl = PASS_DURATIONS.get(duration or DEFAULT_PASS)
+    if ttl is None:
+        raise HTTPException(status_code=422, detail="이용 기간은 1d/7d/30d/365d 중 하나입니다")
+    from models import utcnow
+
+    user.portal_expires_at = utcnow() + ttl
+    return ttl
+
+
+def _issue_magic(user: User, ttl: timedelta = None) -> Tuple[str, str]:
     """매직 토큰 1회 발급 → (표시용 magic_link, 알림톡 버튼용 절대 링크).
 
     같은 토큰을 화면 복사와 발송에 함께 써 불일치를 막는다. 표시용은 현행대로 FRONTEND
     기준(Dev에선 상대경로일 수 있음), 알림톡 버튼은 절대 URL 필수라 APP_BASE_URL 우선.
     토큰은 반환값에만 담고 감사엔 남기지 않는다(R2-E6).
     """
-    token = create_magic_token(user)
+    token = create_magic_token(user, ttl)
     path = "/portal/login?token={0}".format(token)
     magic_link = "{0}{1}".format(FRONTEND_ORIGIN, path)
     abs_link = "{0}{1}".format(kakao_service.app_base_url() or FRONTEND_ORIGIN, path)
@@ -252,10 +275,11 @@ def create_external_account(
             existing.status = "ACTIVE"  # 비활성이었다면 재활성 후 발급(재초대)
         if phone and not existing.phone:
             existing.phone = phone
+        ttl = _apply_pass(db, existing, payload.duration)
         AuditLogger.external_account_resend(db, manager.user_id, existing.user_id)
         db.commit()
         db.refresh(existing)
-        magic_link, abs_link = _issue_magic(existing)
+        magic_link, abs_link = _issue_magic(existing, ttl)
         delivery = _deliver_magic_link(existing, abs_link)
         _log_portal_invite_activity(db, manager, existing, delivery, resend=True)
         return _account_out(existing, magic_link, delivery)
@@ -273,11 +297,12 @@ def create_external_account(
     )
     db.add(user)
     db.flush()
+    ttl = _apply_pass(db, user, payload.duration)
     AuditLogger.external_account_create(db, manager.user_id, user.user_id, payload.role)
     # 계정을 먼저 커밋한 뒤 발송한다 — 트랜잭션 내 HTTP I/O(락 유지)·"발송 후 롤백" 엣지 제거
     db.commit()
     db.refresh(user)
-    magic_link, abs_link = _issue_magic(user)  # 토큰 1회 발급(원문 미기록) → 표시·발송 공용
+    magic_link, abs_link = _issue_magic(user, ttl)  # 토큰 1회 발급(원문 미기록) → 표시·발송 공용
     delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort
     _log_portal_invite_activity(db, manager, user, delivery, resend=False)
     return _account_out(user, magic_link, delivery)
@@ -286,10 +311,11 @@ def create_external_account(
 @router.post("/{user_id}/resend-link", response_model=schemas.ExternalAccountOut)
 def resend_magic_link(
     user_id: str,
+    payload: schemas.ExternalAccountResendIn = None,
     manager: User = Depends(require_role("MANAGER")),
     db: Session = Depends(get_db),
 ):
-    """외부 계정 매직링크 재발급 — 활성 외부역할 계정만."""
+    """외부 계정 매직링크 재발급 — 이용권 기간(1d/7d/30d/365d) 새로 적용."""
     user = common.get_or_404(db, User, user_id, "사용자")
     if user.role not in EXTERNAL_ROLES:
         raise HTTPException(status_code=404, detail="외부 포털 계정이 아닙니다")
@@ -297,9 +323,10 @@ def resend_magic_link(
         raise HTTPException(
             status_code=409, detail="활성(ACTIVE) 상태의 외부 계정만 링크를 재발급할 수 있습니다"
         )
+    ttl = _apply_pass(db, user, payload.duration if payload else DEFAULT_PASS)
     AuditLogger.external_account_resend(db, manager.user_id, user.user_id)
-    db.commit()  # 감사 확정 후 발송 — 트랜잭션 밖에서 best-effort 재발송
-    magic_link, abs_link = _issue_magic(user)
+    db.commit()  # 감사·만료 확정 후 발송 — 트랜잭션 밖에서 best-effort 재발송
+    magic_link, abs_link = _issue_magic(user, ttl)
     delivery = _deliver_magic_link(user, abs_link)  # 이메일(주)→카카오(폴백), best-effort 재발송
     _log_portal_invite_activity(db, manager, user, delivery, resend=True)
     return _account_out(user, magic_link, delivery)

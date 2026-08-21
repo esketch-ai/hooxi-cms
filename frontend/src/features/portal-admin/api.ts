@@ -16,6 +16,7 @@ export interface ExternalAccount {
   buyer_id?: string | null
   status: UserStatus
   phone?: string | null
+  portal_expires_at?: string | null // 이용권 만료(만료 후 로그인 차단)
   magic_link?: string | null
   /** 카카오 알림톡 발송 결과 (발급·재발급 응답에만 존재, 목록은 없음) */
   delivery?: string | null
@@ -30,7 +31,17 @@ export interface ExternalAccountIn {
   buyer_id?: string | null // INVESTOR 필수 (매수자)
   phone?: string // 카카오 알림톡 발송용 (선택)
   kakao_contact_id?: string | null
+  duration?: PassDuration // 이용권: 1d(1일권)/7d(1주권)/30d(1개월권)/365d(연간권)
 }
+
+/** 이용권 기간 — 링크 유효기간 = 이용권 기간, 만료 후 포털 로그인 차단 */
+export type PassDuration = '1d' | '7d' | '30d' | '365d'
+export const PASS_OPTIONS: { value: PassDuration; label: string }[] = [
+  { value: '1d', label: '1일권' },
+  { value: '7d', label: '1주권' },
+  { value: '30d', label: '1개월권' },
+  { value: '365d', label: '연간권' },
+]
 
 export function useExternalAccounts(options?: { enabled?: boolean }) {
   return useQuery({
@@ -60,9 +71,10 @@ export function useCreateExternalAccount() {
 export function useResendMagicLink() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({ userId, duration }: { userId: string; duration: PassDuration }) => {
       const { data } = await api.post<ExternalAccount>(
         `/external-accounts/${userId}/resend-link`,
+        { duration },
       )
       return data
     },

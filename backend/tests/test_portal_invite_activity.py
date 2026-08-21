@@ -92,3 +92,72 @@ def test_invite_logged_to_activity_history(client, manager_headers, staff_header
         db.commit()
         _cleanup(db)
         db.close()
+
+
+def test_pass_duration_and_expiry(client, manager_headers, staff_headers):
+    """이용권(1일/1주/1개월/연간) — 만료일 설정·만료 후 포털 401·재발급으로 연장."""
+    from datetime import timedelta
+
+    import models as m
+    db = m.SessionLocal()
+    try:
+        _cleanup(db)
+    finally:
+        db.close()
+    ca = _mk_client(client, staff_headers, "TESTINV이용권운수")
+    # 1일권 발급
+    r = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "pass@inv-test.example", "role": "PARTNER", "client_id": ca,
+        "duration": "1d",
+    })
+    assert r.status_code == 201, r.text
+    uid = r.json()["user_id"]
+    assert r.json()["portal_expires_at"] is not None
+    # 매직링크 verify → 포털 접근 정상
+    from auth import create_magic_token
+    db = m.SessionLocal()
+    try:
+        u = db.get(m.User, uid)
+        tok = create_magic_token(u)
+    finally:
+        db.close()
+    rv = client.post("/api/v1/portal/auth/verify", json={"token": tok})
+    assert rv.status_code == 200, rv.text
+    access = rv.json()["access_token"]
+    assert client.get("/api/v1/portal/me",
+                      headers={"Authorization": "Bearer " + access}).status_code == 200
+    # 만료 처리(과거로 밀기) → 기존 세션도 즉시 401, verify도 401
+    db = m.SessionLocal()
+    try:
+        u = db.get(m.User, uid)
+        u.portal_expires_at = m.utcnow() - timedelta(hours=1)
+        db.commit()
+    finally:
+        db.close()
+    r401 = client.get("/api/v1/portal/me", headers={"Authorization": "Bearer " + access})
+    assert r401.status_code == 401
+    assert "만료" in r401.json()["detail"]
+    assert client.post("/api/v1/portal/auth/verify", json={"token": tok}).status_code == 401
+    # 재발급(연간권) → 만료 연장, 다시 접근 가능
+    rr = client.post(f"{EXTERNAL}/{uid}/resend-link", headers=manager_headers,
+                     json={"duration": "365d"})
+    assert rr.status_code == 200, rr.text
+    db = m.SessionLocal()
+    try:
+        u = db.get(m.User, uid)
+        assert u.portal_expires_at > m.utcnow() + timedelta(days=300)
+        tok2 = create_magic_token(u)
+    finally:
+        db.close()
+    assert client.post("/api/v1/portal/auth/verify", json={"token": tok2}).status_code == 200
+    # 잘못된 기간 → 422
+    bad = client.post(EXTERNAL, headers=manager_headers, json={
+        "email": "pass2@inv-test.example", "role": "PARTNER", "client_id": ca,
+        "duration": "3d",
+    })
+    assert bad.status_code == 422
+    db = m.SessionLocal()
+    try:
+        _cleanup(db)
+    finally:
+        db.close()

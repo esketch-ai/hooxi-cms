@@ -84,6 +84,9 @@ class User(Base):
     )
     buyer_id = Column(String(50), ForeignKey("tb_buyer.buyer_id", ondelete="SET NULL"))
     phone = Column(String(20))  # 외부 포털 매직링크 알림톡 발송 대상(INC-9) — 없으면 발송 스킵
+    # 외부 포털 이용권 만료(1일/1주/1개월/연간권) — 내부 계정은 항상 NULL(무관).
+    # 만료 후 포털 인증(매직링크 verify·access 재검증)이 401로 차단된다.
+    portal_expires_at = Column(DateTime)
     pin_hash = Column(String(255))  # 미팅 모드·reveal 게이트용 (R2-C11)
     token_version = Column(Integer, nullable=False, default=0)  # 즉시 무효화 (C2)
     created_at = Column(DateTime, default=utcnow)
@@ -1090,6 +1093,8 @@ def ensure_schema():
         ("tb_fleet_mgmt", "regulated_type", "VARCHAR(20)"),
         # 접근 그룹 부서코드 연동 — 부서명은 공통코드(DEPT)에서 관리
         ("tb_access_group", "dept_code", "VARCHAR(30)"),
+        # 외부 포털 이용권 만료(1일/1주/1개월/연간권)
+        ("tb_user", "portal_expires_at", "TIMESTAMP"),
     ]
     try:
         insp = _inspect(engine)
