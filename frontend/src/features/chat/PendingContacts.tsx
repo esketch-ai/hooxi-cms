@@ -34,8 +34,12 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
   /** 처리 중인 contact_id (버튼별 로딩 표시) */
   const [pendingId, setPendingId] = useState<string | null>(null)
 
-  const handle = (contact: KakaoContact, status: 'APPROVED' | 'REJECTED') => {
-    const clientId = mapping[contact.contact_id]
+  const handle = (
+    contact: KakaoContact,
+    status: 'APPROVED' | 'REJECTED',
+    overrideClientId?: string,
+  ) => {
+    const clientId = overrideClientId ?? mapping[contact.contact_id]
     if (status === 'APPROVED' && !clientId) {
       showToast('먼저 매핑할 고객사를 선택해 주세요.', 'info')
       return
@@ -103,6 +107,28 @@ export function PendingContacts({ contacts, isLoading, embedded = false }: Pendi
               {contact.phone ?? '연락처 미확인'}
               {contact.memo ? ` · ${contact.memo}` : ''}
             </p>
+            {/* 전화번호 일치 후보 — 제안일 뿐, 승인 확정은 사람(CR-3). 전화 확인 후 원클릭 승인 */}
+            {canApprove && (contact.suggested_clients?.length ?? 0) > 0 && (
+              <div className="mb-2 rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-2">
+                <p className="mb-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                  전화번호 일치 후보 — 전화로 신원 확인 후 승인하세요
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {contact.suggested_clients!.map((sg) => (
+                    <button
+                      key={sg.client_id}
+                      type="button"
+                      onClick={() => handle(contact, 'APPROVED', sg.client_id)}
+                      disabled={busy}
+                      className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-500/25 disabled:opacity-50 dark:text-emerald-200"
+                      title={`${sg.matched_field} 일치 — 이 고객사로 승인`}
+                    >
+                      {sg.company_name} 로 승인 · {sg.matched_field}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* 안내 사유는 상단 배너(:87)가 정본 → RoleGate reason 생략(이중 안내 방지) */}
             <RoleGate allow={canApprove}>
               <div className="flex items-center gap-2">

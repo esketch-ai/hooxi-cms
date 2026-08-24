@@ -2009,6 +2009,14 @@ class ReportDetailOut(ReportRow):
 # ---------------------------------------------------------------------------
 # P3 — 카카오 채널 연동 (SCR-08 / CR-3)
 # ---------------------------------------------------------------------------
+class SuggestedClient(BaseModel):
+    """전화번호 대조로 나온 매핑 후보 고객사 — 승인 보조(확정은 사람, CR-3)."""
+
+    client_id: str
+    company_name: str
+    matched_field: str  # '주 담당 전화' | '대표 전화'
+
+
 class KakaoContactOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -2027,6 +2035,8 @@ class KakaoContactOut(BaseModel):
     memo: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # 전화번호 일치 매핑 후보(PENDING+전화 있을 때만) — 승인 화면 [이 고객사로 승인] 보조
+    suggested_clients: List[SuggestedClient] = []
 
 
 class KakaoContactListResponse(BaseModel):

@@ -27,7 +27,7 @@ from models import (
 )
 from routers import common
 from services.audit_logger import AuditLogger
-from services import integration_config, kakao_service
+from services import integration_config, kakao_service, phone_match
 
 router = APIRouter(tags=["kakao"])
 
@@ -160,6 +160,30 @@ def sensitive_keywords(db: Session) -> list:
 # ---------------------------------------------------------------------------
 # 웹훅 — 오픈빌더 폴백 블록 스킬 서버
 # ---------------------------------------------------------------------------
+def _extract_phone(payload: dict) -> Optional[str]:
+    """카카오 페이로드에서 전화번호 추출(정규화 전 원문 반환) — 없으면 None.
+
+    채널 '전화번호 수집 동의' 설정에 따라 전달 위치가 다를 수 있어 후보 경로를 넓게 본다:
+    userRequest.user.properties.{phone,phone_number,phoneNumber} 및
+    action.params/detailParams.{phone,phoneNumber}. 실제 채널 payload 확인 후 좁힐 수 있음.
+    """
+    ur = payload.get("userRequest") or {}
+    props = (ur.get("user") or {}).get("properties") or {}
+    action = payload.get("action") or {}
+    params = action.get("params") or {}
+    detail = action.get("detailParams") or {}
+    for src in (props, params):
+        for k in ("phone", "phone_number", "phoneNumber"):
+            v = src.get(k)
+            if v:
+                return str(v)
+    for k in ("phone", "phoneNumber"):
+        dv = detail.get(k)
+        if isinstance(dv, dict) and dv.get("value"):
+            return str(dv["value"])
+    return None
+
+
 @router.post("/kakao/webhook")
 def kakao_webhook(
     payload: dict = Body(...),
@@ -190,6 +214,7 @@ def kakao_webhook(
     utterance = (user_request.get("utterance") or "").strip()
     properties = kakao_user.get("properties") or {}
     client_extra = ((payload.get("action") or {}).get("clientExtra")) or {}
+    incoming_phone = _extract_phone(payload)  # 전화 수집 동의 시 채워짐(승인 보조용)
 
     contact = (
         db.query(KakaoContact).filter(KakaoContact.kakao_user_key == kakao_user_key).first()
@@ -200,6 +225,7 @@ def kakao_webhook(
         contact = KakaoContact(
             kakao_user_key=kakao_user_key,
             name=properties.get("nickname"),
+            phone=incoming_phone,  # 관리자 신원 확인·후보 제안의 근거
             status="PENDING",
             requested_at=utcnow(),
             memo="첫 발화: {0}".format(utterance[:150]) if utterance else None,
@@ -211,6 +237,11 @@ def kakao_webhook(
             "고객 확인 후 상담을 연결드리겠습니다. 소속 회사명과 성함을 남겨주시면 "
             "담당자가 빠르게 확인하겠습니다."
         )
+
+    # 재발화 시 전화가 새로 확보됐고 기존에 비어있으면 채운다(승인 보조 강화, 덮어쓰기 안 함)
+    if incoming_phone and not contact.phone:
+        contact.phone = incoming_phone
+        db.commit()
 
     # --- 승인 전/거절/차단: 일반 안내만 ---
     if contact.status != "APPROVED":
@@ -292,14 +323,20 @@ def kakao_webhook(
 # ---------------------------------------------------------------------------
 # 연락처 승인 게이트 (CR-3)
 # ---------------------------------------------------------------------------
-def _contact_out(db: Session, contact: KakaoContact) -> schemas.KakaoContactOut:
+def _contact_out(db: Session, contact: KakaoContact, phone_index=None) -> schemas.KakaoContactOut:
     cnames = common.client_name_map(db, [contact.client_id])
     unames = common.user_name_map(db, [contact.approved_by])
     out = schemas.KakaoContactOut.model_validate(contact, from_attributes=True)
+    # 매핑 후보 제안 — PENDING + 전화 있을 때만(승인 보조, 확정은 사람). 목록은 index 재사용.
+    suggestions = []
+    if contact.status == "PENDING" and contact.phone:
+        idx = phone_index if phone_index is not None else phone_match.client_phone_index(db)
+        suggestions = [schemas.SuggestedClient(**s) for s in phone_match.suggest_clients(idx, contact.phone)]
     return out.model_copy(
         update={
             "client_name": cnames.get(contact.client_id),
             "approved_by_name": unames.get(contact.approved_by),
+            "suggested_clients": suggestions,
         }
     )
 
@@ -318,15 +355,25 @@ def list_kakao_contacts(
 
     cnames = common.client_name_map(db, [c.client_id for c in rows])
     unames = common.user_name_map(db, [c.approved_by for c in rows])
-    items = [
-        schemas.KakaoContactOut.model_validate(c, from_attributes=True).model_copy(
-            update={
-                "client_name": cnames.get(c.client_id),
-                "approved_by_name": unames.get(c.approved_by),
-            }
+    # 전화 대조 인덱스는 PENDING+전화 보유 연락처가 있을 때만 1회 구성(불필요한 전건 조회 회피)
+    phone_idx = None
+    if any(c.status == "PENDING" and c.phone for c in rows):
+        phone_idx = phone_match.client_phone_index(db)
+    items = []
+    for c in rows:
+        out = schemas.KakaoContactOut.model_validate(c, from_attributes=True)
+        suggestions = []
+        if phone_idx is not None and c.status == "PENDING" and c.phone:
+            suggestions = [schemas.SuggestedClient(**s) for s in phone_match.suggest_clients(phone_idx, c.phone)]
+        items.append(
+            out.model_copy(
+                update={
+                    "client_name": cnames.get(c.client_id),
+                    "approved_by_name": unames.get(c.approved_by),
+                    "suggested_clients": suggestions,
+                }
+            )
         )
-        for c in rows
-    ]
     return schemas.KakaoContactListResponse(items=items, total=len(items))
 
 

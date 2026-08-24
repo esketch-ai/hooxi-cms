@@ -977,6 +977,13 @@ export interface KakaoContact {
   created_at?: string
   updated_at?: string
   client_name?: string | null
+  suggested_clients?: SuggestedClient[]
+}
+
+export interface SuggestedClient {
+  client_id: string
+  company_name: string
+  matched_field: string
 }
 
 // 보고서 목록 응답 (schemas.ReportListResponse)
