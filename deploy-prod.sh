@@ -18,9 +18,9 @@ IMAGE="gcr.io/${PROJECT}/hooxi-cms:latest"
 SQL_CONN="${PROJECT}:${REGION}:hooxi-cms-db"
 
 echo "▶ 1/2 Cloud Build 이미지 빌드+push …"
-# 운영은 재무·자산 은닉 빌드(_FEATURE_FINANCE=off). dev(main push)는 기본 on 유지.
-# 운영: 재무 은닉 + 파트너 포털 개방(분리 플래그)
-gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --substitutions=_FEATURE_FINANCE=off,_FEATURE_PORTAL=on .
+# 운영: 재무·자산 전체 개방(_FEATURE_FINANCE=on, 2026-08-24 오픈) + 파트너 포털 개방.
+# (8/19 은닉을 해제 — 재무 원장·정산·세금계산서·경영 관찰·매수자·자산관리 보고 노출)
+gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --substitutions=_FEATURE_FINANCE=on,_FEATURE_PORTAL=on .
 
 echo "▶ 2/2 Cloud Run 배포 …"
 # 시크릿은 Secret Manager로 주입(감사로그 비밀값 금지 R2-E6 준수). DB는 Cloud SQL 유닉스소켓.
