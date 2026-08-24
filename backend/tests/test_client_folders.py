@@ -725,3 +725,33 @@ def test_dropbox_file_link_503_unconfigured(client, admin_headers):
         params={"path": "/파일503_tree/a.pdf"}, headers=admin_headers,
     )
     assert r.status_code == 503
+
+
+def test_backfill_limit_batches_and_reports_remaining(client, admin_headers, monkeypatch):
+    """배치 상한(limit) — limit건만 provision하고 remaining 반환, 재호출이 이어서 처리."""
+    monkeypatch.setenv("DROPBOX_APP_KEY", "k")
+    monkeypatch.setenv("DROPBOX_APP_SECRET", "s")
+    monkeypatch.setenv("DROPBOX_REFRESH_TOKEN", "r")
+    monkeypatch.setattr(dropbox_storage, "ensure_folder", lambda p: True)
+    db = models.SessionLocal()
+    try:
+        for i in (1, 2, 3):
+            db.add(
+                models.Client(
+                    client_id="bflim{0}".format(i),
+                    client_type="TRANSPORT",
+                    company_name="백필배치운수{0}".format(i),
+                    biz_reg_no="66{0}-66-6666{0}".format(i),
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+    r1 = client.post(
+        API + "/batch/provision-dropbox-folders?limit=2", headers=admin_headers
+    ).json()
+    assert r1["total"] == 3 and r1["provisioned"] == 2 and r1["remaining"] == 1
+    r2 = client.post(
+        API + "/batch/provision-dropbox-folders?limit=2", headers=admin_headers
+    ).json()
+    assert r2["provisioned"] == 1 and r2["remaining"] == 0

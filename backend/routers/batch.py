@@ -518,6 +518,7 @@ def report_send(
 )
 def provision_dropbox_folders(
     secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    limit: int = Query(10, ge=1, le=50),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
@@ -526,6 +527,9 @@ def provision_dropbox_folders(
     dropbox_folder가 없는 전 고객사(운수사·건물)를 provision한다. 건별 실패는 격리해
     카운트만 반환하고, 재실행하면 이미 생성된 건은 대상에서 제외되어 안전(멱등).
     Dropbox 미설정 시 503(게이트 규약).
+
+    배치 상한(limit): provision은 건당 API 호출이 많아(루트+서브폴더) 오래 걸리므로
+    limit건만 처리하고 remaining을 반환 — 호출측이 0이 될 때까지 반복한다(건별 커밋).
     """
     actor = _optional_admin(credentials, db)
     _authorize(secret, db, actor)
@@ -545,7 +549,7 @@ def provision_dropbox_folders(
     ]
     provisioned = 0
     failed = 0
-    for c in targets:
+    for c in targets[:limit]:
         try:
             # actor_id 전달 → 건별 CLIENT_FOLDER_PROVISION 감사 로그(폴더 경로 추적)
             client_folders.provision(db, c, actor_id=actor_id)
@@ -557,17 +561,18 @@ def provision_dropbox_folders(
             log.warning(
                 "Dropbox 폴더 백필 실패 (client_id=%s)", c.client_id, exc_info=True
             )
+    remaining = max(0, len(targets) - len(targets[:limit]))
     if actor_id and targets:
         # 백필 요약 감사 — 대상이 있을 때만(빈 실행 잡음 방지). 건수만(개별은 위 건별 로그로 추적)
         AuditLogger.log_action(
             db, actor_id, "DROPBOX_BACKFILL", target_type="BATCH",
-            new_value="total={0}, provisioned={1}, failed={2}".format(
-                len(targets), provisioned, failed
+            new_value="total={0}, provisioned={1}, failed={2}, remaining={3}".format(
+                len(targets), provisioned, failed, remaining
             ),
         )
         db.commit()
     return schemas.DropboxProvisionResponse(
-        total=len(targets), provisioned=provisioned, failed=failed
+        total=len(targets), provisioned=provisioned, failed=failed, remaining=remaining
     )
 
 

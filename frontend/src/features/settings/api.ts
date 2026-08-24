@@ -218,6 +218,7 @@ export interface DropboxProvisionResult {
   total: number
   provisioned: number
   failed: number
+  remaining?: number
 }
 
 /**
@@ -227,10 +228,23 @@ export interface DropboxProvisionResult {
 export function useProvisionDropboxFolders() {
   return useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<DropboxProvisionResult>(
-        '/batch/provision-dropbox-folders',
-      )
-      return data
+      // 서버가 배치 상한(limit=10)으로 나눠 처리 — remaining=0까지 반복 호출해 합산.
+      // provision은 건당 Dropbox API 호출이 많아 배치당 시간이 길어 타임아웃을 넉넉히.
+      const sum: DropboxProvisionResult = { total: 0, provisioned: 0, failed: 0, remaining: 0 }
+      for (let i = 0; i < 100; i += 1) {
+        const { data } = await api.post<DropboxProvisionResult>(
+          '/batch/provision-dropbox-folders',
+          undefined,
+          { timeout: 60000 },
+        )
+        sum.total = data.total + sum.provisioned + sum.failed // 첫 판정 총량 기준 누적 표기
+        sum.provisioned += data.provisioned
+        sum.failed += data.failed
+        sum.remaining = data.remaining ?? 0
+        if (!data.remaining) break
+        if (data.provisioned === 0) break // 진전 없음(전건 실패) — 무한 반복 방지
+      }
+      return sum
     },
   })
 }
