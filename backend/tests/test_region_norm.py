@@ -42,7 +42,7 @@ def test_normalize_region_full_names():
 def test_normalize_region_suffix_fallback_variants():
     """실존하지 않는 변형 표기(운영 파일 유입)도 접미사 제거로 귀결."""
     assert normalize_region("서울특별자치시") == "서울"
-    assert normalize_region("전남광주통합특별시") == "전남광주"
+    assert normalize_region("전남광주통합특별시") == "전남"
     assert normalize_region("부산특별자치시") == "부산"
     assert normalize_region("경기광역시") == "경기"
     # 귀결 불가한 접미사 제거 결과는 원본 보존
@@ -50,9 +50,11 @@ def test_normalize_region_suffix_fallback_variants():
 
 
 def test_normalize_region_idempotent_and_preserves_legacy():
-    # 이미 단축형·관용 표기는 그대로(멱등)
-    for v in ["서울", "경기", "전남광주", "고속", ""]:
+    # 이미 단축형·귀결 불가 관용 표기는 그대로(멱등)
+    for v in ["서울", "경기", "고속", ""]:
         assert normalize_region(v) == v
+    # 전남광주(버스조합 통합 표기)는 공통코드 정합을 위해 전남으로(사용자 확정)
+    assert normalize_region("전남광주") == "전남"
     assert normalize_region(None) == ""
     # 표의 모든 결과값은 다시 넣어도 불변(고정점)
     for code in set(REGION_FULL_TO_CODE.values()):
@@ -104,7 +106,7 @@ def test_ensure_schema_normalizes_existing_regions(client):
             client_type="TRANSPORT", company_name="지역보정대상운수", region="경기도",
         ))
         db.add(models.Client(
-            client_type="TRANSPORT", company_name="지역보정변형운수", region="전남광주통합특별시",
+            client_type="TRANSPORT", company_name="지역보정변형운수", region="전남광주",
         ))
         db.commit()
 
@@ -114,7 +116,7 @@ def test_ensure_schema_normalizes_existing_regions(client):
         row = db.query(models.Client).filter_by(company_name="지역보정대상운수").one()
         assert row.region == "경기"
         row2 = db.query(models.Client).filter_by(company_name="지역보정변형운수").one()
-        assert row2.region == "전남광주"
+        assert row2.region == "전남"
         # 재실행해도 불변(멱등)
         models.ensure_schema()
         db.expire_all()
