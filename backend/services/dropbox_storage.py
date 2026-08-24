@@ -208,7 +208,26 @@ def move(src: str, dst: str) -> str:
             and err.get_to().is_conflict()
         ):
             raise DropboxConflict(dst)
+        if (
+            isinstance(err, dropbox.files.RelocationError)
+            and err.is_from_lookup()
+            and err.get_from_lookup().is_not_found()
+        ):
+            # 원본 경로가 Dropbox에 없음 — 호출부가 채택/재생성 복구를 판단하게 구분 전파
+            raise DropboxNotFound(src)
         raise
+
+
+def exists(path: str) -> bool:
+    """경로 존재 여부 — 메타데이터 조회(파일·폴더 공통). 미설정 시 DropboxConfigError."""
+    import dropbox
+
+    dbx = _get_client()
+    try:
+        _retry_once(dbx.files_get_metadata, path)
+        return True
+    except dropbox.exceptions.ApiError:
+        return False
 
 
 def file_size(path: str) -> Optional[int]:

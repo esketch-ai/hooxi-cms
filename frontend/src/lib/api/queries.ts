@@ -202,6 +202,8 @@ export interface ReconcileApplyDetail {
 }
 
 export interface ReconcileApply {
+  recovered?: number
+  remaining?: number
   total_candidates: number
   moved: number
   conflicts: number
@@ -222,12 +224,30 @@ export function usePreviewReconcile() {
 }
 
 // 적용 — 규칙 경로로 실제 이동. 파일은 보존(폴더 이동만).
+// 서버가 배치 상한(limit)으로 나눠 처리하므로 remaining=0까지 반복 호출해 합산한다
+// (건별 커밋이라 중간 실패·중단에도 안전, 재호출 시 이어서 처리).
 export function useApplyReconcile() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      const { data } = await api.post<ReconcileApply>('/batch/reconcile-dropbox-folders/apply')
-      return data
+      const sum: ReconcileApply = {
+        total_candidates: 0, moved: 0, conflicts: 0, failed: 0, recovered: 0, remaining: 0,
+        details: [],
+      }
+      for (let i = 0; i < 50; i += 1) {
+        const { data } = await api.post<ReconcileApply>('/batch/reconcile-dropbox-folders/apply')
+        sum.total_candidates = data.total_candidates // 매 배치 재판정 — 마지막 판정 기준
+        sum.moved += data.moved
+        sum.conflicts = data.conflicts // 충돌은 매 배치 재보고(합산하면 중복)
+        sum.failed += data.failed
+        sum.recovered = (sum.recovered ?? 0) + (data.recovered ?? 0)
+        sum.remaining = data.remaining ?? 0
+        sum.details = [...(sum.details ?? []), ...(data.details ?? [])].slice(-200)
+        if (!data.remaining) break
+        // 진전 없이 남기만 하면(전건 conflict/failed) 무한 반복 방지
+        if (data.moved + (data.recovered ?? 0) === 0) break
+      }
+      return sum
     },
     onSuccess: () => {
       // 폴더 경로 변동 반영

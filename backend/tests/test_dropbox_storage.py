@@ -212,6 +212,28 @@ def test_move_conflict_raises_dropbox_conflict(monkeypatch):
         dropbox_storage.move("/A/old", "/A/new")
 
 
+def test_move_source_not_found_raises_dropbox_not_found(monkeypatch):
+    """원본 not_found는 DropboxNotFound로 구분 전파 — reconcile 채택/재생성 복구용."""
+    import pytest
+
+    import dropbox
+
+    _configure(monkeypatch)
+    missing = dropbox.exceptions.ApiError(
+        "req",
+        dropbox.files.RelocationError.from_lookup(dropbox.files.LookupError.not_found),
+        "src missing", None,
+    )
+
+    class FakeDbx:
+        def files_move_v2(self, src, dst, **kwargs):
+            raise missing
+
+    monkeypatch.setattr(dropbox_storage, "_get_client", lambda: FakeDbx())
+    with pytest.raises(dropbox_storage.DropboxNotFound):
+        dropbox_storage.move("/A/old", "/A/new")
+
+
 def test_move_other_api_error_propagates(monkeypatch):
     import pytest
 
@@ -220,8 +242,8 @@ def test_move_other_api_error_propagates(monkeypatch):
     _configure(monkeypatch)
     other = dropbox.exceptions.ApiError(
         "req",
-        dropbox.files.RelocationError.from_lookup(dropbox.files.LookupError.not_found),
-        "src missing", None,
+        dropbox.files.RelocationError.cant_move_folder_into_itself,
+        "invalid move", None,
     )
 
     class FakeDbx:

@@ -2448,7 +2448,7 @@ class ReconcileApplyDetail(BaseModel):
     client_id: str
     from_path: str
     to_path: str
-    result: str  # moved | conflict | failed
+    result: str  # moved | conflict | failed | adopted(원본없음·목적지채택) | recreated(재생성)
 
 
 class ReconcileApplyResponse(BaseModel):
@@ -2458,6 +2458,8 @@ class ReconcileApplyResponse(BaseModel):
     moved: int
     conflicts: int
     failed: int
+    recovered: int = 0  # 원본 없음 복구(adopted+recreated)
+    remaining: int = 0  # 배치 상한(limit) 초과로 다음 호출에 남은 move 대상 수
     details: List[ReconcileApplyDetail] = []
 
 

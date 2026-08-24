@@ -457,13 +457,19 @@ function ReconcileFoldersModal({ open, onClose }: { open: boolean; onClose: () =
       const res = await apply.mutateAsync()
       setResult(res)
       setConfirmOpen(false)
+      const recovered = res.recovered ?? 0
       if (res.failed > 0 || res.conflicts > 0) {
         showToast(
-          `이동 ${res.moved} · 충돌 ${res.conflicts} · 실패 ${res.failed}`,
+          `이동 ${res.moved} · 복구 ${recovered} · 충돌 ${res.conflicts} · 실패 ${res.failed}`,
           res.failed > 0 ? 'danger' : 'info',
         )
       } else {
-        showToast(`${res.moved}건을 규칙 경로로 이동했습니다.`, 'success')
+        showToast(
+          recovered > 0
+            ? `이동 ${res.moved}건 · 복구 ${recovered}건 완료했습니다.`
+            : `${res.moved}건을 규칙 경로로 이동했습니다.`,
+          'success',
+        )
       }
     } catch (err) {
       setConfirmOpen(false)
@@ -513,8 +519,9 @@ function ReconcileFoldersModal({ open, onClose }: { open: boolean; onClose: () =
                       : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 }`}
               >
-                적용 결과 — 이동 {result.moved} · 충돌 {result.conflicts} · 실패 {result.failed}
-                {' / '}대상 {result.total_candidates}건
+                적용 결과 — 이동 {result.moved} · 복구 {result.recovered ?? 0} · 충돌{' '}
+                {result.conflicts} · 실패 {result.failed}
+                {(result.remaining ?? 0) > 0 && ` · 남음 ${result.remaining}(다시 적용)`}
               </div>
             )}
 

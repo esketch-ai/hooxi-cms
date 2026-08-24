@@ -230,3 +230,76 @@ def _count_audit(db):
         return db.query(models.AuditLog).count()
     finally:
         db.close()
+
+
+def test_apply_recovers_missing_source(client, admin_headers, monkeypatch):
+    """원본 not_found 복구 — 목적지 있으면 채택(adopted), 없으면 재생성(recreated).
+
+    (운영 사고: 프론트 타임아웃으로 apply가 끊겨 'Dropbox는 이동·DB는 옛 경로'가 남거나
+    폴더가 수동 정리로 소실된 케이스 — 재실행이 자동 복구해야 한다.)
+    """
+    _configure_dropbox(monkeypatch)
+    _guard_no_delete(monkeypatch)
+
+    def _fake_move(src, dst):
+        raise dropbox_storage.DropboxNotFound(src)  # 원본 없음
+
+    ensured = []
+    monkeypatch.setattr(dropbox_storage, "move", _fake_move)
+    monkeypatch.setattr(dropbox_storage, "ensure_folder", lambda p: ensured.append(p) or True)
+    # 'Adopt' 고객사의 목적지는 이미 존재(이동만 되고 DB 갱신 전에 끊긴 시나리오)
+    monkeypatch.setattr(dropbox_storage, "exists", lambda p: "Adopt" in p)
+
+    db = models.SessionLocal()
+    try:
+        _clear_all_folders(db)
+        m_adopt = _mk(db, "경기", "Adopt", "/경기도_Adopt_운수")
+        m_recreate = _mk(db, "경남", "Recreate", "/경상남도_Recreate_운수")
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.post(APPLY, headers=admin_headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["recovered"] == 2
+    assert body["failed"] == 0
+    results = {d["client_id"]: d["result"] for d in body["details"]}
+    assert results[m_adopt] == "adopted"
+    assert results[m_recreate] == "recreated"
+
+    db = models.SessionLocal()
+    try:
+        # 두 건 모두 DB 경로가 규칙 경로로 갱신됨
+        assert db.get(models.Client, m_adopt).dropbox_folder == "/경기_Adopt_운수"
+        assert db.get(models.Client, m_recreate).dropbox_folder == "/경남_Recreate_운수"
+    finally:
+        db.close()
+    # 재생성 건만 폴더 생성 호출(루트 포함) — 채택 건은 생성 없음
+    assert any(p == "/경남_Recreate_운수" for p in ensured)
+    assert not any("Adopt" in p for p in ensured)
+
+
+def test_apply_limit_batches_and_reports_remaining(client, admin_headers, monkeypatch):
+    """배치 상한(limit) — limit건만 처리하고 remaining 반환, 재호출이 이어서 처리."""
+    _configure_dropbox(monkeypatch)
+    _guard_no_delete(monkeypatch)
+    monkeypatch.setattr(dropbox_storage, "move", lambda src, dst: dst)
+
+    db = models.SessionLocal()
+    try:
+        _clear_all_folders(db)
+        for i in range(3):
+            _mk(db, "서울", "Batch{0}".format(i), "/old_batch_{0}".format(i))
+        db.commit()
+    finally:
+        db.close()
+
+    r1 = client.post(APPLY + "?limit=2", headers=admin_headers).json()
+    assert r1["total_candidates"] == 3
+    assert r1["moved"] == 2
+    assert r1["remaining"] == 1
+
+    r2 = client.post(APPLY + "?limit=2", headers=admin_headers).json()
+    assert r2["moved"] == 1
+    assert r2["remaining"] == 0

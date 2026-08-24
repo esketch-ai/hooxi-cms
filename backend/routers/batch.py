@@ -39,7 +39,7 @@ from models import (
 )
 from routers import common
 from routers.reports import generate_for_period
-from services import client_folders, dropbox_storage
+from services import client_folders, dropbox_storage, storage
 from services.audit_logger import AuditLogger
 from services.report_sender import (
     SendPrecondition,
@@ -667,6 +667,7 @@ def reconcile_dropbox_folders_preview(
 )
 def reconcile_dropbox_folders_apply(
     secret: Optional[str] = Query(None, description="BATCH_SECRET (Cloud Scheduler)"),
+    limit: int = Query(30, ge=1, le=200),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
@@ -676,6 +677,12 @@ def reconcile_dropbox_folders_apply(
     move 성공 시 dropbox_folder를 목표 경로로 갱신하고 감사 로그를 남긴다. 목적지가
     점유돼 conflict면 스킵(경로 불변), 기타 예외는 rollback 후 건별 failed로 격리한다.
     자동 접미사(_2)는 붙이지 않는다 — conflict는 보고만 한다. Dropbox 미설정 시 503.
+
+    - 배치 상한(limit): 한 요청이 프론트 타임아웃(15s)을 넘지 않게 move 대상을 limit건만
+      처리하고 remaining을 반환 — 호출측이 0이 될 때까지 반복한다(건별 커밋이라 중단 안전).
+    - 원본 없음(not_found) 복구: 목적지가 이미 있으면 이전 실행이 이동만 하고 끊긴
+      케이스로 보고 **경로만 채택(adopted)**, 목적지도 없으면 폴더를 **재생성(recreated)**
+      한다 — 어느 쪽도 파일 삭제·덮어쓰기 없음.
     """
     actor = _optional_admin(credentials, db)
     _authorize(secret, db, actor)
@@ -690,7 +697,7 @@ def reconcile_dropbox_folders_apply(
     targets = db.query(Client).filter(Client.dropbox_folder.isnot(None)).all()
 
     candidates = 0
-    moved = conflicts = failed = 0
+    moved = conflicts = failed = recovered = processed = 0
     details = []
     for c in targets:
         # 적용 시점 재판정 — preview 이후 상태가 바뀌어도 안전(멱등·경합)
@@ -698,6 +705,9 @@ def reconcile_dropbox_folders_apply(
         if action != "move":
             continue
         candidates += 1
+        if processed >= limit:
+            continue  # 배치 상한 초과 — remaining으로 보고(다음 호출이 이어서 처리)
+        processed += 1
         try:
             dropbox_storage.move(current, proposed)
             c.dropbox_folder = proposed
@@ -713,6 +723,35 @@ def reconcile_dropbox_folders_apply(
             # 목적지에 이미 항목 존재 — 경로 불변(스킵), 보고만
             conflicts += 1
             result = "conflict"
+        except dropbox_storage.DropboxNotFound:
+            # 원본 없음 — ① 목적지가 있으면 이전 실행이 이동만 하고 끊긴 것: 경로 채택
+            #            ② 목적지도 없으면 소실: 규칙 경로로 재생성(서브폴더 포함)
+            try:
+                if dropbox_storage.exists(proposed):
+                    result = "adopted"
+                else:
+                    dropbox_storage.ensure_folder(proposed)
+                    for label in client_folders.subfolder_labels(db):
+                        dropbox_storage.ensure_folder(
+                            "{0}/{1}".format(proposed, storage.sanitize_segment(label))
+                        )
+                    result = "recreated"
+                c.dropbox_folder = proposed
+                AuditLogger.log_action(
+                    db, actor_id, "CLIENT_FOLDER_RENAME",
+                    target_type="CLIENT", target_id=c.client_id,
+                    new_value="{0}: {1} -> {2}".format(result, current, proposed),
+                )
+                db.commit()
+                recovered += 1
+            except Exception:
+                db.rollback()
+                failed += 1
+                result = "failed"
+                log.warning(
+                    "Dropbox 폴더 reconcile 복구 실패 (client_id=%s)",
+                    c.client_id, exc_info=True,
+                )
         except Exception:
             db.rollback()
             failed += 1
@@ -726,12 +765,13 @@ def reconcile_dropbox_folders_apply(
             )
         )
 
+    remaining = candidates - processed
     if actor_id and candidates:
         # 교정 요약 감사 — 대상이 있을 때만(빈 실행 잡음 방지)
         AuditLogger.log_action(
             db, actor_id, "DROPBOX_RECONCILE", target_type="BATCH",
-            new_value="total={0}, moved={1}, conflicts={2}, failed={3}".format(
-                candidates, moved, conflicts, failed
+            new_value="total={0}, moved={1}, conflicts={2}, failed={3}, recovered={4}, remaining={5}".format(
+                candidates, moved, conflicts, failed, recovered, remaining
             ),
         )
         db.commit()
@@ -741,5 +781,7 @@ def reconcile_dropbox_folders_apply(
         moved=moved,
         conflicts=conflicts,
         failed=failed,
+        recovered=recovered,
+        remaining=remaining,
         details=details,
     )
