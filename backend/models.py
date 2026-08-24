@@ -1273,20 +1273,27 @@ def ensure_schema():
         except Exception as exc:
             print("⚠ ensure_schema widen union_contract skipped: {0}".format(exc))
 
-    # 고객사 지역 정규화 — 운영 고객사마스터 업로드로 들어온 정식 행정구역명
-    # (경기도·경상남도·제주특별자치도…)을 공통코드 REGION 단축형으로 멱등 보정(2026-08-24 사고).
-    # 표에 없는 값(단축형·전남광주 등 관용 표기)은 건드리지 않는다.
+    # 고객사 지역 정규화 — 운영 고객사마스터 업로드로 들어온 정식 행정구역명·변형 표기
+    # (경기도·경상남도·서울특별자치시·전남광주통합특별시…)를 공통코드 REGION 단축형으로
+    # 멱등 보정(2026-08-24 사고). DISTINCT 전수 스캔 후 normalize_region이 바꾸는 값만
+    # UPDATE — 귀결 불가 값(단축형·고속 등 관용 표기)은 건드리지 않는다.
     try:
-        from services.region_norm import REGION_FULL_TO_CODE
+        from services.region_norm import normalize_region
 
         fixed = 0
         with engine.begin() as conn:
-            for full, code in REGION_FULL_TO_CODE.items():
-                res = conn.execute(
-                    _text("UPDATE tb_client SET region = :code WHERE region = :full"),
-                    {"code": code, "full": full},
-                )
-                fixed += res.rowcount or 0
+            rows = conn.execute(_text(
+                "SELECT DISTINCT region FROM tb_client "
+                "WHERE region IS NOT NULL AND region <> ''"
+            )).fetchall()
+            for (raw,) in rows:
+                norm = normalize_region(raw)
+                if norm != raw:
+                    res = conn.execute(
+                        _text("UPDATE tb_client SET region = :norm WHERE region = :raw"),
+                        {"norm": norm, "raw": raw},
+                    )
+                    fixed += res.rowcount or 0
         if fixed:
             print("✓ tb_client.region 정식명칭 → 단축형 정규화 {0}건".format(fixed))
     except Exception as exc:

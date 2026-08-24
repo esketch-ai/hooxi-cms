@@ -3,9 +3,13 @@
 운영 고객사마스터 업로드에서 '경기도·경상남도·제주특별자치도' 같은 정식 명칭이
 그대로 저장돼 공통코드(REGION: 서울·경기·경남·제주…)와 어긋난 사고 대응(2026-08-24).
 - 엑셀 업로드 변환(excel_import "region_kr")·계약대수 매칭(fleet_import)·
-  ensure_schema 기존 데이터 보정이 모두 이 표 하나를 쓴다.
-- 멱등: 이미 단축형이거나 표에 없는 값(전남광주·고속 등 관용 표기)은 그대로 보존.
+  ensure_schema 기존 데이터 보정이 모두 이 모듈 하나를 쓴다.
+- 2단계: ①정식 명칭 표 ②접미사 제거 폴백 — '서울특별자치시'·'전남광주통합특별시' 같은
+  실존하지 않는 변형 표기도 접미사를 벗겨 알려진 지역으로 귀결될 때만 치환한다.
+- 멱등: 이미 단축형이거나 귀결 불가 값(고속 등 관용 표기)은 그대로 보존.
 """
+
+import re
 
 REGION_FULL_TO_CODE = {
     "서울특별시": "서울", "서울시": "서울",
@@ -28,7 +32,25 @@ REGION_FULL_TO_CODE = {
 }
 
 
+# 접미사 폴백의 귀결 허용치 — 공통코드 단축형 17종 + 전남광주(이 저장소 관용 통합 표기)
+KNOWN_REGIONS = set(REGION_FULL_TO_CODE.values()) | {"전남광주"}
+
+# 변형 표기 접미사 — 통합/특별/자치 조합이 붙은 시·도 꼬리표(실존 명칭 여부 불문)
+_SUFFIX_RE = re.compile(r"(?:통합)?(?:특별자치도|특별자치시|특별시|광역시|자치도|자치시)$")
+
+
 def normalize_region(raw) -> str:
-    """정식 행정구역명이면 단축형으로, 아니면 공백 정리만 하고 그대로 반환."""
+    """정식 명칭(표)→단축형, 변형 표기는 접미사 제거 후 알려진 지역일 때만 치환.
+
+    예: '경상남도'→'경남'(표), '서울특별자치시'→'서울', '전남광주통합특별시'→'전남광주'(폴백).
+    귀결 불가('고속' 등)는 공백 정리만 하고 그대로 반환(멱등)."""
     s = str(raw or "").strip()
-    return REGION_FULL_TO_CODE.get(s.replace(" ", ""), s)
+    key = s.replace(" ", "")
+    if key in REGION_FULL_TO_CODE:
+        return REGION_FULL_TO_CODE[key]
+    stripped = _SUFFIX_RE.sub("", key)
+    if stripped != key:
+        stripped = REGION_FULL_TO_CODE.get(stripped, stripped)
+        if stripped in KNOWN_REGIONS:
+            return stripped
+    return s
