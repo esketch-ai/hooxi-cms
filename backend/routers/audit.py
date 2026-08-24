@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import require_role
-from models import AuditLog, User, get_db
+from models import AuditLog, Buyer, Client, KakaoContact, Project, User, get_db
 from routers import common
 from services.audit_logger import AuditLogger
 from services.excel_export import (
@@ -57,6 +57,32 @@ def _apply_filters(
     return query
 
 
+# 대상 유형 → (모델, 이름 컬럼) — 목록·내보내기에서 UUID 대신 이름을 보여주기 위한 해석표.
+# 여기 없는 유형(CONFIG·CODE·BATCH 등)은 target_id 자체가 사람이 읽는 키라 해석하지 않는다.
+_TARGET_NAME_MODELS = {
+    "CLIENT": (Client, Client.client_id, Client.company_name),
+    "USER": (User, User.user_id, User.name),
+    "PROJECT": (Project, Project.project_id, Project.project_name),
+    "BUYER": (Buyer, Buyer.buyer_id, Buyer.name),
+    "KAKAO_CONTACT": (KakaoContact, KakaoContact.contact_id, KakaoContact.name),
+}
+
+
+def _target_name_map(db: Session, rows):
+    """(target_type, target_id) → 이름. 유형별 1쿼리(IN)로 페이지 단위 해석."""
+    by_type = {}
+    for log in rows:
+        if log.target_type in _TARGET_NAME_MODELS and log.target_id:
+            by_type.setdefault(log.target_type, set()).add(log.target_id)
+    names = {}
+    for ttype, ids in by_type.items():
+        model, id_col, name_col = _TARGET_NAME_MODELS[ttype]
+        for tid, tname in db.query(id_col, name_col).filter(id_col.in_(ids)).all():
+            if tname:
+                names[(ttype, tid)] = tname
+    return names
+
+
 @router.get("", response_model=schemas.AuditLogListResponse)
 def list_audit_logs(
     action: Optional[str] = Query(
@@ -89,9 +115,13 @@ def list_audit_logs(
         .all()
     )
     unames = common.user_name_map(db, [log.actor_id for log in rows])
+    tnames = _target_name_map(db, rows)
     items = [
         schemas.AuditLogOut.model_validate(log, from_attributes=True).model_copy(
-            update={"actor_name": unames.get(log.actor_id)}
+            update={
+                "actor_name": unames.get(log.actor_id),
+                "target_name": tnames.get((log.target_type, log.target_id)),
+            }
         )
         for log in rows
     ]
@@ -103,7 +133,8 @@ _EXPORT_COLUMNS = [
     ColumnSpec("created_at", "시각", "date"),
     ColumnSpec("action", "액션", "text"),
     ColumnSpec("target_type", "대상유형", "text"),
-    ColumnSpec("target_id", "대상", "text"),
+    ColumnSpec("target_name", "대상명", "text"),
+    ColumnSpec("target_id", "대상ID", "text"),
     ColumnSpec("actor", "수행자", "text"),
     ColumnSpec("old_value", "이전값", "text"),
     ColumnSpec("new_value", "변경값", "text"),
@@ -160,11 +191,13 @@ def export_audit_logs(
 
     logs = query.order_by(AuditLog.created_at.desc()).all()
     unames = common.user_name_map(db, [log.actor_id for log in logs])
+    tnames = _target_name_map(db, logs)
     rows = [
         {
             "created_at": log.created_at,
             "action": log.action,
             "target_type": log.target_type,
+            "target_name": tnames.get((log.target_type, log.target_id)),
             "target_id": log.target_id,
             "actor": unames.get(log.actor_id) or log.actor_id,
             # R2-E6: 저장된 redact값 그대로(원문 재조회·복호화 없음)

@@ -153,10 +153,20 @@ export function AuditLogTab() {
           {log.target_type
             ? (TARGET_TYPE_LABELS[log.target_type] ?? log.target_type)
             : '—'}
-          {log.target_id && (
-            <code className="ml-1.5 rounded bg-elevate-strong px-1 py-0.5 font-mono text-[11px] text-slatey">
-              {log.target_id}
-            </code>
+          {/* 이름이 해석되면 이름을 표시, UUID는 툴팁·미해석 시에만 축약 코드로 */}
+          {log.target_name ? (
+            <span className="ml-1.5 font-medium text-bone" title={log.target_id ?? undefined}>
+              {log.target_name}
+            </span>
+          ) : (
+            log.target_id && (
+              <code
+                className="ml-1.5 rounded bg-elevate-strong px-1 py-0.5 font-mono text-[11px] text-slatey"
+                title={log.target_id}
+              >
+                {log.target_id.length > 12 ? `${log.target_id.slice(0, 8)}…` : log.target_id}
+              </code>
+            )
           )}
         </span>
       ),

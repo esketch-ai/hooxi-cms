@@ -38,6 +38,7 @@ export interface AuditLogItem {
   action: string
   target_type?: string | null
   target_id?: string | null
+  target_name?: string | null
   old_value?: string | null
   new_value?: string | null
   created_at?: string | null

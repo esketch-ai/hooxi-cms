@@ -187,3 +187,35 @@ def test_export_daily_limit(client, admin_headers, monkeypatch):
     monkeypatch.setattr(au, "DAILY_EXPORT_LIMIT", 0)
     r = client.get(EXPORT, headers=admin_headers, params={"target_type": "무관"})
     assert r.status_code == 429, r.text
+
+
+def test_list_and_export_resolve_client_target_name(client, admin_headers):
+    """대상이 CLIENT면 UUID 대신 회사명을 함께 반환한다(목록 target_name·엑셀 대상명)."""
+    db = models.SessionLocal()
+    try:
+        c = models.Client(client_type="TRANSPORT", company_name="감사표기운수", region="서울")
+        db.add(c)
+        db.commit()
+        cid = c.client_id
+    finally:
+        db.close()
+    _seed_audit("CLIENT_FOLDER_PROVISION", "CLIENT", target_id=cid, new_value="created: /x")
+
+    listed = client.get(
+        AUDIT, headers=admin_headers,
+        params={"action": "CLIENT_FOLDER_PROVISION"},
+    ).json()
+    row = next(i for i in listed["items"] if i["target_id"] == cid)
+    assert row["target_name"] == "감사표기운수"
+
+    resp = client.get(
+        EXPORT, headers=admin_headers, params={"action": "CLIENT_FOLDER_PROVISION"}
+    )
+    assert resp.status_code == 200
+    ws = load_workbook(BytesIO(resp.content)).active
+    headers = [c2.value for c2 in ws[3]]  # 1행 워터마크, 2행 빈 행, 3행 헤더
+    assert "대상명" in headers and "대상ID" in headers
+    name_col = headers.index("대상명")
+    id_col = headers.index("대상ID")
+    hit = [r for r in ws.iter_rows(min_row=4, values_only=True) if r[id_col] == cid]
+    assert hit and hit[0][name_col] == "감사표기운수"

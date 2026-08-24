@@ -2319,6 +2319,7 @@ class AuditLogOut(BaseModel):
     action: str
     target_type: Optional[str] = None
     target_id: Optional[str] = None
+    target_name: Optional[str] = None  # 대상 이름(고객사명·사용자명 등) — UUID 대신 표시용
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     created_at: Optional[datetime] = None
