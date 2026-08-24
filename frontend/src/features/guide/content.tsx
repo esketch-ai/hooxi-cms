@@ -186,7 +186,7 @@ export const TOPICS: GuideTopic[] = [
     title: '고객사 관리',
     summary: '신규·엑셀/운수사 표준 등록(대기·정식)과 고객사 360° 상세',
     featureRoute: '/clients',
-    related: ['assets', 'fleet-import', 'histories'],
+    related: ['assets', 'fleet-import', 'histories', 'data-cleanup'],
     Body: () => (
       <>
         <Flow>
@@ -231,6 +231,12 @@ export const TOPICS: GuideTopic[] = [
           <li>
             <b>중복은 사업자번호(없으면 회사명)로 묶어</b> 하나로 병합합니다 — 이미 있는 운수사면
             <b>비어있는 칸만 채우고</b> 기존 값은 그대로 둡니다(중복·신규 생성 없음).
+          </li>
+          <li>
+            <b>지역은 공통 코드 단축형으로 자동 표준화</b>됩니다 — <Kbd>경상남도</Kbd>→
+            <Kbd>경남</Kbd>, <Kbd>제주특별자치도</Kbd>→<Kbd>제주</Kbd>, <Kbd>전남광주</Kbd>→
+            <Kbd>전남</Kbd>. 대량 등록 뒤 정리 절차는 관리자 가이드{' '}
+            <b>"대량 등록 후 정리 절차"</b>를 따르세요.
           </li>
         </ul>
         <Note title="대기 vs 정식 — 사업자번호가 기준">
@@ -628,7 +634,7 @@ export const TOPICS: GuideTopic[] = [
     title: '문서 아카이브',
     summary: '저장 폴더 선택(정산 등)·Dropbox 라이브 브라우즈·폴더명 교정',
     featureRoute: '/documents',
-    related: ['reports', 'segments', 'clients', 'tax-invoices'],
+    related: ['reports', 'segments', 'clients', 'tax-invoices', 'data-cleanup'],
     Body: () => (
       <>
         <ul>
@@ -839,6 +845,89 @@ export const TOPICS: GuideTopic[] = [
           배포 직후 끔 → 구성원 배정 → <b>모니터로 며칠 관찰</b>(감사 로그에서
           ACCESS_DENY_WOULD 검색) → 오차단 없음을 확인하고 강제 전환. 강제 전환은 확인창을
           거칩니다.
+        </Note>
+      </>
+    ),
+  },
+  {
+    id: 'data-cleanup',
+    categoryId: 'admin',
+    eyebrow: 'ADMIN · 운영 절차',
+    title: '대량 등록 후 정리 절차 — 지역 표준화·폴더 정합',
+    summary: '고객사 엑셀 대량 등록 뒤 지역값·Dropbox 폴더를 정리하는 관리자 체크리스트',
+    featureRoute: '/documents',
+    accessLabel: '관리자 전용',
+    related: ['clients', 'documents', 'settings'],
+    Body: () => (
+      <>
+        <p>
+          고객사 마스터를 엑셀로 <b>대량 등록·갱신한 뒤</b>에는 아래 순서로 데이터와 Dropbox
+          폴더를 정리합니다. 세 도구 모두 <b>몇 번을 다시 실행해도 안전</b>하고(멱등 — 이미
+          처리된 건은 건너뜀), 삭제는 절대 하지 않으며, 전 건이 감사 로그에 남습니다.
+        </p>
+        <h3 className="pt-1 text-sm font-semibold text-bone">① 지역값 — 자동 표준화</h3>
+        <ul>
+          <li>
+            업로드 파일의 지역이 정식 명칭(<Kbd>경기도</Kbd>·<Kbd>경상남도</Kbd>·
+            <Kbd>제주특별자치도</Kbd>)이거나 변형 표기(<Kbd>서울특별자치시</Kbd> 등)여도{' '}
+            <b>공통 코드 단축형(경기·경남·제주…)으로 자동 변환</b>되어 저장됩니다.
+            버스조합 통합 표기 <Kbd>전남광주</Kbd>는 <b>전남</b>으로 저장됩니다.
+          </li>
+          <li>
+            과거에 잘못 들어간 지역값도 <b>서버 배포(재시작) 시 자동 보정</b>됩니다 — 별도
+            조치 불필요. 시작 로그에 "정규화 N건"으로 표시됩니다.
+          </li>
+          <li>
+            표준 지역으로 해석되지 않는 값은 임의로 바꾸지 않고 보존하니, 업로드 후 고객사
+            마스터에서 지역 필터로 <b>이상값이 남았는지 확인</b>하세요(발견 시 개별 수정).
+          </li>
+        </ul>
+        <h3 className="pt-1 text-sm font-semibold text-bone">
+          ② 폴더명 규칙 점검 — 문서 아카이브 (ADMIN)
+        </h3>
+        <ul>
+          <li>
+            고객사 폴더명은 <Kbd>지역_고객사명_분류</Kbd> 규칙입니다. 지역·회사명이 바뀌면
+            기존 폴더명이 규칙과 어긋나므로, <Kbd>문서 아카이브 → 폴더명 규칙 점검</Kbd>에서{' '}
+            <b>미리보기(현재 → 제안 경로)를 확인한 뒤 적용</b>하세요.
+          </li>
+          <li>
+            적용은 <b>30건씩 자동 반복</b> 처리됩니다 — 끝날 때까지 <b>브라우저 탭을 열어
+            두세요</b>. 중간에 끊겨도 다시 적용하면 남은 것부터 이어갑니다.
+          </li>
+          <li>
+            폴더는 파일째 <b>이동(개명)</b>만 하며 삭제·덮어쓰기가 없습니다. 원본 폴더가
+            없어진 건은 자동 복구됩니다(새 경로가 이미 있으면 경로 채택, 없으면 재생성).
+          </li>
+          <li>
+            결과에 <b>충돌(conflict)</b>이 남으면 목표 경로를 이미 다른 폴더가 쓰고 있는
+            경우입니다 — 자동으로 덮지 않으니 해당 건만 Dropbox에서 직접 확인 후 정리하세요.
+          </li>
+        </ul>
+        <h3 className="pt-1 text-sm font-semibold text-bone">
+          ③ 폴더 일괄 생성 — 환경설정 → 연동 → Dropbox
+        </h3>
+        <ul>
+          <li>
+            대량 등록 시 폴더 자동 생성이 일부 <b>누락될 수 있습니다</b>(생성이 응답 후
+            백그라운드로 돌기 때문). 등록을 마치면 <Kbd>환경설정 → 연동 → Dropbox →
+            폴더 일괄 생성</Kbd>을 한 번 실행해 누락분을 소급 생성하세요.
+          </li>
+          <li>
+            <b>10건씩 자동 반복</b>되며 건당 폴더 7개(루트+서브 6종)를 만들어 수백 건이면{' '}
+            <b>20~40분</b> 걸립니다 — 완료까지 탭을 열어 두세요. 중단돼도 재실행하면
+            이어갑니다.
+          </li>
+          <li>
+            <b>사업자번호가 없는 '대기' 고객사는 폴더를 만들지 않습니다</b>(정책) — 고객사
+            마스터에서 사업자번호를 채우면 그때 자동 생성됩니다.
+          </li>
+        </ul>
+        <Note title="권장 순서 · 확인 지점">
+          엑셀 업로드 → ① 지역 이상값 확인(고객사 마스터 필터) → ② 폴더명 규칙 점검(적용 후
+          충돌 0 확인) → ③ 폴더 일괄 생성("총 N건 중 N건 생성" 확인) → 감사 로그에서{' '}
+          <Kbd>CLIENT_FOLDER_RENAME</Kbd>·<Kbd>CLIENT_FOLDER_PROVISION</Kbd> 기록 확인.
+          모든 단계는 재실행해도 안전합니다.
         </Note>
       </>
     ),
