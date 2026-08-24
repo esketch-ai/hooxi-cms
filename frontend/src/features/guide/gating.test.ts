@@ -36,7 +36,7 @@ describe('isTopicHidden / visibleTopics (현재 빌드 = ON)', () => {
 
 describe('OFF 은닉 판정 로직(경로 매칭)', () => {
   // isTopicHidden의 OFF 분기와 동치인 순수 판정: featureRoute가 있고 재무 은닉 경로일 때 은닉.
-  const wouldHideWhenOff = (route?: string): boolean => !!route && isFinanceHiddenPath(route)
+  const wouldHideWhenOff = (route?: string): boolean => !!route && isFinanceHiddenPath(route, false)
 
   it('설계상 은닉 대상 토픽은 OFF에서 은닉된다', () => {
     for (const id of EXPECTED_HIDDEN_IDS) {

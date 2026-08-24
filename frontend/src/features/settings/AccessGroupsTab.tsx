@@ -12,15 +12,15 @@ import { useCodes } from '../../lib/api/queries'
 import type { AccessGroupAdmin, AccessGroupMeta, AccessMode, User } from '../../types'
 
 const MODE_LABEL: Record<AccessMode, { label: string; desc: string; cls: string }> = {
-  off: { label: '끔', desc: '그룹 제한 없음(전 메뉴)', cls: 'text-slatey' },
+  off: { label: '끔', desc: 'API 차단 없음', cls: 'text-slatey' },
   monitor: {
     label: '모니터',
-    desc: '차단 없이 위반만 감사 로그 기록',
+    desc: 'API 차단 없이 위반만 감사 로그 기록',
     cls: 'text-amber-600 dark:text-amber-300',
   },
   enforce: {
     label: '강제',
-    desc: '허용 메뉴 밖 화면·API 차단',
+    desc: '허용 메뉴 밖 API 403 차단',
     cls: 'text-rose-600 dark:text-rose-300',
   },
 }
@@ -192,7 +192,8 @@ export function AccessGroupsTab() {
           </div>
         </div>
         <p className={`mt-2 text-xs ${MODE_LABEL[mode].cls}`}>
-          현재: {MODE_LABEL[mode].label} — {MODE_LABEL[mode].desc}
+          현재: {MODE_LABEL[mode].label} — {MODE_LABEL[mode].desc} · 메뉴 표시는 모드와
+          무관하게 그룹 설정을 항상 따릅니다(재로그인·새로고침 시 반영)
         </p>
       </section>
 

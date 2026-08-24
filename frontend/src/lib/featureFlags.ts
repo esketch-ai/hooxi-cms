@@ -9,6 +9,14 @@
 export const FINANCE_FEATURES = import.meta.env.VITE_FEATURE_FINANCE !== 'off'
 
 /**
+ * 외부 파트너 포털 노출 여부 — 재무와 분리된 플래그.
+ * 재무 ON이면 항상 ON(기존 동작 보존). 재무 OFF 빌드에서도 `VITE_FEATURE_PORTAL=on`이면
+ * 포털 서브트리(/portal*)와 발급 화면(/portal-accounts)만 켠다(운영: 재무 은닉 + 포털 개방).
+ */
+export const PORTAL_FEATURES =
+  FINANCE_FEATURES || import.meta.env.VITE_FEATURE_PORTAL === 'on'
+
+/**
  * OFF(은닉) 시 내부 라우트/네비에서 감출 경로 6종(정확 매칭 + 하위 경로).
  * 외부 포털 서브트리(/portal*)는 라우터에서 별도(서브트리 통째 제외)로 처리한다.
  */
@@ -22,8 +30,18 @@ export const FINANCE_HIDDEN_PATHS = [
   '/tax-invoices',
 ] as const
 
-/** pathname이 재무 은닉 대상인지 — 정확 매칭 우선, 하위 경로(startsWith 경계 '/')만 허용 */
-export function isFinanceHiddenPath(pathname: string): boolean {
+/** pathname이 재무 은닉 대상인지 — 정확 매칭 우선, 하위 경로(startsWith 경계 '/')만 허용.
+ *  portalEnabled(기본: 빌드 플래그)면 발급 화면(/portal-accounts)은 은닉에서 제외한다. */
+export function isFinanceHiddenPath(
+  pathname: string,
+  portalEnabled: boolean = PORTAL_FEATURES,
+): boolean {
+  if (
+    portalEnabled &&
+    (pathname === '/portal-accounts' || pathname.startsWith('/portal-accounts/'))
+  ) {
+    return false
+  }
   return FINANCE_HIDDEN_PATHS.some(
     (base) => pathname === base || pathname.startsWith(`${base}/`),
   )
@@ -36,12 +54,13 @@ export function isFinanceHiddenPath(pathname: string): boolean {
 export function filterFinanceRoutes<T extends { path?: string }>(
   routes: T[],
   financeEnabled: boolean,
+  portalEnabled: boolean = PORTAL_FEATURES,
 ): T[] {
   if (financeEnabled) return routes
-  return routes.filter((r) => !(r.path && isFinanceHiddenPath(r.path)))
+  return routes.filter((r) => !(r.path && isFinanceHiddenPath(r.path, portalEnabled)))
 }
 
-/** 외부 포털(/portal*) 서브트리 노출 여부 — 재무 OFF면 라우트에서 통째로 제외한다. */
-export function includePortalRoutes(financeEnabled: boolean): boolean {
-  return financeEnabled
+/** 외부 포털(/portal*) 서브트리 노출 여부 — 재무와 분리(PORTAL_FEATURES). */
+export function includePortalRoutes(): boolean {
+  return PORTAL_FEATURES
 }

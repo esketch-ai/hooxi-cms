@@ -156,7 +156,7 @@ const appRoutes: RouteObject[] = [
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   // 재무 OFF면 포털 서브트리 제외
-  ...(includePortalRoutes(FINANCE_FEATURES) ? [portalRoute] : []),
+  ...(includePortalRoutes() ? [portalRoute] : []),
   {
     element: <RequireAuth />,
     children: filterFinanceRoutes(appRoutes, FINANCE_FEATURES),

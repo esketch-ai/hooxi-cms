@@ -9,19 +9,26 @@ describe('visibleNavGroups', () => {
     expect(visibleNavGroups(true)).toBe(NAV_GROUPS)
   })
 
-  it('OFF면 은닉 6경로 항목이 nav에서 사라진다', () => {
-    const paths = visibleNavGroups(false).flatMap((g) => g.items.map((i) => i.path))
+  it('OFF(포털도 OFF)면 은닉 전 경로 항목이 nav에서 사라진다', () => {
+    const paths = visibleNavGroups(false, false).flatMap((g) => g.items.map((i) => i.path))
     for (const hidden of FINANCE_HIDDEN_PATHS) expect(paths).not.toContain(hidden)
   })
 
+  it('재무 OFF + 포털 ON이면 /portal-accounts만 생존한다', () => {
+    const paths = visibleNavGroups(false, true).flatMap((g) => g.items.map((i) => i.path))
+    expect(paths).toContain('/portal-accounts')
+    for (const hidden of FINANCE_HIDDEN_PATHS.filter((p) => p !== '/portal-accounts'))
+      expect(paths).not.toContain(hidden)
+  })
+
   it('OFF여도 유지 항목은 남는다(대시보드·감축사업·전기버스·가이드·설정)', () => {
-    const paths = visibleNavGroups(false).flatMap((g) => g.items.map((i) => i.path))
+    const paths = visibleNavGroups(false, false).flatMap((g) => g.items.map((i) => i.path))
     for (const kept of ['/dashboard', '/projects', '/asset-vehicles', '/guide', '/settings'])
       expect(paths).toContain(kept)
   })
 
   it('OFF면 항목이 모두 사라진 그룹은 제거된다', () => {
-    for (const g of visibleNavGroups(false)) expect(g.items.length).toBeGreaterThan(0)
+    for (const g of visibleNavGroups(false, false)) expect(g.items.length).toBeGreaterThan(0)
   })
 })
 

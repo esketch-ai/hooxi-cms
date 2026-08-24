@@ -8,11 +8,11 @@ const base: User = {
 }
 
 describe('isMenuAllowed', () => {
-  it('off/monitor 모드는 항상 허용(회귀 0)', () => {
-    expect(isMenuAllowed({ ...base, access_mode: 'off', allowed_menus: ['/clients'] }, '/settlements')).toBe(true)
-    expect(isMenuAllowed({ ...base, access_mode: 'monitor', allowed_menus: ['/clients'] }, '/settlements')).toBe(true)
+  it('메뉴 표시는 모드 무관 — off/monitor에서도 그룹 허용 목록을 따른다', () => {
+    expect(isMenuAllowed({ ...base, access_mode: 'off', allowed_menus: ['/clients'] }, '/settlements')).toBe(false)
+    expect(isMenuAllowed({ ...base, access_mode: 'monitor', allowed_menus: ['/clients'] }, '/clients')).toBe(true)
   })
-  it('enforce: 허용 목록으로 판정', () => {
+  it('허용 목록으로 판정', () => {
     const u: User = { ...base, access_mode: 'enforce', allowed_menus: ['/clients', '/guide'] }
     expect(isMenuAllowed(u, '/clients')).toBe(true)
     expect(isMenuAllowed(u, '/settlements')).toBe(false)
@@ -40,12 +40,13 @@ describe('isPathAllowedForUser', () => {
 })
 
 describe('groupHome', () => {
-  it('enforce + 허용 홈이면 그룹 홈, 비허용이면 허용 경로로 폴백', () => {
+  it('허용 홈이면 그룹 홈, 비허용이면 허용 경로로 폴백(모드 무관)', () => {
     expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/assets'], home_path: '/assets' })).toBe('/assets')
     // home(/assets) 비허용·/dashboard도 비허용 → 첫 허용 메뉴(/clients). 반환은 항상 허용 경로(루프 방지)
     expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/clients'], home_path: '/assets' })).toBe('/clients')
     expect(groupHome({ ...base, access_mode: 'enforce', allowed_menus: ['/dashboard', '/clients'], home_path: '/assets' })).toBe('/dashboard')
-    expect(groupHome({ ...base, access_mode: 'off', home_path: '/assets' })).toBe('/dashboard')
+    // off 모드여도 홈은 그룹 설정을 따른다
+    expect(groupHome({ ...base, access_mode: 'off', allowed_menus: ['/assets'], home_path: '/assets' })).toBe('/assets')
   })
   it('무한 루프 방지 — /dashboard도 비허용이면 첫 허용 메뉴로', () => {
     const u = { ...base, access_mode: 'enforce' as const, allowed_menus: ['/assets', '/guide'], home_path: '/settlements' }

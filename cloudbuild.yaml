@@ -8,6 +8,7 @@ steps:
       '-t', 'gcr.io/$PROJECT_ID/hooxi-cms:$BUILD_ID',
       '-t', 'gcr.io/$PROJECT_ID/hooxi-cms:latest',
       '--build-arg', 'FEATURE_FINANCE=${_FEATURE_FINANCE}',
+      '--build-arg', 'FEATURE_PORTAL=${_FEATURE_PORTAL}',
       '.']
 images:
   - 'gcr.io/$PROJECT_ID/hooxi-cms:$BUILD_ID'
@@ -18,3 +19,4 @@ options:
 substitutions:
   # 재무·자산 기능 노출(기본 on). 운영은 deploy-prod.sh에서 off로 덮어씀.
   _FEATURE_FINANCE: 'on'
+  _FEATURE_PORTAL: 'on'

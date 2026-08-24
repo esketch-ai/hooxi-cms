@@ -11,7 +11,9 @@ COPY frontend/ ./
 # 재무·자산 기능 노출 스위치(기본 on=전체 노출). 운영 빌드만 off로 주입해 은닉.
 # Vite는 빌드 시 process.env의 VITE_*가 .env.production보다 우선 → 공유 .env 미변경으로 주입.
 ARG FEATURE_FINANCE=on
+ARG FEATURE_PORTAL=on
 ENV VITE_FEATURE_FINANCE=$FEATURE_FINANCE
+ENV VITE_FEATURE_PORTAL=$FEATURE_PORTAL
 RUN npm run build
 
 # Stage 2: Backend + Static Files
