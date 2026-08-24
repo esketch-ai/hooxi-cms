@@ -82,7 +82,8 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
                 code_category="CLIENT_TYPE", example="TRANSPORT",
             ),
             ImportColumn("biz_reg_no", "사업자번호", example="123-45-67890"),
-            ImportColumn("region", "지역", code_category="REGION", example="서울"),
+            ImportColumn("region", "지역", code_category="REGION",
+                         transform="region_kr", example="서울"),
             ImportColumn("address", "주소", example="서울시 강남구 테헤란로 1"),
             ImportColumn("ceo_name", "대표자", example="김대표"),
             ImportColumn("ceo_contact_phone", "대표 연락처", example="010-1234-5678"),
@@ -113,7 +114,7 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
         columns=(
             ImportColumn("company_name", "회사명", required=True,
                          transform="company_clean", example="경성여객"),
-            ImportColumn("region", "조합", example="서울"),
+            ImportColumn("region", "조합", transform="region_kr", example="서울"),
             ImportColumn("ceo_name", "대표자", example="김대표, 이대표"),
             ImportColumn("ceo_contact_phone", "전 화", transform="phone_kr", example="02)435-5158"),
             ImportColumn("fax", "FAX", transform="phone_kr", example="02)495-0293"),
@@ -137,7 +138,9 @@ IMPORT_SPECS: Dict[str, ImportSpec] = {
                          transform="company_clean", example="강원고속"),
             ImportColumn("biz_reg_no", "사업자등록번호", example="221-81-00682"),
             ImportColumn("corp_reg_no", "법인등록번호", example="140111-0000105"),
-            ImportColumn("region", "지역", example="강원"),
+            # 정식 행정구역명(경기도·경상남도…)도 공통코드 단축형으로 정규화해 수용.
+            # 코드 검증은 걸지 않음 — 전남광주·고속 등 레거시 관용 지역값 보존.
+            ImportColumn("region", "지역", transform="region_kr", example="강원"),
             ImportColumn("ceo_name", "대표자", example="이동진"),
             ImportColumn("ceo_contact_phone", "전화", transform="phone_kr", example="033-254-8272"),
             ImportColumn("fax", "팩스", transform="phone_kr", example="033-253-2304"),

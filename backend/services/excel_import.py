@@ -28,6 +28,7 @@ from routers import common
 from routers.codes import validate_active_code
 from services import import_spec
 from services.import_spec import MAX_IMPORT_ROWS, ImportColumn, ImportSpec
+from services.region_norm import normalize_region
 
 # Y/N 정규화 — 실무 표기(예/아니오·O/X 등) 수용
 _YN_TRUE = {"Y", "YES", "예", "O", "TRUE", "1"}
@@ -356,6 +357,7 @@ _TRANSFORMS = {
     "phone_kr": _tf_phone_kr,
     "license_date_kr": _tf_license_date_kr,
     "union_region": _tf_union_region,
+    "region_kr": normalize_region,  # 정식 행정구역명 → REGION 단축형(멱등)
 }
 
 
@@ -371,7 +373,10 @@ def _normalize_cell(
         fn = _TRANSFORMS.get(col.transform)
         if fn is None:
             raise ValueError("알 수 없는 변환: {0}".format(col.transform))
-        return fn(raw)
+        value = fn(raw)
+        if not col.code_category:
+            return value
+        # 변환 + 코드 카테고리 조합: 변환된 값을 라벨/코드 검증으로 이어감(아래 분기)
     if col.yn:
         raw = _cell_to_str(value)
         if raw is None:

@@ -10,6 +10,7 @@
 
 from io import BytesIO
 from typing import Dict, List, Optional
+from services.region_norm import normalize_region
 
 from openpyxl import load_workbook
 from sqlalchemy import func
@@ -52,7 +53,8 @@ _REGION_CANON = {"광주": "전남광주", "전남": "전남광주"}
 
 
 def _canon_region(r) -> str:
-    r = (r or "").strip()
+    # 정식 행정구역명(경상남도 등)→단축형을 먼저 거친 뒤 매칭 관용 통합(광주/전남→전남광주)
+    r = normalize_region(r)
     return _REGION_CANON.get(r, r)
 
 
