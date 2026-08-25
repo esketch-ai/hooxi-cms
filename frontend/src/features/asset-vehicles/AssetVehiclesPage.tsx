@@ -302,10 +302,11 @@ export function AssetVehiclesPage() {
 
       {FINANCE_FEATURES ? (
         <ScreenGuide
-          perspective="차량 1대 단위"
+          perspective="차량 1대 단위(사업·재무 관점)"
           links={[
             { label: '사업 단위로', to: '/finance-ledger' },
             { label: '운수사 단위로', to: '/asset-report' },
+            { label: 'KISA 원천·산정으로', to: '/registry' },
           ]}
         >
           어떤 전기버스가 있고 각 감축량·예상지급액인지 <strong className="font-medium text-bone">차량 단위</strong>

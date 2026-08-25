@@ -1,6 +1,7 @@
 // 감축 참여 레지스트리(KISA 500대) — 참여 상태별 차량 현황 원장(M3).
 // BASELINE(대체 전 화석연료)·PROJECT(전기버스 참여)·CANDIDATE(대체예정 미참여) + 업로드.
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CircleNotch, UploadSimple } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
@@ -114,6 +115,9 @@ export function RegistryPage() {
         ))}
       </div>
       <p className="text-xs text-slatey">운수사 매칭률 {matchRate}% ({summary?.client_matched ?? 0}/{summary?.total ?? 0}) · 대체예정은 아직 사업에 안 들어간 향후 참여 대상입니다.</p>
+      <div className="flex items-start gap-2 rounded-xl border border-hairline bg-elevate px-3 py-2 text-[11px] text-slatey">
+        <span>이 목록은 <b className="text-ash">KISA 원천 원장 관점</b>(참여 역할·차대번호·도입구분)입니다. 사업·재무 관점(감축량·지급·만료)은 <Link to="/asset-vehicles" className="text-ash underline underline-offset-2 hover:text-bone">전기버스 자산</Link>에서, 한 차량의 전 생애는 차량번호를 눌러 <b className="text-ash">통합 상세</b>로 보세요.</span>
+      </div>
 
       {/* 툴바 */}
       <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +163,9 @@ export function RegistryPage() {
                 (data?.items ?? []).map((r) => (
                   <tr key={r.registry_id} className="border-b border-hairline/60">
                     <td className="px-2 py-2"><RoleBadge role={r.role} /></td>
-                    <td className="px-2 py-2 font-medium text-bone">{r.vehicle_no}</td>
+                    <td className="px-2 py-2 font-medium">
+                      {r.vehicle_no ? <Link to={`/vehicles/${encodeURIComponent(r.vehicle_no)}`} className="text-bone hover:underline" title="차량 통합 상세">{r.vehicle_no}</Link> : <span className="text-bone">—</span>}
+                    </td>
                     <td className="px-2 py-2 text-ash">{r.client_name ?? r.operator_name ?? '—'}</td>
                     <td className="px-2 py-2 text-ash">{r.introduction_type ?? '—'}</td>
                     <td className="px-2 py-2 text-ash">{r.model_name ?? '—'}</td>
