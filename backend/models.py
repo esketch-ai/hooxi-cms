@@ -625,9 +625,10 @@ class VehicleCalcInput(Base):
 
     calc_input_id = Column(String(50), primary_key=True, default=gen_uuid)
     vehicle_no = Column(String(30), nullable=False, index=True)  # 차량번호(중복키)
+    introduction_type = Column(String(20))  # 도입구분(신규도입/대체도입) — VIN 검증 분기
     baseline_vin = Column(String(50))  # 내연(대체 전) 차대번호 — 대체도입 판정
     project_vin = Column(String(50))   # 전기(대체 후) 차대번호
-    vin_status = Column(String(20))    # 대체도입 VIN 검증: OK/WARN(사유 memo)
+    vin_status = Column(String(20))    # NEW(신규도입)/OK/WARN
     operator_name = Column(String(100))
     client_id = Column(
         String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
@@ -1306,6 +1307,7 @@ def ensure_schema():
         # 상담→이슈 승격 연결(K3)
         ("tb_activity_history", "chat_thread_id", "VARCHAR(50)"),
         # 산정 입력 차대번호 정합(D5) — 대체도입 VIN 검증(신규 테이블에 additive)
+        ("tb_vehicle_calc_input", "introduction_type", "VARCHAR(20)"),
         ("tb_vehicle_calc_input", "baseline_vin", "VARCHAR(50)"),
         ("tb_vehicle_calc_input", "project_vin", "VARCHAR(50)"),
         ("tb_vehicle_calc_input", "vin_status", "VARCHAR(20)"),

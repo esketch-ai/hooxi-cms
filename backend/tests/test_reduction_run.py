@@ -112,3 +112,31 @@ def test_skip_on_missing_input(client, staff_headers):
 
 def test_requires_auth(client):
     assert client.get("/api/v1/calc-inputs").status_code == 401
+
+
+def test_new_introduction_not_vin_flagged(client, staff_headers):
+    """신규도입은 대체도입 VIN 쌍 검증 대상 아님 → NEW(경고 아님)."""
+    db = models.SessionLocal()
+    try:
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        # 신규도입 — 전기 PROJECT만(베이스라인 내연 없음)
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="제주79자7011",
+                                        vin="EV-J", introduction_type="신규도입"))
+        db.commit()
+    finally:
+        db.close()
+    rows = [["제주79자7011", "삼영교통", "제주", "경유", 85832, 39471, 85832, 96423, 2021, 0.45]]
+    r = client.post(IMPORT, headers=staff_headers, files={"file": ("c.xlsx", _xlsx(rows),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    body = r.json()
+    assert body["vin_new"] == 1 and body["vin_warn"] == 0
+    row = client.get("/api/v1/calc-inputs", headers=staff_headers).json()["items"][0]
+    assert row["vin_status"] == "NEW" and row["introduction_type"] == "신규도입"
+    db = models.SessionLocal()
+    try:
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()

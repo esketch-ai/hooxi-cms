@@ -38,6 +38,8 @@ _LABEL_FIELD = {
     "전기차등록년도": "ev_reg_year",
     "민간투자비율": "private_ratio",
     "민간비율": "private_ratio",
+    "사업구분": "introduction_type",
+    "도입구분": "introduction_type",
     # 차대번호(VIN) — 대체도입 판정. 내연/전기 구분 라벨 우선, 단독 차대번호는 미지정.
     "베이스라인차대번호": "baseline_vin",
     "내연차대번호": "baseline_vin",
@@ -117,29 +119,39 @@ def parse_calc_inputs(content: bytes) -> List[dict]:
 
 
 def _registry_vin_index(db) -> Dict[str, dict]:
-    """차량번호 → {baseline_vin, project_vin} — 레지스트리(권위 VIN)로 교차검증·보완."""
+    """차량번호 → {baseline_vin, project_vin, introduction_type} — 레지스트리 권위값."""
     idx: Dict[str, dict] = {}
     for r in db.query(ReductionRegistry.vehicle_no, ReductionRegistry.role,
-                      ReductionRegistry.vin).all():
-        if not r.vehicle_no or not r.vin:
+                      ReductionRegistry.vin, ReductionRegistry.introduction_type).all():
+        if not r.vehicle_no:
             continue
         slot = idx.setdefault(r.vehicle_no, {})
-        if r.role == "BASELINE":
+        if r.role == "BASELINE" and r.vin:
             slot.setdefault("baseline_vin", r.vin)
         elif r.role == "PROJECT":
-            slot.setdefault("project_vin", r.vin)
+            if r.vin:
+                slot.setdefault("project_vin", r.vin)
+            if r.introduction_type:
+                slot.setdefault("introduction_type", r.introduction_type)
     return idx
 
 
 def _resolve_vin(rec: dict, reg: Dict[str, dict]) -> None:
-    """레지스트리로 VIN 보완 + 대체도입 판정(같은 차량번호·old≠new)."""
+    """도입구분별 VIN 검증 — 신규도입은 VIN 쌍 검증 대상 아님(NEW), 대체도입만 OK/WARN."""
     r = reg.get(rec["vehicle_no"], {})
-    # 업로드가 비우면 레지스트리 VIN으로 보완(권위값)
     if not rec.get("baseline_vin") and r.get("baseline_vin"):
         rec["baseline_vin"] = r["baseline_vin"]
     if not rec.get("project_vin") and r.get("project_vin"):
         rec["project_vin"] = r["project_vin"]
+    if not rec.get("introduction_type") and r.get("introduction_type"):
+        rec["introduction_type"] = r["introduction_type"]
+
+    itype = rec.get("introduction_type")
     bv, pv = rec.get("baseline_vin"), rec.get("project_vin")
+    if itype == "신규도입":
+        rec["vin_status"] = "NEW"  # 유사 화석연료차 선정 — 대체도입 VIN 쌍 검증 대상 아님
+        return
+    # 대체도입(또는 미상): 같은 차량번호·내연≠전기 VIN 확인
     if bv and pv:
         rec["vin_status"] = "OK" if bv != pv else "WARN"
         if bv == pv:
@@ -166,11 +178,14 @@ def apply_calc_inputs(db, rows: List[dict]) -> dict:
     """차량번호로 중복 체크 후 upsert(CRUD) — 차대번호(VIN) 레지스트리 교차검증 포함."""
     cindex = _client_index(db)
     reg = _registry_vin_index(db)
-    created = updated = matched = vin_ok = vin_warn = 0
+    created = updated = matched = vin_ok = vin_warn = vin_new = 0
     for r in rows:
-        _resolve_vin(r, reg)  # baseline_vin/project_vin 보완 + vin_status
-        if r.get("vin_status") == "OK":
+        _resolve_vin(r, reg)  # 도입구분·VIN 보완 + vin_status
+        st = r.get("vin_status")
+        if st == "OK":
             vin_ok += 1
+        elif st == "NEW":
+            vin_new += 1
         else:
             vin_warn += 1
         vno = r["vehicle_no"]
@@ -196,5 +211,5 @@ def apply_calc_inputs(db, rows: List[dict]) -> dict:
             created += 1
     return {
         "created": created, "updated": updated, "client_matched": matched,
-        "vin_ok": vin_ok, "vin_warn": vin_warn, "total": len(rows),
+        "vin_ok": vin_ok, "vin_warn": vin_warn, "vin_new": vin_new, "total": len(rows),
     }

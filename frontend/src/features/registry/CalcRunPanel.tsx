@@ -20,7 +20,7 @@ export function CalcRunPanel() {
     if (!files || files.length === 0) return
     try {
       const r = await importM.mutateAsync(files[0])
-      showToast(`입력 반영 — 생성 ${r.created}·갱신 ${r.updated} · VIN검증 OK ${r.vin_ok}·경고 ${r.vin_warn}`, r.vin_warn > 0 ? 'info' : 'success')
+      showToast(`입력 반영 — 생성 ${r.created}·갱신 ${r.updated} · 대체도입 검증 ${r.vin_ok}·신규도입 ${r.vin_new}·확인필요 ${r.vin_warn}`, r.vin_warn > 0 ? 'info' : 'success')
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast(detail ?? '적재에 실패했습니다.', 'danger')
@@ -80,9 +80,13 @@ export function CalcRunPanel() {
                   <tr key={r.vehicle_no} className={`border-b border-hairline/60 ${r.status !== 'OK' ? 'opacity-60' : ''}`}>
                     <td className="px-2 py-2 font-medium text-bone">{r.vehicle_no}</td>
                     <td className="px-2 py-2">
-                      {r.vin_status === 'OK'
-                        ? <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">검증</span>
-                        : <span className="rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">확인필요</span>}
+                      {r.vin_status === 'OK' ? (
+                        <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">대체도입 검증</span>
+                      ) : r.vin_status === 'NEW' ? (
+                        <span className="rounded-full border border-sky-400/25 bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-700 dark:text-sky-300">신규도입</span>
+                      ) : (
+                        <span className="rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">확인필요</span>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-ash">{r.operator_name ?? '—'}</td>
                     <td className="px-2 py-2 text-ash">{r.fuel ?? '—'}</td>
