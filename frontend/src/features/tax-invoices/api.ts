@@ -7,6 +7,7 @@ import type {
   TaxInvoiceListResponse,
   TaxInvoicePreviewResponse,
   TaxInvoiceSummary,
+  TaxInvoiceIssueCounts,
 } from './types'
 
 export function useTaxInvoices(filters: TaxInvoiceFilters) {
@@ -19,6 +20,7 @@ export function useTaxInvoices(filters: TaxInvoiceFilters) {
       }
       if (filters.direction) params.direction = filters.direction
       if (filters.search) params.search = filters.search
+      if (filters.issue) params.issue = filters.issue
       const { data } = await api.get<TaxInvoiceListResponse>('/tax-invoices', { params })
       return data
     },
@@ -37,6 +39,19 @@ export function useTaxInvoiceSummary(range: { date_from?: string; date_to?: stri
       return data
     },
     placeholderData: (prev) => prev,
+  })
+}
+
+export function useTaxInvoiceIssueCounts(range: { date_from?: string; date_to?: string }) {
+  return useQuery({
+    queryKey: ['tax-invoices', 'issue-counts', range],
+    queryFn: async () => {
+      const params: Record<string, string> = {}
+      if (range.date_from) params.date_from = range.date_from
+      if (range.date_to) params.date_to = range.date_to
+      const { data } = await api.get<TaxInvoiceIssueCounts>('/tax-invoices/issue-counts', { params })
+      return data
+    },
   })
 }
 

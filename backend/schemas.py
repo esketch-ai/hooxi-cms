@@ -1468,6 +1468,14 @@ class TaxInvoiceListResponse(BaseModel):
     total: int
 
 
+class TaxInvoiceIssueCounts(BaseModel):
+    """정합성 워크리스트 카운트 — 미연결·미매칭·음수(수정취소)."""
+
+    unlinked: int   # 사업(project) 미연결
+    unmatched: int  # 상대(운수사/투자사) 마스터 미매칭
+    negative: int   # 음수 공급가액(수정취소 등)
+
+
 class TaxInvoiceMonthPoint(BaseModel):
     """월별 매입·매출·순액(공급가액 기준) — 요약 추이 차트용."""
 

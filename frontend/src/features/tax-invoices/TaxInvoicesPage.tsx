@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { TaxSummaryPanel } from './TaxSummaryPanel'
+import { TaxIntegrityPanel } from './TaxIntegrityPanel'
 import {
   useCommitScan,
   useCommitTaxInvoices,
@@ -51,7 +52,7 @@ export function TaxInvoicesPage() {
   // 적재(업로드·적용)는 쓰기 권한(master.write=STAFF↑)만. 경영전략실 등 읽기 역할은 조회·집계만.
   const canWrite = !!user && ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role)
   // 요약(경영전략실 기본) / 원장 내부 탭
-  const [tab, setTab] = useState<'summary' | 'ledger'>('summary')
+  const [tab, setTab] = useState<'summary' | 'integrity' | 'ledger'>('summary')
   const [files, setFiles] = useState<File[]>([])
   const [preview, setPreview] = useState<TaxInvoicePreviewItem[] | null>(null)
   const [source, setSource] = useState<'upload' | 'scan'>('upload')
@@ -146,6 +147,7 @@ export function TaxInvoicesPage() {
         {(
           [
             { key: 'summary', label: '요약' },
+            { key: 'integrity', label: '정합성' },
             { key: 'ledger', label: '원장' },
           ] as const
         ).map((t) => (
@@ -163,6 +165,7 @@ export function TaxInvoicesPage() {
       </div>
 
       {tab === 'summary' && <TaxSummaryPanel />}
+      {tab === 'integrity' && <TaxIntegrityPanel />}
 
       {tab === 'ledger' && (
         <>

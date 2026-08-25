@@ -76,8 +76,15 @@ export interface TaxInvoiceListResponse {
 export interface TaxInvoiceFilters {
   direction?: string
   search?: string
+  issue?: string // unlinked | unmatched | negative
   page: number
   page_size: number
+}
+
+export interface TaxInvoiceIssueCounts {
+  unlinked: number
+  unmatched: number
+  negative: number
 }
 
 export interface TaxInvoiceMonthPoint {

@@ -37,10 +37,24 @@ async def _read_html_files(files: List[UploadFile]) -> List[tuple]:
     return out
 
 
+# 정합성 이슈 필터 — 미연결(사업 미귀속)·미매칭(상대 마스터 없음)·음수(수정취소)
+def _apply_issue_filter(query, issue: Optional[str]):
+    if issue == "unlinked":  # 사업(project) 미연결
+        return query.filter(TaxInvoice.project_id.is_(None))
+    if issue == "unmatched":  # 상대(운수사/투자사) 마스터 미매칭
+        return query.filter(
+            TaxInvoice.matched_client_id.is_(None) & TaxInvoice.matched_buyer_id.is_(None)
+        )
+    if issue == "negative":  # 수정취소 등 음수 공급가액
+        return query.filter(TaxInvoice.supply_amount < 0)
+    return query
+
+
 @router.get("", response_model=schemas.TaxInvoiceListResponse)
 def list_tax_invoices(
     direction: Optional[str] = Query(None, description="매입/매출/미상"),
     search: Optional[str] = Query(None, description="상대 사업자번호·상호 부분검색"),
+    issue: Optional[str] = Query(None, description="정합성: unlinked/unmatched/negative"),
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
     page: int = Query(1, ge=1),
@@ -63,6 +77,7 @@ def list_tax_invoices(
             | (TaxInvoice.invoicer_name.like(like))
             | (TaxInvoice.invoicee_name.like(like))
         )
+    query = _apply_issue_filter(query, issue)
     total = query.count()
     rows = (
         query.order_by(TaxInvoice.issue_date.desc(), TaxInvoice.created_at.desc())
@@ -135,6 +150,29 @@ def tax_invoice_summary(
         purchase_count=pc,
         sales_count=sc,
         months=months,
+    )
+
+
+@router.get("/issue-counts", response_model=schemas.TaxInvoiceIssueCounts)
+def tax_invoice_issue_counts(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """정합성 워크리스트 카운트 — 미연결(사업)·미매칭(거래처)·음수(수정취소). 기간 필터 반영."""
+    def _base():
+        q = db.query(TaxInvoice)
+        if date_from:
+            q = q.filter(TaxInvoice.issue_date >= date_from)
+        if date_to:
+            q = q.filter(TaxInvoice.issue_date <= date_to)
+        return q
+
+    return schemas.TaxInvoiceIssueCounts(
+        unlinked=_apply_issue_filter(_base(), "unlinked").count(),
+        unmatched=_apply_issue_filter(_base(), "unmatched").count(),
+        negative=_apply_issue_filter(_base(), "negative").count(),
     )
 
 
