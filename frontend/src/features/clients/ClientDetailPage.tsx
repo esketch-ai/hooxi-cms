@@ -1087,7 +1087,9 @@ function ParticipationTab({ clientId }: { clientId: string }) {
               ) : (
                 parts.map((p, i) => (
                   <tr key={`${p.vehicle_no}-${i}`} className="border-b border-hairline/60">
-                    <td className="px-3 py-2 font-medium text-bone">{p.vehicle_no ?? '—'}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {p.vehicle_no ? <Link to={`/vehicles/${encodeURIComponent(p.vehicle_no)}`} className="text-bone hover:underline">{p.vehicle_no}</Link> : <span className="text-bone">—</span>}
+                    </td>
                     <td className="px-3 py-2 text-ash">{p.introduction_type ?? '—'}</td>
                     <td className="px-3 py-2">
                       {p.participation_status === 'COMPLETED' ? (
@@ -1138,7 +1140,9 @@ function ParticipationTab({ clientId }: { clientId: string }) {
               <tbody>
                 {notPart.map((n, i) => (
                   <tr key={`${n.vehicle_no}-${i}`} className="border-b border-hairline/60">
-                    <td className="px-3 py-2 font-medium text-bone">{n.vehicle_no ?? '—'}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {n.vehicle_no ? <Link to={`/vehicles/${encodeURIComponent(n.vehicle_no)}`} className="text-bone hover:underline">{n.vehicle_no}</Link> : <span className="text-bone">—</span>}
+                    </td>
                     <td className="px-3 py-2 text-ash">{n.model_name ?? '—'}</td>
                     <td className="px-3 py-2 text-ash">{n.fuel ?? '—'}</td>
                     <td className="px-3 py-2 text-ash">{n.model_year ?? '—'}</td>

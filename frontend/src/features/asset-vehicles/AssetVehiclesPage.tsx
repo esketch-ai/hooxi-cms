@@ -168,7 +168,9 @@ export function AssetVehiclesPage() {
     {
       key: 'vehicle_no',
       header: '차량번호',
-      render: (v) => <span className="font-mono text-sm text-bone">{v.vehicle_no ?? '—'}</span>,
+      render: (v) => v.vehicle_no
+        ? <Link to={`/vehicles/${encodeURIComponent(v.vehicle_no)}`} className="font-mono text-sm text-bone hover:underline" title="차량 통합 상세">{v.vehicle_no}</Link>
+        : <span className="font-mono text-sm text-bone">—</span>,
     },
     {
       key: 'region',

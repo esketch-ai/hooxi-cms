@@ -1521,6 +1521,19 @@ class StageCompareResponse(BaseModel):
     total_final: float
 
 
+class VehicleDossierOut(BaseModel):
+    """차량 통합 상세(개편 P5) — 한 vehicle_no의 전 생애. 섹션별 dict/list 조립 결과."""
+    vehicle_no: str
+    found: bool
+    owned: List[Dict] = []
+    participations: List[Dict] = []
+    registry: List[Dict] = []
+    calc_input: Optional[Dict] = None
+    stages: Dict[str, Dict] = {}
+    log_summary: Optional[Dict] = None
+    finance: Optional[Dict] = None
+
+
 class ParticipationSummary(BaseModel):
     owned_count: int
     participating_count: int
