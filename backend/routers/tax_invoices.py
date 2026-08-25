@@ -75,6 +75,69 @@ def list_tax_invoices(
     )
 
 
+@router.get("/summary", response_model=schemas.TaxInvoiceSummary)
+def tax_invoice_summary(
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """세금계산서 요약(경영전략실) — 기간 내 매입·매출·순액·부가세 + 월별 추이.
+
+    원장(tb_tax_invoice) 단일 원천에서 파생(별도 저장 없음). 월 그룹핑은 방언 무관하게
+    파이썬에서 처리한다(경영 관찰과 동일 관용구). 공급가액(부가세 제외)이 순액 기준.
+    """
+    q = db.query(
+        TaxInvoice.issue_date,
+        TaxInvoice.direction,
+        TaxInvoice.supply_amount,
+        TaxInvoice.tax_amount,
+    )
+    if date_from:
+        q = q.filter(TaxInvoice.issue_date >= date_from)
+    if date_to:
+        q = q.filter(TaxInvoice.issue_date <= date_to)
+
+    ps = ss = pt = st = 0.0
+    pc = sc = 0
+    monthly = {}  # 'YYYY-MM' -> [purchase, sales]
+    for issue_date, direction, supply, tax in q.all():
+        supply = float(supply or 0)
+        tax = float(tax or 0)
+        if direction == "매입":
+            ps += supply
+            pt += tax
+            pc += 1
+        elif direction == "매출":
+            ss += supply
+            st += tax
+            sc += 1
+        if issue_date:
+            mk = "{0:04d}-{1:02d}".format(issue_date.year, issue_date.month)
+            m = monthly.setdefault(mk, [0.0, 0.0])
+            if direction == "매입":
+                m[0] += supply
+            elif direction == "매출":
+                m[1] += supply
+
+    months = [
+        schemas.TaxInvoiceMonthPoint(
+            month=k, purchase=round(v[0], 2), sales=round(v[1], 2), net=round(v[1] - v[0], 2)
+        )
+        for k, v in sorted(monthly.items())
+    ]
+    return schemas.TaxInvoiceSummary(
+        purchase_supply=round(ps, 2),
+        sales_supply=round(ss, 2),
+        net_supply=round(ss - ps, 2),
+        purchase_tax=round(pt, 2),
+        sales_tax=round(st, 2),
+        purchase_count=pc,
+        sales_count=sc,
+        months=months,
+    )
+
+
 @router.post("/preview", response_model=schemas.TaxInvoicePreviewResponse)
 async def preview_tax_invoices(
     files: List[UploadFile] = File(...),

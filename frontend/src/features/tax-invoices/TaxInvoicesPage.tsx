@@ -4,6 +4,7 @@ import { SectionTabs } from '../../components/SectionTabs'
 import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
+import { TaxSummaryPanel } from './TaxSummaryPanel'
 import {
   useCommitScan,
   useCommitTaxInvoices,
@@ -49,6 +50,8 @@ export function TaxInvoicesPage() {
   const { user } = useAuth()
   // 적재(업로드·적용)는 쓰기 권한(master.write=STAFF↑)만. 경영전략실 등 읽기 역할은 조회·집계만.
   const canWrite = !!user && ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role)
+  // 요약(경영전략실 기본) / 원장 내부 탭
+  const [tab, setTab] = useState<'summary' | 'ledger'>('summary')
   const [files, setFiles] = useState<File[]>([])
   const [preview, setPreview] = useState<TaxInvoicePreviewItem[] | null>(null)
   const [source, setSource] = useState<'upload' | 'scan'>('upload')
@@ -136,8 +139,33 @@ export function TaxInvoicesPage() {
     <div className="space-y-6">
       {/* 허브 서브탭(A안) — 재무/자산 묶음 화면 전환 */}
       <SectionTabs />
-      <PageHeader title="세금계산서 원장" subtitle="홈택스 보안메일 HTML 자동반영 (매입·매출)" />
+      <PageHeader title="세금계산서 관리" subtitle="매입·매출 요약 + 원장(홈택스 보안메일 HTML 자동반영)" />
 
+      {/* 요약 / 원장 탭 — 경영전략실은 요약 기본 */}
+      <div className="flex w-fit items-center gap-1 rounded-full border border-hairline bg-elevate p-0.5">
+        {(
+          [
+            { key: 'summary', label: '요약' },
+            { key: 'ledger', label: '원장' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+              tab === t.key ? 'bg-elevate-strong text-bone' : 'text-slatey hover:text-ash'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'summary' && <TaxSummaryPanel />}
+
+      {tab === 'ledger' && (
+        <>
       {/* 적재(업로드·미리보기·적용) — 쓰기 권한자 전용. 읽기 역할은 원장 조회만 노출 */}
       {canWrite && (
         <>
@@ -370,6 +398,8 @@ export function TaxInvoicesPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   )
 }

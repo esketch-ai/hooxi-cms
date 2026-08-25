@@ -1468,6 +1468,28 @@ class TaxInvoiceListResponse(BaseModel):
     total: int
 
 
+class TaxInvoiceMonthPoint(BaseModel):
+    """월별 매입·매출·순액(공급가액 기준) — 요약 추이 차트용."""
+
+    month: str          # YYYY-MM
+    purchase: float     # 매입 공급가액
+    sales: float        # 매출 공급가액
+    net: float          # 순액(매출 - 매입)
+
+
+class TaxInvoiceSummary(BaseModel):
+    """세금계산서 요약(경영전략실) — 기간 내 매입·매출·순액·부가세 집계 + 월별 추이."""
+
+    purchase_supply: float
+    sales_supply: float
+    net_supply: float      # 매출 - 매입(공급가액)
+    purchase_tax: float
+    sales_tax: float
+    purchase_count: int
+    sales_count: int
+    months: List[TaxInvoiceMonthPoint] = []
+
+
 class TaxInvoicePreviewItem(BaseModel):
     filename: Optional[str] = None
     ok: bool

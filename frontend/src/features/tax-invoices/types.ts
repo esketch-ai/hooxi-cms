@@ -79,3 +79,21 @@ export interface TaxInvoiceFilters {
   page: number
   page_size: number
 }
+
+export interface TaxInvoiceMonthPoint {
+  month: string
+  purchase: number
+  sales: number
+  net: number
+}
+
+export interface TaxInvoiceSummary {
+  purchase_supply: number
+  sales_supply: number
+  net_supply: number
+  purchase_tax: number
+  sales_tax: number
+  purchase_count: number
+  sales_count: number
+  months: TaxInvoiceMonthPoint[]
+}
