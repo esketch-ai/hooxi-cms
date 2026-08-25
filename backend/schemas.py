@@ -1364,6 +1364,50 @@ class EmissionFactorIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=255)
 
 
+class EvFinanceImportResult(BaseModel):
+    created: int
+    client_matched: int
+
+
+class EvFinanceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ev_finance_id: str
+    vehicle_no: Optional[str] = None
+    vin: Optional[str] = None
+    operator_name: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    region: Optional[str] = None
+    sido: Optional[str] = None
+    model_year: Optional[int] = None
+    registered_at: Optional[date] = None
+    release_price: Optional[float] = None
+    acquisition_tax: Optional[float] = None
+    rural_tax: Optional[float] = None
+    vehicle_value: Optional[float] = None
+    low_floor_subsidy: Optional[float] = None
+    ev_subsidy: Optional[float] = None
+    self_payment: Optional[float] = None
+    private_ratio: Optional[float] = None
+    public_ratio: Optional[float] = None
+    subsidy_check: Optional[float] = None
+    note: Optional[str] = None
+
+
+class EvFinanceListResponse(BaseModel):
+    items: List[EvFinanceOut]
+    total: int
+
+
+class EvFinanceSummary(BaseModel):
+    count: int
+    vehicle_value_total: float
+    subsidy_total: float
+    self_payment_total: float
+    avg_private_ratio: float
+
+
 class ReductionRegistryImportResult(BaseModel):
     created: int
     client_matched: int

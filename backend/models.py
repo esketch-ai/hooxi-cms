@@ -655,6 +655,46 @@ class ReductionRegistry(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class EvFinance(Base):
+    """전기버스 도입 재무 — 차량가액·보조금·자부담금·민간투자비율 근거(증빙 03, D2).
+
+    민간투자비율의 근거를 숫자 하나가 아니라 구성으로 관리(감사가능성):
+      차량가액 = 출고가(부가세제외) + 취득세 + 농어촌특별세
+      자부담금 = 출고가 − (저상버스보조금 + 전기차보조금)
+      민간비율 = 자부담금 / 차량가액   (공공비율 = 1 − 민간비율)
+    엑셀 산정 결과 값을 그대로 적재(재계산 아님, Option A). 차량번호로 참여차량과 연결 가능.
+    """
+
+    __tablename__ = "tb_ev_finance"
+
+    ev_finance_id = Column(String(50), primary_key=True, default=gen_uuid)
+    vehicle_no = Column(String(30), index=True)  # 차량번호
+    vin = Column(String(50))  # 차대번호
+    operator_name = Column(String(100))  # 운수사(원문)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )
+    region = Column(String(30))  # 권역/시도
+    sido = Column(String(30))  # 시/군
+    vehicle_class = Column(String(50))  # 차종
+    model_year = Column(Integer)  # 연식
+    registered_at = Column(Date)  # 차량등록일
+    release_price = Column(Numeric(15, 2))  # 자동차 출고가격(부가세 제외)
+    acquisition_tax = Column(Numeric(15, 2))  # 취득세
+    rural_tax = Column(Numeric(15, 2))  # 농어촌특별세(제주 없음 → null)
+    vehicle_value = Column(Numeric(15, 2))  # 차량가액(=출고가+취득세+농특세)
+    low_floor_subsidy = Column(Numeric(15, 2))  # 저상버스보조금
+    ev_subsidy = Column(Numeric(15, 2))  # 전기차보조금
+    self_payment = Column(Numeric(15, 2))  # 자부담금
+    private_ratio = Column(Numeric(8, 6))  # 민간비율(자부담/차량가액)
+    public_ratio = Column(Numeric(8, 6))  # 공공비율
+    subsidy_check = Column(Numeric(8, 6))  # 보조금검증(보조금합/출고가, 70%이하)
+    note = Column(String(255))  # 비고
+    source = Column(String(20), default="EVIDENCE_IMPORT")
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
 import { useImportRegistry, useRegistry, useRegistrySummary } from './api'
+import { EvFinancePanel } from './EvFinancePanel'
 
 const ROLE_META: Record<string, { label: string; cls: string }> = {
   BASELINE: { label: '베이스라인(화석연료)', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/25' },
@@ -22,6 +23,7 @@ export function RegistryPage() {
   const { showToast } = useToast()
   const { user } = useAuth()
   const canWrite = !!user && ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role)
+  const [tab, setTab] = useState<'vehicles' | 'finance'>('vehicles')
   const { data: summary } = useRegistrySummary()
   const [role, setRole] = useState('')
   const [search, setSearch] = useState('')
@@ -57,8 +59,32 @@ export function RegistryPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="감축 참여 레지스트리" subtitle="프로그램 전체 차량 현황(KISA) — 참여·베이스라인·대체예정" />
+      <PageHeader title="감축 참여 레지스트리" subtitle="프로그램 전체 차량 현황(KISA) + 민간투자비율 근거" />
 
+      {/* 탭 — 차량 현황 / 민간투자비율(재무) */}
+      <div className="flex w-fit items-center gap-1 rounded-full border border-hairline bg-elevate p-0.5">
+        {(
+          [
+            { key: 'vehicles', label: '차량 현황' },
+            { key: 'finance', label: '민간투자비율' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+              tab === t.key ? 'bg-elevate-strong text-bone' : 'text-slatey hover:text-ash'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'finance' && <EvFinancePanel />}
+      {tab !== 'finance' && (
+        <>
       {/* 요약 타일 — 클릭 시 role 필터 */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {TILES.map((t) => (
@@ -143,6 +169,8 @@ export function RegistryPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   )
 }
