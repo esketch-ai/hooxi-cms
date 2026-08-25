@@ -203,6 +203,9 @@ class Project(Base):
     base_vehicle_age = Column(Numeric(5, 2))  # 기준차령(기본 8)
     approved_at = Column(Date)  # 승인일(승인=NOT NULL). 지급 파라미터 입력 시 자동 세팅
     approval_status = Column(String(20))  # APPROVAL_STATUS: 미승인/승인 — 미착품 전환 스위치(부록 L)
+    # 탄소배출권 원가·재고 정밀화 C1 — 승인시점 잠금 스냅샷(이후 설정/시세 변동에도 불변)
+    approved_unit_price = Column(Numeric(12, 2))  # 승인시점 매출 기준단가(원/톤) 스냅샷
+    approved_reduction = Column(Numeric(14, 3))   # 승인시 확정수량(Σ effective_reduction) 스냅샷
     issued_credits = Column(Numeric(10, 2))  # 확정 발급량 — 발급완료 전환 시 필수 (R2-A1)
     issued_at = Column(Date)
     manager_id = Column(String(50), ForeignKey("tb_user.user_id"))
@@ -1350,6 +1353,9 @@ def ensure_schema():
         ("tb_project", "base_vehicle_age", "NUMERIC(5,2)"),
         ("tb_project", "approved_at", "DATE"),
         ("tb_project", "approval_status", "VARCHAR(20)"),
+        # 탄소배출권 원가·재고 정밀화 C1 — 승인시점 잠금 스냅샷
+        ("tb_project", "approved_unit_price", "NUMERIC(12,2)"),
+        ("tb_project", "approved_reduction", "NUMERIC(14,3)"),
         ("tb_project_vehicle", "expire_at", "DATE"),
         # 3단계 '모니터링' 정본(라이프사이클 P2 정합) — 워크벤치서 단방향 커밋. additive.
         ("tb_project_vehicle", "monitoring_reduction", "NUMERIC(14,3)"),

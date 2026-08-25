@@ -442,6 +442,16 @@ function OverviewSection({
         <OverviewItem label="승인일">
           <ApprovedAtEditor projectId={project.project_id} approvedAt={project.approved_at} />
         </OverviewItem>
+        {project.approved_unit_price != null && (
+          <OverviewItem label="승인시점 잠금 (탄소배출권)">
+            <span className="text-sm text-bone">
+              매출단가 {Math.round(project.approved_unit_price).toLocaleString('ko-KR')}원/톤
+              {project.approved_reduction != null && (
+                <span className="text-ash"> · 확정수량 {project.approved_reduction.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂</span>
+              )}
+            </span>
+          </OverviewItem>
+        )}
         <OverviewItem label="승인상태">
           <ApprovalStatusEditor
             projectId={project.project_id}

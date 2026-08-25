@@ -506,6 +506,8 @@ export interface Project {
   base_reduction?: number | null // 기준감축량(기본 240)
   base_vehicle_age?: number | null // 기준차령(기본 8)
   approved_at?: string | null // 승인일(승인=존재). 최대지급액 입력 시 자동 세팅
+  approved_unit_price?: number | null // 승인시점 매출 기준단가 잠금(탄소배출권 C1)
+  approved_reduction?: number | null // 승인시 확정수량 잠금(탄소배출권 C1)
   issued_credits?: number | null // 확정 발급량 (R2-A1)
   issued_at?: string | null
   manager_id?: string | null

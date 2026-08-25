@@ -733,6 +733,8 @@ class ProjectOut(BaseModel):
     base_vehicle_age: Optional[float] = None  # 기준차령(기본 8)
     approved_at: Optional[date] = None  # 승인일(승인=NOT NULL)
     approval_status: Optional[str] = None  # 사업 승인상태(미승인/승인) — 미착품 전환 스위치(부록 L)
+    approved_unit_price: Optional[float] = None  # 승인시점 매출 기준단가 잠금(C1)
+    approved_reduction: Optional[float] = None   # 승인시 확정수량 잠금(C1)
     issued_credits: Optional[float] = None
     issued_at: Optional[date] = None
     manager_id: Optional[str] = None

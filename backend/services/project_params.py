@@ -20,6 +20,9 @@ DEFAULT_PROJECT_BASE_PARAMS = {
     "base_vehicle_age": 8.0,          # 기준차령 기본값
     "expire_months": 108,             # 차령만료 개월(EDATE 12*9)
     "default_max_payment": 2000000,   # 차량당 기본 최대지급액(UI 프리필용)
+    # 탄소배출권 단가 2종(카본크레딧실 정본, CARBON_CREDIT_COST_INVENTORY_PLAN C1)
+    "sale_base_unit_price": 20000.0,      # 매출 기준단가(원/톤) — 승인시점 잠금·예상매출 기준
+    "inventory_unit_price": 13888.0,      # 재고평가 원가단가(원/톤) — 후시보유분 평가
 }
 
 

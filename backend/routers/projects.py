@@ -1579,6 +1579,14 @@ def update_payout_params(
         project.approved_at = date.today()  # 지급 파라미터 입력 = 승인 시점(미설정 시)
     _recalc_vehicle_payouts(db, project)
     db.flush()  # 파생값 재계산 반영 후 aggregate 조회가 최신을 보도록 flush(스냅샷 전제)
+    # 탄소배출권 원가·재고 C1 — 승인시점 매출단가·확정수량 1회 잠금(이후 설정/시세 변동 불변).
+    # 최초 승인 시(스냅샷 미설정)만 캡처 → 재편집·재계산에도 승인시점 값 보존.
+    if project.approved_at is not None and project.approved_unit_price is None:
+        project.approved_unit_price = params["sale_base_unit_price"]
+        total_eff = db.query(
+            func.coalesce(func.sum(ProjectVehicle.effective_reduction), 0)
+        ).filter(ProjectVehicle.project_id == project.project_id).scalar()
+        project.approved_reduction = float(total_eff or 0)
     _snapshot_participation(db, project, "payout_params")  # 참여 집계 변동 이력(INC-3)
     # 감사 로그 — 최대지급액만 old→new 기록(다른 파라미터 병기 금지, R2-E6/H.6)
     new_max = data.get("max_payment") if "max_payment" in data else old_max
