@@ -133,7 +133,12 @@ y1~y10, total, private_invest_ratio, source, measured_period, at)로 단계별 �
    `issued_credits`를 차량별 `effective_reduction` 비율로 배분→`ProjectVehicle.final_reduction` 동결
    (effective 0이면 total→균등 폴백, 마지막 차량 보정으로 발급 총량 정합). `POST /projects/{id}/finalize-reductions`.
    사업 상세 '발급 배분 확정' 버튼(발급완료 시). 최종 정본 = final_reduction(미확정 시 effective 폴백).
-   participation·dossier 반영. ※ 크로스 집계·신호(보)는 후속.
+   participation·dossier 반영.
+
+**보(補) 크로스 집계·신호** ✅ **구현(dev)** — `participation.all_operators_overview`(벌크 3쿼리, N+1 방지):
+운수사별 참여율·상태별 대수(기/현/미)·3단계 감축량 합계·달성률(모니터링/예상)·확정률(최종/예상).
+`GET /clients/participation-overview`(리터럴을 /{client_id} 앞에 선언). 화면 '운수사 참여 현황'
+(/operator-participation, 감축 사업·차량 그룹) — 요약 타일 + 참여율 내림차순 표 + 운수사→감축 참여 탭 링크.
 각 단계 pytest·빌드·dev 검증 후 로컬 커밋, 지시 시 배포.
 
 ## 7. 원칙

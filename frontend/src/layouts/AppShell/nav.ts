@@ -84,6 +84,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // 구 '감축 참여 레지스트리' — 산정 파이프라인(원장·산정·로그·3단계)임을 명확히.
       // 고객사 '감축 참여' 탭과의 명칭 충돌 해소.
       { label: '감축 산정 워크벤치', path: '/registry', icon: ChartBar, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+      // 전 운수사 크로스 집계 — 참여율·3단계·오차 신호(라이프사이클 보)
+      { label: '운수사 참여 현황', path: '/operator-participation', icon: ChartBar, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
     ],
   },
   {

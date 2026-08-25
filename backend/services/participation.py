@@ -13,9 +13,10 @@
 reduction_stage는 워크벤치 분석 스냅샷일 뿐 정본 아님(divergence 위험 제거).
 """
 
-from typing import Dict, List
+from collections import defaultdict
+from typing import Dict, List, Optional
 
-from models import ClientVehicle, Project, ProjectVehicle
+from models import Client, ClientVehicle, Project, ProjectVehicle
 
 _COMPLETED_STATUS = {"발급완료"}
 _EV_FUEL = {"EV", "전기", "전기차", "ELECTRIC"}
@@ -124,4 +125,93 @@ def client_participation(db, client_id: str) -> dict:
         },
         "participated": participated,
         "not_participated": not_participated,
+    }
+
+
+def all_operators_overview(db, region: Optional[str] = None) -> dict:
+    """전 운수사 크로스 집계(라이프사이클 보) — 운수사별 참여율·상태별 대수·3단계 감축량·오차 신호.
+
+    단건 client_participation을 N번 부르지 않고 벌크 조회 3건으로 집계(N+1 방지):
+    보유대수(ClientVehicle)·참여차량(ProjectVehicle×Project). 3단계 정본은 ProjectVehicle 단일.
+    """
+    # 운수사 마스터(TRANSPORT) — 이름·권역
+    cq = db.query(Client.client_id, Client.company_name, Client.region).filter(
+        Client.client_type == "TRANSPORT")
+    if region:
+        cq = cq.filter(Client.region == region)
+    clients = {c.client_id: {"name": c.company_name, "region": c.region} for c in cq.all()}
+    if not clients:
+        return {"items": [], "operator_count": 0, "total_owned": 0, "total_participating": 0,
+                "expected_total": 0.0, "monitoring_total": 0.0, "final_total": 0.0,
+                "participation_rate": None}
+
+    # 보유대수(폐차 제외)
+    owned: Dict[str, int] = defaultdict(int)
+    for cv in db.query(ClientVehicle.client_id, ClientVehicle.status).filter(
+            ClientVehicle.client_id.in_(list(clients))).all():
+        if cv.status != "폐차":
+            owned[cv.client_id] += 1
+
+    # 참여차량 + 사업상태 — 운수사별 집계
+    agg: Dict[str, dict] = {cid: {"vnos": set(), "completed_vnos": set(),
+                                  "exp": 0.0, "mon": 0.0, "fin": 0.0} for cid in clients}
+    rows = (db.query(ProjectVehicle.client_id, ProjectVehicle.vehicle_no,
+                     ProjectVehicle.total_reduction, ProjectVehicle.monitoring_reduction,
+                     ProjectVehicle.effective_reduction, ProjectVehicle.final_reduction,
+                     Project.project_status)
+            .join(Project, ProjectVehicle.project_id == Project.project_id)
+            .filter(ProjectVehicle.client_id.in_(list(clients))).all())
+    for r in rows:
+        a = agg.get(r.client_id)
+        if a is None:
+            continue
+        completed = r.project_status in _COMPLETED_STATUS
+        if r.vehicle_no:
+            a["vnos"].add(r.vehicle_no)
+            if completed:
+                a["completed_vnos"].add(r.vehicle_no)
+        if r.total_reduction is not None:
+            a["exp"] += float(r.total_reduction)
+        if r.monitoring_reduction is not None:
+            a["mon"] += float(r.monitoring_reduction)
+        fin = r.final_reduction if r.final_reduction is not None else (
+            r.effective_reduction if completed else None)
+        if fin is not None:
+            a["fin"] += float(fin)
+
+    items = []
+    tot_owned = tot_part = 0
+    exp_t = mon_t = fin_t = 0.0
+    for cid, meta in clients.items():
+        a = agg[cid]
+        ow = owned.get(cid, 0)
+        part = len(a["vnos"])
+        comp = len(a["completed_vnos"])
+        # 보유·참여 둘 다 0인 운수사는 생략(노이즈 축소)
+        if ow == 0 and part == 0:
+            continue
+        tot_owned += ow
+        tot_part += part
+        exp_t += a["exp"]; mon_t += a["mon"]; fin_t += a["fin"]
+        items.append({
+            "client_id": cid, "operator_name": meta["name"], "region": meta["region"],
+            "owned_count": ow, "participating_count": part,
+            "completed_count": comp, "ongoing_count": part - comp,
+            "not_participated_count": max(0, ow - part),
+            "participation_rate": round(part / ow * 100, 1) if ow else None,
+            "expected_reduction": round(a["exp"], 3),
+            "monitoring_reduction": round(a["mon"], 3),
+            "final_reduction": round(a["fin"], 3),
+            "ach_monitoring": _rate(a["mon"], a["exp"]),
+            "ach_final": _rate(a["fin"], a["exp"]),
+        })
+    # 참여율 높은 순
+    items.sort(key=lambda x: (x["participation_rate"] is None, -(x["participation_rate"] or 0),
+                              x["operator_name"] or ""))
+    return {
+        "items": items, "operator_count": len(items),
+        "total_owned": tot_owned, "total_participating": tot_part,
+        "expected_total": round(exp_t, 3), "monitoring_total": round(mon_t, 3),
+        "final_total": round(fin_t, 3),
+        "participation_rate": round(tot_part / tot_owned * 100, 1) if tot_owned else None,
     }

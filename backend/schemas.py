@@ -1593,6 +1593,34 @@ class ClientParticipationOut(BaseModel):
     not_participated: List[NotParticipatedVehicle] = []
 
 
+class OperatorParticipationRow(BaseModel):
+    client_id: str
+    operator_name: Optional[str] = None
+    region: Optional[str] = None
+    owned_count: int
+    participating_count: int
+    completed_count: int
+    ongoing_count: int
+    not_participated_count: int
+    participation_rate: Optional[float] = None
+    expected_reduction: float
+    monitoring_reduction: float
+    final_reduction: float
+    ach_monitoring: Optional[float] = None
+    ach_final: Optional[float] = None
+
+
+class ParticipationOverviewOut(BaseModel):
+    items: List[OperatorParticipationRow] = []
+    operator_count: int
+    total_owned: int
+    total_participating: int
+    expected_total: float
+    monitoring_total: float
+    final_total: float
+    participation_rate: Optional[float] = None
+
+
 class MethodologyConstantIn(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     value: float

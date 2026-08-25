@@ -390,6 +390,26 @@ def client_options(
     ]
 
 
+@router.get("/participation-overview", response_model=schemas.ParticipationOverviewOut)
+def participation_overview(
+    region: Optional[str] = Query(None, description="권역 필터"),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """운수사별 감축 참여 크로스 집계(라이프사이클 보) — 참여율·상태별 대수·3단계·오차 신호.
+
+    ※ 리터럴 경로가 아래 /{client_id} 동적 경로보다 먼저 선언돼야 매칭됨(순서 의존).
+    """
+    out = participation.all_operators_overview(db, region=region)
+    return schemas.ParticipationOverviewOut(
+        items=[schemas.OperatorParticipationRow(**i) for i in out["items"]],
+        operator_count=out["operator_count"], total_owned=out["total_owned"],
+        total_participating=out["total_participating"], expected_total=out["expected_total"],
+        monitoring_total=out["monitoring_total"], final_total=out["final_total"],
+        participation_rate=out["participation_rate"],
+    )
+
+
 @router.get("/{client_id}", response_model=schemas.ClientDetailOut)
 def get_client(
     client_id: str,

@@ -60,11 +60,11 @@ describe('collapseHubs (A안 허브 축약)', () => {
     expect(fin.path).toBe('/finance-ledger') // NAV 정의 순서상 첫 소속 경로
   })
 
-  it('감축 사업·차량 그룹 — 사업·전기버스·산정 워크벤치 3항목(허브 없음)', async () => {
+  it('감축 사업·차량 그룹 — 사업·전기버스·워크벤치·운수사참여현황(허브 없음)', async () => {
     const { collapseHubs, NAV_GROUPS } = await import('./nav')
     const g = collapseHubs(NAV_GROUPS).find((x) => x.label === '감축 사업·차량')!
     const paths = g.items.map((i) => i.path)
-    expect(paths).toEqual(['/projects', '/asset-vehicles', '/registry'])
+    expect(paths).toEqual(['/projects', '/asset-vehicles', '/registry', '/operator-participation'])
   })
 
   it('일부 항목이 필터로 빠져도 남은 것만으로 허브 구성(링크=첫 생존 경로)', async () => {
