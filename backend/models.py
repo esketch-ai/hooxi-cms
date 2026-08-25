@@ -612,6 +612,49 @@ class EmissionFactor(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class ReductionRegistry(Base):
+    """감축 참여 레지스트리 — 프로그램 전체 차량의 참여 상태·제원 원장(증빙 KISA 500대, M3).
+
+    role로 참여 라이프사이클을 표현한다:
+      BASELINE  : 대체 전 화석연료버스(대체도입의 베이스라인)
+      PROJECT   : 사업대상 전기버스(대체도입/신규도입 — 참여중/기참여)
+      CANDIDATE : 대체 예정 화석연료버스(아직 미참여 — 향후 참여 대상)
+    대체도입은 같은 차량번호로 BASELINE↔PROJECT가 존재(VIN만 교체). operator_name은 원문,
+    client_id는 운수사 매칭 결과(nullable). 방법론 결과가 아니라 '차량 현황' 원장이다.
+    """
+
+    __tablename__ = "tb_reduction_registry"
+
+    registry_id = Column(String(50), primary_key=True, default=gen_uuid)
+    role = Column(String(20), nullable=False, index=True)  # BASELINE/PROJECT/CANDIDATE
+    vehicle_no = Column(String(30), index=True)  # 차량번호(자동차등록번호)
+    operator_name = Column(String(100))  # 업체명 원문
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )  # 운수사 매칭(nullable)
+    seq = Column(Integer)  # 순번(원본)
+    introduction_type = Column(String(20))  # 사업구분 대체도입/신규도입(후보는 null)
+    model_name = Column(String(50))  # 차명
+    vin = Column(String(50))  # 차대번호(후보 시트엔 없음 → null)
+    model_year = Column(Integer)  # 연식
+    vehicle_class = Column(String(50))  # 차종
+    purpose = Column(String(20))  # 용도(후보 영업용 등)
+    length_mm = Column(Integer)
+    width_mm = Column(Integer)
+    height_mm = Column(Integer)
+    gross_weight_kg = Column(Integer)
+    seating_capacity = Column(Integer)  # 승차정원
+    fuel = Column(String(20))  # 연료
+    registered_at = Column(Date)  # 등록일/전기차량 등록일
+    battery_type = Column(String(50))  # 배터리종류(전기버스)
+    program_name = Column(String(200))  # 사업명
+    region = Column(String(30))  # 권역
+    source = Column(String(20), default="KISA_IMPORT")
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

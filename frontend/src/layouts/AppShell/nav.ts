@@ -64,6 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
       { label: '매수자 마스터', path: '/buyers', icon: Bank, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '자산·연동 마스터', path: '/assets', icon: Truck },
+      { label: '감축 참여 레지스트리', path: '/registry', icon: Bus, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '계정 점검', path: '/accounts', icon: LockKey },
     ],
   },

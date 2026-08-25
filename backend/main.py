@@ -58,6 +58,7 @@ from routers import tax_invoices as tax_invoices_router
 from routers import kakao as kakao_router
 from routers import market_rates as market_rates_router
 from routers import emission_factors as emission_factors_router
+from routers import reduction_registry as reduction_registry_router
 from routers import observe as observe_router
 from routers import portal as portal_router
 from routers import projects as projects_router
@@ -436,6 +437,7 @@ app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(market_rates_router.router, prefix=API_V1_PREFIX)
 app.include_router(emission_factors_router.router, prefix=API_V1_PREFIX)
+app.include_router(reduction_registry_router.router, prefix=API_V1_PREFIX)
 app.include_router(observe_router.router, prefix=API_V1_PREFIX)
 app.include_router(portal_router.router, prefix=API_V1_PREFIX)
 app.include_router(external_accounts_router.router, prefix=API_V1_PREFIX)

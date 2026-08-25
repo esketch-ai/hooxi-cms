@@ -32,6 +32,7 @@ import { GuideHubPage } from '../features/guide/GuideHubPage'
 import { GuideTopicPage } from '../features/guide/GuideTopicPage'
 import { AssetsPage } from '../features/assets/AssetsPage'
 import { AssetVehiclesPage } from '../features/asset-vehicles/AssetVehiclesPage'
+import { RegistryPage } from '../features/registry/RegistryPage'
 import { AccountsPage } from '../features/accounts/AccountsPage'
 import { ProjectsPage } from '../features/projects/ProjectsPage'
 import { ProjectDetailPage } from '../features/projects/ProjectDetailPage'
@@ -141,6 +142,7 @@ const appRoutes: RouteObject[] = [
   // ── P2 구현 화면 ──────────────────────────────────────────────
   { path: '/assets', element: <AssetsPage /> }, // SCR-04
   { path: '/asset-vehicles', element: <AssetVehiclesPage /> }, // AV-3 전기버스 자산
+  { path: '/registry', element: <RegistryPage /> }, // M3 감축 참여 레지스트리(KISA)
   { path: '/accounts', element: <AccountsPage /> }, // 수집 계정 관리
   { path: '/projects', element: <ProjectsPage /> }, // SCR-06
   { path: '/projects/:projectId', element: <ProjectDetailPage /> }, // SCR-06 상세

@@ -1364,6 +1364,51 @@ class EmissionFactorIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=255)
 
 
+class ReductionRegistryImportResult(BaseModel):
+    created: int
+    client_matched: int
+    baseline: int
+    project: int
+    candidate: int
+
+
+class ReductionRegistryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    registry_id: str
+    role: str
+    vehicle_no: Optional[str] = None
+    operator_name: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    introduction_type: Optional[str] = None
+    model_name: Optional[str] = None
+    vin: Optional[str] = None
+    model_year: Optional[int] = None
+    vehicle_class: Optional[str] = None
+    purpose: Optional[str] = None
+    seating_capacity: Optional[int] = None
+    fuel: Optional[str] = None
+    registered_at: Optional[date] = None
+    battery_type: Optional[str] = None
+    program_name: Optional[str] = None
+    region: Optional[str] = None
+
+
+class ReductionRegistryListResponse(BaseModel):
+    items: List[ReductionRegistryOut]
+    total: int
+
+
+class ReductionRegistrySummary(BaseModel):
+    total: int
+    baseline: int
+    project: int
+    candidate: int
+    client_matched: int
+    by_region: List[dict] = []
+
+
 class EmissionFactorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
