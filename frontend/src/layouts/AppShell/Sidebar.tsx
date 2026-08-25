@@ -45,15 +45,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 로고(HOOXI PARTNERS) + CMS 텍스트 — 중앙 정렬, 다크는 로고 흰색화 */}
-      <div className="flex h-16 shrink-0 items-center justify-center gap-2 border-b border-hairline px-4">
+      {/* 로고(HOOXI PARTNERS) + CMS 워드마크 — 중앙 정렬, 다크는 로고 흰색화 */}
+      <div className="group flex h-16 shrink-0 items-center justify-center gap-2.5 border-b border-hairline px-4">
         <img
           src="/hooxipartners_logo_trans.png"
           alt="Hooxi Partners"
-          className="h-7 w-auto dark:brightness-0 dark:invert"
+          className="h-8 w-auto transition-transform duration-300 ease-out group-hover:scale-105 dark:brightness-0 dark:invert"
         />
-        <span className="text-lg font-semibold tracking-tight text-red-600 dark:text-red-500">
-          CMS
+        <span className="h-6 w-px shrink-0 bg-hairline-strong/70" aria-hidden="true" />
+        <span className="logo-cms-wrap text-2xl font-extrabold tracking-tight">
+          <span className="logo-cms-base">CMS</span>
+          <span className="logo-cms-shine" aria-hidden="true">
+            CMS
+          </span>
         </span>
       </div>
 

@@ -194,3 +194,48 @@ body {
 .animate-slide-in {
   animation: slide-in 0.22s ease-out;
 }
+
+/* 로고 워드마크(CMS) — 레드 그라디언트 + 로드 시 1회 샤인 스윕(호버 시 재생) */
+.logo-cms-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+.logo-cms-base {
+  background-image: linear-gradient(180deg, #f87171 0%, #dc2626 55%, #b91c1c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.logo-cms-shine {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.92) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  background-position: 220% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none;
+  animation: cms-shine 2.4s ease-in-out 0.5s 1;
+}
+.logo-cms-wrap:hover .logo-cms-shine {
+  animation: cms-shine 1.5s ease-in-out 1;
+}
+@keyframes cms-shine {
+  to {
+    background-position: -120% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-cms-shine {
+    animation: none;
+  }
+}
