@@ -84,5 +84,45 @@ def test_import_consolidate_aggregate(client, staff_headers):
     _clean()
 
 
+def _bms_xlsx():
+    """BMS취합 LONG: 운수사·차량번호·월·운행거리합계·운행횟수합계."""
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["운수사", "차량번호", "월", "운행형태", "운행횟수합계", "운행거리합계", "집계행수", "파일수"])
+    ws.append(["경기버스", "경기72바1278", "2025-07", "일반형시내버스", 85.8, 7236.26, 30, 1])
+    ws.append(["경기버스", "경기72바1278", "2025-08", "일반형시내버스", 88.8, 7730.67, 30, 1])
+    b = io.BytesIO(); wb.save(b); return b.getvalue()
+
+
+def test_import_raw_bms(client, staff_headers):
+    _clean()
+    # 다건 업로드(여기선 BMS .xlsx 1건) → import-raw 자동판별
+    files = [("files", ("BMS취합_x.xlsx", _bms_xlsx(), XLSX))]
+    r = client.post("/api/v1/vehicle-logs/import-raw", headers=staff_headers, files=files)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["parsed_files"] == 1 and body["files"] == 1
+    assert body["created"] == 2 and body["vehicles"] == 1 and body["months"] == 2
+
+    # 로그가 BMS 출처로 적재됐는지 — consolidate에 운행거리 반영
+    con = client.get(CONSOL, headers=staff_headers).json()
+    v = next(x for x in con["vehicles"] if x["vehicle_no"] == "경기72바1278")
+    assert v["months"]["2025-07"]["distance_km"] == 7236.26
+    assert v["has_charge"] is False  # BMS엔 충전량 없음
+
+    # 재업로드 → (차량·월·BMS) 중복키 upsert
+    r2 = client.post("/api/v1/vehicle-logs/import-raw", headers=staff_headers,
+                     files=[("files", ("BMS취합_x.xlsx", _bms_xlsx(), XLSX))])
+    assert r2.json()["updated"] == 2 and r2.json()["created"] == 0
+    _clean()
+
+
+def test_import_raw_rejects_empty(client, staff_headers):
+    # 빈/무의미 파일 → 파싱 0 → 422
+    wb = openpyxl.Workbook(); b = io.BytesIO(); wb.save(b)
+    r = client.post("/api/v1/vehicle-logs/import-raw", headers=staff_headers,
+                    files=[("files", ("빈.xlsx", b.getvalue(), XLSX))])
+    assert r.status_code == 422
+
+
 def test_requires_auth(client):
     assert client.get(CONSOL).status_code == 401

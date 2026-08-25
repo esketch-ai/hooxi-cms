@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { CircleNotch, UploadSimple, Function } from '@phosphor-icons/react'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { useConsolidate, useImportVehicleLogs, useAggregateLogs, type AggregateResp } from './logApi'
+import { useConsolidate, useImportVehicleLogs, useImportRawLogs, useAggregateLogs, type AggregateResp } from './logApi'
 
 const n = (v?: number | null) => (v == null ? '—' : v.toLocaleString('ko-KR', { maximumFractionDigits: 1 }))
 
@@ -14,6 +14,7 @@ export function VehicleLogPanel() {
   const [programOnly, setProgramOnly] = useState(false)
   const { data, isLoading } = useConsolidate({ program_only: programOnly })
   const importM = useImportVehicleLogs()
+  const rawM = useImportRawLogs()
   const aggM = useAggregateLogs()
   const [agg, setAgg] = useState<AggregateResp | null>(null)
 
@@ -22,6 +23,18 @@ export function VehicleLogPanel() {
     try {
       const r = await importM.mutateAsync(files[0])
       showToast(`로그 반영 — 차량 ${r.vehicles}·월 ${r.months} · 생성 ${r.created}·갱신 ${r.updated}`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '적재에 실패했습니다.', 'danger')
+    }
+  }
+
+  const onUploadRaw = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    try {
+      const r = await rawM.mutateAsync(files)
+      const skip = r.skipped_files.length ? ` · 스킵 ${r.skipped_files.length}건` : ''
+      showToast(`원본 ${r.parsed_files}/${r.files}개 반영 — 차량 ${r.vehicles}·월 ${r.months} · 생성 ${r.created}·갱신 ${r.updated}${skip}`, 'success')
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast(detail ?? '적재에 실패했습니다.', 'danger')
@@ -55,8 +68,10 @@ export function VehicleLogPanel() {
         <Tile label="충전 결여" value={`${data?.missing_charge ?? 0}`} tone={(data?.missing_charge ?? 0) > 0 ? 'warn' : undefined} />
       </div>
       <p className="text-xs text-slatey">
-        담당자 취합본(WIDE: <span className="font-mono">YYYY년MM월_운행일수/운행거리/충전량</span>)을 올리면 차량×월 원천 로그로
-        분해·정리됩니다. 같은 (차량·월)은 재업로드해도 안전하게 갱신(upsert). 집계는 프로그램 차량(레지스트리)만 연평균으로
+        <b className="text-ash">운수사 원본 적재(다건)</b> — eTAS <span className="font-mono">.xls</span>(운수사별 월별) 또는 BMS취합
+        <span className="font-mono"> .xlsx</span>를 여러 개 한 번에 올리면 구조를 자동 판별해 로그로 정리합니다. 담당자 수작업 취합 불필요.
+        <b className="text-ash"> 취합본 적재</b>는 기존 WIDE 정본(<span className="font-mono">YYYY년MM월_운행일수/운행거리/충전량</span>)용 과도기 경로.
+        같은 (차량·월·출처)은 재업로드해도 안전하게 갱신(upsert). 집계는 프로그램 차량(레지스트리)만 연평균으로
         산정 입력의 사업(project) 측을 채웁니다: <span className="font-mono">(Σ지표 / Σ운행일수) × 365</span>.
       </p>
 
@@ -84,6 +99,11 @@ export function VehicleLogPanel() {
             >
               산정 입력 반영
             </button>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate">
+              {rawM.isPending ? <CircleNotch size={15} className="animate-spin" /> : <UploadSimple size={15} />}
+              운수사 원본 적재(다건)
+              <input type="file" accept=".xls,.xlsx" multiple className="hidden" onChange={(e) => onUploadRaw(e.target.files)} />
+            </label>
             <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate">
               {importM.isPending ? <CircleNotch size={15} className="animate-spin" /> : <UploadSimple size={15} />}
               취합본 적재

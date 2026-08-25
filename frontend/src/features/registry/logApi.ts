@@ -53,6 +53,30 @@ export function useImportVehicleLogs() {
   })
 }
 
+export interface RawImportResult {
+  files: number
+  parsed_files: number
+  skipped_files: string[]
+  created: number
+  updated: number
+  client_matched: number
+  vehicles: number
+  months: number
+  total: number
+}
+export function useImportRawLogs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (files: FileList) => {
+      const fd = new FormData()
+      Array.from(files).forEach((f) => fd.append('files', f))
+      const { data } = await api.post('/vehicle-logs/import-raw', fd)
+      return data as RawImportResult
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['vehicle-logs-consolidate'] }),
+  })
+}
+
 export function useAggregateLogs() {
   const qc = useQueryClient()
   return useMutation({

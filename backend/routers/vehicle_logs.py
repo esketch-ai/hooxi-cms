@@ -5,7 +5,7 @@
 - POST /vehicle-logs/aggregate   : 기간 Σ → 연평균 project → (옵션)VehicleCalcInput 갱신
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission
 from models import User, get_db
+from services import etas_raw_import as eri
 from services import vehicle_log_aggregate as agg
 from services import vehicle_log_import as vli
 from services.audit_logger import AuditLogger
@@ -51,6 +52,49 @@ async def import_vehicle_logs(
     )
     db.commit()
     return schemas.VehicleLogImportResult(**result)
+
+
+@router.post("/vehicle-logs/import-raw", response_model=schemas.VehicleLogRawImportResult)
+async def import_raw_vehicle_logs(
+    files: List[UploadFile] = File(...),
+    batch: Optional[str] = Query(None, description="업로드 배치 표기"),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """운수사별 원본 다건 업로드(eTAS .xls / BMS취합 .xlsx) → 구조 자동판별 후 로그 upsert."""
+    if not files:
+        raise HTTPException(status_code=422, detail="업로드할 파일이 없습니다")
+    all_rows: list = []
+    parsed = 0
+    skipped: list = []
+    for f in files:
+        content = await f.read()
+        if not content or len(content) > MAX_UPLOAD_BYTES:
+            skipped.append(f.filename or "(무명)")
+            continue
+        try:
+            rows = eri.parse_raw_file(content, f.filename or "")
+        except Exception:
+            skipped.append(f.filename or "(무명)")
+            continue
+        if rows:
+            all_rows.extend(rows)
+            parsed += 1
+        else:
+            skipped.append(f.filename or "(무명)")
+    if not all_rows:
+        raise HTTPException(
+            status_code=422,
+            detail="파싱 가능한 데이터가 없습니다(eTAS .xls 또는 BMS취합 .xlsx 확인)")
+    result = vli.apply_logs(db, all_rows, batch=batch)
+    AuditLogger.log_action(
+        db, user.user_id, "VEHICLE_LOG_RAW_IMPORT", target_type="BATCH",
+        new_value="files={0}/{1}, created={2}, updated={3}".format(
+            parsed, len(files), result["created"], result["updated"]),
+    )
+    db.commit()
+    return schemas.VehicleLogRawImportResult(
+        files=len(files), parsed_files=parsed, skipped_files=skipped, **result)
 
 
 @router.get("/vehicle-logs/consolidate", response_model=schemas.VehicleLogConsolidateResponse)

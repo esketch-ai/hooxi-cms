@@ -13,5 +13,6 @@ cryptography==49.0.0  # 자산 인증정보 AES-256-GCM 암호화 (services/cryp
 dropbox==12.1.0  # 문서 아카이브 Dropbox 저장소 (services/dropbox_storage.py)
 openpyxl==3.1.5  # 엑셀 일괄 등록 양식 생성·파싱 (services/import_spec.py·excel_import.py)
 defusedxml==0.7.1  # openpyxl XML 파싱 보호 (엔티티 팽창 DoS 방어 — 설치만으로 자동 적용)
+xlrd==2.0.2  # 레거시 .xls 읽기전용 (eTAS 운수사별 원본 파싱 — services/etas_raw_import.py, D6 P3)
 # google-cloud-storage==2.19.0  # GCS_BUCKET 사용 시 주석 해제 (services/storage.py)
 alembic==1.14.0
