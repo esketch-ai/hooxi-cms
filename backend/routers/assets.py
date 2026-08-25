@@ -8,7 +8,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,7 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
+from services import charge_account_import as cai
 from services import crypto
 from services.audit_logger import AuditLogger
 
@@ -229,6 +230,40 @@ def create_asset(
     db.commit()
     db.refresh(asset)
     return _asset_out(db, asset)
+
+
+@router.post("/charge-accounts/import", response_model=schemas.ChargeAccountImportResult)
+async def import_charge_accounts(
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """충전 관제 계정 목록 엑셀 → 자산·연동(Asset) 일괄 등록(충전량 수집 경로).
+
+    비밀번호는 AES-256-GCM 암호화 저장(키 미설정 시 메타만 등록·비번 제외). 응답·감사에
+    평문 절대 미포함(R2-E6). 재업로드는 (고객사·사이트·아이디·시스템) 기준 갱신.
+    """
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=422, detail="빈 파일은 업로드할 수 없습니다")
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="파일 크기가 25MB를 초과합니다")
+    try:
+        rows = cai.parse_charge_accounts(content)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="엑셀 파싱 실패: {0}".format(exc))
+    if not rows:
+        raise HTTPException(status_code=422, detail="회사명 열을 찾지 못했습니다(헤더 확인)")
+    result = cai.apply_charge_accounts(db, rows)
+    # 감사 — 건수만(비밀값 절대 기록 금지)
+    AuditLogger.log_action(
+        db, user.user_id, "CHARGE_ACCOUNT_IMPORT", target_type="BATCH",
+        new_value="created={0}, updated={1}, matched={2}, encrypted={3}, pw_skipped={4}".format(
+            result["created"], result["updated"], result["client_matched"],
+            result["encrypted"], result["password_skipped"]),
+    )
+    db.commit()
+    return schemas.ChargeAccountImportResult(**result)
 
 
 @router.get("/{asset_id}", response_model=schemas.AssetListItem)

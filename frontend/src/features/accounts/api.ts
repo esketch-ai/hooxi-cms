@@ -44,6 +44,34 @@ export function useCredentialAssets(filters: AccountFilters) {
   })
 }
 
+export interface ChargeAccountImportResult {
+  created: number
+  updated: number
+  client_matched: number
+  unmatched: number
+  unmatched_names: string[]
+  encrypted: number
+  password_skipped: number
+  encryption_available: boolean
+  total: number
+}
+
+/** 충전 관제 계정 목록 엑셀 → 자산·연동 일괄 등록 (ADMIN). 비번은 AES 암호화(키 있을 때). */
+export function useImportChargeAccounts() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData(); fd.append('file', file)
+      const { data } = await api.post<ChargeAccountImportResult>('/assets/charge-accounts/import', fd)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['assets'] })
+    },
+  })
+}
+
 /** 전체 계정 월별 점검 실행 (ADMIN) — 대상 자산별 점검 이슈 생성(멱등)
  *  사이트 도달성 확인(병렬)으로 수십 초 걸릴 수 있어 기본 15초 대신 전용 타임아웃 사용 */
 export function useAccountCheck() {

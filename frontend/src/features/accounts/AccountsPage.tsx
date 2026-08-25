@@ -10,6 +10,7 @@ import {
   PencilSimple,
   Plus,
   ShieldCheck,
+  UploadSimple,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
@@ -25,7 +26,7 @@ import { useCodes } from '../../lib/api/queries'
 import type { AccountCheckResponse, Asset } from '../../types'
 import { useRevealAuth } from '../assets/useRevealAuth'
 import { AssetFormModal } from '../assets/AssetFormModal'
-import { useAccountCheck, useCredentialAssets } from './api'
+import { useAccountCheck, useCredentialAssets, useImportChargeAccounts } from './api'
 
 const PAGE_SIZE = 20
 
@@ -148,6 +149,23 @@ export function AccountsPage() {
 
   const { revealed, loadingId, reveal, hide } = useRevealAuth()
   const accountCheck = useAccountCheck()
+  const importCharge = useImportChargeAccounts()
+
+  const onImportCharge = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    try {
+      const r = await importCharge.mutateAsync(files[0])
+      const enc = r.encryption_available
+        ? `비밀번호 암호화 ${r.encrypted}건`
+        : `키 미설정 — 비밀번호 제외 ${r.password_skipped}건(메타만)`
+      const unmatched = r.unmatched > 0 ? ` · 미매칭 ${r.unmatched}건(고객사 마스터 확인)` : ''
+      showToast(`충전 계정 반영 — 등록 ${r.created}·갱신 ${r.updated} · ${enc}${unmatched}`, r.unmatched > 0 ? 'info' : 'success')
+      refetch()
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '일괄 등록에 실패했습니다.', 'danger')
+    }
+  }
 
   const openEdit = (asset: Asset) => {
     setEditing(asset)
@@ -287,6 +305,14 @@ export function AccountsPage() {
                 <ShieldCheck size={16} weight="bold" />
                 지금 전체 점검
               </button>
+              <label
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-semibold text-bone hover:bg-elevate"
+                title="충전 관제 계정 목록 엑셀 → 자산·연동 일괄 등록(비밀번호 AES 암호화)"
+              >
+                {importCharge.isPending ? <CircleNotch size={16} className="animate-spin" /> : <UploadSimple size={16} weight="bold" />}
+                충전계정 일괄등록
+                <input type="file" accept=".xlsx" className="hidden" onChange={(e) => onImportCharge(e.target.files)} />
+              </label>
             </RoleGate>
             <button
               type="button"

@@ -627,6 +627,18 @@ class AssetListResponse(BaseModel):
     check_summary: Optional[AccountCheckSummary] = None  # 계정 관리 뷰에서만 채움
 
 
+class ChargeAccountImportResult(BaseModel):
+    created: int
+    updated: int
+    client_matched: int
+    unmatched: int
+    unmatched_names: List[str] = []
+    encrypted: int
+    password_skipped: int
+    encryption_available: bool
+    total: int
+
+
 class AssetRevealOut(BaseModel):
     """reveal-auth 응답 — 일시 복호화 평문(프론트 5초 자동 숨김). 호출은 감사 로그 필수."""
 
