@@ -90,3 +90,43 @@ def test_config_sale_price_applies_at_approval(client, staff_headers):
         db.commit()
     finally:
         db.close()
+
+
+def test_c2_ownership_split(client, staff_headers):
+    """C2 — 매각률로 소유량 K를 매각 M·후시보유 L 분할 + 재고평가(원가단가)."""
+    pid = _mk_project(client, staff_headers, "C2분할검증")
+    _add_vehicle(client, staff_headers, pid)
+    # 승인 → 확정수량 K=80(effective)
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    # 매각률 89% 설정(엑셀 89% 매각 케이스)
+    r = client.put(f"{PROJECTS}/{pid}", headers=staff_headers, json={"sale_ratio": 89})
+    assert r.status_code == 200, r.text
+    d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    co = d["carbon_ownership"]
+    assert co is not None
+    assert co["sale_ratio"] == 89.0 and co["owned_quantity"] == 80.0
+    assert co["sold_quantity"] == 71.2   # 80 × 0.89
+    assert co["held_quantity"] == 8.8    # 80 − 71.2
+    assert co["inventory_value"] == round(8.8 * 13888)  # 후시보유 × 원가단가
+
+
+def test_c2_no_ratio_no_split(client, staff_headers):
+    """매각률 미설정이면 소유량 분할 None."""
+    pid = _mk_project(client, staff_headers, "C2미설정검증")
+    _add_vehicle(client, staff_headers, pid)
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    assert d["carbon_ownership"] is None
+
+
+def test_c2_full_hold(client, staff_headers):
+    """100% 후시보유(매각률 0) → M=0, L=K."""
+    pid = _mk_project(client, staff_headers, "C2전량보유검증")
+    _add_vehicle(client, staff_headers, pid)
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    client.put(f"{PROJECTS}/{pid}", headers=staff_headers, json={"sale_ratio": 0})
+    co = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()["carbon_ownership"]
+    assert co["sold_quantity"] == 0.0 and co["held_quantity"] == 80.0

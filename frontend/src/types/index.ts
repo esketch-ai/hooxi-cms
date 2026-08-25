@@ -487,6 +487,14 @@ export interface RevealAuthResponse {
 /** 진행 상태 — 백엔드 저장 값 그대로 한국어 (schemas._PROJECT_STATUS_PATTERN) */
 export type ProjectStatus = '기획' | '등록완료' | '모니터링' | '검증' | '발급완료'
 
+export interface CarbonOwnership {
+  sale_ratio: number
+  owned_quantity: number
+  sold_quantity: number
+  held_quantity: number
+  inventory_value?: number | null
+}
+
 export interface Project {
   project_id: string
   client_id?: string | null // 묶음 사업 시 대표사
@@ -508,6 +516,8 @@ export interface Project {
   approved_at?: string | null // 승인일(승인=존재). 최대지급액 입력 시 자동 세팅
   approved_unit_price?: number | null // 승인시점 매출 기준단가 잠금(탄소배출권 C1)
   approved_reduction?: number | null // 승인시 확정수량 잠금(탄소배출권 C1)
+  sale_ratio?: number | null // 탄소배출권 C2 매각률(%)
+  carbon_ownership?: CarbonOwnership | null // 소유량 분할(C2, 조회 파생)
   issued_credits?: number | null // 확정 발급량 (R2-A1)
   issued_at?: string | null
   manager_id?: string | null

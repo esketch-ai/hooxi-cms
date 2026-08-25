@@ -38,6 +38,7 @@ from models import (
 from routers import common
 from routers.codes import validate_active_code
 from services import accounting
+from services import carbon_credit
 from services import reduction_finalize
 from services.market_rate import current_market_rate, expected_revenue, trailing_avg_rate
 from services.project_params import base_params
@@ -52,6 +53,7 @@ _PROJECT_FIELDS = [
     "expected_issue_date", "expected_credits",
     "issued_credits", "issued_at", "manager_id", "approval_status",
 ]  # 지급 파라미터(max_payment·approved_at 등)는 payout-params 전용 경로만(차량 재계산 동반)
+# 탄소배출권 C2 매각률(sale_ratio)은 update_project에서만 명시 처리(생성 payload엔 없음)
 
 
 def _project_status_codes(db: Session):
@@ -480,6 +482,16 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         func.sum(ProjectVehicle.effective_reduction)
     ).filter(ProjectVehicle.project_id == project.project_id).scalar()
     expected_rev = expected_revenue(eff_sum, avg6)
+    # 탄소배출권 소유량 분할(C2, 비영속) — 승인 확정수량(우선) 또는 Σeff를 매각률로 L/M 분할·재고평가.
+    cc_params = base_params(db)
+    owned_q = (float(project.approved_reduction) if project.approved_reduction is not None
+               else (float(eff_sum) if eff_sum is not None else None))
+    _co = carbon_credit.compute_ownership(
+        owned_quantity=owned_q,
+        sale_ratio=float(project.sale_ratio) if project.sale_ratio is not None else None,
+        inventory_unit_price=cc_params.get("inventory_unit_price"),
+    )
+    carbon_ownership = schemas.CarbonOwnership(**_co) if _co else None
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -497,6 +509,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "inventory_valuation": inventory_valuation,
             "market_rate_avg6": float(avg6) if avg6 is not None else None,
             "expected_revenue": expected_rev,
+            "carbon_ownership": carbon_ownership,
             **acct,
         }
     )
@@ -748,6 +761,8 @@ def update_project(
     for field in _PROJECT_FIELDS:
         if field in data:
             setattr(project, field, data[field])
+    if "sale_ratio" in data:  # 탄소배출권 C2 매각률 — 소유량 분할 파생(재계산 불요)
+        project.sale_ratio = data["sale_ratio"]
     # 진행 상태가 '실제로' 바뀔 때만 해당 단계의 실제 도달일 자동 기록(비어 있을 때만) — Phase 1.
     # (폼이 수정 시에도 project_status를 항상 재전송하므로, 값이 동일하면 도달일을 찍지 않아
     #  기존 지연 상태가 조용히 해제되는 것을 방지)

@@ -353,6 +353,21 @@ export function useUpdateApprovalStatus(projectId: string | undefined) {
   })
 }
 
+/** 탄소배출권 C2 매각률(%) 저장 — 소유량 분할(후시보유/매각) 파생. */
+export function useUpdateSaleRatio(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (saleRatio: number | null) => {
+      const { data } = await api.put<Project>(`/projects/${projectId}`, { sale_ratio: saleRatio })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
 /** 사업 본체 삭제 — 정산 진행(BILLED/COMPLETED) 사업은 백엔드가 409로 막는다. */
 export function useDeleteProject() {
   const queryClient = useQueryClient()

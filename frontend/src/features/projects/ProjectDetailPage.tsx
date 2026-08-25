@@ -48,6 +48,7 @@ import {
   useProjectVehicles,
   usePurchaseInvoices,
   useUpdateApprovalStatus,
+  useUpdateSaleRatio,
   useUpdatePayoutParams,
   useUpdateStages,
 } from './api'
@@ -325,6 +326,57 @@ function ApprovalStatusEditor({
   )
 }
 
+// 탄소배출권 C2 — 매각률 인라인 편집 + 소유량 분할(후시보유/매각·재고자산) 표시
+function SaleRatioEditor({
+  projectId, saleRatio, ownership,
+}: { projectId: string; saleRatio?: number | null; ownership?: import('../../types').CarbonOwnership | null }) {
+  const { showToast } = useToast()
+  const update = useUpdateSaleRatio(projectId)
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(saleRatio != null ? String(saleRatio) : '')
+  const n = (v?: number | null) => (v == null ? '—' : v.toLocaleString('ko-KR', { maximumFractionDigits: 1 }))
+  const won = (v?: number | null) => (v == null ? '—' : `${Math.round(v).toLocaleString('ko-KR')}원`)
+
+  const save = async () => {
+    const parsed = val.trim() === '' ? null : Number(val)
+    if (parsed != null && (Number.isNaN(parsed) || parsed < 0 || parsed > 100)) {
+      showToast('매각률은 0~100 사이여야 합니다.', 'danger'); return
+    }
+    try {
+      await update.mutateAsync(parsed)
+      showToast('매각률이 저장되었습니다.', 'success'); setEditing(false)
+    } catch { showToast('매각률 저장에 실패했습니다.', 'danger') }
+  }
+
+  if (editing) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <input type="number" min={0} max={100} value={val} onChange={(e) => setVal(e.target.value)}
+          className="w-20 rounded-md border border-hairline bg-elevate px-2 py-1 text-sm text-bone" placeholder="%" />
+        <button type="button" onClick={save} disabled={update.isPending}
+          className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-on-primary disabled:opacity-50">저장</button>
+        <button type="button" onClick={() => { setEditing(false); setVal(saleRatio != null ? String(saleRatio) : '') }}
+          className="text-xs text-slatey hover:text-ash">취소</button>
+      </span>
+    )
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+      <span className="text-bone">{saleRatio != null ? `매각률 ${saleRatio}%` : <span className="text-slatey">매각률 미설정</span>}</span>
+      {ownership && (
+        <span className="text-ash">
+          · 매각 {n(ownership.sold_quantity)} · 후시보유 {n(ownership.held_quantity)} tCO₂
+          {ownership.inventory_value != null && <span className="text-slatey"> · 재고자산 {won(ownership.inventory_value)}</span>}
+        </span>
+      )}
+      <button type="button" onClick={() => setEditing(true)}
+        className="rounded-md p-1 text-smoke hover:bg-elevate hover:text-bone" title="매각률 변경" aria-label="매각률">
+        <PencilSimple size={14} />
+      </button>
+    </span>
+  )
+}
+
 // 최종 감축량 확정·배분(P4) — 발급량을 차량별 effective 비율로 배분·동결
 function FinalizeReductionButton({ projectId }: { projectId: string }) {
   const { showToast } = useToast()
@@ -452,6 +504,9 @@ function OverviewSection({
             </span>
           </OverviewItem>
         )}
+        <OverviewItem label="매각률 · 소유량 (탄소배출권)">
+          <SaleRatioEditor projectId={project.project_id} saleRatio={project.sale_ratio} ownership={project.carbon_ownership} />
+        </OverviewItem>
         <OverviewItem label="승인상태">
           <ApprovalStatusEditor
             projectId={project.project_id}

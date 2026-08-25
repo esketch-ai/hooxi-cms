@@ -709,6 +709,7 @@ class ProjectUpdate(BlankFKToNoneModel):
     manager_id: Optional[str] = Field(default=None, max_length=50)
     # 사업 승인상태(APPROVAL_STATUS: 미승인/승인) — 라우터에서 validate_active_code 검증. 미착품 전환 스위치(부록 L)
     approval_status: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    sale_ratio: Optional[float] = Field(default=None, ge=0, le=100)  # 탄소배출권 C2 매각률(%)
 
 
 class ProjectOut(BaseModel):
@@ -735,6 +736,7 @@ class ProjectOut(BaseModel):
     approval_status: Optional[str] = None  # 사업 승인상태(미승인/승인) — 미착품 전환 스위치(부록 L)
     approved_unit_price: Optional[float] = None  # 승인시점 매출 기준단가 잠금(C1)
     approved_reduction: Optional[float] = None   # 승인시 확정수량 잠금(C1)
+    sale_ratio: Optional[float] = None  # 탄소배출권 C2 매각률(%)
     issued_credits: Optional[float] = None
     issued_at: Optional[date] = None
     manager_id: Optional[str] = None
@@ -2136,6 +2138,15 @@ class FleetPreviewResult(BaseModel):
     rows: List[FleetPreviewRow] = []  # '건너뜀' 행 상세만
 
 
+class CarbonOwnership(BaseModel):
+    """탄소배출권 소유량 분할(C2) — 승인 확정수량 K를 매각률로 M(매각)·L(후시보유) 분할."""
+    sale_ratio: float           # 매각률(%)
+    owned_quantity: float       # 소유량 K(tCO2)
+    sold_quantity: float        # 매각 M = K×율(tCO2)
+    held_quantity: float        # 후시보유 L = K−M(tCO2)
+    inventory_value: Optional[float] = None  # 재고자산 평가 = L × 원가단가(원)
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 진행 단계 + 거래계약/원장 파생."""
 
@@ -2167,6 +2178,8 @@ class ProjectDetailOut(ProjectOut):
     # 예상수익 파생(비영속 read-only, B2) — Σ잔여반영감축량 × 직전 6개월 평균시세(원단위 절사)
     market_rate_avg6: Optional[float] = None  # 직전 6개월 평균 매출단가 시세(없으면 None)
     expected_revenue: Optional[float] = None  # 예상수익 = trunc(Σeff × 6개월평균시세), None 안전
+    # 탄소배출권 소유량 분할(C2, 비영속) — 매각률로 K를 매각(M)·후시보유(L) 분할 + 재고평가
+    carbon_ownership: Optional[CarbonOwnership] = None
 
 
 # ---------------------------------------------------------------------------
