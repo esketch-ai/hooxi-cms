@@ -796,6 +796,7 @@ export interface FleetStatusCommitResult {
   aggregated: number
   created: number
   updated: number
+  reconciled?: number // 옛 보류행 승격·정리(지연 매칭 정합)
   matched: number
   unmatched: number
 }

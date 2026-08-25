@@ -192,16 +192,42 @@ def commit(db, file_bytes: bytes, period: str, actor_id: Optional[str] = None) -
     """적용 — (고객사×월) upsert. 기존 있으면 대수 갱신, 없으면 생성. 미매칭은 보류로 적재."""
     rows = parse_rows(file_bytes)
     items = _aggregate(db, rows)
-    created = updated = 0
+    created = updated = reconciled = 0
+
+    def _apply_values(fs: FleetStatus) -> None:
+        fs.region = it["region"]
+        fs.industry = it["industry"]
+        fs.company_name = it["company_name"]
+        for f in _NUM_FIELDS:
+            setattr(fs, _MODEL_COL.get(f, f), it[f])
+
     for it in items:
+        # 나중에 매칭된 운수사: 이전 미매칭(client_id NULL, region+회사명) 보류행 존재 여부
+        orphan = None
+        if it.get("matched_client_id"):
+            orphan = (
+                db.query(FleetStatus)
+                .filter(
+                    FleetStatus.period == period,
+                    FleetStatus.client_id.is_(None),
+                    FleetStatus.region == it["region"],
+                    FleetStatus.company_name == it["company_name"],
+                )
+                .first()
+            )
         existing = _find_existing(db, it, period)
         if existing is not None:
-            existing.region = it["region"]
-            existing.industry = it["industry"]
-            existing.company_name = it["company_name"]
-            for f in _NUM_FIELDS:
-                setattr(existing, _MODEL_COL.get(f, f), it[f])
+            _apply_values(existing)
             updated += 1
+            # 매칭행이 이미 있고 옛 보류행도 남아 있으면 보류행 제거(이중계상 방지)
+            if orphan is not None and orphan is not existing:
+                db.delete(orphan)
+                reconciled += 1
+        elif orphan is not None:
+            # 매칭 신규지만 옛 보류행 존재 → 보류행을 매칭행으로 승격(정합)
+            orphan.client_id = it["matched_client_id"]
+            _apply_values(orphan)
+            reconciled += 1
         else:
             fs = FleetStatus(
                 client_id=it["matched_client_id"],
@@ -223,6 +249,7 @@ def commit(db, file_bytes: bytes, period: str, actor_id: Optional[str] = None) -
         "aggregated": len(items),
         "created": created,
         "updated": updated,
+        "reconciled": reconciled,  # 옛 보류행 승격·정리 건수(지연 매칭 정합)
         "matched": matched,
         "unmatched": len(items) - matched,
     }

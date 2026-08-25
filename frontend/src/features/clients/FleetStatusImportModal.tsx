@@ -92,7 +92,7 @@ export function FleetStatusImportModal({ open, onClose }: Props) {
       {
         onSuccess: (r) => {
           showToast(
-            `${r.period} 반영 — 신규 ${r.created} · 갱신 ${r.updated}건 · 미매칭 ${r.unmatched}건.`,
+            `${r.period} 반영 — 신규 ${r.created} · 갱신 ${r.updated}건${r.reconciled ? ` · 보류정합 ${r.reconciled}건` : ''} · 미매칭 ${r.unmatched}건.`,
             'success',
           )
           onClose()

@@ -417,3 +417,36 @@ def test_unmatched_export_xlsx(client, admin_headers):
         _cleanup(db)
     finally:
         db.close()
+
+
+def test_reconcile_stale_orphan_on_late_match(client):
+    """지연 매칭 정합 — 미매칭 보류행이, 나중에 고객사 등록 후 재커밋 시 승격(이중계상 방지)."""
+    db = models.SessionLocal()
+    try:
+        _cleanup(db)
+        xls = _make_excel([
+            {"region": "강원", "industry": "시내", "company": "TESTF지연운수",
+             "lic": 12, "total": 12, "diesel": 0, "cng": 5, "ev": 7},
+        ])
+        # 1차: 고객사 없음 → 보류행(client_id NULL) 생성
+        r1 = fleet_import.commit(db, xls, "2026-06", actor_id="tester")
+        assert r1["created"] == 1 and r1["matched"] == 0
+        orphan = db.query(models.FleetStatus).filter_by(
+            company_name="TESTF지연운수", period="2026-06").first()
+        assert orphan.client_id is None  # 보류
+
+        # 고객사 나중 등록
+        c = models.Client(client_type="TRANSPORT", company_name="TESTF지연운수", region="강원")
+        db.add(c); db.commit(); cid = c.client_id
+
+        # 2차 재커밋 → 보류행이 매칭행으로 승격(reconciled), 이중행 없음
+        r2 = fleet_import.commit(db, xls, "2026-06", actor_id="tester")
+        assert r2["reconciled"] == 1 and r2["created"] == 0 and r2["matched"] == 1
+        db.expire_all()
+        rows = db.query(models.FleetStatus).filter_by(
+            company_name="TESTF지연운수", period="2026-06").all()
+        assert len(rows) == 1  # 이중계상 없음
+        assert rows[0].client_id == cid and rows[0].electric == 7
+    finally:
+        _cleanup(db)
+        db.close()

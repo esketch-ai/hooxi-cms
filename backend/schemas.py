@@ -3332,6 +3332,7 @@ class FleetStatusCommitOut(BaseModel):
     aggregated: int
     created: int
     updated: int
+    reconciled: int = 0  # 옛 보류행 승격·정리 건수(지연 매칭 정합)
     matched: int
     unmatched: int
     # 현황 탭 분류 반영(F6) — 현황 탭이 있을 때만(단일 원본 탭이면 0)
