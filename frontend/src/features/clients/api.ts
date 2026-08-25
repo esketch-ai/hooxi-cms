@@ -212,6 +212,7 @@ export interface ParticipationVehicle {
   vehicle_no?: string | null
   introduction_type?: string | null
   participation_status: 'COMPLETED' | 'ONGOING'
+  project_id?: string | null
   project_name?: string | null
   project_status?: string | null
   expected_reduction?: number | null

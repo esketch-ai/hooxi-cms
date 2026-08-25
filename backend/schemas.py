@@ -1538,6 +1538,7 @@ class ParticipationVehicle(BaseModel):
     vehicle_no: Optional[str] = None
     introduction_type: Optional[str] = None
     participation_status: str  # COMPLETED/ONGOING
+    project_id: Optional[str] = None
     project_name: Optional[str] = None
     project_status: Optional[str] = None
     expected_reduction: Optional[float] = None

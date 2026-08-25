@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { SectionTabs } from '../../components/SectionTabs'
 import { Num } from '../../components/Num'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Bus, ChartLineUp, Coins, DownloadSimple, Gauge } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
 import { ScreenGuide } from '../../components/ScreenGuide'
@@ -71,9 +71,11 @@ export function AssetVehiclesPage() {
   const isManagerUp = user?.role === 'ADMIN' || user?.role === 'MANAGER'
   const [exporting, setExporting] = useState(false)
 
+  const [searchParams] = useSearchParams()
   const [projectId, setProjectId] = useState('')
   const [region, setRegion] = useState('')
-  const [clientId, setClientId] = useState('')
+  // 운수사 '감축 참여' 탭에서 넘어온 ?client= 로 초기 필터(4관점 상호 링크, 개편 P3)
+  const [clientId, setClientId] = useState(() => searchParams.get('client') ?? '')
   const [approvalStatus, setApprovalStatus] = useState('')
   const [buyerId, setBuyerId] = useState('')
   const [registeredFrom, setRegisteredFrom] = useState('')

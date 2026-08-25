@@ -1051,6 +1051,17 @@ function ParticipationTab({ clientId }: { clientId: string }) {
         3단계 감축량 정합 — <b className="text-ash">예상</b>=사업 참여차량 산정값, <b className="text-ash">모니터링</b>=감축 산정 워크벤치 실측 스냅샷,
         <b className="text-ash"> 최종</b>=발급확정 반영값(차량번호로 연결). 달성률=모니터링/예상, 확정률=최종/예상.
       </p>
+      {/* 4관점 상호 링크(개편 P3) — 운수사 → 차량 크로스뷰 · 산정 워크벤치 */}
+      <div className="flex flex-wrap gap-2">
+        <Link to={`/asset-vehicles?client=${clientId}`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ash hover:bg-elevate hover:text-bone">
+          이 운수사 차량 크로스뷰 →
+        </Link>
+        <Link to="/registry"
+          className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-ash hover:bg-elevate hover:text-bone">
+          감축 산정 워크벤치 →
+        </Link>
+      </div>
 
       {/* 참여 차량 */}
       <div>
@@ -1085,7 +1096,13 @@ function ParticipationTab({ clientId }: { clientId: string }) {
                         <span className="rounded-full border border-sky-400/25 bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-700 dark:text-sky-300">참여중</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-ash">{p.project_name ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {p.project_id ? (
+                        <Link to={`/projects/${p.project_id}`} className="text-ash underline-offset-2 hover:text-bone hover:underline">{p.project_name ?? '사업'}</Link>
+                      ) : (
+                        <span className="text-ash">{p.project_name ?? '—'}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-ash">{p.project_status ?? '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ash">{tco2(p.expected_reduction)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-sky-600 dark:text-sky-400">{tco2(p.monitoring_reduction)}</td>

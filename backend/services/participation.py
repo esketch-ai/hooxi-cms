@@ -43,7 +43,7 @@ def client_participation(db, client_id: str) -> dict:
             ProjectVehicle.vehicle_no, ProjectVehicle.introduction_type,
             ProjectVehicle.total_reduction, ProjectVehicle.effective_reduction,
             ProjectVehicle.expected_payout, ProjectVehicle.client_vehicle_id,
-            Project.project_name, Project.project_status,
+            Project.project_id, Project.project_name, Project.project_status,
         )
         .join(Project, ProjectVehicle.project_id == Project.project_id)
         .filter(ProjectVehicle.client_id == client_id)
@@ -83,8 +83,8 @@ def client_participation(db, client_id: str) -> dict:
             final_total += fin
         participated.append({
             "vehicle_no": r.vehicle_no, "introduction_type": r.introduction_type,
-            "participation_status": state, "project_name": r.project_name,
-            "project_status": r.project_status,
+            "participation_status": state, "project_id": r.project_id,
+            "project_name": r.project_name, "project_status": r.project_status,
             "expected_reduction": exp, "monitoring_reduction": mon, "final_reduction": fin,
             "ach_monitoring": _rate(mon, exp), "ach_final": _rate(fin, exp),
             "expected_payout": _f(r.expected_payout),
