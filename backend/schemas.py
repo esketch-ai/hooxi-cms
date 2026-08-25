@@ -2011,6 +2011,13 @@ class TaxInvoiceCommitResponse(BaseModel):
     details: List[TaxInvoiceCommitDetail]
 
 
+class TaxInvoiceRematchResult(BaseModel):
+    scanned: int            # 미매칭 스캔 건수
+    relinked_client: int    # 운수사(고객사) 재연결
+    relinked_buyer: int     # 투자사(매수자) 재연결
+    still_unmatched: int    # 여전히 미매칭(마스터에 없음)
+
+
 # 운수사 보유 차량(fleet) 마스터 — 부록 M. BUS_Info_list.xlsx 컬럼 반영 --------------
 class ClientVehicleIn(BlankFKToNoneModel):
     """차량 마스터 등록 — vehicle_no 필수(전국 유일). operator_name은 업체명 원문(운수사 매칭)."""

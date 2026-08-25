@@ -12,6 +12,7 @@ import {
   useCommitTaxInvoices,
   usePreviewScan,
   usePreviewTaxInvoices,
+  useRematchTaxInvoices,
   useTaxInvoices,
 } from './api'
 import type { TaxInvoicePreviewItem } from './types'
@@ -63,7 +64,20 @@ export function TaxInvoicesPage() {
   const commitM = useCommitTaxInvoices()
   const previewScanM = usePreviewScan()
   const commitScanM = useCommitScan()
+  const rematchM = useRematchTaxInvoices()
   const committing = commitM.isPending || commitScanM.isPending
+
+  const onRematch = async () => {
+    try {
+      const r = await rematchM.mutateAsync()
+      showToast(
+        `재매칭 — 운수사 ${r.relinked_client}·투자사 ${r.relinked_buyer} 연결${r.still_unmatched > 0 ? ` · 미매칭 ${r.still_unmatched}건(마스터 미등록)` : ''}`,
+        r.relinked_client + r.relinked_buyer > 0 ? 'success' : 'info',
+      )
+    } catch (e) {
+      showErr(e, '재매칭에 실패했습니다.')
+    }
+  }
 
   // 원장 조회
   const [direction, setDirection] = useState('')
@@ -216,6 +230,18 @@ export function TaxInvoicesPage() {
           >
             {previewScanM.isPending ? '스캔 중…' : '폴더 스캔'}
           </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+          <span className="text-xs font-medium text-ash">미매칭 재매칭:</span>
+          <button
+            type="button"
+            onClick={onRematch}
+            disabled={rematchM.isPending}
+            className="rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+          >
+            {rematchM.isPending ? '재매칭 중…' : '미매칭 재매칭'}
+          </button>
+          <span className="text-[11px] text-slatey">고객사·투자사를 나중에 등록했다면 눌러 상대 사업자번호로 자동 연결(재업로드 불필요).</span>
         </div>
       </section>
 

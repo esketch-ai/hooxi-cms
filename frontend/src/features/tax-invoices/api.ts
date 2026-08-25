@@ -102,6 +102,20 @@ export function useCommitTaxInvoices() {
   })
 }
 
+// 미매칭 재매칭 백필 — 나중에 등록된 고객사/투자사에 상대 사업자번호로 재연결
+export function useRematchTaxInvoices() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ scanned: number; relinked_client: number; relinked_buyer: number; still_unmatched: number }>(
+        '/tax-invoices/rematch',
+      )
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-invoices'] }),
+  })
+}
+
 // Dropbox 정산 폴더 스캔 — folder 비우면 백엔드 config 기본값 사용
 export function usePreviewScan() {
   return useMutation({

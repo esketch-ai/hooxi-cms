@@ -111,3 +111,46 @@ def test_tax_invoice_scan_dropbox(client, staff_headers, monkeypatch):
     finally:
         _cleanup(db, cid)
         db.close()
+
+
+def test_rematch_backfill_links_late_client(client, staff_headers):
+    """미매칭으로 굳은 세금계산서가, 나중에 고객사 등록 후 재매칭 백필로 자동 연결."""
+    db = models.SessionLocal()
+    cid = None
+    try:
+        _cleanup(db, None)
+        db.merge(models.Config(config_key="company_biz_reg_no", config_value=COMPANY))
+        db.commit()  # 자사만 등록 — 상대(COUNTERPART) 고객사는 아직 없음
+        # 적재 → 상대 미등록이라 미매칭으로 굳음
+        html = _build_secure_mail(SAMPLE_XML, COMPANY)
+        r = client.post(API + "/commit", headers=staff_headers, files=[_file(html)])
+        assert r.status_code == 200, r.text
+        assert r.json()["created"] == 1
+        inv = db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTIMP%")).first()
+        assert inv.matched_client_id is None and inv.matched_buyer_id is None  # 미매칭
+
+        # 재업로드해도 멱등(중복)이라 재매칭 안 됨 확인
+        r2 = client.post(API + "/commit", headers=staff_headers, files=[_file(html)])
+        assert r2.json()["duplicate"] == 1
+
+        # 이제 상대 고객사(운수사) 등록
+        c = models.Client(client_type="TRANSPORT", company_name="지연등록운수", biz_reg_no=COUNTERPART)
+        db.add(c); db.commit(); cid = c.client_id
+
+        # 재매칭 백필 → 미매칭이 자동 연결
+        rm = client.post(API + "/rematch", headers=staff_headers)
+        assert rm.status_code == 200, rm.text
+        body = rm.json()
+        assert body["relinked_client"] == 1 and body["still_unmatched"] == 0
+        db.expire_all()
+        inv2 = db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTIMP%")).first()
+        assert inv2.matched_client_id == cid  # 재연결됨
+
+        # 멱등 — 다시 돌리면 스캔 0
+        rm2 = client.post(API + "/rematch", headers=staff_headers)
+        assert rm2.json()["scanned"] == 0
+    finally:
+        _cleanup(db, cid)
+        db.close()

@@ -247,3 +247,36 @@ def commit_files(db, files: List[Tuple[str, str]], actor_id: Optional[str] = Non
         "held": held,
         "details": details,
     }
+
+
+def rematch_unmatched(db) -> dict:
+    """미매칭 세금계산서 재매칭 백필 — 나중에 등록된 고객사/투자사에 상대 사업자번호로 재연결.
+
+    적재 시점에 마스터가 없어 matched_client_id·matched_buyer_id 둘 다 NULL로 굳은 행을,
+    지금 마스터(Client·Buyer) 기준으로 counterpart_reg_no로 다시 찾아 FK를 채운다(재업로드 불요).
+    멱등: 이미 매칭된 행은 건너뜀. analyze_html과 동일 매칭(자사 무관, 상대 사업자번호만).
+    """
+    ctx = build_context(db)
+    rows = db.query(TaxInvoice).filter(
+        TaxInvoice.matched_client_id.is_(None),
+        TaxInvoice.matched_buyer_id.is_(None),
+    ).all()
+    relinked_client = relinked_buyer = 0
+    for inv in rows:
+        norm = normalize_biz_no(inv.counterpart_reg_no or "")
+        if not norm:
+            continue
+        client = ctx.client_by_biz.get(norm)
+        buyer = ctx.buyer_by_biz.get(norm)
+        if client:
+            inv.matched_client_id = client.client_id
+            relinked_client += 1
+        elif buyer:
+            inv.matched_buyer_id = buyer.buyer_id
+            relinked_buyer += 1
+    return {
+        "scanned": len(rows),
+        "relinked_client": relinked_client,
+        "relinked_buyer": relinked_buyer,
+        "still_unmatched": len(rows) - relinked_client - relinked_buyer,
+    }

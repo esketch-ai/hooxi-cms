@@ -381,6 +381,22 @@ async def commit_tax_invoices(
     return schemas.TaxInvoiceCommitResponse(**result)
 
 
+@router.post("/rematch", response_model=schemas.TaxInvoiceRematchResult)
+def rematch_tax_invoices(
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """미매칭 세금계산서 재매칭 — 나중에 등록된 고객사/투자사에 상대 사업자번호로 재연결."""
+    result = tax_invoice_import.rematch_unmatched(db)
+    AuditLogger.log_action(
+        db, user.user_id, "TAX_INVOICE_REMATCH", target_type="TAX_INVOICE",
+        new_value="scanned={0}, client={1}, buyer={2}".format(
+            result["scanned"], result["relinked_client"], result["relinked_buyer"]),
+    )
+    db.commit()
+    return schemas.TaxInvoiceRematchResult(**result)
+
+
 def _resolve_scan_folder(db: Session, folder: Optional[str]) -> str:
     f = (folder or "").strip() or tax_invoice_import.scan_folder_default(db)
     if not f:
