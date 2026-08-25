@@ -158,5 +158,27 @@ def test_scan_requires_folder(client, staff_headers, monkeypatch):
     assert r.status_code == 422  # 폴더 미지정·config 기본값 없음
 
 
+def test_multi_source_merge_priority(client, staff_headers):
+    """같은 (차량·월)에 ETAS(운행)+INTEGRATED(충전) → 결정적 병합(eTAS 운행 우선, 충전 채움)."""
+    _clean()
+    db = models.SessionLocal()
+    try:
+        # eTAS: 운행일수·거리(권위), 충전 없음
+        db.add(models.VehicleMonthlyLog(vehicle_no="A1", year_month="2025-05", source="ETAS",
+                                        operating_days=30, distance_km=6000))
+        # INTEGRATED: 충전량 보유, 거리는 다른 값(우선순위 낮음 → 무시돼야)
+        db.add(models.VehicleMonthlyLog(vehicle_no="A1", year_month="2025-05", source="INTEGRATED",
+                                        distance_km=9999, charge_kwh=7000))
+        db.commit()
+    finally:
+        db.close()
+    con = client.get(CONSOL, headers=staff_headers).json()
+    m = con["vehicles"][0]["months"]["2025-05"]
+    assert m["distance_km"] == 6000  # eTAS 우선(9999 아님)
+    assert m["charge_kwh"] == 7000   # INTEGRATED가 채움
+    assert m["operating_days"] == 30
+    _clean()
+
+
 def test_requires_auth(client):
     assert client.get(CONSOL).status_code == 401

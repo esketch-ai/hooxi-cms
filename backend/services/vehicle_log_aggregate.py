@@ -10,6 +10,9 @@ from typing import Dict, List, Optional
 
 from models import ReductionRegistry, VehicleCalcInput, VehicleMonthlyLog
 
+# 출처 우선순위(작을수록 우선). 운행=eTAS 권위, 충전량은 INTEGRATED만 보유, BMS는 보조.
+_SOURCE_PRIORITY = {"ETAS": 0, "INTEGRATED": 1, "BMS": 2}
+
 
 def _f(v) -> Optional[float]:
     return float(v) if v is not None else None
@@ -25,7 +28,8 @@ def consolidate(db, region: Optional[str] = None, ym_from: Optional[str] = None,
         q = q.filter(VehicleMonthlyLog.year_month >= ym_from)
     if ym_to:
         q = q.filter(VehicleMonthlyLog.year_month <= ym_to)
-    logs = q.all()
+    # 출처 우선순위로 정렬 → 지표는 first-write-wins(고우선 출처가 채움, 결정적)
+    logs = sorted(q.all(), key=lambda l: _SOURCE_PRIORITY.get(l.source, 9))
 
     program = None
     if program_only:
@@ -44,7 +48,7 @@ def consolidate(db, region: Optional[str] = None, ym_from: Optional[str] = None,
             "operating_days": None, "distance_km": None, "charge_kwh": None})
         for k in ("operating_days", "distance_km", "charge_kwh"):
             val = getattr(lg, k)
-            if val is not None:
+            if val is not None and m[k] is None:  # 고우선 출처 우선(first-write-wins)
                 m[k] = _f(val)
         months.add(lg.year_month)
 
