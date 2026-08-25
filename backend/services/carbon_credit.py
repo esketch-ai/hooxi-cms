@@ -5,6 +5,7 @@
 회계 원장(compute_accounting)과 독립 — 조회 시 계산만(비영속).
 """
 
+import math
 from typing import Dict, Optional
 
 
@@ -37,3 +38,32 @@ def compute_ownership(
         "held_quantity": held,
         "inventory_value": inventory_value,
     }
+
+
+def compute_valuation(
+    approval_status: Optional[str],
+    eff_sum: Optional[float],
+    avg6_rate: Optional[float],
+    approved_reduction: Optional[float],
+    approved_unit_price: Optional[float],
+) -> Dict[str, Optional[object]]:
+    """탄소배출권 2상태 평가액(C3) — 신청중=예상수량×6개월평균가 / 승인=확정수량×승인시점 잠금가.
+
+    ※ 기존 compute_accounting(엑셀 v19.3 16/16 검증)은 **무접촉** — 이 함수는 별도 파생 평가.
+    - 신청중(미승인 또는 승인스냅샷 미비): 수량=Σ effective_reduction, 단가=6개월 평균시세(EXPECTED)
+    - 승인(잠금 스냅샷 존재): 수량=approved_reduction, 단가=approved_unit_price(CONFIRMED)
+    평가액 = TRUNC(수량 × 단가). 수량/단가 결여 시 None.
+    """
+    approved = approval_status == "승인"
+    if approved and approved_reduction is not None and approved_unit_price is not None:
+        basis = "CONFIRMED"
+        qty: Optional[float] = float(approved_reduction)
+        unit: Optional[float] = float(approved_unit_price)
+    else:
+        basis = "EXPECTED"
+        qty = float(eff_sum) if eff_sum is not None else None
+        unit = float(avg6_rate) if avg6_rate is not None else None
+    valuation = (
+        float(math.trunc(qty * unit)) if (qty is not None and unit is not None) else None
+    )
+    return {"basis": basis, "quantity": qty, "unit_price": unit, "valuation": valuation}

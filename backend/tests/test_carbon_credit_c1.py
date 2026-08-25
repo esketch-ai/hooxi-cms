@@ -130,3 +130,32 @@ def test_c2_full_hold(client, staff_headers):
     client.put(f"{PROJECTS}/{pid}", headers=staff_headers, json={"sale_ratio": 0})
     co = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()["carbon_ownership"]
     assert co["sold_quantity"] == 0.0 and co["held_quantity"] == 80.0
+
+
+def test_c3_valuation_expected_when_pending(client, staff_headers):
+    """C3 신청중(미승인) — 평가 basis=EXPECTED(예상수량×6개월평균가)."""
+    pid = _mk_project(client, staff_headers, "C3신청중검증")
+    _add_vehicle(client, staff_headers, pid)
+    # 승인 파라미터로 effective 파생시키되 승인상태는 미승인 유지 위해 approval_status 명시 안 함
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    cv = d["credit_valuation"]
+    assert cv is not None and cv["basis"] == "EXPECTED"
+    # 시세 미설정이면 단가 None → 평가액 None(수량은 Σeff=80)
+    assert cv["quantity"] == 80.0
+
+
+def test_c3_valuation_confirmed_when_approved(client, staff_headers):
+    """C3 승인 — 평가 basis=CONFIRMED(확정수량×잠금가). 잠금가 20,000·확정수량 80 → 1,600,000."""
+    pid = _mk_project(client, staff_headers, "C3승인검증")
+    _add_vehicle(client, staff_headers, pid)
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    # 승인 상태 전환
+    client.put(f"{PROJECTS}/{pid}", headers=staff_headers, json={"approval_status": "승인"})
+    d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    cv = d["credit_valuation"]
+    assert cv["basis"] == "CONFIRMED"
+    assert cv["quantity"] == 80.0 and cv["unit_price"] == 20000.0
+    assert cv["valuation"] == 1600000  # trunc(80 × 20000)

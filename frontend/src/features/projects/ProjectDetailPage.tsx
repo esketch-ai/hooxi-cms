@@ -507,6 +507,23 @@ function OverviewSection({
         <OverviewItem label="매각률 · 소유량 (탄소배출권)">
           <SaleRatioEditor projectId={project.project_id} saleRatio={project.sale_ratio} ownership={project.carbon_ownership} />
         </OverviewItem>
+        {project.credit_valuation && (
+          <OverviewItem label="배출권 평가액 (탄소배출권)">
+            <span className="flex flex-wrap items-center gap-1.5 text-sm">
+              <span className={`rounded-full border px-2 py-0.5 text-[11px] ${project.credit_valuation.basis === 'CONFIRMED' ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'border-sky-400/25 bg-sky-500/15 text-sky-700 dark:text-sky-300'}`}>
+                {project.credit_valuation.basis === 'CONFIRMED' ? '승인 확정' : '예상(신청중)'}
+              </span>
+              {project.credit_valuation.valuation != null ? (
+                <SensitiveData type="text" value={`${Math.round(project.credit_valuation.valuation).toLocaleString('ko-KR')}원`} />
+              ) : <span className="text-slatey">시세/수량 미비 — 산출 불가</span>}
+              {project.credit_valuation.quantity != null && project.credit_valuation.unit_price != null && (
+                <span className="text-[11px] text-slatey">
+                  ({project.credit_valuation.quantity.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂ × {Math.round(project.credit_valuation.unit_price).toLocaleString('ko-KR')}원)
+                </span>
+              )}
+            </span>
+          </OverviewItem>
+        )}
         <OverviewItem label="승인상태">
           <ApprovalStatusEditor
             projectId={project.project_id}

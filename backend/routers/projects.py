@@ -492,6 +492,15 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         inventory_unit_price=cc_params.get("inventory_unit_price"),
     )
     carbon_ownership = schemas.CarbonOwnership(**_co) if _co else None
+    # 탄소배출권 2상태 평가액(C3, 비영속) — 신청중=예상수량×6개월평균가 / 승인=확정수량×잠금가.
+    # compute_accounting(16/16 검증) 무접촉 — 별도 파생.
+    credit_valuation = schemas.CreditValuation(**carbon_credit.compute_valuation(
+        approval_status=project.approval_status,
+        eff_sum=float(eff_sum) if eff_sum is not None else None,
+        avg6_rate=float(avg6) if avg6 is not None else None,
+        approved_reduction=float(project.approved_reduction) if project.approved_reduction is not None else None,
+        approved_unit_price=float(project.approved_unit_price) if project.approved_unit_price is not None else None,
+    ))
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -510,6 +519,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "market_rate_avg6": float(avg6) if avg6 is not None else None,
             "expected_revenue": expected_rev,
             "carbon_ownership": carbon_ownership,
+            "credit_valuation": credit_valuation,
             **acct,
         }
     )

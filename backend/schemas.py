@@ -2147,6 +2147,14 @@ class CarbonOwnership(BaseModel):
     inventory_value: Optional[float] = None  # 재고자산 평가 = L × 원가단가(원)
 
 
+class CreditValuation(BaseModel):
+    """탄소배출권 2상태 평가액(C3) — 신청중=예상수량×6개월평균 / 승인=확정수량×잠금가."""
+    basis: str                          # EXPECTED(신청중) / CONFIRMED(승인)
+    quantity: Optional[float] = None    # 평가 수량(tCO2)
+    unit_price: Optional[float] = None  # 평가 단가(원/톤)
+    valuation: Optional[float] = None   # 평가액 = trunc(수량×단가)(원)
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 진행 단계 + 거래계약/원장 파생."""
 
@@ -2180,6 +2188,8 @@ class ProjectDetailOut(ProjectOut):
     expected_revenue: Optional[float] = None  # 예상수익 = trunc(Σeff × 6개월평균시세), None 안전
     # 탄소배출권 소유량 분할(C2, 비영속) — 매각률로 K를 매각(M)·후시보유(L) 분할 + 재고평가
     carbon_ownership: Optional[CarbonOwnership] = None
+    # 탄소배출권 2상태 평가액(C3, 비영속) — 신청중=예상수량×6개월평균 / 승인=확정수량×잠금가
+    credit_valuation: Optional[CreditValuation] = None
 
 
 # ---------------------------------------------------------------------------

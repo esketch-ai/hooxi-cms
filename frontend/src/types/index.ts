@@ -495,6 +495,13 @@ export interface CarbonOwnership {
   inventory_value?: number | null
 }
 
+export interface CreditValuation {
+  basis: 'EXPECTED' | 'CONFIRMED'
+  quantity?: number | null
+  unit_price?: number | null
+  valuation?: number | null
+}
+
 export interface Project {
   project_id: string
   client_id?: string | null // 묶음 사업 시 대표사
@@ -518,6 +525,7 @@ export interface Project {
   approved_reduction?: number | null // 승인시 확정수량 잠금(탄소배출권 C1)
   sale_ratio?: number | null // 탄소배출권 C2 매각률(%)
   carbon_ownership?: CarbonOwnership | null // 소유량 분할(C2, 조회 파생)
+  credit_valuation?: CreditValuation | null // 2상태 평가액(C3, 조회 파생)
   issued_credits?: number | null // 확정 발급량 (R2-A1)
   issued_at?: string | null
   manager_id?: string | null

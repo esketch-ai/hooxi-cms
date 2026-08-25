@@ -93,7 +93,10 @@
   `Project.sale_ratio`(%) + `services/carbon_credit.compute_ownership`: 소유량 K(승인 확정수량
   approved_reduction 우선, 없으면 Σeff)를 매각 M=K×율·후시보유 L=K−M 분할, L×원가단가(13,888)=재고자산.
   ProjectDetailOut.carbon_ownership(비영속) + 사업상세 매각률 인라인 편집·소유량 표시. compute_accounting 무변경.
-- C3: compute_accounting 2상태 분기(rate 입력·예상/확정 평가) — finance_query·화면 동시.
+- C3: compute_accounting 2상태 분기(rate 입력·예상/확정 평가) — finance_query·화면 동시. ✅ **구현(dev)** —
+  기존 compute_accounting(16/16 검증) **무접촉**, `carbon_credit.compute_valuation`로 별도 파생:
+  신청중=EXPECTED(Σeff×6개월평균) / 승인=CONFIRMED(approved_reduction×approved_unit_price). TRUNC 평가액.
+  ProjectDetailOut.credit_valuation + 사업상세 '배출권 평가액'(승인확정/예상 배지·SensitiveData 마스킹).
 - C4: (선택) 실지급 추적 + 세금계산서 연결(TAX_INVOICE 플랜).
 - 각 단계 4원칙 루프(planner→implementer→verifier→reviewer), 회계 정합 테스트 필수(기존 16/16 회귀 0).
 
