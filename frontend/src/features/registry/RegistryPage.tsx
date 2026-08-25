@@ -63,7 +63,7 @@ export function RegistryPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="감축 참여 레지스트리" subtitle="프로그램 전체 차량 현황(KISA) + 민간투자비율 근거" />
+      <PageHeader title="감축 산정 워크벤치" subtitle="프로그램 차량 현황(KISA)·산정 입력·운행/충전 로그·3단계 감축량" />
 
       {/* 탭 — 차량 현황 / 민간투자비율(재무) */}
       <div className="flex w-fit items-center gap-1 rounded-full border border-hairline bg-elevate p-0.5">

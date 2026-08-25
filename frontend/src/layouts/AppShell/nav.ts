@@ -64,8 +64,24 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
       { label: '매수자 마스터', path: '/buyers', icon: Bank, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '자산·연동 마스터', path: '/assets', icon: Truck },
-      { label: '감축 참여 레지스트리', path: '/registry', icon: Bus, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '계정 점검', path: '/accounts', icon: LockKey },
+    ],
+  },
+  {
+    // 감축 도메인 통합 그룹 — 사업(사업중심)·전기버스 자산(차량 크로스)·산정 워크벤치(방법론)
+    // 을 한 축으로 모아 차량 생애주기 동선을 드러낸다(도메인 축 재편, URL·권한 불변).
+    label: '감축 사업·차량',
+    items: [
+      { label: '감축 사업 관리', path: '/projects', icon: TreeStructure },
+      {
+        label: '전기버스 자산',
+        path: '/asset-vehicles',
+        icon: Bus,
+        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
+      },
+      // 구 '감축 참여 레지스트리' — 산정 파이프라인(원장·산정·로그·3단계)임을 명확히.
+      // 고객사 '감축 참여' 탭과의 명칭 충돌 해소.
+      { label: '감축 산정 워크벤치', path: '/registry', icon: ChartBar, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
     ],
   },
   {
@@ -83,20 +99,13 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'PROJECT & FINANCE',
+    label: '재무·정산',
     items: [
-      { label: '감축 사업 관리', path: '/projects', icon: TreeStructure },
       {
         label: '세금계산서 원장',
         path: '/tax-invoices',
         icon: Receipt,
         roles: ['ADMIN', 'MANAGER', 'STAFF'],
-      },
-      {
-        label: '전기버스 자산',
-        path: '/asset-vehicles',
-        icon: Bus,
-        roles: ['ADMIN', 'MANAGER', 'STAFF', 'OBSERVER'],
       },
       {
         label: '재무 원장',
@@ -137,8 +146,9 @@ export const NAV_GROUPS: NavGroup[] = [
 /** 전체 메뉴 경로(정본) — 그룹 접근 가드(G4)의 판정 대상 목록 */
 export const ALL_MENU_PATHS: string[] = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.path))
 
-// ── LNB 허브(A안) — PROJECT & FINANCE 6메뉴를 3항목으로 표시 축약. URL·권한 키는 불변:
-//    개별 화면 경로가 그대로 살아있고(서브탭으로 전환), 접근 그룹 매트릭스도 종전 세분 단위.
+// ── LNB 허브 — 재무·정산 그룹의 3개 세부 원장을 '재무 관리' 1항목으로 표시 축약.
+//    URL·권한 키는 불변(개별 화면 경로가 그대로 살아있고 서브탭 전환, 접근 그룹 매트릭스도 종전 세분).
+//    ('자산 관리' 허브는 도메인 재편으로 전기버스 자산이 감축 그룹으로 이동해 폐지 — 항목 직접 표시)
 export interface NavHub {
   label: string
   icon: Icon
@@ -148,7 +158,6 @@ export interface NavHub {
 
 export const NAV_HUBS: NavHub[] = [
   { label: '재무 관리', icon: Receipt, paths: ['/finance-ledger', '/settlements', '/tax-invoices'] },
-  { label: '자산 관리', icon: Bus, paths: ['/asset-vehicles', '/asset-report'] },
 ]
 
 /** 필터(재무 OFF·role·observer·그룹허용)를 통과하고 남은 항목에 적용 — 시각 축약만 담당 */

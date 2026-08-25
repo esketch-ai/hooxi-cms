@@ -46,24 +46,30 @@ describe('NAV_GROUPS 구조 정합', () => {
 })
 
 describe('collapseHubs (A안 허브 축약)', () => {
-  it('PROJECT & FINANCE 6항목 → 3항목(사업 + 재무 관리 + 자산 관리)', async () => {
+  it('재무·정산 4항목 → 2항목(재무 관리 허브 + 자산관리 보고)', async () => {
     const { collapseHubs, NAV_GROUPS } = await import('./nav')
     const collapsed = collapseHubs(NAV_GROUPS)
-    const pf = collapsed.find((g) => g.label === 'PROJECT & FINANCE')!
-    expect(pf.items).toHaveLength(3)
+    const pf = collapsed.find((g) => g.label === '재무·정산')!
+    expect(pf.items).toHaveLength(2)
     const labels = pf.items.map((i) => i.label)
-    expect(labels).toContain('감축 사업 관리')
     expect(labels).toContain('재무 관리')
-    expect(labels).toContain('자산 관리')
+    expect(labels).toContain('자산관리 보고')
     // 허브 링크는 첫 소속 경로, matchPaths에 전 소속 경로
     const fin = pf.items.find((i) => i.label === '재무 관리')!
     expect(new Set(fin.matchPaths)).toEqual(new Set(['/finance-ledger', '/settlements', '/tax-invoices']))
     expect(fin.path).toBe('/finance-ledger') // NAV 정의 순서상 첫 소속 경로
   })
 
+  it('감축 사업·차량 그룹 — 사업·전기버스·산정 워크벤치 3항목(허브 없음)', async () => {
+    const { collapseHubs, NAV_GROUPS } = await import('./nav')
+    const g = collapseHubs(NAV_GROUPS).find((x) => x.label === '감축 사업·차량')!
+    const paths = g.items.map((i) => i.path)
+    expect(paths).toEqual(['/projects', '/asset-vehicles', '/registry'])
+  })
+
   it('일부 항목이 필터로 빠져도 남은 것만으로 허브 구성(링크=첫 생존 경로)', async () => {
     const { collapseHubs, NAV_GROUPS } = await import('./nav')
-    const pf = NAV_GROUPS.find((g) => g.label === 'PROJECT & FINANCE')!
+    const pf = NAV_GROUPS.find((g) => g.label === '재무·정산')!
     // 재무 원장·세금계산서가 필터로 빠진 상황(예: 그룹 미허용) — 정산만 생존
     const filtered = [{ ...pf, items: pf.items.filter((i) => !['/finance-ledger', '/tax-invoices'].includes(i.path)) }]
     const out = collapseHubs(filtered)[0]
