@@ -695,6 +695,54 @@ class EvFinance(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class ChargingFacility(Base):
+    """충전 차고지(주요시설) — 운수사별 충전소 위치(증빙 02, D3). MRV 인프라 증빙의 상위."""
+
+    __tablename__ = "tb_charging_facility"
+
+    facility_id = Column(String(50), primary_key=True, default=gen_uuid)
+    operator_name = Column(String(100))  # 운수사(원문)
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )
+    region = Column(String(30))  # 권역
+    address = Column(String(255))  # 차고지/충전소 주소
+    seq = Column(Integer)  # 연번(원본)
+    source = Column(String(20), default="EVIDENCE_IMPORT")
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class Charger(Base):
+    """충전기 제원 — 차고지별 충전기(제조번호·제조년월). MRV 증빙(부록 개념설계 T_CHARGER)."""
+
+    __tablename__ = "tb_charger"
+
+    charger_id = Column(String(50), primary_key=True, default=gen_uuid)
+    facility_id = Column(
+        String(50), ForeignKey("tb_charging_facility.facility_id", ondelete="CASCADE")
+    )
+    serial_number = Column(String(100))  # 제조번호
+    manufacturing_ym = Column(String(10))  # 제조년월(YYYY.MM 문자)
+    source = Column(String(20), default="EVIDENCE_IMPORT")
+    created_at = Column(DateTime, default=utcnow)
+
+
+class AcPowerMeter(Base):
+    """AC전력량계 — 차고지별 전력량계(제조번호·제조년월). 전력 실측 증빙(T_AC_POWER_METER)."""
+
+    __tablename__ = "tb_ac_power_meter"
+
+    meter_id = Column(String(50), primary_key=True, default=gen_uuid)
+    facility_id = Column(
+        String(50), ForeignKey("tb_charging_facility.facility_id", ondelete="CASCADE")
+    )
+    serial_number = Column(String(100))
+    manufacturing_ym = Column(String(10))
+    source = Column(String(20), default="EVIDENCE_IMPORT")
+    created_at = Column(DateTime, default=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

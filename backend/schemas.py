@@ -1364,6 +1364,38 @@ class EmissionFactorIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=255)
 
 
+class ChargingInfraImportResult(BaseModel):
+    facilities: int
+    chargers: int
+    meters: int
+    client_matched: int
+
+
+class ChargingFacilityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    facility_id: str
+    operator_name: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    region: Optional[str] = None
+    address: Optional[str] = None
+    charger_count: int = 0
+    meter_count: int = 0
+
+
+class ChargingFacilityListResponse(BaseModel):
+    items: List[ChargingFacilityOut]
+    total: int
+
+
+class ChargingInfraSummary(BaseModel):
+    facilities: int
+    chargers: int
+    meters: int
+    by_region: List[dict] = []
+
+
 class EvFinanceImportResult(BaseModel):
     created: int
     client_matched: int
