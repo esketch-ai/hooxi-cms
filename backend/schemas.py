@@ -1360,6 +1360,8 @@ class CalcInputImportResult(BaseModel):
     created: int
     updated: int
     client_matched: int
+    vin_ok: int = 0
+    vin_warn: int = 0
     total: int
 
 
@@ -1368,6 +1370,9 @@ class CalcInputOut(BaseModel):
 
     calc_input_id: str
     vehicle_no: str
+    baseline_vin: Optional[str] = None
+    project_vin: Optional[str] = None
+    vin_status: Optional[str] = None
     operator_name: Optional[str] = None
     client_name: Optional[str] = None
     region: Optional[str] = None
@@ -1392,6 +1397,7 @@ class ReductionRunItem(BaseModel):
     region: Optional[str] = None
     status: str
     reason: Optional[str] = None
+    vin_status: Optional[str] = None
     fuel: Optional[str] = None
     usage_year: Optional[int] = None
     project_emission: Optional[float] = None

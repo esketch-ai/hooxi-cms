@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from openpyxl import load_workbook
 from io import BytesIO
 
-from models import Client, VehicleCalcInput
+from models import Client, ReductionRegistry, VehicleCalcInput
 from services.excel_import import _tf_company_clean
 from services.region_norm import normalize_region
 
@@ -38,6 +38,13 @@ _LABEL_FIELD = {
     "전기차등록년도": "ev_reg_year",
     "민간투자비율": "private_ratio",
     "민간비율": "private_ratio",
+    # 차대번호(VIN) — 대체도입 판정. 내연/전기 구분 라벨 우선, 단독 차대번호는 미지정.
+    "베이스라인차대번호": "baseline_vin",
+    "내연차대번호": "baseline_vin",
+    "기존차대번호": "baseline_vin",
+    "전기차대번호": "project_vin",
+    "사업차대번호": "project_vin",
+    "신규차대번호": "project_vin",
 }
 _NUM = {"baseline_distance", "baseline_fuel", "project_distance", "project_kwh", "private_ratio"}
 _INT = {"ev_reg_year"}
@@ -109,6 +116,42 @@ def parse_calc_inputs(content: bytes) -> List[dict]:
     return out
 
 
+def _registry_vin_index(db) -> Dict[str, dict]:
+    """차량번호 → {baseline_vin, project_vin} — 레지스트리(권위 VIN)로 교차검증·보완."""
+    idx: Dict[str, dict] = {}
+    for r in db.query(ReductionRegistry.vehicle_no, ReductionRegistry.role,
+                      ReductionRegistry.vin).all():
+        if not r.vehicle_no or not r.vin:
+            continue
+        slot = idx.setdefault(r.vehicle_no, {})
+        if r.role == "BASELINE":
+            slot.setdefault("baseline_vin", r.vin)
+        elif r.role == "PROJECT":
+            slot.setdefault("project_vin", r.vin)
+    return idx
+
+
+def _resolve_vin(rec: dict, reg: Dict[str, dict]) -> None:
+    """레지스트리로 VIN 보완 + 대체도입 판정(같은 차량번호·old≠new)."""
+    r = reg.get(rec["vehicle_no"], {})
+    # 업로드가 비우면 레지스트리 VIN으로 보완(권위값)
+    if not rec.get("baseline_vin") and r.get("baseline_vin"):
+        rec["baseline_vin"] = r["baseline_vin"]
+    if not rec.get("project_vin") and r.get("project_vin"):
+        rec["project_vin"] = r["project_vin"]
+    bv, pv = rec.get("baseline_vin"), rec.get("project_vin")
+    if bv and pv:
+        rec["vin_status"] = "OK" if bv != pv else "WARN"
+        if bv == pv:
+            rec["memo"] = "VIN 동일 — 대체도입 아님(확인 필요)"
+    elif not bv and not pv:
+        rec["vin_status"] = "WARN"
+        rec["memo"] = "차대번호 없음 — 레지스트리 미매칭"
+    else:
+        rec["vin_status"] = "WARN"
+        rec["memo"] = "차대번호 한쪽만 확인됨"
+
+
 def _client_index(db) -> Dict[tuple, str]:
     idx: Dict[tuple, str] = {}
     for c in db.query(Client.client_id, Client.company_name, Client.region).all():
@@ -120,10 +163,16 @@ def _client_index(db) -> Dict[tuple, str]:
 
 
 def apply_calc_inputs(db, rows: List[dict]) -> dict:
-    """차량번호로 중복 체크 후 upsert(CRUD). 요약 dict 반환."""
+    """차량번호로 중복 체크 후 upsert(CRUD) — 차대번호(VIN) 레지스트리 교차검증 포함."""
     cindex = _client_index(db)
-    created = updated = matched = 0
+    reg = _registry_vin_index(db)
+    created = updated = matched = vin_ok = vin_warn = 0
     for r in rows:
+        _resolve_vin(r, reg)  # baseline_vin/project_vin 보완 + vin_status
+        if r.get("vin_status") == "OK":
+            vin_ok += 1
+        else:
+            vin_warn += 1
         vno = r["vehicle_no"]
         existing = db.query(VehicleCalcInput).filter(
             VehicleCalcInput.vehicle_no == vno).first()
@@ -145,4 +194,7 @@ def apply_calc_inputs(db, rows: List[dict]) -> dict:
         else:
             db.add(VehicleCalcInput(client_id=client_id, source="CRAWL_IMPORT", **r))
             created += 1
-    return {"created": created, "updated": updated, "client_matched": matched, "total": len(rows)}
+    return {
+        "created": created, "updated": updated, "client_matched": matched,
+        "vin_ok": vin_ok, "vin_warn": vin_warn, "total": len(rows),
+    }

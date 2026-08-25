@@ -20,7 +20,7 @@ export function CalcRunPanel() {
     if (!files || files.length === 0) return
     try {
       const r = await importM.mutateAsync(files[0])
-      showToast(`입력 반영 — 생성 ${r.created}·갱신 ${r.updated} (총 ${r.total}) · 운수사매칭 ${r.client_matched}`, 'success')
+      showToast(`입력 반영 — 생성 ${r.created}·갱신 ${r.updated} · VIN검증 OK ${r.vin_ok}·경고 ${r.vin_warn}`, r.vin_warn > 0 ? 'info' : 'success')
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast(detail ?? '적재에 실패했습니다.', 'danger')
@@ -60,6 +60,7 @@ export function CalcRunPanel() {
             <thead className="border-b border-hairline text-[11px] uppercase tracking-wider text-slatey">
               <tr>
                 <th className="px-2 py-2">차량번호</th>
+                <th className="px-2 py-2">대체도입(VIN)</th>
                 <th className="px-2 py-2">운수사</th>
                 <th className="px-2 py-2">연료</th>
                 <th className="px-2 py-2 text-right">사업배출/년</th>
@@ -71,13 +72,18 @@ export function CalcRunPanel() {
             </thead>
             <tbody>
               {isLoading && !data ? (
-                <tr><td colSpan={8} className="px-2 py-8 text-center text-ash"><CircleNotch size={16} className="mx-auto animate-spin" /></td></tr>
+                <tr><td colSpan={9} className="px-2 py-8 text-center text-ash"><CircleNotch size={16} className="mx-auto animate-spin" /></td></tr>
               ) : (data?.items ?? []).length === 0 ? (
-                <tr><td colSpan={8} className="px-2 py-8 text-center text-slatey">계산 결과가 없습니다. {canWrite ? '산정 입력을 적재하세요.' : ''}</td></tr>
+                <tr><td colSpan={9} className="px-2 py-8 text-center text-slatey">계산 결과가 없습니다. {canWrite ? '산정 입력을 적재하세요.' : ''}</td></tr>
               ) : (
                 (data?.items ?? []).map((r) => (
                   <tr key={r.vehicle_no} className={`border-b border-hairline/60 ${r.status !== 'OK' ? 'opacity-60' : ''}`}>
                     <td className="px-2 py-2 font-medium text-bone">{r.vehicle_no}</td>
+                    <td className="px-2 py-2">
+                      {r.vin_status === 'OK'
+                        ? <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">검증</span>
+                        : <span className="rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">확인필요</span>}
+                    </td>
                     <td className="px-2 py-2 text-ash">{r.operator_name ?? '—'}</td>
                     <td className="px-2 py-2 text-ash">{r.fuel ?? '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-ash">{t(r.project_emission)}</td>

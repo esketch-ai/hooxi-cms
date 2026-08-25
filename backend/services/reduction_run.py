@@ -39,6 +39,7 @@ def run_all(db, region: Optional[str] = None) -> dict:
             results.append({
                 "vehicle_no": v.vehicle_no, "operator_name": v.operator_name,
                 "region": v.region, "status": "SKIP", "reason": "입력 결여",
+                "vin_status": v.vin_status,
                 "total_reduction": None, "adjusted_total": None,
             })
             continue
@@ -61,6 +62,7 @@ def run_all(db, region: Optional[str] = None) -> dict:
         results.append({
             "vehicle_no": v.vehicle_no, "operator_name": v.operator_name, "region": v.region,
             "status": "OK", "reason": None,
+            "vin_status": v.vin_status,  # 대체도입 VIN 검증(OK/WARN)
             "fuel": v.fuel, "usage_year": res["usage_year"],
             "project_emission": res["project_emission"],
             "total_reduction": res["total_reduction"],

@@ -23,7 +23,12 @@ def _xlsx(rows):
 def test_import_upsert_and_run(client, staff_headers):
     db = models.SessionLocal()
     try:
-        db.query(models.VehicleCalcInput).delete(synchronize_session=False); db.commit()
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        # 레지스트리 권위 VIN(내연≠전기) — 대체도입 VIN 검증 대상
+        db.add(models.ReductionRegistry(role="BASELINE", vehicle_no="강원70자1088", vin="ICE-OLD"))
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="강원70자1088", vin="EV-NEW"))
+        db.commit()
     finally:
         db.close()
     # 강원 검증 차량(엔진 회귀와 동일 입력) + 민간비율 0.4
@@ -32,7 +37,13 @@ def test_import_upsert_and_run(client, staff_headers):
     f = {"file": ("calc.xlsx", _xlsx(rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
     r = client.post(IMPORT, headers=staff_headers, files=f)
     assert r.status_code == 200, r.text
-    assert r.json()["created"] == 1
+    body = r.json()
+    assert body["created"] == 1
+    # 레지스트리 교차검증으로 VIN 보완·OK(내연≠전기)
+    assert body["vin_ok"] == 1 and body["vin_warn"] == 0
+    row = client.get("/api/v1/calc-inputs", headers=staff_headers).json()["items"][0]
+    assert row["baseline_vin"] == "ICE-OLD" and row["project_vin"] == "EV-NEW"
+    assert row["vin_status"] == "OK"
 
     # 재업로드 → 갱신(중복체크)
     r2 = client.post(IMPORT, headers=staff_headers, files={"file": ("calc.xlsx", _xlsx(rows), f["file"][2])})
@@ -49,7 +60,35 @@ def test_import_upsert_and_run(client, staff_headers):
 
     db = models.SessionLocal()
     try:
-        db.query(models.VehicleCalcInput).delete(synchronize_session=False); db.commit()
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_vin_same_flags_warn(client, staff_headers):
+    """내연=전기 VIN이면 대체도입 아님 — WARN 플래그."""
+    db = models.SessionLocal()
+    try:
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        db.add(models.ReductionRegistry(role="BASELINE", vehicle_no="X1", vin="SAME"))
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="X1", vin="SAME"))
+        db.commit()
+    finally:
+        db.close()
+    rows = [["X1", "A운수", "강원", "경유", 50000, 20000, 48000, 60000, 2024, 0.4]]
+    r = client.post(IMPORT, headers=staff_headers, files={"file": ("c.xlsx", _xlsx(rows),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+    assert r.json()["vin_warn"] == 1
+    row = client.get("/api/v1/calc-inputs", headers=staff_headers).json()["items"][0]
+    assert row["vin_status"] == "WARN"
+    db = models.SessionLocal()
+    try:
+        db.query(models.VehicleCalcInput).delete(synchronize_session=False)
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        db.commit()
     finally:
         db.close()
 

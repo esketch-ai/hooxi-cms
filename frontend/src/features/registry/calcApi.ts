@@ -8,6 +8,7 @@ export interface RunItem {
   region?: string | null
   status: string
   reason?: string | null
+  vin_status?: string | null
   fuel?: string | null
   usage_year?: number | null
   project_emission?: number | null
@@ -38,7 +39,7 @@ export function useImportCalcInputs() {
     mutationFn: async (file: File) => {
       const fd = new FormData(); fd.append('file', file)
       const { data } = await api.post('/calc-inputs/import', fd)
-      return data as { created: number; updated: number; client_matched: number; total: number }
+      return data as { created: number; updated: number; client_matched: number; vin_ok: number; vin_warn: number; total: number }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reduction-run'] }),
   })
