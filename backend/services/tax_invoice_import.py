@@ -280,3 +280,29 @@ def rematch_unmatched(db) -> dict:
         "relinked_buyer": relinked_buyer,
         "still_unmatched": len(rows) - relinked_client - relinked_buyer,
     }
+
+
+def rematch_for_new_master(db, biz_reg_no, client_id=None, buyer_id=None) -> int:
+    """새 마스터(고객사/투자사) 등록 시, 그 사업자번호의 미매칭 세금계산서를 자동 연결.
+
+    create_client/create_buyer에서 호출 — 사용자가 재매칭 버튼을 누르지 않아도 지연 도착
+    마스터에 미매칭이 자동으로 붙는다. 반환: 연결 건수(0이면 무변경). 커밋은 호출부 책임.
+    """
+    norm = normalize_biz_no(biz_reg_no or "")
+    if not norm or not (client_id or buyer_id):
+        return 0
+    rows = db.query(TaxInvoice).filter(
+        TaxInvoice.matched_client_id.is_(None),
+        TaxInvoice.matched_buyer_id.is_(None),
+        TaxInvoice.counterpart_reg_no.isnot(None),
+    ).all()
+    linked = 0
+    for inv in rows:
+        if normalize_biz_no(inv.counterpart_reg_no or "") != norm:
+            continue
+        if client_id:
+            inv.matched_client_id = client_id
+        else:
+            inv.matched_buyer_id = buyer_id
+        linked += 1
+    return linked

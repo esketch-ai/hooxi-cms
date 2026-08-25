@@ -21,6 +21,7 @@ from sqlalchemy import distinct, func
 from models import Buyer, ProjectSale, User, get_db
 from routers import common
 from routers.codes import validate_active_code
+from services import tax_invoice_import
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/buyers", tags=["buyers"])
@@ -113,6 +114,12 @@ def create_buyer(
     )
     db.commit()
     db.refresh(buyer)
+    # 지연 도착 정합(제안 3) — 새 투자사 사업자번호의 미매칭 세금계산서 자동 연결
+    if buyer.biz_reg_no:
+        linked = tax_invoice_import.rematch_for_new_master(
+            db, buyer.biz_reg_no, buyer_id=buyer.buyer_id)
+        if linked:
+            db.commit()
     return schemas.BuyerOut.model_validate(buyer, from_attributes=True)
 
 

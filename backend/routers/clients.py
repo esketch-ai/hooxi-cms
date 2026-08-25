@@ -37,7 +37,7 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
-from services import client_folders, dropbox_storage, geocoding, participation
+from services import client_folders, dropbox_storage, geocoding, participation, tax_invoice_import
 from services.audit_logger import AuditLogger
 
 log = logging.getLogger(__name__)
@@ -311,6 +311,12 @@ def create_client(
         _upsert_subscription(db, client, payload.subscription)
     db.commit()
     db.refresh(client)
+    # 지연 도착 정합(제안 3) — 새 운수사 사업자번호의 미매칭 세금계산서 자동 연결
+    if client.biz_reg_no:
+        linked = tax_invoice_import.rematch_for_new_master(
+            db, client.biz_reg_no, client_id=client.client_id)
+        if linked:
+            db.commit()
     # 등록 응답을 블로킹하지 않도록 폴더 생성은 응답 후 백그라운드로 (실패는 백필 복구)
     background_tasks.add_task(_provision_dropbox_folder_bg, client.client_id, user.user_id)
     # 좌표 미제공 시 주소→좌표 지오코딩(백그라운드, best-effort) — helper가 좌표 유무를 재확인

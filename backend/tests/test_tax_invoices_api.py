@@ -154,3 +154,31 @@ def test_rematch_backfill_links_late_client(client, staff_headers):
     finally:
         _cleanup(db, cid)
         db.close()
+
+
+def test_auto_rematch_on_client_create(client, staff_headers):
+    """제안 3 — 미매칭 굳은 뒤 고객사를 '화면에서 등록'하면 버튼 없이 자동 연결."""
+    db = models.SessionLocal()
+    cid = None
+    try:
+        _cleanup(db, None)
+        db.merge(models.Config(config_key="company_biz_reg_no", config_value=COMPANY))
+        db.commit()
+        html = _build_secure_mail(SAMPLE_XML, COMPANY)
+        client.post(API + "/commit", headers=staff_headers, files=[_file(html)])
+        inv = db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTIMP%")).first()
+        assert inv.matched_client_id is None  # 미매칭
+
+        # 고객사를 API(화면 경로)로 등록 → 자동 재매칭 트리거
+        r = client.post("/api/v1/clients", headers=staff_headers, json={
+            "client_type": "TRANSPORT", "company_name": "자동정합운수", "biz_reg_no": COUNTERPART})
+        assert r.status_code == 201, r.text
+        cid = r.json()["client_id"]
+        db.expire_all()
+        inv2 = db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTIMP%")).first()
+        assert inv2.matched_client_id == cid  # 버튼 없이 자동 연결됨
+    finally:
+        _cleanup(db, cid)
+        db.close()
