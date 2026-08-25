@@ -17,9 +17,20 @@ from sqlalchemy.orm import Session
 
 import schemas
 from auth import get_current_user, require_permission
-from models import TaxInvoice, User, get_db
+from models import Project, TaxInvoice, User, get_db
 from services import dropbox_storage, tax_invoice_import
 from services.audit_logger import AuditLogger
+from services.excel_export import (
+    DAILY_EXPORT_LIMIT,
+    MAX_EXPORT_ROWS,
+    ColumnSpec,
+    build_watermark,
+    build_workbook,
+    check_export_quota,
+    enforce_row_limit,
+    export_filename,
+    xlsx_response,
+)
 
 router = APIRouter(prefix="/tax-invoices", tags=["tax-invoices"])
 
@@ -174,6 +185,162 @@ def tax_invoice_issue_counts(
         unmatched=_apply_issue_filter(_base(), "unmatched").count(),
         negative=_apply_issue_filter(_base(), "negative").count(),
     )
+
+
+_BREAKDOWN_AXES = ("counterpart", "project", "entity")
+
+
+@router.get("/breakdown", response_model=schemas.TaxInvoiceBreakdown)
+def tax_invoice_breakdown(
+    axis: str = Query("counterpart", description="counterpart/project/entity"),
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    limit: int = Query(100, ge=1, le=500),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """축별 집계 — 거래처별/사업별/자사법인별 매입·매출·순액·건수(공급가액 기준).
+
+    자사법인 축은 방향으로 자사 측을 정한다(매입=받는자, 매출=공급자). 사업 축의
+    미연결(project_id NULL)은 '미연결'로 묶는다. 상위 limit건(총 거래량 순).
+    """
+    if axis not in _BREAKDOWN_AXES:
+        raise HTTPException(status_code=422, detail="axis는 counterpart/project/entity 중 하나여야 합니다")
+    q = db.query(
+        TaxInvoice.direction, TaxInvoice.supply_amount,
+        TaxInvoice.counterpart_reg_no, TaxInvoice.counterpart_name,
+        TaxInvoice.project_id,
+        TaxInvoice.invoicer_reg_no, TaxInvoice.invoicer_name,
+        TaxInvoice.invoicee_reg_no, TaxInvoice.invoicee_name,
+    )
+    if date_from:
+        q = q.filter(TaxInvoice.issue_date >= date_from)
+    if date_to:
+        q = q.filter(TaxInvoice.issue_date <= date_to)
+
+    groups = {}
+    for r in q.all():
+        if axis == "counterpart":
+            key = r.counterpart_reg_no or r.counterpart_name or "미상"
+            label = r.counterpart_name or r.counterpart_reg_no or "미상"
+        elif axis == "project":
+            key = r.project_id or "__none__"
+            label = None  # 나중에 사업명 해석
+        else:  # entity — 자사 측(방향 기준)
+            if r.direction == "매입":
+                key = r.invoicee_reg_no or "미상"
+                label = r.invoicee_name or key
+            elif r.direction == "매출":
+                key = r.invoicer_reg_no or "미상"
+                label = r.invoicer_name or key
+            else:
+                key = "미상"
+                label = "미상"
+        g = groups.setdefault(key, {"label": label, "purchase": 0.0, "sales": 0.0, "count": 0})
+        supply = float(r.supply_amount or 0)
+        if r.direction == "매입":
+            g["purchase"] += supply
+        elif r.direction == "매출":
+            g["sales"] += supply
+        g["count"] += 1
+
+    if axis == "project":
+        ids = [k for k in groups if k != "__none__"]
+        names = dict(
+            db.query(Project.project_id, Project.project_name)
+            .filter(Project.project_id.in_(ids)).all()
+        ) if ids else {}
+        for k, g in groups.items():
+            g["label"] = "미연결" if k == "__none__" else (names.get(k) or k)
+
+    rows = [
+        schemas.TaxInvoiceBreakdownRow(
+            key=k, label=g["label"] or k,
+            purchase=round(g["purchase"], 2), sales=round(g["sales"], 2),
+            net=round(g["sales"] - g["purchase"], 2), count=g["count"],
+        )
+        for k, g in groups.items()
+    ]
+    rows.sort(key=lambda x: abs(x.purchase) + abs(x.sales), reverse=True)
+    return schemas.TaxInvoiceBreakdown(axis=axis, rows=rows[:limit])
+
+
+_EXPORT_COLUMNS = [
+    ColumnSpec("issue_date", "작성일", "date"),
+    ColumnSpec("direction", "방향", "text"),
+    ColumnSpec("invoicer", "공급자", "text"),
+    ColumnSpec("invoicee", "받는자", "text"),
+    ColumnSpec("counterpart", "상대", "text"),
+    ColumnSpec("supply", "공급가액", "money"),
+    ColumnSpec("tax", "세액", "money"),
+    ColumnSpec("total", "합계", "money"),
+    ColumnSpec("approval_no", "승인번호", "text"),
+    ColumnSpec("linked", "사업연결", "text"),
+    ColumnSpec("matched", "거래처매칭", "text"),
+]
+
+
+@router.get("/export")
+def export_tax_invoices(
+    direction: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    issue: Optional[str] = Query(None),
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """세금계산서 원장 엑셀 내보내기(경영전략실) — 현재 필터 결과 전체.
+
+    행상한(무음 잘라내기 금지)·일일 반출 횟수·워터마크·DATA_EXPORT 감사(공용 관용구).
+    """
+    check_export_quota(db, user, daily_limit=DAILY_EXPORT_LIMIT)
+    query = db.query(TaxInvoice)
+    if direction:
+        query = query.filter(TaxInvoice.direction == direction)
+    if date_from:
+        query = query.filter(TaxInvoice.issue_date >= date_from)
+    if date_to:
+        query = query.filter(TaxInvoice.issue_date <= date_to)
+    if search:
+        like = "%{0}%".format(search.strip())
+        query = query.filter(
+            (TaxInvoice.counterpart_reg_no.like(like))
+            | (TaxInvoice.counterpart_name.like(like))
+            | (TaxInvoice.invoicer_name.like(like))
+            | (TaxInvoice.invoicee_name.like(like))
+        )
+    query = _apply_issue_filter(query, issue)
+    total = query.count()
+    enforce_row_limit(total, max_rows=MAX_EXPORT_ROWS)
+    logs = query.order_by(TaxInvoice.issue_date.desc(), TaxInvoice.created_at.desc()).all()
+    rows = [
+        {
+            "issue_date": r.issue_date,
+            "direction": r.direction,
+            "invoicer": r.invoicer_name or r.invoicer_reg_no,
+            "invoicee": r.invoicee_name or r.invoicee_reg_no,
+            "counterpart": r.counterpart_name or r.counterpart_reg_no,
+            "supply": float(r.supply_amount) if r.supply_amount is not None else None,
+            "tax": float(r.tax_amount) if r.tax_amount is not None else None,
+            "total": float(r.total_amount) if r.total_amount is not None else None,
+            "approval_no": r.approval_no,
+            "linked": "연결" if r.project_id else "미연결",
+            "matched": "매칭" if (r.matched_client_id or r.matched_buyer_id) else "미매칭",
+        }
+        for r in logs
+    ]
+    content = build_workbook(
+        _EXPORT_COLUMNS, rows, sheet_title="세금계산서",
+        watermark=build_watermark(user), total_row=None,
+    )
+    AuditLogger.log_action(
+        db, user.user_id, "DATA_EXPORT", target_type="TAX_INVOICE",
+        new_value="rows={0}; direction={1}; issue={2}; from={3}; to={4}".format(
+            total, direction or "-", issue or "-", date_from or "-", date_to or "-"),
+    )
+    db.commit()
+    return xlsx_response(content, export_filename("세금계산서"))
 
 
 @router.post("/preview", response_model=schemas.TaxInvoicePreviewResponse)

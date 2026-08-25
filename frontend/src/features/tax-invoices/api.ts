@@ -8,6 +8,7 @@ import type {
   TaxInvoicePreviewResponse,
   TaxInvoiceSummary,
   TaxInvoiceIssueCounts,
+  TaxInvoiceBreakdown,
 } from './types'
 
 export function useTaxInvoices(filters: TaxInvoiceFilters) {
@@ -52,6 +53,20 @@ export function useTaxInvoiceIssueCounts(range: { date_from?: string; date_to?: 
       const { data } = await api.get<TaxInvoiceIssueCounts>('/tax-invoices/issue-counts', { params })
       return data
     },
+  })
+}
+
+export function useTaxInvoiceBreakdown(axis: string, range: { date_from?: string; date_to?: string }) {
+  return useQuery({
+    queryKey: ['tax-invoices', 'breakdown', axis, range],
+    queryFn: async () => {
+      const params: Record<string, string> = { axis }
+      if (range.date_from) params.date_from = range.date_from
+      if (range.date_to) params.date_to = range.date_to
+      const { data } = await api.get<TaxInvoiceBreakdown>('/tax-invoices/breakdown', { params })
+      return data
+    },
+    placeholderData: (prev) => prev,
   })
 }
 

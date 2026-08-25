@@ -17,6 +17,7 @@ import {
   Warning,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { TaxSignalCard } from '../tax-invoices/TaxSignalCard'
 import { Drawer } from '../../components/Drawer'
 import { Num } from '../../components/Num'
 import { SensitiveData } from '../../components/SensitiveData'
@@ -393,7 +394,7 @@ export function ObservePage() {
       )}
 
       {/* ⑦ 운영 신호 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <section className="rounded-3xl border border-hairline bg-graphite p-4">
           <p className="mb-2 text-xs font-medium text-ash">보고서 발송률(월별)</p>
           <MiniBars
@@ -437,6 +438,7 @@ export function ObservePage() {
             onSelect={(m) => open('signal', `${m} 활동 기록`, `activity:${m}`)}
           />
         </section>
+        <TaxSignalCard />
       </div>
 
       {/* 개요 드로어 — 3단계 프로세스의 2단계 */}

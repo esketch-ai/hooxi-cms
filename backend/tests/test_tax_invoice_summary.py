@@ -106,3 +106,53 @@ def test_issue_counts_and_filter(client):
         db.commit()
     finally:
         db.close()
+
+
+def test_breakdown_axes_and_export(client):
+    db = models.SessionLocal()
+    try:
+        db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTBRK%")
+        ).delete(synchronize_session=False)
+        db.add(models.TaxInvoice(
+            approval_no="TESTBRK01", direction="매출", supply_amount=2_000_000,
+            tax_amount=200_000, total_amount=2_200_000, issue_date=date(2026, 8, 1),
+            invoicer_reg_no="1000000001", invoicer_name="후시파트너스",
+            counterpart_reg_no="2000000002", counterpart_name="가나운수", source="HTML_IMPORT",
+        ))
+        db.add(models.TaxInvoice(
+            approval_no="TESTBRK02", direction="매입", supply_amount=800_000,
+            tax_amount=80_000, total_amount=880_000, issue_date=date(2026, 8, 5),
+            invoicee_reg_no="1000000001", invoicee_name="후시파트너스",
+            counterpart_reg_no="2000000002", counterpart_name="가나운수", source="HTML_IMPORT",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    headers = _login(client, "manager@hooxipartners.com")
+    # 거래처별 — 가나운수: 매출 2.0M / 매입 0.8M / 순액 1.2M
+    b = client.get("/api/v1/tax-invoices/breakdown", headers=headers,
+                   params={"axis": "counterpart", "date_from": "2026-08-01", "date_to": "2026-08-31"}).json()
+    row = next(r for r in b["rows"] if r["label"] == "가나운수")
+    assert row["sales"] == 2_000_000 and row["purchase"] == 800_000 and row["net"] == 1_200_000
+    # 자사법인별 — 후시파트너스로 묶임
+    e = client.get("/api/v1/tax-invoices/breakdown", headers=headers,
+                   params={"axis": "entity", "date_from": "2026-08-01", "date_to": "2026-08-31"}).json()
+    assert any(r["label"] == "후시파트너스" for r in e["rows"])
+    # 잘못된 축 422
+    assert client.get("/api/v1/tax-invoices/breakdown", headers=headers, params={"axis": "bad"}).status_code == 422
+    # 엑셀 내보내기 200 + xlsx
+    ex = client.get("/api/v1/tax-invoices/export", headers=headers,
+                    params={"date_from": "2026-08-01", "date_to": "2026-08-31"})
+    assert ex.status_code == 200
+    assert "spreadsheet" in ex.headers.get("content-type", "")
+
+    db = models.SessionLocal()
+    try:
+        db.query(models.TaxInvoice).filter(
+            models.TaxInvoice.approval_no.like("TESTBRK%")
+        ).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()

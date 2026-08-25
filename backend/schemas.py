@@ -1476,6 +1476,22 @@ class TaxInvoiceIssueCounts(BaseModel):
     negative: int   # 음수 공급가액(수정취소 등)
 
 
+class TaxInvoiceBreakdownRow(BaseModel):
+    """축별 집계 1행 — 거래처/사업/자사법인별 매입·매출·순액·건수."""
+
+    key: str
+    label: str
+    purchase: float
+    sales: float
+    net: float
+    count: int
+
+
+class TaxInvoiceBreakdown(BaseModel):
+    axis: str  # counterpart | project | entity
+    rows: List[TaxInvoiceBreakdownRow] = []
+
+
 class TaxInvoiceMonthPoint(BaseModel):
     """월별 매입·매출·순액(공급가액 기준) — 요약 추이 차트용."""
 

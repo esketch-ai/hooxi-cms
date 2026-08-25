@@ -104,3 +104,17 @@ export interface TaxInvoiceSummary {
   sales_count: number
   months: TaxInvoiceMonthPoint[]
 }
+
+export interface TaxInvoiceBreakdownRow {
+  key: string
+  label: string
+  purchase: number
+  sales: number
+  net: number
+  count: number
+}
+
+export interface TaxInvoiceBreakdown {
+  axis: string
+  rows: TaxInvoiceBreakdownRow[]
+}
