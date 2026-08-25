@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { SectionTabs } from '../../components/SectionTabs'
 import { PageHeader } from '../../components/PageHeader'
 import { useToast } from '../../components/Toast'
+import { useAuth } from '../../app/AuthProvider'
 import {
   useCommitScan,
   useCommitTaxInvoices,
@@ -45,6 +46,9 @@ function matchLabel(it: TaxInvoicePreviewItem): string {
 
 export function TaxInvoicesPage() {
   const { showToast } = useToast()
+  const { user } = useAuth()
+  // 적재(업로드·적용)는 쓰기 권한(master.write=STAFF↑)만. 경영전략실 등 읽기 역할은 조회·집계만.
+  const canWrite = !!user && ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role)
   const [files, setFiles] = useState<File[]>([])
   const [preview, setPreview] = useState<TaxInvoicePreviewItem[] | null>(null)
   const [source, setSource] = useState<'upload' | 'scan'>('upload')
@@ -134,6 +138,9 @@ export function TaxInvoicesPage() {
       <SectionTabs />
       <PageHeader title="세금계산서 원장" subtitle="홈택스 보안메일 HTML 자동반영 (매입·매출)" />
 
+      {/* 적재(업로드·미리보기·적용) — 쓰기 권한자 전용. 읽기 역할은 원장 조회만 노출 */}
+      {canWrite && (
+        <>
       {/* 업로드 */}
       <section className="rounded-2xl border border-hairline bg-graphite p-5">
         <p className="text-sm font-semibold text-bone">HTML 업로드</p>
@@ -260,6 +267,8 @@ export function TaxInvoicesPage() {
             </table>
           </div>
         </section>
+      )}
+        </>
       )}
 
       {/* 원장 목록 */}

@@ -47,8 +47,9 @@ SEED_GROUPS: List[Dict] = [
         "/asset-vehicles", "/settlements", "/reports", "/guide",
     ], "memo": "경영진 — 현황·재무·사업 중심(쓰기 권한은 직급으로)"},
     {"name": "경영전략실", "dept_code": "STRATEGY", "is_default": False, "home_path": "/observe", "menus": [
-        "/observe", "/dashboard", "/finance-ledger", "/asset-report", "/asset-vehicles", "/guide",
-    ], "memo": "경영전략실 — OBSERVER 화이트리스트와 동일 스코프(전환기 공존)"},
+        "/observe", "/dashboard", "/finance-ledger", "/asset-report", "/asset-vehicles",
+        "/tax-invoices", "/guide",
+    ], "memo": "경영전략실 — 현황·재무·세금계산서(읽기 중심) 관리"},
     {"name": "자산관리", "dept_code": "ASSET", "is_default": False, "home_path": "/assets", "menus": [
         "/dashboard", "/assets", "/accounts", "/asset-vehicles", "/asset-report",
         "/clients", "/documents", "/guide",
