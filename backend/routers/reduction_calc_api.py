@@ -101,6 +101,25 @@ def reduction_run(
     )
 
 
+@router.post("/reduction-stages/commit-monitoring", response_model=schemas.MonitoringCommitResult)
+def commit_monitoring(
+    region: Optional[str] = Query(None),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """워크벤치 MONITORING 스냅샷 → 사업 정본(ProjectVehicle.monitoring_reduction) 단방향 반영.
+
+    ※ 리터럴 경로가 아래 /{stage} 동적 경로보다 먼저 등록돼야 매칭됨(순서 의존).
+    """
+    out = rs.commit_monitoring(db, region=region)
+    AuditLogger.log_action(
+        db, user.user_id, "MONITORING_COMMIT", target_type="BATCH",
+        new_value="committed={0}, snapshots={1}".format(out["committed"], out["snapshots"]),
+    )
+    db.commit()
+    return schemas.MonitoringCommitResult(**out)
+
+
 @router.post("/reduction-stages/{stage}", response_model=schemas.ReductionStageSaveResult)
 def save_reduction_stage(
     stage: str,

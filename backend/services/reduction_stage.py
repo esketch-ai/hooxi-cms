@@ -8,7 +8,7 @@
 
 from typing import Dict, List, Optional
 
-from models import ReductionStage, VehicleCalcInput
+from models import ProjectVehicle, ReductionStage, VehicleCalcInput
 from services import reduction_calc as rc
 from services.reduction_run import _ratio_index
 
@@ -62,6 +62,30 @@ def save_stage(db, stage: str, region: Optional[str] = None,
             db.add(ReductionStage(vehicle_no=v.vehicle_no, stage=stage, **payload))
         saved += 1
     return {"stage": stage, "saved": saved, "skipped": skipped}
+
+
+def commit_monitoring(db, region: Optional[str] = None) -> dict:
+    """워크벤치 MONITORING 스냅샷 → ProjectVehicle.monitoring_reduction 단방향 반영(정본 커밋).
+
+    reduction_stage(분석)에서 계산·검토한 모니터링 감축량을, 사업 정본(ProjectVehicle)에
+    vehicle_no로 명시적으로 확정한다. 정본은 ProjectVehicle 단일 — reduction_stage는 여기서 소스일 뿐.
+    """
+    snap = {s.vehicle_no: float(s.total_reduction)
+            for s in db.query(ReductionStage.vehicle_no, ReductionStage.total_reduction)
+            .filter(ReductionStage.stage == "MONITORING").all()
+            if s.vehicle_no and s.total_reduction is not None}
+    if not snap:
+        return {"committed": 0, "snapshots": 0}
+    q = db.query(ProjectVehicle).filter(ProjectVehicle.vehicle_no.in_(list(snap)))
+    if region:
+        q = q.filter(ProjectVehicle.region == region)
+    committed = 0
+    for pv in q.all():
+        val = snap.get(pv.vehicle_no)
+        if val is not None:
+            pv.monitoring_reduction = val
+            committed += 1
+    return {"committed": committed, "snapshots": len(snap)}
 
 
 def _rate(num: Optional[float], den: Optional[float]) -> Optional[float]:

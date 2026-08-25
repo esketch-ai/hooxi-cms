@@ -69,21 +69,30 @@ def test_participation_derivation(client, staff_headers):
         _clean(cid)
 
 
-def test_monitoring_stage_bridge(client, staff_headers):
-    """정합 P2 — reduction_stage(MONITORING)를 vehicle_no로 참여 뷰에 연결."""
+def test_monitoring_single_source_and_commit(client, staff_headers):
+    """정합 P2 강화 — 모니터링 정본은 ProjectVehicle. 워크벤치→사업 단방향 커밋으로 채운다."""
     cid = _setup()
     try:
+        # 워크벤치 MONITORING 스냅샷(예상 200 대비 실측 190) — 아직 사업 정본엔 미반영
         db = models.SessionLocal()
-        # 워크벤치 MONITORING 스냅샷(예상 200 대비 실측 190)
         db.add(models.ReductionStage(vehicle_no="강원70자1", stage="MONITORING", total_reduction=190))
         db.commit(); db.close()
+        # 커밋 전: 사업 정본 monitoring 없음
+        s0 = client.get(API.format(cid), headers=staff_headers).json()
+        assert s0["summary"]["monitoring_reduction_total"] == 0.0
+
+        # 워크벤치 → 사업 정본 단방향 커밋
+        r = client.post("/api/v1/reduction-stages/commit-monitoring", headers=staff_headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["committed"] == 1 and r.json()["snapshots"] == 1
+
+        # 커밋 후: ProjectVehicle.monitoring_reduction에서 읽힘
         s = client.get(API.format(cid), headers=staff_headers).json()
         assert s["summary"]["monitoring_reduction_total"] == 190.0
         p1 = next(p for p in s["participated"] if p["vehicle_no"] == "강원70자1")
         assert p1["monitoring_reduction"] == 190.0
-        # 달성률 = 모니터링/예상 = 190/200 = 95%
-        assert p1["ach_monitoring"] == 95.0
-        assert p1["ach_final"] == 90.0  # 180/200
+        assert p1["ach_monitoring"] == 95.0  # 190/200
+        assert p1["ach_final"] == 90.0       # 180/200
         db = models.SessionLocal()
         db.query(models.ReductionStage).filter(models.ReductionStage.vehicle_no == "강원70자1").delete()
         db.commit(); db.close()

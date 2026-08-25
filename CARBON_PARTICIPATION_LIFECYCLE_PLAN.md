@@ -123,12 +123,12 @@ y1~y10, total, private_invest_ratio, source, measured_period, at)로 단계별 �
 3. **P3 운수사 '감축 참여' 탭** ✅ **구현(dev, P1과 함께)** — 고객사 상세 '감축 참여' 탭(운수사 전용):
    참여율·상태별 대수·3단계 감축량(예상/최종) 요약 + 참여 차량 목록(도입구분·상태·사업·단계·감축량)
    + 미참여 후보 목록. GET /clients/{id}/participation.
-2. **P2 3단계 감축량 정합** ✅ **구현(dev)** — 신규 테이블 추가 대신 **각 단계 단일 권위 소스**로 정합:
-   예상=`ProjectVehicle.total_reduction`(사업 ingest), 모니터링=`tb_reduction_stage`(MONITORING, 산정
-   워크벤치 계산), 최종=`ProjectVehicle.effective_reduction`(발급확정). `participation.py`가 vehicle_no로
-   세 소스를 조립(두 3단계 테이블 연결). 감축 참여 탭에 3단계 합계·차량별 모니터링·달성률(모니터링/예상) 표시.
-   ※ `tb_project_vehicle_reduction` 신설은 보류(연차 y1~10 stage별 보관이 필요해지면 재검토) — 현 합계
-   중심 요약에는 단일 컬럼/스냅샷으로 충분. 스키마 무변경.
+2. **P2 3단계 감축량 정합(강화)** ✅ **구현(dev)** — **ProjectVehicle이 3단계 전부의 단일 정본**:
+   예상=`total_reduction`, 모니터링=`monitoring_reduction`(신규 컬럼), 최종=`effective_reduction`.
+   `tb_reduction_stage`는 **워크벤치 분석 스냅샷으로 강등**(정본 아님) — divergence 위험 제거.
+   워크벤치 → 사업은 **단방향 커밋**(`POST /reduction-stages/commit-monitoring`)으로만: MONITORING
+   스냅샷을 vehicle_no로 ProjectVehicle.monitoring_reduction에 확정. participation.py는 3단계 전부
+   ProjectVehicle에서 읽음(교차테이블 read 제거). CalcRunPanel에 '모니터링 → 사업 반영' 버튼·분석용 라벨.
 4. **P4 최종 감축량 확정·배분(D2)** + 크로스 집계·신호(보) — asset-vehicles 도입구분·참여상태 필터.
 각 단계 pytest·빌드·dev 검증 후 로컬 커밋, 지시 시 배포.
 

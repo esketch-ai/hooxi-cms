@@ -1502,6 +1502,11 @@ class ReductionStageSaveResult(BaseModel):
     skipped: int
 
 
+class MonitoringCommitResult(BaseModel):
+    committed: int   # 사업 정본에 반영된 참여차량 수
+    snapshots: int   # 워크벤치 MONITORING 스냅샷 수
+
+
 class StageCompareItem(BaseModel):
     vehicle_no: str
     operator_name: Optional[str] = None

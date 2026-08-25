@@ -6,16 +6,16 @@
 - 참여중(ONGOING): 소속 사업이 기획~검증(발급 전)
 - 미참여(NOT): 보유버스 중 어떤 참여에도 안 걸린 차량(향후 참여 후보)
 
-3단계 감축량 정합(P2) — 각 단계 단일 권위 소스를 조립(재계산 안 함):
-- **예상** = ProjectVehicle.total_reduction (사업 참여차량 ingest 정본)
-- **모니터링** = ReductionStage(MONITORING).total_reduction (감축 산정 워크벤치 계산, vehicle_no 매칭)
+3단계 감축량 정합(P2 강화) — **ProjectVehicle이 3단계 전부의 단일 정본**:
+- **예상** = ProjectVehicle.total_reduction (계획 산정)
+- **모니터링** = ProjectVehicle.monitoring_reduction (워크벤치서 단방향 커밋된 실측)
 - **최종** = ProjectVehicle.effective_reduction (승인 후 파생, 발급완료 시)
-두 3단계 테이블(project_vehicle 중심·reduction_stage 중심)을 vehicle_no로 이 뷰에서 연결한다.
+reduction_stage는 워크벤치 분석 스냅샷일 뿐 정본 아님(divergence 위험 제거).
 """
 
 from typing import Dict, List
 
-from models import ClientVehicle, Project, ProjectVehicle, ReductionStage
+from models import ClientVehicle, Project, ProjectVehicle
 
 _COMPLETED_STATUS = {"발급완료"}
 _EV_FUEL = {"EV", "전기", "전기차", "ELECTRIC"}
@@ -41,7 +41,8 @@ def client_participation(db, client_id: str) -> dict:
     pv_rows = (
         db.query(
             ProjectVehicle.vehicle_no, ProjectVehicle.introduction_type,
-            ProjectVehicle.total_reduction, ProjectVehicle.effective_reduction,
+            ProjectVehicle.total_reduction, ProjectVehicle.monitoring_reduction,
+            ProjectVehicle.effective_reduction,
             ProjectVehicle.expected_payout, ProjectVehicle.client_vehicle_id,
             Project.project_id, Project.project_name, Project.project_status,
         )
@@ -50,16 +51,6 @@ def client_participation(db, client_id: str) -> dict:
         .all()
     )
     cvs = db.query(ClientVehicle).filter(ClientVehicle.client_id == client_id).all()
-
-    # 모니터링 감축량(정합 P2) — 감축 산정 워크벤치의 MONITORING 스냅샷을 vehicle_no로 매칭
-    vnos = [r.vehicle_no for r in pv_rows if r.vehicle_no]
-    monitoring: Dict[str, float] = {}
-    if vnos:
-        for s in (db.query(ReductionStage.vehicle_no, ReductionStage.total_reduction)
-                  .filter(ReductionStage.stage == "MONITORING",
-                          ReductionStage.vehicle_no.in_(vnos)).all()):
-            if s.vehicle_no and s.total_reduction is not None:
-                monitoring[s.vehicle_no] = float(s.total_reduction)
 
     linked_cv_ids = set()
     linked_vnos = set()
@@ -73,7 +64,7 @@ def client_participation(db, client_id: str) -> dict:
         if r.vehicle_no:
             linked_vnos.add(r.vehicle_no)
         exp = _f(r.total_reduction)
-        mon = monitoring.get(r.vehicle_no)
+        mon = _f(r.monitoring_reduction)
         fin = _f(r.effective_reduction) if completed else None
         if exp:
             expected_total += exp

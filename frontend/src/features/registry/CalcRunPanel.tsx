@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { CircleNotch, UploadSimple } from '@phosphor-icons/react'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { useImportCalcInputs, useReductionRun, useStageCompare, useSaveStage } from './calcApi'
+import { useImportCalcInputs, useReductionRun, useStageCompare, useSaveStage, useCommitMonitoring } from './calcApi'
 
 const t = (v?: number | null) => (v == null ? '—' : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}`)
 const tco2 = (v: number) => `${v.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂`
@@ -17,6 +17,7 @@ export function CalcRunPanel() {
   const importM = useImportCalcInputs()
   const { data: stages } = useStageCompare()
   const saveStageM = useSaveStage()
+  const commitMonM = useCommitMonitoring()
 
   const onSaveStage = async (stage: 'PLANNED' | 'MONITORING' | 'FINAL') => {
     try {
@@ -26,6 +27,16 @@ export function CalcRunPanel() {
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast(detail ?? '스냅샷 저장에 실패했습니다.', 'danger')
+    }
+  }
+
+  const onCommitMonitoring = async () => {
+    try {
+      const r = await commitMonM.mutateAsync()
+      showToast(`모니터링 사업 반영 — 참여차량 ${r.committed}대 정본 갱신(스냅샷 ${r.snapshots})`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '사업 반영에 실패했습니다.', 'danger')
     }
   }
 
@@ -119,10 +130,10 @@ export function CalcRunPanel() {
       {/* 3단계 감축량(D6 P5) — 예상↔모니터링↔최종 스냅샷·달성률 */}
       <section className="rounded-2xl border border-hairline bg-graphite p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-bone">3단계 감축량</h3>
-          <span className="text-[11px] text-slatey">예상↔모니터링↔최종을 나란히 비교 · 달성률로 관리 신뢰도 확인</span>
+          <h3 className="text-sm font-semibold text-bone">3단계 감축량 <span className="text-[11px] font-normal text-slatey">(워크벤치 분석 스냅샷)</span></h3>
+          <span className="text-[11px] text-slatey">예상↔모니터링↔최종 나란히 비교 · 달성률로 관리 신뢰도 확인</span>
           {canWrite && (
-            <div className="ml-auto flex flex-wrap gap-1.5">
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
               {(['PLANNED', 'MONITORING', 'FINAL'] as const).map((s) => (
                 <button
                   key={s}
@@ -134,11 +145,21 @@ export function CalcRunPanel() {
                   {saveStageM.isPending ? <CircleNotch size={13} className="inline animate-spin" /> : `${{ PLANNED: '예상', MONITORING: '모니터링', FINAL: '최종' }[s]} 저장`}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={onCommitMonitoring}
+                disabled={commitMonM.isPending}
+                className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-500/20 disabled:opacity-50 dark:text-sky-300"
+                title="워크벤치 모니터링 값을 사업 정본(ProjectVehicle)에 단방향 반영"
+              >
+                {commitMonM.isPending ? <CircleNotch size={13} className="inline animate-spin" /> : '모니터링 → 사업 반영'}
+              </button>
             </div>
           )}
         </div>
         <p className="mt-1.5 text-[11px] text-slatey">
-          현재 산정 입력으로 계산해 단계별로 동결합니다. 로그 집계로 사업(project)을 갱신한 뒤 '모니터링 저장'하면 예상과 나란히 비교됩니다.
+          이 표는 <b className="text-ash">워크벤치 분석용 스냅샷</b>입니다 — 사업/정산의 3단계 정본은 감축 사업(ProjectVehicle)입니다.
+          현재 산정 입력으로 계산해 단계별로 동결하고, <b className="text-ash">'모니터링 → 사업 반영'</b>으로만 모니터링 값이 사업 정본에 확정됩니다(단방향).
         </p>
         <div className="mt-3 grid grid-cols-3 gap-3">
           <Tile label="예상 합계" value={tco2(stages?.total_planned ?? 0)} />

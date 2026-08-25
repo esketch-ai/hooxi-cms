@@ -66,6 +66,19 @@ export function useSaveStage() {
   })
 }
 
+// 워크벤치 MONITORING 스냅샷 → 사업 정본(ProjectVehicle.monitoring_reduction) 단방향 커밋
+export function useCommitMonitoring() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post('/reduction-stages/commit-monitoring')).data as { committed: number; snapshots: number },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reduction-stage-compare'] })
+      qc.invalidateQueries({ queryKey: ['clients'] }) // 운수사 감축 참여 탭 갱신
+    },
+  })
+}
+
 export function useImportCalcInputs() {
   const qc = useQueryClient()
   return useMutation({

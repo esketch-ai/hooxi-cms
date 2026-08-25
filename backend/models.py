@@ -272,7 +272,11 @@ class ProjectVehicle(Base):
     reduction_y8 = Column(Numeric(12, 3))
     reduction_y9 = Column(Numeric(12, 3))
     reduction_y10 = Column(Numeric(12, 3))
-    total_reduction = Column(Numeric(14, 3))  # 파생: 연차 단순합(서버 계산·저장)
+    total_reduction = Column(Numeric(14, 3))  # 3단계 '예상'(계획 산정, 연차 단순합·서버 저장)
+    # 3단계 '모니터링'(실측 재산정) — 감축 산정 워크벤치(reduction_stage MONITORING)에서 명시적 커밋.
+    # 3단계 정본은 ProjectVehicle 단일: 예상=total_reduction, 모니터링=monitoring_reduction,
+    # 최종=effective_reduction. reduction_stage는 워크벤치 분석 스냅샷일 뿐 정본 아님(단방향 반영).
+    monitoring_reduction = Column(Numeric(14, 3))
     private_invest_ratio = Column(Numeric(5, 2))  # 민간투자비율(%)
     expire_at = Column(Date)  # 파생: 차령만료일(EDATE(등록일,108)-1, 부록 L)
     remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(CLAMP(0,기준차령,(만료-승인)/365), 부록 L)
@@ -1338,6 +1342,8 @@ def ensure_schema():
         ("tb_project", "approved_at", "DATE"),
         ("tb_project", "approval_status", "VARCHAR(20)"),
         ("tb_project_vehicle", "expire_at", "DATE"),
+        # 3단계 '모니터링' 정본(라이프사이클 P2 정합) — 워크벤치서 단방향 커밋. additive.
+        ("tb_project_vehicle", "monitoring_reduction", "NUMERIC(14,3)"),
         ("tb_project_vehicle", "remaining_age", "NUMERIC(6,3)"),
         ("tb_project_vehicle", "effective_reduction", "NUMERIC(14,3)"),
         ("tb_project_vehicle", "client_vehicle_id", "VARCHAR(50)"),  # fleet 마스터 링크(부록 M)
