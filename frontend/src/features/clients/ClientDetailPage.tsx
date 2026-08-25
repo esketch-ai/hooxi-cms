@@ -41,6 +41,7 @@ import {
   useClientAssets,
   useClientDocuments,
   useClientHistories,
+  useClientParticipation,
   useClientRecipients,
   useClientReports,
   useClientVehicles,
@@ -53,7 +54,7 @@ import { ClientAvatar } from './ClientsPage'
 import { ClientFormModal } from './ClientFormModal'
 import { FleetImportModal } from './FleetImportModal'
 
-type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'status' | 'chat'
+type TabKey = 'overview' | 'histories' | 'reports' | 'assets' | 'vehicles' | 'participation' | 'status' | 'chat'
 
 const TABS: { key: TabKey; label: string; transportOnly?: boolean }[] = [
   { key: 'overview', label: '개요' },
@@ -61,6 +62,7 @@ const TABS: { key: TabKey; label: string; transportOnly?: boolean }[] = [
   { key: 'reports', label: '보고서·문서' },
   { key: 'assets', label: '자산 및 연동' },
   { key: 'vehicles', label: '보유 차량' },
+  { key: 'participation', label: '감축 참여', transportOnly: true },
   { key: 'status', label: '계약대수 현황', transportOnly: true },
   { key: 'chat', label: '상담' },
 ]
@@ -222,6 +224,7 @@ export function ClientDetailPage() {
       {tab === 'reports' && <ReportsDocsTab clientId={client.client_id} />}
       {tab === 'assets' && <AssetsTab clientId={client.client_id} />}
       {tab === 'vehicles' && <VehiclesTab clientId={client.client_id} />}
+      {tab === 'participation' && <ParticipationTab clientId={client.client_id} />}
       {tab === 'status' && <FleetStatusTab clientId={client.client_id} />}
       {tab === 'chat' && <ChatTab clientId={client.client_id} />}
 
@@ -1012,6 +1015,129 @@ function VehiclesTab({ clientId }: { clientId: string }) {
         </div>
       )}
     </section>
+  )
+}
+
+// ── 감축 참여 탭 (라이프사이클 P3) — 참여상태(기/현/미) + 3단계 감축량. 운수사 전용 ──
+function ParticipationTab({ clientId }: { clientId: string }) {
+  const { data, isLoading } = useClientParticipation(clientId)
+  if (isLoading && !data) {
+    return <div className="py-16 text-center text-slatey">불러오는 중…</div>
+  }
+  const s = data?.summary
+  const parts = data?.participated ?? []
+  const notPart = data?.not_participated ?? []
+  const tco2 = (v?: number | null) => (v == null ? '—' : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂`)
+  const rate = (a?: number | null, b?: number | null) =>
+    a != null && b ? `${Math.round((a / b) * 100)}%` : '—'
+
+  return (
+    <section className="space-y-5">
+      {/* 요약 */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryTile label="참여율" value={s?.participation_rate != null ? `${s.participation_rate}%` : '—'}
+          sub={s ? `참여 ${s.participating_count} / 보유 ${s.owned_count}` : ''} tone />
+        <SummaryTile label="기참여 · 참여중 · 미참여" value={s ? `${s.completed_count} · ${s.ongoing_count} · ${s.not_participated_count}` : '—'}
+          sub={s ? `미참여 중 전기버스 후보 ${s.ev_candidate_count}` : ''} />
+        <SummaryTile label="예상 감축량(합계)" value={tco2(s?.expected_reduction_total)} />
+        <SummaryTile label="최종 감축량(발급확정)" value={tco2(s?.final_reduction_total)}
+          sub={s && s.expected_reduction_total ? `예상 대비 ${rate(s.final_reduction_total, s.expected_reduction_total)}` : ''} />
+      </div>
+      <p className="text-xs text-slatey">
+        참여 상태는 보유 차량 × 참여 차량 × 사업 단계로 자동 판별됩니다(발급완료=기참여, 기획~검증=참여중, 미참여=향후 후보).
+        3단계 감축량 중 예상=방법론 산정값, 최종=발급확정 반영값. 모니터링 단계는 후속 반영 예정.
+      </p>
+
+      {/* 참여 차량 */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-bone">참여 차량 ({parts.length})</h3>
+        <div className="overflow-x-auto rounded-2xl border border-hairline bg-graphite">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-hairline text-[11px] uppercase tracking-wider text-slatey">
+              <tr>
+                <th className="px-3 py-2">차량번호</th>
+                <th className="px-3 py-2">도입구분</th>
+                <th className="px-3 py-2">참여 상태</th>
+                <th className="px-3 py-2">소속 사업</th>
+                <th className="px-3 py-2">사업 단계</th>
+                <th className="px-3 py-2 text-right">예상 감축</th>
+                <th className="px-3 py-2 text-right">최종 감축</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parts.length === 0 ? (
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-slatey">참여 차량이 없습니다.</td></tr>
+              ) : (
+                parts.map((p, i) => (
+                  <tr key={`${p.vehicle_no}-${i}`} className="border-b border-hairline/60">
+                    <td className="px-3 py-2 font-medium text-bone">{p.vehicle_no ?? '—'}</td>
+                    <td className="px-3 py-2 text-ash">{p.introduction_type ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {p.participation_status === 'COMPLETED' ? (
+                        <span className="rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">기참여(발급완료)</span>
+                      ) : (
+                        <span className="rounded-full border border-sky-400/25 bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-700 dark:text-sky-300">참여중</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-ash">{p.project_name ?? '—'}</td>
+                    <td className="px-3 py-2 text-ash">{p.project_status ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-ash">{tco2(p.expected_reduction)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-bone">{tco2(p.final_reduction)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 미참여 후보 */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-bone">미참여 차량 · 향후 참여 후보 ({notPart.length})</h3>
+        {notPart.length === 0 ? (
+          <div className="rounded-2xl border border-hairline bg-graphite px-4 py-6 text-center text-sm text-slatey">
+            보유 차량이 모두 참여 중이거나 미참여 후보가 없습니다.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-hairline bg-graphite">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead className="border-b border-hairline text-[11px] uppercase tracking-wider text-slatey">
+                <tr>
+                  <th className="px-3 py-2">차량번호</th>
+                  <th className="px-3 py-2">차명</th>
+                  <th className="px-3 py-2">연료</th>
+                  <th className="px-3 py-2">연식</th>
+                  <th className="px-3 py-2">후보</th>
+                </tr>
+              </thead>
+              <tbody>
+                {notPart.map((n, i) => (
+                  <tr key={`${n.vehicle_no}-${i}`} className="border-b border-hairline/60">
+                    <td className="px-3 py-2 font-medium text-bone">{n.vehicle_no ?? '—'}</td>
+                    <td className="px-3 py-2 text-ash">{n.model_name ?? '—'}</td>
+                    <td className="px-3 py-2 text-ash">{n.fuel ?? '—'}</td>
+                    <td className="px-3 py-2 text-ash">{n.model_year ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {n.is_ev && <span className="rounded-full border border-amber-400/25 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">전기버스</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function SummaryTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: boolean }) {
+  return (
+    <div className="rounded-2xl border border-hairline bg-graphite p-4">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-slatey">{label}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums ${tone ? 'text-emerald-600 dark:text-emerald-400' : 'text-bone'}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-slatey">{sub}</p>}
+    </div>
   )
 }
 

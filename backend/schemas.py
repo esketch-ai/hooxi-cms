@@ -1521,6 +1521,43 @@ class StageCompareResponse(BaseModel):
     total_final: float
 
 
+class ParticipationSummary(BaseModel):
+    owned_count: int
+    participating_count: int
+    completed_count: int
+    ongoing_count: int
+    not_participated_count: int
+    ev_candidate_count: int
+    participation_rate: Optional[float] = None
+    expected_reduction_total: float
+    final_reduction_total: float
+
+
+class ParticipationVehicle(BaseModel):
+    vehicle_no: Optional[str] = None
+    introduction_type: Optional[str] = None
+    participation_status: str  # COMPLETED/ONGOING
+    project_name: Optional[str] = None
+    project_status: Optional[str] = None
+    expected_reduction: Optional[float] = None
+    final_reduction: Optional[float] = None
+    expected_payout: Optional[float] = None
+
+
+class NotParticipatedVehicle(BaseModel):
+    vehicle_no: Optional[str] = None
+    model_name: Optional[str] = None
+    fuel: Optional[str] = None
+    model_year: Optional[int] = None
+    is_ev: bool = False
+
+
+class ClientParticipationOut(BaseModel):
+    summary: ParticipationSummary
+    participated: List[ParticipationVehicle] = []
+    not_participated: List[NotParticipatedVehicle] = []
+
+
 class MethodologyConstantIn(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     value: float

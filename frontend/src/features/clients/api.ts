@@ -195,6 +195,49 @@ export function useClientAssets(clientId: string | undefined) {
   })
 }
 
+// ── 감축 참여 라이프사이클 (참여상태 파생 + 3단계 감축량, P3) ────────
+export interface ParticipationSummary {
+  owned_count: number
+  participating_count: number
+  completed_count: number
+  ongoing_count: number
+  not_participated_count: number
+  ev_candidate_count: number
+  participation_rate: number | null
+  expected_reduction_total: number
+  final_reduction_total: number
+}
+export interface ParticipationVehicle {
+  vehicle_no?: string | null
+  introduction_type?: string | null
+  participation_status: 'COMPLETED' | 'ONGOING'
+  project_name?: string | null
+  project_status?: string | null
+  expected_reduction?: number | null
+  final_reduction?: number | null
+  expected_payout?: number | null
+}
+export interface NotParticipatedVehicle {
+  vehicle_no?: string | null
+  model_name?: string | null
+  fuel?: string | null
+  model_year?: number | null
+  is_ev: boolean
+}
+export interface ClientParticipation {
+  summary: ParticipationSummary
+  participated: ParticipationVehicle[]
+  not_participated: NotParticipatedVehicle[]
+}
+export function useClientParticipation(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'participation'],
+    queryFn: async () =>
+      (await api.get<ClientParticipation>(`/clients/${clientId}/participation`)).data,
+    enabled: !!clientId,
+  })
+}
+
 // ── 보유 차량 (tb_client_vehicle, 부록 M) ───────────────────────────
 export function useClientVehicles(
   clientId: string | undefined,

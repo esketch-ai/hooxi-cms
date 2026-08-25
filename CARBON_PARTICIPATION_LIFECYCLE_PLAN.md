@@ -118,12 +118,15 @@ y1~y10, total, private_invest_ratio, source, measured_period, at)로 단계별 �
 | D6 | 감축량 단위·표기 | tCO₂, 소수 2자리(기존 Num 규격 재사용) |
 
 ## 6. 단계(구현 시)
-1. **P1 참여상태 파생 + 표시(모델 무변경, 즉효)** — ClientVehicle↔ProjectVehicle↔Project.status로
-   기/현/미 파생. asset-vehicles·운수사 상세에 상태·도입구분 노출. "미참여 후보" 조회.
-2. **P2 3단계 감축량 모델** — `tb_project_vehicle_reduction`(stage=예상/모니터링/최종) 신설,
-   기존 reduction_y1~10을 '예상'으로 이관. 참여차량 엑셀에 stage 선택 추가(재ingest). 예상↔모니터링↔최종 비교.
-3. **P3 운수사 '감축 참여' 탭** — 요약·리스트·미참여·시각화(3단계·파이프라인).
-4. **P4 최종 감축량 확정·배분(D2)** + 크로스 집계·신호(보).
+1. **P1 참여상태 파생 + 표시** ✅ **구현(dev)** — `services/participation.py`: ClientVehicle↔ProjectVehicle
+   ↔Project.status로 기참여(발급완료)/참여중(기획~검증)/미참여 파생. 미참여 후보(전기버스) 조회.
+3. **P3 운수사 '감축 참여' 탭** ✅ **구현(dev, P1과 함께)** — 고객사 상세 '감축 참여' 탭(운수사 전용):
+   참여율·상태별 대수·3단계 감축량(예상/최종) 요약 + 참여 차량 목록(도입구분·상태·사업·단계·감축량)
+   + 미참여 후보 목록. GET /clients/{id}/participation.
+2. **P2 3단계 감축량 모델(남음)** — `tb_project_vehicle_reduction`(stage=예상/모니터링/최종) 신설,
+   기존 reduction_y1~10을 '예상'으로 이관. 참여차량 엑셀에 stage 선택. **모니터링 단계는 여기서 채움**
+   (현재 P3 요약은 예상·최종만, 모니터링 컬럼은 후속). D6 tb_reduction_stage(vehicle_no 중심)와 정합 검토.
+4. **P4 최종 감축량 확정·배분(D2)** + 크로스 집계·신호(보) — asset-vehicles 도입구분·참여상태 필터.
 각 단계 pytest·빌드·dev 검증 후 로컬 커밋, 지시 시 배포.
 
 ## 7. 원칙

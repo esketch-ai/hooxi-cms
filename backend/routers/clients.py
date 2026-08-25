@@ -37,7 +37,7 @@ from models import (
 )
 from routers import common
 from routers.codes import validate_active_code
-from services import client_folders, dropbox_storage, geocoding
+from services import client_folders, dropbox_storage, geocoding, participation
 from services.audit_logger import AuditLogger
 
 log = logging.getLogger(__name__)
@@ -698,6 +698,22 @@ def client_assets(
         )
         for a in rows
     ]
+
+
+@router.get("/{client_id}/participation", response_model=schemas.ClientParticipationOut)
+def client_participation(
+    client_id: str,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """감축 참여 탭 — 참여상태(기/현/미) 파생 + 3단계 감축량(예상·최종) 요약·목록."""
+    common.get_or_404(db, Client, client_id, "고객사")
+    out = participation.client_participation(db, client_id)
+    return schemas.ClientParticipationOut(
+        summary=schemas.ParticipationSummary(**out["summary"]),
+        participated=[schemas.ParticipationVehicle(**p) for p in out["participated"]],
+        not_participated=[schemas.NotParticipatedVehicle(**n) for n in out["not_participated"]],
+    )
 
 
 # ---------------------------------------------------------------------------
