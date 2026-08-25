@@ -8,10 +8,15 @@
 
 import re
 from io import BytesIO
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import xlrd
 from openpyxl import load_workbook
+
+from models import Config
+from services import client_folders, dropbox_storage
+
+_SCAN_FOLDER_CONFIG_KEY = "etas_bms_dropbox_folder"
 
 # 파일명/기간에서 'YYYY년 MM월' 또는 'YYYY-MM'
 _YM_KR = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월")
@@ -177,3 +182,63 @@ def parse_raw_file(content: bytes, filename: str = "") -> List[dict]:
         return parse_etas_raw(content, filename)
     # .xlsx — BMS취합 LONG 우선 시도
     return parse_bms_long(content)
+
+
+def parse_many(files: List[Tuple[str, bytes]]) -> Tuple[List[dict], int, List[str]]:
+    """[(파일명, bytes)] → (전체 로그행, 파싱성공 파일수, 스킵 파일명). 다건 업로드·스캔 공용."""
+    all_rows: List[dict] = []
+    parsed = 0
+    skipped: List[str] = []
+    for name, content in files:
+        if not content:
+            skipped.append(name or "(무명)")
+            continue
+        try:
+            rows = parse_raw_file(content, name or "")
+        except Exception:
+            skipped.append(name or "(무명)")
+            continue
+        if rows:
+            all_rows.extend(rows)
+            parsed += 1
+        else:
+            skipped.append(name or "(무명)")
+    return all_rows, parsed, skipped
+
+
+def scan_folder_default(db) -> str:
+    """스캔 기본 Dropbox 폴더(config etas_bms_dropbox_folder). 미설정 시 ''."""
+    row = db.get(Config, _SCAN_FOLDER_CONFIG_KEY)
+    return ((row.config_value if row else "") or "").strip()
+
+
+def scan_dropbox_raw(folder_path: str, max_files: int = 1500,
+                     max_depth: int = 6) -> List[Tuple[str, bytes]]:
+    """Dropbox 폴더(하위 포함)에서 .xls/.xlsx를 내려받아 [(name, bytes)]. 저장소 루트 밖 차단.
+
+    Dropbox 미설정 시 dropbox_storage.DropboxConfigError를 상위로 전파(엔드포인트가 503).
+    """
+    root = dropbox_storage.root()
+    base = client_folders.normalize_dropbox_path(folder_path)
+    if root and not client_folders.is_within_folder(root, base):
+        raise ValueError("스캔 폴더가 저장소 루트 밖입니다")
+
+    out: List[Tuple[str, bytes]] = []
+
+    def walk(path: str, depth: int) -> None:
+        if depth > max_depth or len(out) >= max_files:
+            return
+        for e in dropbox_storage.list_folder(path):
+            if len(out) >= max_files:
+                break
+            if e.get("is_dir"):
+                walk(e["path_display"], depth + 1)
+                continue
+            nm = str(e.get("name", "")).lower()
+            if nm.endswith(".xls") or nm.endswith(".xlsx"):
+                content = dropbox_storage.download(e["path_display"])
+                if content:
+                    out.append((e["name"], content))
+
+    walk(base, 0)
+    return out

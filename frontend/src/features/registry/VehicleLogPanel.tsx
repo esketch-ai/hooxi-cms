@@ -1,9 +1,9 @@
 // 운행·충전 로그(D6, P1·P2) — 취합본 WIDE 업로드 → 자동 정리 뷰 + 연평균 집계.
 import { useState } from 'react'
-import { CircleNotch, UploadSimple, Function } from '@phosphor-icons/react'
+import { CircleNotch, UploadSimple, Function, CloudArrowDown } from '@phosphor-icons/react'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { useConsolidate, useImportVehicleLogs, useImportRawLogs, useAggregateLogs, type AggregateResp } from './logApi'
+import { useConsolidate, useImportVehicleLogs, useImportRawLogs, useScanPreview, useScanCommit, useAggregateLogs, type AggregateResp, type ScanPreview } from './logApi'
 
 const n = (v?: number | null) => (v == null ? '—' : v.toLocaleString('ko-KR', { maximumFractionDigits: 1 }))
 
@@ -15,8 +15,12 @@ export function VehicleLogPanel() {
   const { data, isLoading } = useConsolidate({ program_only: programOnly })
   const importM = useImportVehicleLogs()
   const rawM = useImportRawLogs()
+  const scanPvM = useScanPreview()
+  const scanCommitM = useScanCommit()
   const aggM = useAggregateLogs()
   const [agg, setAgg] = useState<AggregateResp | null>(null)
+  const [folder, setFolder] = useState('')
+  const [preview, setPreview] = useState<ScanPreview | null>(null)
 
   const onUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -35,6 +39,29 @@ export function VehicleLogPanel() {
       const r = await rawM.mutateAsync(files)
       const skip = r.skipped_files.length ? ` · 스킵 ${r.skipped_files.length}건` : ''
       showToast(`원본 ${r.parsed_files}/${r.files}개 반영 — 차량 ${r.vehicles}·월 ${r.months} · 생성 ${r.created}·갱신 ${r.updated}${skip}`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '적재에 실패했습니다.', 'danger')
+    }
+  }
+
+  const onScanPreview = async () => {
+    try {
+      const r = await scanPvM.mutateAsync(folder.trim())
+      setPreview(r)
+      showToast(`스캔 완료 — 파일 ${r.parsed_files}/${r.files} · 차량 ${r.vehicles}·월 ${r.months}(미리보기, 미적재)`, 'info')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '스캔에 실패했습니다.', 'danger')
+    }
+  }
+
+  const onScanCommit = async () => {
+    try {
+      const r = await scanCommitM.mutateAsync(folder.trim())
+      setPreview(null)
+      const skip = r.skipped_files.length ? ` · 스킵 ${r.skipped_files.length}건` : ''
+      showToast(`Dropbox 적재 — 파일 ${r.parsed_files}/${r.files} · 차량 ${r.vehicles}·월 ${r.months} · 생성 ${r.created}·갱신 ${r.updated}${skip}`, 'success')
     } catch (e) {
       const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast(detail ?? '적재에 실패했습니다.', 'danger')
@@ -112,6 +139,49 @@ export function VehicleLogPanel() {
           </>
         )}
       </div>
+
+      {canWrite && (
+        <section className="rounded-2xl border border-hairline bg-graphite p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <CloudArrowDown size={17} className="text-slatey" />
+            <span className="text-sm font-medium text-bone">Dropbox 폴더 자동 수집</span>
+            <input
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="예: /운행자료/eTAS (미입력 시 기본 폴더)"
+              className="min-w-[240px] flex-1 rounded-lg border border-hairline bg-elevate px-3 py-1.5 text-sm text-bone placeholder:text-slatey/60"
+            />
+            <button
+              type="button"
+              onClick={onScanPreview}
+              disabled={scanPvM.isPending}
+              className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-1.5 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+            >
+              {scanPvM.isPending ? <CircleNotch size={15} className="animate-spin" /> : <CloudArrowDown size={15} />}
+              스캔(미리보기)
+            </button>
+            <button
+              type="button"
+              onClick={onScanCommit}
+              disabled={scanCommitM.isPending || !preview}
+              className="flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-40 dark:text-emerald-300"
+            >
+              적재
+            </button>
+          </div>
+          {preview && (
+            <p className="mt-2 text-xs text-slatey">
+              <b className="text-ash">{preview.folder}</b> — .xls/.xlsx {preview.parsed_files}/{preview.files}개 파싱 ·
+              차량 {preview.vehicles} · 월 {preview.months} · 로그 {preview.total.toLocaleString('ko-KR')}행
+              {preview.skipped_files.length > 0 && ` · 스킵 ${preview.skipped_files.length}건`}
+              {' '}→ '적재' 시 (차량·월·출처) 기준으로 반영됩니다.
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-slatey">
+            담당자가 지정 폴더(하위 포함)에 eTAS·BMS 원본을 저장만 하면 스캔해 로그로 정리합니다. 저장소 루트 밖 폴더는 차단.
+          </p>
+        </section>
+      )}
 
       {agg && (
         <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.04] p-4">

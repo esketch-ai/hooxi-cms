@@ -77,6 +77,30 @@ export function useImportRawLogs() {
   })
 }
 
+export interface ScanPreview {
+  folder: string
+  files: number
+  parsed_files: number
+  skipped_files: string[]
+  vehicles: number
+  months: number
+  total: number
+}
+export function useScanPreview() {
+  return useMutation({
+    mutationFn: async (folder: string) =>
+      (await api.get<ScanPreview>('/vehicle-logs/scan-preview', { params: folder ? { folder } : {} })).data,
+  })
+}
+export function useScanCommit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (folder: string) =>
+      (await api.post<RawImportResult>('/vehicle-logs/scan-commit', null, { params: folder ? { folder } : {} })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['vehicle-logs-consolidate'] }),
+  })
+}
+
 export function useAggregateLogs() {
   const qc = useQueryClient()
   return useMutation({

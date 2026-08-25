@@ -70,7 +70,10 @@
    BMS취합 `.xlsx` LONG(운수사·차량번호·월·운행거리·운행횟수) 파서 + 구조 자동판별.
    API `POST /vehicle-logs/import-raw`(다건). `xlrd==2.0.2` 추가. 실파일 검증(80/80, 14개월).
    ※ **BMS취합·운행기록관리 = 운행(거리·횟수)이며 충전량 없음** — 충전량 원천 아님(E5 갱신).
-4. **P4 Dropbox 자동 수집** — 폴더 저장 → 스캔·파싱(무업로드 자동화).
+4. **P4 Dropbox 자동 수집** ✅ **구현(dev)** — `etas_raw_import.scan_dropbox_raw`(폴더 하위 .xls/.xlsx
+   재귀 스캔, 저장소 루트 밖 차단, 세금계산서 스캔 관용구 재사용) + `parse_many` 공용화.
+   API `GET /vehicle-logs/scan-preview`(미리보기 무변경)·`POST /vehicle-logs/scan-commit`(적재).
+   config `etas_bms_dropbox_folder` 기본폴더(또는 inline 입력). 프론트 'Dropbox 폴더 자동 수집' 블록.
 5. **P5 3단계 감축량 stage** — 예상/모니터링/최종 저장·비교(라이프사이클 연결).
 각 단계 pytest·빌드·dev 검증 후 커밋. dev 전용(내년 데이터 고려한 실험적 구축).
 

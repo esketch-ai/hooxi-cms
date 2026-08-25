@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import schemas
 from auth import get_current_user, require_permission
 from models import User, get_db
+from services import dropbox_storage
 from services import etas_raw_import as eri
 from services import vehicle_log_aggregate as agg
 from services import vehicle_log_import as vli
@@ -64,24 +65,16 @@ async def import_raw_vehicle_logs(
     """운수사별 원본 다건 업로드(eTAS .xls / BMS취합 .xlsx) → 구조 자동판별 후 로그 upsert."""
     if not files:
         raise HTTPException(status_code=422, detail="업로드할 파일이 없습니다")
-    all_rows: list = []
-    parsed = 0
-    skipped: list = []
+    loaded: list = []
+    oversized: list = []
     for f in files:
         content = await f.read()
-        if not content or len(content) > MAX_UPLOAD_BYTES:
-            skipped.append(f.filename or "(무명)")
+        if content and len(content) > MAX_UPLOAD_BYTES:
+            oversized.append(f.filename or "(무명)")
             continue
-        try:
-            rows = eri.parse_raw_file(content, f.filename or "")
-        except Exception:
-            skipped.append(f.filename or "(무명)")
-            continue
-        if rows:
-            all_rows.extend(rows)
-            parsed += 1
-        else:
-            skipped.append(f.filename or "(무명)")
+        loaded.append((f.filename or "", content))
+    all_rows, parsed, skipped = eri.parse_many(loaded)
+    skipped.extend(oversized)
     if not all_rows:
         raise HTTPException(
             status_code=422,
@@ -89,6 +82,65 @@ async def import_raw_vehicle_logs(
     result = vli.apply_logs(db, all_rows, batch=batch)
     AuditLogger.log_action(
         db, user.user_id, "VEHICLE_LOG_RAW_IMPORT", target_type="BATCH",
+        new_value="files={0}/{1}, created={2}, updated={3}".format(
+            parsed, len(files), result["created"], result["updated"]),
+    )
+    db.commit()
+    return schemas.VehicleLogRawImportResult(
+        files=len(files), parsed_files=parsed, skipped_files=skipped, **result)
+
+
+def _resolve_scan_folder(db: Session, folder: Optional[str]) -> str:
+    f = (folder or "").strip() or eri.scan_folder_default(db)
+    if not f:
+        raise HTTPException(status_code=422, detail="스캔 폴더가 지정되지 않았습니다")
+    if not dropbox_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다")
+    return f
+
+
+def _scan_and_parse(folder: str) -> tuple:
+    try:
+        files = eri.scan_dropbox_raw(folder)
+    except dropbox_storage.DropboxNotFound:
+        raise HTTPException(status_code=404, detail="Dropbox 폴더를 찾을 수 없습니다: {0}".format(folder))
+    except dropbox_storage.DropboxConfigError:
+        raise HTTPException(status_code=503, detail="Dropbox 연동이 설정되지 않았습니다")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    rows, parsed, skipped = eri.parse_many(files)
+    return files, rows, parsed, skipped
+
+
+@router.get("/vehicle-logs/scan-preview", response_model=schemas.VehicleLogScanPreview)
+def scan_preview_vehicle_logs(
+    folder: Optional[str] = Query(None, description="스캔 Dropbox 폴더(미지정 시 config 기본값)"),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """Dropbox 폴더(하위 포함) .xls/.xlsx 스캔 → 미리보기(DB 무변경)."""
+    f = _resolve_scan_folder(db, folder)
+    files, rows, parsed, skipped = _scan_and_parse(f)
+    return schemas.VehicleLogScanPreview(
+        folder=f, files=len(files), parsed_files=parsed, skipped_files=skipped,
+        vehicles=len({r["vehicle_no"] for r in rows}),
+        months=len({r["year_month"] for r in rows}), total=len(rows))
+
+
+@router.post("/vehicle-logs/scan-commit", response_model=schemas.VehicleLogRawImportResult)
+def scan_commit_vehicle_logs(
+    folder: Optional[str] = Query(None),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """Dropbox 폴더(하위 포함) .xls/.xlsx 스캔 → 로그 upsert(차량·월·출처)."""
+    f = _resolve_scan_folder(db, folder)
+    files, rows, parsed, skipped = _scan_and_parse(f)
+    if not rows:
+        raise HTTPException(status_code=422, detail="파싱 가능한 데이터가 없습니다")
+    result = vli.apply_logs(db, rows, batch="dropbox:{0}".format(f))
+    AuditLogger.log_action(
+        db, user.user_id, "VEHICLE_LOG_DROPBOX_SCAN", target_type="FOLDER", target_id=f,
         new_value="files={0}/{1}, created={2}, updated={3}".format(
             parsed, len(files), result["created"], result["updated"]),
     )

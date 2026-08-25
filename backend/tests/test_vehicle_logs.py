@@ -124,5 +124,39 @@ def test_import_raw_rejects_empty(client, staff_headers):
     assert r.status_code == 422
 
 
+def test_scan_dropbox(client, staff_headers, monkeypatch):
+    """Dropbox 폴더 스캔 → .xlsx/.xls 자동판별 파싱 → 미리보기·적재."""
+    import services.dropbox_storage as ds
+
+    _clean()
+    monkeypatch.setattr(ds, "is_configured", lambda: True)
+    monkeypatch.setattr(ds, "root", lambda: "")
+    monkeypatch.setattr(ds, "list_folder", lambda p: [
+        {"name": "BMS취합.xlsx", "path_display": "/etas/BMS취합.xlsx", "is_dir": False},
+        {"name": "메모.txt", "path_display": "/etas/메모.txt", "is_dir": False},  # 비대상 → 스킵
+    ])
+    monkeypatch.setattr(ds, "download", lambda p: _bms_xlsx() if p.endswith(".xlsx") else b"x")
+
+    # 미리보기 — DB 무변경
+    pv = client.get("/api/v1/vehicle-logs/scan-preview", headers=staff_headers, params={"folder": "/etas"})
+    assert pv.status_code == 200, pv.text
+    assert pv.json()["parsed_files"] == 1 and pv.json()["vehicles"] == 1 and pv.json()["total"] == 2
+    assert client.get(CONSOL, headers=staff_headers).json()["vehicle_count"] == 0  # 아직 미적재
+
+    # 적재
+    cm = client.post("/api/v1/vehicle-logs/scan-commit", headers=staff_headers, params={"folder": "/etas"})
+    assert cm.status_code == 200, cm.text
+    assert cm.json()["created"] == 2 and cm.json()["parsed_files"] == 1
+    assert client.get(CONSOL, headers=staff_headers).json()["vehicle_count"] == 1
+    _clean()
+
+
+def test_scan_requires_folder(client, staff_headers, monkeypatch):
+    import services.dropbox_storage as ds
+    monkeypatch.setattr(ds, "is_configured", lambda: True)
+    r = client.get("/api/v1/vehicle-logs/scan-preview", headers=staff_headers)
+    assert r.status_code == 422  # 폴더 미지정·config 기본값 없음
+
+
 def test_requires_auth(client):
     assert client.get(CONSOL).status_code == 401

@@ -1440,6 +1440,16 @@ class VehicleLogRawImportResult(BaseModel):
     total: int
 
 
+class VehicleLogScanPreview(BaseModel):
+    folder: str
+    files: int
+    parsed_files: int
+    skipped_files: List[str] = []
+    vehicles: int
+    months: int
+    total: int
+
+
 class VehicleLogConsolidateRow(BaseModel):
     vehicle_no: str
     operator_name: Optional[str] = None
