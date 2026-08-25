@@ -205,6 +205,7 @@ export interface ParticipationSummary {
   ev_candidate_count: number
   participation_rate: number | null
   expected_reduction_total: number
+  monitoring_reduction_total: number
   final_reduction_total: number
 }
 export interface ParticipationVehicle {
@@ -214,7 +215,10 @@ export interface ParticipationVehicle {
   project_name?: string | null
   project_status?: string | null
   expected_reduction?: number | null
+  monitoring_reduction?: number | null
   final_reduction?: number | null
+  ach_monitoring?: number | null
+  ach_final?: number | null
   expected_payout?: number | null
 }
 export interface NotParticipatedVehicle {

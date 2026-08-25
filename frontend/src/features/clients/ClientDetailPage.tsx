@@ -1028,24 +1028,28 @@ function ParticipationTab({ clientId }: { clientId: string }) {
   const parts = data?.participated ?? []
   const notPart = data?.not_participated ?? []
   const tco2 = (v?: number | null) => (v == null ? '—' : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂`)
-  const rate = (a?: number | null, b?: number | null) =>
-    a != null && b ? `${Math.round((a / b) * 100)}%` : '—'
 
   return (
     <section className="space-y-5">
       {/* 요약 */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <SummaryTile label="참여율" value={s?.participation_rate != null ? `${s.participation_rate}%` : '—'}
-          sub={s ? `참여 ${s.participating_count} / 보유 ${s.owned_count}` : ''} tone />
-        <SummaryTile label="기참여 · 참여중 · 미참여" value={s ? `${s.completed_count} · ${s.ongoing_count} · ${s.not_participated_count}` : '—'}
-          sub={s ? `미참여 중 전기버스 후보 ${s.ev_candidate_count}` : ''} />
-        <SummaryTile label="예상 감축량(합계)" value={tco2(s?.expected_reduction_total)} />
-        <SummaryTile label="최종 감축량(발급확정)" value={tco2(s?.final_reduction_total)}
-          sub={s && s.expected_reduction_total ? `예상 대비 ${rate(s.final_reduction_total, s.expected_reduction_total)}` : ''} />
+          sub={s ? `참여 ${s.participating_count} / 보유 ${s.owned_count} · 기 ${s.completed_count}·현 ${s.ongoing_count}·미 ${s.not_participated_count}` : ''} tone />
+        <SummaryTile label="미참여 · 전기버스 후보" value={s ? `${s.not_participated_count} · ${s.ev_candidate_count}` : '—'}
+          sub="향후 참여 확대 대상" />
+        <div className="rounded-2xl border border-hairline bg-graphite p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-slatey">3단계 감축량 합계</p>
+          <div className="mt-1.5 grid grid-cols-3 gap-2 text-center">
+            <div><p className="text-[10px] text-slatey">예상</p><p className="text-sm font-bold tabular-nums text-bone">{tco2(s?.expected_reduction_total)}</p></div>
+            <div><p className="text-[10px] text-slatey">모니터링</p><p className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">{s?.monitoring_reduction_total ? tco2(s.monitoring_reduction_total) : '—'}</p></div>
+            <div><p className="text-[10px] text-slatey">최종</p><p className="text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{s?.final_reduction_total ? tco2(s.final_reduction_total) : '—'}</p></div>
+          </div>
+        </div>
       </div>
       <p className="text-xs text-slatey">
         참여 상태는 보유 차량 × 참여 차량 × 사업 단계로 자동 판별됩니다(발급완료=기참여, 기획~검증=참여중, 미참여=향후 후보).
-        3단계 감축량 중 예상=방법론 산정값, 최종=발급확정 반영값. 모니터링 단계는 후속 반영 예정.
+        3단계 감축량 정합 — <b className="text-ash">예상</b>=사업 참여차량 산정값, <b className="text-ash">모니터링</b>=감축 산정 워크벤치 실측 스냅샷,
+        <b className="text-ash"> 최종</b>=발급확정 반영값(차량번호로 연결). 달성률=모니터링/예상, 확정률=최종/예상.
       </p>
 
       {/* 참여 차량 */}
@@ -1060,13 +1064,15 @@ function ParticipationTab({ clientId }: { clientId: string }) {
                 <th className="px-3 py-2">참여 상태</th>
                 <th className="px-3 py-2">소속 사업</th>
                 <th className="px-3 py-2">사업 단계</th>
-                <th className="px-3 py-2 text-right">예상 감축</th>
-                <th className="px-3 py-2 text-right">최종 감축</th>
+                <th className="px-3 py-2 text-right">예상</th>
+                <th className="px-3 py-2 text-right">모니터링</th>
+                <th className="px-3 py-2 text-right">달성률</th>
+                <th className="px-3 py-2 text-right">최종</th>
               </tr>
             </thead>
             <tbody>
               {parts.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-slatey">참여 차량이 없습니다.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-8 text-center text-slatey">참여 차량이 없습니다.</td></tr>
               ) : (
                 parts.map((p, i) => (
                   <tr key={`${p.vehicle_no}-${i}`} className="border-b border-hairline/60">
@@ -1082,6 +1088,8 @@ function ParticipationTab({ clientId }: { clientId: string }) {
                     <td className="px-3 py-2 text-ash">{p.project_name ?? '—'}</td>
                     <td className="px-3 py-2 text-ash">{p.project_status ?? '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ash">{tco2(p.expected_reduction)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-sky-600 dark:text-sky-400">{tco2(p.monitoring_reduction)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{p.ach_monitoring != null ? <span className={p.ach_monitoring >= 100 ? 'text-emerald-600 dark:text-emerald-400' : p.ach_monitoring >= 80 ? 'text-ash' : 'text-amber-600 dark:text-amber-400'}>{p.ach_monitoring.toFixed(0)}%</span> : <span className="text-slatey">—</span>}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-bone">{tco2(p.final_reduction)}</td>
                   </tr>
                 ))

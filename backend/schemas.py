@@ -1530,6 +1530,7 @@ class ParticipationSummary(BaseModel):
     ev_candidate_count: int
     participation_rate: Optional[float] = None
     expected_reduction_total: float
+    monitoring_reduction_total: float
     final_reduction_total: float
 
 
@@ -1540,7 +1541,10 @@ class ParticipationVehicle(BaseModel):
     project_name: Optional[str] = None
     project_status: Optional[str] = None
     expected_reduction: Optional[float] = None
+    monitoring_reduction: Optional[float] = None
     final_reduction: Optional[float] = None
+    ach_monitoring: Optional[float] = None  # 모니터링/예상 %
+    ach_final: Optional[float] = None        # 최종/예상 %
     expected_payout: Optional[float] = None
 
 

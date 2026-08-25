@@ -58,12 +58,35 @@ def test_participation_derivation(client, staff_headers):
         # 예상 = 200+150, 최종 = 180(발급완료분만)
         assert s["expected_reduction_total"] == 350.0
         assert s["final_reduction_total"] == 180.0
+        assert s["monitoring_reduction_total"] == 0.0  # 아직 모니터링 스냅샷 없음
         # 목록 상태
         parts = {p["vehicle_no"]: p for p in r.json()["participated"]}
         assert parts["강원70자1"]["participation_status"] == "COMPLETED"
         assert parts["강원70자1"]["final_reduction"] == 180.0
         assert parts["강원70자2"]["participation_status"] == "ONGOING"
         assert parts["강원70자2"]["final_reduction"] is None
+    finally:
+        _clean(cid)
+
+
+def test_monitoring_stage_bridge(client, staff_headers):
+    """정합 P2 — reduction_stage(MONITORING)를 vehicle_no로 참여 뷰에 연결."""
+    cid = _setup()
+    try:
+        db = models.SessionLocal()
+        # 워크벤치 MONITORING 스냅샷(예상 200 대비 실측 190)
+        db.add(models.ReductionStage(vehicle_no="강원70자1", stage="MONITORING", total_reduction=190))
+        db.commit(); db.close()
+        s = client.get(API.format(cid), headers=staff_headers).json()
+        assert s["summary"]["monitoring_reduction_total"] == 190.0
+        p1 = next(p for p in s["participated"] if p["vehicle_no"] == "강원70자1")
+        assert p1["monitoring_reduction"] == 190.0
+        # 달성률 = 모니터링/예상 = 190/200 = 95%
+        assert p1["ach_monitoring"] == 95.0
+        assert p1["ach_final"] == 90.0  # 180/200
+        db = models.SessionLocal()
+        db.query(models.ReductionStage).filter(models.ReductionStage.vehicle_no == "강원70자1").delete()
+        db.commit(); db.close()
     finally:
         _clean(cid)
 

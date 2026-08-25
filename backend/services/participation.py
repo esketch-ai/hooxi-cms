@@ -1,16 +1,21 @@
-"""운수사 감축 참여 라이프사이클 — 참여상태 파생·요약(라이프사이클 P3/P1).
+"""운수사 감축 참여 라이프사이클 — 참여상태 파생·요약(라이프사이클 P1·P2·P3).
 
 보유 차량(ClientVehicle) × 참여 차량(ProjectVehicle) × 사업 상태(Project.project_status)로
 참여 상태(기참여/참여중/미참여)를 **파생**(저장 안 함)하고, 운수사 한 화면용 요약+목록을 만든다.
 - 기참여(COMPLETED): 소속 사업이 발급완료
 - 참여중(ONGOING): 소속 사업이 기획~검증(발급 전)
 - 미참여(NOT): 보유버스 중 어떤 참여에도 안 걸린 차량(향후 참여 후보)
-감축량은 기존 ProjectVehicle 값 사용(예상=total_reduction, 최종=effective_reduction). 재계산 안 함.
+
+3단계 감축량 정합(P2) — 각 단계 단일 권위 소스를 조립(재계산 안 함):
+- **예상** = ProjectVehicle.total_reduction (사업 참여차량 ingest 정본)
+- **모니터링** = ReductionStage(MONITORING).total_reduction (감축 산정 워크벤치 계산, vehicle_no 매칭)
+- **최종** = ProjectVehicle.effective_reduction (승인 후 파생, 발급완료 시)
+두 3단계 테이블(project_vehicle 중심·reduction_stage 중심)을 vehicle_no로 이 뷰에서 연결한다.
 """
 
 from typing import Dict, List
 
-from models import ClientVehicle, Project, ProjectVehicle
+from models import ClientVehicle, Project, ProjectVehicle, ReductionStage
 
 _COMPLETED_STATUS = {"발급완료"}
 _EV_FUEL = {"EV", "전기", "전기차", "ELECTRIC"}
@@ -18,6 +23,13 @@ _EV_FUEL = {"EV", "전기", "전기차", "ELECTRIC"}
 
 def _f(v):
     return float(v) if v is not None else None
+
+
+def _rate(num, den):
+    """달성률 % — num/den×100(소수1). 분모 0/None이면 None."""
+    if num is None or not den:
+        return None
+    return round(num / den * 100, 1)
 
 
 def _is_ev(fuel) -> bool:
@@ -39,10 +51,20 @@ def client_participation(db, client_id: str) -> dict:
     )
     cvs = db.query(ClientVehicle).filter(ClientVehicle.client_id == client_id).all()
 
+    # 모니터링 감축량(정합 P2) — 감축 산정 워크벤치의 MONITORING 스냅샷을 vehicle_no로 매칭
+    vnos = [r.vehicle_no for r in pv_rows if r.vehicle_no]
+    monitoring: Dict[str, float] = {}
+    if vnos:
+        for s in (db.query(ReductionStage.vehicle_no, ReductionStage.total_reduction)
+                  .filter(ReductionStage.stage == "MONITORING",
+                          ReductionStage.vehicle_no.in_(vnos)).all()):
+            if s.vehicle_no and s.total_reduction is not None:
+                monitoring[s.vehicle_no] = float(s.total_reduction)
+
     linked_cv_ids = set()
     linked_vnos = set()
     participated: List[dict] = []
-    expected_total = final_total = 0.0
+    expected_total = monitoring_total = final_total = 0.0
     for r in pv_rows:
         completed = r.project_status in _COMPLETED_STATUS
         state = "COMPLETED" if completed else "ONGOING"
@@ -51,16 +73,20 @@ def client_participation(db, client_id: str) -> dict:
         if r.vehicle_no:
             linked_vnos.add(r.vehicle_no)
         exp = _f(r.total_reduction)
+        mon = monitoring.get(r.vehicle_no)
         fin = _f(r.effective_reduction) if completed else None
         if exp:
             expected_total += exp
+        if mon:
+            monitoring_total += mon
         if fin:
             final_total += fin
         participated.append({
             "vehicle_no": r.vehicle_no, "introduction_type": r.introduction_type,
             "participation_status": state, "project_name": r.project_name,
             "project_status": r.project_status,
-            "expected_reduction": exp, "final_reduction": fin,
+            "expected_reduction": exp, "monitoring_reduction": mon, "final_reduction": fin,
+            "ach_monitoring": _rate(mon, exp), "ach_final": _rate(fin, exp),
             "expected_payout": _f(r.expected_payout),
         })
 
@@ -99,6 +125,7 @@ def client_participation(db, client_id: str) -> dict:
             "ev_candidate_count": ev_candidates,
             "participation_rate": round(participating / owned * 100, 1) if owned else None,
             "expected_reduction_total": round(expected_total, 3),
+            "monitoring_reduction_total": round(monitoring_total, 3),
             "final_reduction_total": round(final_total, 3),
         },
         "participated": participated,
