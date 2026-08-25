@@ -1356,6 +1356,28 @@ class MarketRateOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class MethodologyConstantIn(BaseModel):
+    key: str = Field(min_length=1, max_length=40)
+    value: float
+    unit: Optional[str] = Field(default=None, max_length=30)
+    label: Optional[str] = Field(default=None, max_length=100)
+    effective_date: date
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+class MethodologyConstantOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    const_id: str
+    key: str
+    value: float
+    unit: Optional[str] = None
+    label: Optional[str] = None
+    effective_date: date
+    note: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class EmissionFactorIn(BaseModel):
     fuel_type: str = Field(min_length=1, max_length=20)
     ef_value: float = Field(ge=0)

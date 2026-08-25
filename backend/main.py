@@ -61,6 +61,7 @@ from routers import emission_factors as emission_factors_router
 from routers import reduction_registry as reduction_registry_router
 from routers import ev_finance as ev_finance_router
 from routers import charging_infra as charging_infra_router
+from routers import methodology as methodology_router
 from routers import observe as observe_router
 from routers import portal as portal_router
 from routers import projects as projects_router
@@ -298,6 +299,39 @@ def seed_codes():
         print(f"⚠ Code seed skipped (database unavailable): {exc}")
 
 
+def seed_methodology_constants():
+    """방법론 상수 부트스트랩(D5) — 비어있을 때만 검증된 기본값(강원 산정 재현) 시드."""
+    from datetime import date as _date
+    from models import MethodologyConstant
+    from services.reduction_calc import DEFAULT_CONSTANTS
+    _LABELS = {
+        "CALORIFIC_CNG": ("순발열량(CNG)", "MJ/Nm3"), "CALORIFIC_OTHER": ("순발열량(경유 등)", "MJ/L"),
+        "EF_CNG": ("배출계수(CNG)", "gCO2/MJ"), "EF_OTHER": ("배출계수(경유 등)", "gCO2/MJ"),
+        "TECH_IMPROVE": ("기술향상계수", ""), "ELEC_CO2": ("전력 CO2 배출계수", "tCO2/MWh"),
+        "ELEC_CH4": ("전력 CH4 배출계수", ""), "ELEC_N2O": ("전력 N2O 배출계수", ""),
+        "GWP_CH4": ("GWP CH4", ""), "GWP_N2O": ("GWP N2O", ""),
+        "BASE_YEAR": ("이용연수 기준연도", "년"), "CREDIT_YEARS": ("인증기간", "년"),
+    }
+    try:
+        db = SessionLocal()
+        try:
+            if db.query(MethodologyConstant).first() is not None:
+                return
+            for key, val in DEFAULT_CONSTANTS.items():
+                label, unit = _LABELS.get(key, (key, ""))
+                db.add(MethodologyConstant(
+                    key=key, value=val, unit=unit or None, label=label,
+                    effective_date=_date(2020, 1, 1),
+                    note="강원 산정 재현 검증값 — 방법론 확정값으로 갱신 가능",
+                ))
+            db.commit()
+            print("✓ Seeded {0} methodology constant(s)".format(len(DEFAULT_CONSTANTS)))
+        finally:
+            db.close()
+    except Exception as exc:
+        print("⚠ seed_methodology_constants skipped: {0}".format(exc))
+
+
 def seed_emission_factors():
     """배출계수(EF) 마스터 부트스트랩 — 비어있을 때만 설계문서 예시값 시드(방법론 확정값으로 갱신 권장)."""
     from datetime import date as _date
@@ -379,6 +413,7 @@ async def lifespan(app: FastAPI):
         seed_codes()
         seed_access_groups()
         seed_emission_factors()
+        seed_methodology_constants()
     yield
 
 
@@ -442,6 +477,7 @@ app.include_router(emission_factors_router.router, prefix=API_V1_PREFIX)
 app.include_router(reduction_registry_router.router, prefix=API_V1_PREFIX)
 app.include_router(ev_finance_router.router, prefix=API_V1_PREFIX)
 app.include_router(charging_infra_router.router, prefix=API_V1_PREFIX)
+app.include_router(methodology_router.router, prefix=API_V1_PREFIX)
 app.include_router(observe_router.router, prefix=API_V1_PREFIX)
 app.include_router(portal_router.router, prefix=API_V1_PREFIX)
 app.include_router(external_accounts_router.router, prefix=API_V1_PREFIX)

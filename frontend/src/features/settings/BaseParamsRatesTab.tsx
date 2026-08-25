@@ -18,6 +18,10 @@ import {
   useCreateEmissionFactor,
   useEmissionFactors,
 } from '../rates/emissionApi'
+import {
+  useCreateMethodologyConstant,
+  useMethodologyConstants,
+} from '../rates/methodologyApi'
 
 const BASE_PARAMS_KEY = 'project_base_params'
 
@@ -40,7 +44,83 @@ export function BaseParamsRatesTab() {
       <BaseParamsCard />
       <MarketRatesCard />
       <EmissionFactorsCard />
+      <MethodologyConstantsCard />
     </div>
+  )
+}
+
+// ── 방법론 상수 마스터(D5) — 감축량 산정 상수(순발열량·배출계수·기술향상계수·전력·GWP)
+function MethodologyConstantsCard() {
+  const { showToast } = useToast()
+  const { data: rows = [], isLoading } = useMethodologyConstants()
+  const create = useCreateMethodologyConstant()
+  const [key, setKey] = useState('')
+  const [value, setValue] = useState('')
+  const [effDate, setEffDate] = useState('')
+
+  // key별 현재값(유효일자 ≤ 오늘 최신)
+  const current = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const byKey: Record<string, (typeof rows)[number]> = {}
+    for (const r of rows) {
+      if (r.effective_date > today) continue
+      const c = byKey[r.key]
+      if (!c || r.effective_date > c.effective_date) byKey[r.key] = r
+    }
+    return Object.values(byKey).sort((a, b) => a.key.localeCompare(b.key))
+  }, [rows])
+
+  const submit = () => {
+    const v = Number(value)
+    if (!key.trim() || !Number.isFinite(v) || !effDate) {
+      showToast('상수 key·값·유효일자를 입력하세요.', 'info')
+      return
+    }
+    create.mutate(
+      { key: key.trim(), value: v, effective_date: effDate },
+      {
+        onSuccess: () => { showToast('방법론 상수를 등록했습니다.', 'success'); setValue('') },
+        onError: () => showToast('등록에 실패했습니다.', 'danger'),
+      },
+    )
+  }
+
+  return (
+    <section className="rounded-2xl border border-hairline bg-elevate p-4">
+      <div className="mb-1 flex items-center gap-1.5">
+        <Sliders size={15} weight="fill" className="text-bone" />
+        <h3 className="text-sm font-semibold text-bone">방법론 상수(감축량 산정)</h3>
+      </div>
+      <p className="mb-3 text-xs text-slatey">
+        감축량 계산 공식 상수 — 순발열량·배출계수(연료별)·기술향상계수·전력 3계수·GWP·기준연도.
+        실무 엑셀(강원 산정) 재현이 검증된 기본값이며, 방법론 확정값으로 갱신하세요(이력 보존).
+      </p>
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {current.map((c) => (
+          <div key={c.const_id} className="rounded-lg border border-hairline bg-graphite px-3 py-2">
+            <p className="text-[11px] text-slatey">{c.label ?? c.key}</p>
+            <p className="font-mono text-sm font-semibold tabular-nums text-bone">
+              {c.value} <span className="text-[10px] font-normal text-slatey">{c.unit ?? ''}</span>
+            </p>
+          </div>
+        ))}
+        {current.length === 0 && !isLoading && (
+          <span className="text-xs text-slatey">등록된 상수가 없습니다.</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="key (예: EF_CNG)"
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone" />
+        <input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" placeholder="값"
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone tabular-nums" />
+        <input type="date" value={effDate} onChange={(e) => setEffDate(e.target.value)}
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone" />
+        <button type="button" onClick={submit} disabled={create.isPending}
+          className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50">
+          등록
+        </button>
+      </div>
+    </section>
   )
 }
 

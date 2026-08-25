@@ -612,6 +612,27 @@ class EmissionFactor(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class MethodologyConstant(Base):
+    """감축량 산정 방법론 상수(effective-dated) — 순발열량·배출계수·기술향상계수·전력계수·GWP·기준연도(D5).
+
+    실무 엑셀 산정 공식을 CMS 계산으로 정립하기 위한 상수 마스터. 하드코딩 금지(부록 G/L 규약).
+    key로 조회(예: CALORIFIC_CNG, EF_CNG, TECH_IMPROVE, ELEC_CO2, GWP_CH4, BASE_YEAR).
+    현재값 = key별 유효일자 ≤ 오늘 중 최신. 과거 산정 재현 위해 이력 보존.
+    """
+
+    __tablename__ = "tb_methodology_constant"
+
+    const_id = Column(String(50), primary_key=True, default=gen_uuid)
+    key = Column(String(40), nullable=False, index=True)
+    value = Column(Numeric(16, 6), nullable=False)
+    unit = Column(String(30))
+    label = Column(String(100))  # 사람이 읽는 이름
+    effective_date = Column(Date, nullable=False, index=True)
+    note = Column(String(255))
+    created_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
 class ReductionRegistry(Base):
     """감축 참여 레지스트리 — 프로그램 전체 차량의 참여 상태·제원 원장(증빙 KISA 500대, M3).
 
