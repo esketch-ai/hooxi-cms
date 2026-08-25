@@ -1526,6 +1526,13 @@ class StageCompareResponse(BaseModel):
     total_final: float
 
 
+class FinalizeReductionResult(BaseModel):
+    ok: bool
+    finalized: int
+    issued: Optional[float] = None
+    method: Optional[str] = None  # effective/total/equal
+
+
 class VehicleLinkResult(BaseModel):
     registry: Dict[str, int]     # linked/vin/ambiguous/unmatched/skipped
     calc_input: Dict[str, int]

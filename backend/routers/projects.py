@@ -38,6 +38,7 @@ from models import (
 from routers import common
 from routers.codes import validate_active_code
 from services import accounting
+from services import reduction_finalize
 from services.market_rate import current_market_rate, expected_revenue, trailing_avg_rate
 from services.project_params import base_params
 from services.audit_logger import AuditLogger
@@ -819,6 +820,26 @@ def update_project_stages(
     db.commit()
     db.refresh(project)
     return _project_detail(db, project)
+
+
+@router.post("/{project_id}/finalize-reductions", response_model=schemas.FinalizeReductionResult)
+def finalize_reductions(
+    project_id: str,
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """최종 감축량 확정·배분(P4) — 발급완료 사업의 issued_credits를 차량별 배분·동결."""
+    common.get_or_404(db, Project, project_id, "감축 사업")
+    out = reduction_finalize.finalize_project(db, project_id)
+    if not out["ok"]:
+        raise HTTPException(status_code=422, detail=out["reason"])
+    AuditLogger.log_action(
+        db, user.user_id, "REDUCTION_FINALIZE", target_type="PROJECT", target_id=project_id,
+        new_value="finalized={0}, issued={1}, method={2}".format(
+            out["finalized"], out["issued"], out["method"]),
+    )
+    db.commit()
+    return schemas.FinalizeReductionResult(**out)
 
 
 # ── 사업 참여 차량 (Phase 2 — 감축량·예상지급액 ingest) ────────────────────

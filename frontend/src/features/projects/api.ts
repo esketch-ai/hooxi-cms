@@ -127,6 +127,22 @@ export function useSaveVehicle(projectId: string | undefined, vehicleId?: string
   })
 }
 
+/** 최종 감축량 확정·배분(P4) — 발급완료 사업의 issued_credits를 차량별 배분·동결 */
+export function useFinalizeReductions(projectId: string | undefined) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post(`/projects/${projectId}/finalize-reductions`)).data as {
+        ok: boolean; finalized: number; issued: number | null; method: string | null
+      },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'vehicles'] })
+      queryClient.invalidateQueries({ queryKey: ['projects', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] }) // 운수사 감축 참여 탭 최종값 갱신
+    },
+  })
+}
+
 /** 차량 일괄등록 양식(.xlsx) 다운로드 (Phase 2) */
 export async function downloadVehicleTemplate(projectId: string): Promise<void> {
   const res = await api.get(`/projects/${projectId}/vehicles/template`, {

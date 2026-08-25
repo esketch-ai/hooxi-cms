@@ -9,7 +9,7 @@
 3단계 감축량 정합(P2 강화) — **ProjectVehicle이 3단계 전부의 단일 정본**:
 - **예상** = ProjectVehicle.total_reduction (계획 산정)
 - **모니터링** = ProjectVehicle.monitoring_reduction (워크벤치서 단방향 커밋된 실측)
-- **최종** = ProjectVehicle.effective_reduction (승인 후 파생, 발급완료 시)
+- **최종** = ProjectVehicle.final_reduction (발급 배분·동결, P4). 미확정 시 발급완료의 effective로 폴백.
 reduction_stage는 워크벤치 분석 스냅샷일 뿐 정본 아님(divergence 위험 제거).
 """
 
@@ -42,7 +42,7 @@ def client_participation(db, client_id: str) -> dict:
         db.query(
             ProjectVehicle.vehicle_no, ProjectVehicle.introduction_type,
             ProjectVehicle.total_reduction, ProjectVehicle.monitoring_reduction,
-            ProjectVehicle.effective_reduction,
+            ProjectVehicle.effective_reduction, ProjectVehicle.final_reduction,
             ProjectVehicle.expected_payout, ProjectVehicle.client_vehicle_id,
             Project.project_id, Project.project_name, Project.project_status,
         )
@@ -65,7 +65,10 @@ def client_participation(db, client_id: str) -> dict:
             linked_vnos.add(r.vehicle_no)
         exp = _f(r.total_reduction)
         mon = _f(r.monitoring_reduction)
-        fin = _f(r.effective_reduction) if completed else None
+        # 최종 = 발급확정 배분(final_reduction) 우선, 미확정이면 발급완료 사업의 effective로 폴백
+        fin = _f(r.final_reduction)
+        if fin is None and completed:
+            fin = _f(r.effective_reduction)
         if exp:
             expected_total += exp
         if mon:

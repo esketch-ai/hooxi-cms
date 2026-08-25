@@ -35,7 +35,8 @@ def get_dossier(db, vehicle_no: str) -> dict:
         {"project_id": r.project_id, "project_name": pname, "project_status": pstatus,
          "introduction_type": r.introduction_type, "total_reduction": _f(r.total_reduction),
          "monitoring_reduction": _f(r.monitoring_reduction),
-         "effective_reduction": _f(r.effective_reduction), "expected_payout": _f(r.expected_payout),
+         "effective_reduction": _f(r.effective_reduction), "final_reduction": _f(r.final_reduction),
+         "expected_payout": _f(r.expected_payout),
          "private_invest_ratio": _f(r.private_invest_ratio)}
         for r, pname, pstatus in (
             db.query(ProjectVehicle, Project.project_name, Project.project_status)

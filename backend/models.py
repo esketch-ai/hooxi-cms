@@ -281,6 +281,9 @@ class ProjectVehicle(Base):
     expire_at = Column(Date)  # 파생: 차령만료일(EDATE(등록일,108)-1, 부록 L)
     remaining_age = Column(Numeric(6, 3))  # 파생: 잔여차령(CLAMP(0,기준차령,(만료-승인)/365), 부록 L)
     effective_reduction = Column(Numeric(14, 3))  # 파생: 잔여반영감축량(MIN(기준감축량, 가중합), 부록 L)
+    # 3단계 '최종'(발급확정 배분·동결, 라이프사이클 P4) — 사업 issued_credits를 effective_reduction
+    # 비율로 배분해 발급완료 시 동결. 미확정 시 None(참여 뷰는 effective_reduction으로 폴백 표시).
+    final_reduction = Column(Numeric(14, 3))
     expected_payout = Column(Numeric(15, 2))  # 파생: 예상지급액(부록 L 정본 산식, 단가 미사용)
     client_vehicle_id = Column(
         String(50),
@@ -1350,6 +1353,8 @@ def ensure_schema():
         ("tb_project_vehicle", "expire_at", "DATE"),
         # 3단계 '모니터링' 정본(라이프사이클 P2 정합) — 워크벤치서 단방향 커밋. additive.
         ("tb_project_vehicle", "monitoring_reduction", "NUMERIC(14,3)"),
+        # 3단계 '최종'(발급확정 배분·동결, 라이프사이클 P4). additive.
+        ("tb_project_vehicle", "final_reduction", "NUMERIC(14,3)"),
         # 보유차량 원장 정규 링크(정합 3) — vehicle_no 문자열 의존 축소. VIN 우선 백필.
         ("tb_vehicle_calc_input", "client_vehicle_id", "VARCHAR(50)"),
         ("tb_reduction_registry", "client_vehicle_id", "VARCHAR(50)"),

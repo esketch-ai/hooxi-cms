@@ -129,7 +129,11 @@ y1~y10, total, private_invest_ratio, source, measured_period, at)로 단계별 �
    워크벤치 → 사업은 **단방향 커밋**(`POST /reduction-stages/commit-monitoring`)으로만: MONITORING
    스냅샷을 vehicle_no로 ProjectVehicle.monitoring_reduction에 확정. participation.py는 3단계 전부
    ProjectVehicle에서 읽음(교차테이블 read 제거). CalcRunPanel에 '모니터링 → 사업 반영' 버튼·분석용 라벨.
-4. **P4 최종 감축량 확정·배분(D2)** + 크로스 집계·신호(보) — asset-vehicles 도입구분·참여상태 필터.
+4. **P4 최종 감축량 확정·배분(D2)** ✅ **구현(dev)** — `services/reduction_finalize.py`: 발급완료 사업의
+   `issued_credits`를 차량별 `effective_reduction` 비율로 배분→`ProjectVehicle.final_reduction` 동결
+   (effective 0이면 total→균등 폴백, 마지막 차량 보정으로 발급 총량 정합). `POST /projects/{id}/finalize-reductions`.
+   사업 상세 '발급 배분 확정' 버튼(발급완료 시). 최종 정본 = final_reduction(미확정 시 effective 폴백).
+   participation·dossier 반영. ※ 크로스 집계·신호(보)는 후속.
 각 단계 pytest·빌드·dev 검증 후 로컬 커밋, 지시 시 배포.
 
 ## 7. 원칙

@@ -41,6 +41,7 @@ import {
   useDeletePurchaseInvoice,
   useDeleteSale,
   useDeleteVehicle,
+  useFinalizeReductions,
   useImportVehicles,
   useProject,
   useProjectOperators,
@@ -324,6 +325,34 @@ function ApprovalStatusEditor({
   )
 }
 
+// 최종 감축량 확정·배분(P4) — 발급량을 차량별 effective 비율로 배분·동결
+function FinalizeReductionButton({ projectId }: { projectId: string }) {
+  const { showToast } = useToast()
+  const finalize = useFinalizeReductions(projectId)
+  const onClick = async () => {
+    try {
+      const r = await finalize.mutateAsync()
+      const m = { effective: '효과비율', total: '예상비율', equal: '균등' }[r.method ?? ''] ?? r.method
+      showToast(`최종 감축량 확정 — 차량 ${r.finalized}대에 발급 ${r.issued} 배분(${m})`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '최종 확정에 실패했습니다.', 'danger')
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={finalize.isPending}
+      className="ml-2 inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
+      title="발급량을 차량별 최종 감축량으로 배분·동결(운수사 감축 참여 탭에 반영)"
+    >
+      {finalize.isPending ? <CircleNotch size={12} className="animate-spin" /> : null}
+      발급 배분 확정
+    </button>
+  )
+}
+
 // 개요 카드 — 승인상태·승인일·최대지급액·톤당단가 인라인 편집 포함. dday/imminent 자체 산출.
 function OverviewSection({
   project,
@@ -401,6 +430,9 @@ function OverviewSection({
             />
             {project.issued_at && (
               <span className="ml-1.5 text-xs text-slatey">({fmtDate(project.issued_at)})</span>
+            )}
+            {project.project_status === '발급완료' && (
+              <FinalizeReductionButton projectId={project.project_id} />
             )}
           </OverviewItem>
         )}
