@@ -592,6 +592,26 @@ class MarketRate(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class EmissionFactor(Base):
+    """배출계수(EF) 마스터(effective-dated) — 감축량 산정의 연료별 CO2 배출계수(부록 G/L, 증빙 설계).
+
+    감축 방법론이 쓰는 상수를 하드코딩하지 않고 마스터로 관리(M4, tb_code 규약과 동일 취지).
+    현재 EF = 연료(fuel_type) 기준 유효일자 ≤ 오늘 중 최신 1건. 이력 보존(과거 산정 재현).
+    단위(unit)는 kgCO2/L·kgCO2/Nm3(연료)·kgCO2/kWh(전력) — 출력은 tCO2(×10^-3, 산정측 책임).
+    """
+
+    __tablename__ = "tb_emission_factor"
+
+    factor_id = Column(String(50), primary_key=True, default=gen_uuid)
+    fuel_type = Column(String(20), nullable=False, index=True)  # 경유/CNG/전력 등
+    ef_value = Column(Numeric(14, 6), nullable=False)  # 단위연료(또는 kWh)당 kgCO2
+    unit = Column(String(20))  # kgCO2/L, kgCO2/Nm3, kgCO2/kWh
+    effective_date = Column(Date, nullable=False, index=True)  # 유효 시작일
+    note = Column(String(255))
+    created_by = Column(String(50), ForeignKey("tb_user.user_id"))
+    created_at = Column(DateTime, default=utcnow)
+
+
 # ---------------------------------------------------------------------------
 # 신규 테이블 (플랜 §6.2)
 # ---------------------------------------------------------------------------

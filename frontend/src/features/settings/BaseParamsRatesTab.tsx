@@ -14,6 +14,10 @@ import {
   useCurrentRate,
   useMarketRates,
 } from '../rates/api'
+import {
+  useCreateEmissionFactor,
+  useEmissionFactors,
+} from '../rates/emissionApi'
 
 const BASE_PARAMS_KEY = 'project_base_params'
 
@@ -35,7 +39,152 @@ export function BaseParamsRatesTab() {
     <div className="space-y-6">
       <BaseParamsCard />
       <MarketRatesCard />
+      <EmissionFactorsCard />
     </div>
+  )
+}
+
+// ── 배출계수(EF) 마스터 ── 감축량 산정 연료별 CO2 배출계수(effective-dated, 이력)
+function EmissionFactorsCard() {
+  const { showToast } = useToast()
+  const { data: rows = [], isLoading } = useEmissionFactors()
+  const create = useCreateEmissionFactor()
+  const [fuel, setFuel] = useState('경유')
+  const [value, setValue] = useState('')
+  const [unit, setUnit] = useState('kgCO2/L')
+  const [effDate, setEffDate] = useState('')
+  const [note, setNote] = useState('')
+
+  // 연료별 현재값(유효일자 ≤ 오늘 최신) — 목록에서 파생
+  const current = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const byFuel: Record<string, (typeof rows)[number]> = {}
+    for (const r of rows) {
+      if (r.effective_date > today) continue
+      const cur = byFuel[r.fuel_type]
+      if (!cur || r.effective_date > cur.effective_date) byFuel[r.fuel_type] = r
+    }
+    return Object.values(byFuel).sort((a, b) => a.fuel_type.localeCompare(b.fuel_type))
+  }, [rows])
+
+  const submit = () => {
+    const v = Number(value)
+    if (!fuel.trim() || !Number.isFinite(v) || v < 0 || !effDate) {
+      showToast('연료·배출계수(0 이상)·유효일자를 입력하세요.', 'info')
+      return
+    }
+    create.mutate(
+      { fuel_type: fuel.trim(), ef_value: v, unit: unit.trim() || null, effective_date: effDate, note: note || null },
+      {
+        onSuccess: () => {
+          showToast('배출계수를 등록했습니다.', 'success')
+          setValue('')
+          setNote('')
+        },
+        onError: () => showToast('등록에 실패했습니다.', 'danger'),
+      },
+    )
+  }
+
+  return (
+    <section className="rounded-2xl border border-hairline bg-elevate p-4">
+      <div className="mb-1 flex items-center gap-1.5">
+        <Sliders size={15} weight="fill" className="text-bone" />
+        <h3 className="text-sm font-semibold text-bone">배출계수(EF) 마스터</h3>
+      </div>
+      <p className="mb-3 text-xs text-slatey">
+        감축량 산정의 연료별 CO₂ 배출계수. 유효일자별 이력으로 관리(과거 산정 재현) — 방법론
+        확정값으로 갱신하세요. 단위: 연료 kgCO₂/L·kgCO₂/Nm³, 전력 kgCO₂/kWh.
+      </p>
+
+      {/* 연료별 현재값 */}
+      <div className="mb-3 flex flex-wrap gap-2">
+        {current.map((c) => (
+          <span
+            key={c.factor_id}
+            className="rounded-full border border-hairline bg-graphite px-3 py-1 text-xs text-bone"
+          >
+            {c.fuel_type} <b className="tabular-nums">{c.ef_value}</b>{' '}
+            <span className="text-slatey">{c.unit ?? ''}</span>
+          </span>
+        ))}
+        {current.length === 0 && !isLoading && (
+          <span className="text-xs text-slatey">등록된 배출계수가 없습니다.</span>
+        )}
+      </div>
+
+      {/* 등록 폼 */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <input
+          value={fuel}
+          onChange={(e) => setFuel(e.target.value)}
+          placeholder="연료(경유/CNG/전력)"
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+        />
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          inputMode="decimal"
+          placeholder="배출계수"
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone tabular-nums"
+        />
+        <input
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          placeholder="단위"
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+        />
+        <input
+          type="date"
+          value={effDate}
+          onChange={(e) => setEffDate(e.target.value)}
+          className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-bone"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={create.isPending}
+          className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-on-primary hover:opacity-90 disabled:opacity-50"
+        >
+          등록
+        </button>
+      </div>
+
+      {/* 이력 */}
+      <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-hairline">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 bg-elevate text-[11px] uppercase tracking-wider text-slatey">
+            <tr>
+              <th className="px-3 py-2">연료</th>
+              <th className="px-3 py-2 text-right">배출계수</th>
+              <th className="px-3 py-2">단위</th>
+              <th className="px-3 py-2">유효일자</th>
+              <th className="px-3 py-2">비고</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-hairline">
+            {rows.map((r) => (
+              <tr key={r.factor_id}>
+                <td className="px-3 py-2 text-bone">{r.fuel_type}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-bone">{r.ef_value}</td>
+                <td className="px-3 py-2 text-slatey">{r.unit ?? '—'}</td>
+                <td className="px-3 py-2 text-ash">{fmtServerDate(r.effective_date)}</td>
+                <td className="max-w-[200px] truncate px-3 py-2 text-xs text-slatey" title={r.note ?? ''}>
+                  {r.note ?? '—'}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && !isLoading && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-xs text-slatey">
+                  등록된 배출계수가 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 

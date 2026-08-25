@@ -1356,6 +1356,27 @@ class MarketRateOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class EmissionFactorIn(BaseModel):
+    fuel_type: str = Field(min_length=1, max_length=20)
+    ef_value: float = Field(ge=0)
+    unit: Optional[str] = Field(default=None, max_length=20)
+    effective_date: date
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+class EmissionFactorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    factor_id: str
+    fuel_type: str
+    ef_value: float
+    unit: Optional[str] = None
+    effective_date: date
+    note: Optional[str] = None
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 # 변동 이력 스냅샷(append-only, Phase 4 INC-3 / 부록 N.8 D5) — Out만(타임라인 조회는 INC-6)
 class ParticipationSnapshotOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -57,6 +57,7 @@ from routers import integrations as integrations_router
 from routers import tax_invoices as tax_invoices_router
 from routers import kakao as kakao_router
 from routers import market_rates as market_rates_router
+from routers import emission_factors as emission_factors_router
 from routers import observe as observe_router
 from routers import portal as portal_router
 from routers import projects as projects_router
@@ -294,6 +295,34 @@ def seed_codes():
         print(f"⚠ Code seed skipped (database unavailable): {exc}")
 
 
+def seed_emission_factors():
+    """배출계수(EF) 마스터 부트스트랩 — 비어있을 때만 설계문서 예시값 시드(방법론 확정값으로 갱신 권장)."""
+    from datetime import date as _date
+    from models import EmissionFactor
+    try:
+        db = SessionLocal()
+        try:
+            if db.query(EmissionFactor).first() is not None:
+                return
+            seeds = [
+                ("경유", 2.64, "kgCO2/L"),
+                ("CNG", 2.75, "kgCO2/Nm3"),
+                ("전력", 0.424, "kgCO2/kWh"),
+            ]
+            for fuel, val, unit in seeds:
+                db.add(EmissionFactor(
+                    fuel_type=fuel, ef_value=val, unit=unit,
+                    effective_date=_date(2020, 1, 1),
+                    note="설계문서 예시값 — 방법론 확정값으로 갱신 필요",
+                ))
+            db.commit()
+            print("✓ Seeded {0} emission factor(s)".format(len(seeds)))
+        finally:
+            db.close()
+    except Exception as exc:
+        print("⚠ seed_emission_factors skipped: {0}".format(exc))
+
+
 def seed_access_groups():
     """접근 그룹 부트스트랩(G1) — tb_access_group이 비어있을 때만 초기 7종 생성.
 
@@ -346,6 +375,7 @@ async def lifespan(app: FastAPI):
         seed_admin()
         seed_codes()
         seed_access_groups()
+        seed_emission_factors()
     yield
 
 
@@ -405,6 +435,7 @@ app.include_router(segments_router.router, prefix=API_V1_PREFIX)
 app.include_router(settlements_router.router, prefix=API_V1_PREFIX)
 app.include_router(kakao_router.router, prefix=API_V1_PREFIX)
 app.include_router(market_rates_router.router, prefix=API_V1_PREFIX)
+app.include_router(emission_factors_router.router, prefix=API_V1_PREFIX)
 app.include_router(observe_router.router, prefix=API_V1_PREFIX)
 app.include_router(portal_router.router, prefix=API_V1_PREFIX)
 app.include_router(external_accounts_router.router, prefix=API_V1_PREFIX)
