@@ -13,6 +13,7 @@ import {
   UploadSimple,
 } from '@phosphor-icons/react'
 import { PageHeader } from '../../components/PageHeader'
+import { SectionTabs } from '../../components/SectionTabs'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
@@ -290,6 +291,7 @@ export function AccountsPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      <SectionTabs />
       <PageHeader
         title="계정 점검"
         subtitle="자산 중 로그인 계정 보유분 통합 점검 — 매월 자동"

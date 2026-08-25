@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { ArrowSquareOut, Camera, CircleNotch, FileXls, HardDrives, Images, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '../../components/PageHeader'
+import { SectionTabs } from '../../components/SectionTabs'
 import { FilterBar, FilterSearch, FilterSelect } from '../../components/FilterBar'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Pagination } from '../../components/Pagination'
@@ -282,6 +283,7 @@ export function AssetsPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      <SectionTabs />
       <PageHeader
         title="자산·연동 마스터"
         subtitle="고객사 자산·관제 연동·외부기관 접속 계정 공동 관리"

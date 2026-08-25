@@ -78,10 +78,20 @@ describe('collapseHubs (A안 허브 축약)', () => {
     expect(fin.matchPaths).toEqual(['/settlements'])
   })
 
-  it('허브 무관 그룹은 불변', async () => {
+  it('허브 무관 그룹은 불변(WORK)', async () => {
     const { collapseHubs, NAV_GROUPS } = await import('./nav')
-    const master = NAV_GROUPS.find((g) => g.label === 'MASTER DATA')!
-    const out = collapseHubs([master])[0]
-    expect(out.items.map((i) => i.path)).toEqual(master.items.map((i) => i.path))
+    const work = NAV_GROUPS.find((g) => g.label === 'WORK')!
+    const out = collapseHubs([work])[0]
+    expect(out.items.map((i) => i.path)).toEqual(work.items.map((i) => i.path))
+  })
+
+  it('MASTER DATA — 자산·연동+계정 점검이 자산·연동 허브 1항목으로(개편 P4)', async () => {
+    const { collapseHubs, NAV_GROUPS } = await import('./nav')
+    const master = collapseHubs(NAV_GROUPS).find((g) => g.label === 'MASTER DATA')!
+    const hub = master.items.find((i) => i.label === '자산·연동')!
+    expect(hub.path).toBe('/assets')
+    expect(new Set(hub.matchPaths)).toEqual(new Set(['/assets', '/accounts']))
+    // /accounts는 개별 항목으로 남지 않음(허브로 접힘)
+    expect(master.items.some((i) => i.path === '/accounts')).toBe(false)
   })
 })

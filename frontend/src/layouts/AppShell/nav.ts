@@ -160,6 +160,8 @@ export interface NavHub {
 
 export const NAV_HUBS: NavHub[] = [
   { label: '재무 관리', icon: Receipt, paths: ['/finance-ledger', '/settlements', '/tax-invoices'] },
+  // 자산·연동 + 계정 점검 — 같은 tb_asset의 두 뷰를 한 메뉴·서브탭으로 통합(개편 P4)
+  { label: '자산·연동', icon: Truck, paths: ['/assets', '/accounts'] },
 ]
 
 /** 필터(재무 OFF·role·observer·그룹허용)를 통과하고 남은 항목에 적용 — 시각 축약만 담당 */
