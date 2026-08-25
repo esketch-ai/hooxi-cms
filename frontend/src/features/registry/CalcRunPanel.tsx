@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { CircleNotch, UploadSimple } from '@phosphor-icons/react'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { useImportCalcInputs, useReductionRun, useStageCompare, useSaveStage, useCommitMonitoring } from './calcApi'
+import { useImportCalcInputs, useReductionRun, useStageCompare, useSaveStage, useCommitMonitoring, useLinkBackfill } from './calcApi'
 
 const t = (v?: number | null) => (v == null ? '—' : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}`)
 const tco2 = (v: number) => `${v.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂`
@@ -18,6 +18,17 @@ export function CalcRunPanel() {
   const { data: stages } = useStageCompare()
   const saveStageM = useSaveStage()
   const commitMonM = useCommitMonitoring()
+  const linkM = useLinkBackfill()
+
+  const onLinkBackfill = async () => {
+    try {
+      const r = await linkM.mutateAsync()
+      showToast(`차량 원장 링크 — 레지스트리 ${r.registry.linked}(VIN ${r.registry.vin})·산정 ${r.calc_input.linked} 연결 · 모호 ${r.registry.ambiguous + r.calc_input.ambiguous}·미매칭 ${r.registry.unmatched + r.calc_input.unmatched}`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '링크 백필에 실패했습니다.', 'danger')
+    }
+  }
 
   const onSaveStage = async (stage: 'PLANNED' | 'MONITORING' | 'FINAL') => {
     try {
@@ -70,11 +81,23 @@ export function CalcRunPanel() {
           계산 성공 건만
         </label>
         {canWrite && (
-          <label className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate">
-            {importM.isPending ? <CircleNotch size={15} className="animate-spin" /> : <UploadSimple size={15} />}
-            산정 입력 엑셀 적재
-            <input type="file" accept=".xlsx" className="hidden" onChange={(e) => onUpload(e.target.files)} />
-          </label>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onLinkBackfill}
+              disabled={linkM.isPending}
+              className="flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate disabled:opacity-50"
+              title="레지스트리·산정 입력을 보유차량 원장에 VIN 우선 연결(client_vehicle_id 백필)"
+            >
+              {linkM.isPending ? <CircleNotch size={15} className="animate-spin" /> : null}
+              차량 원장 링크
+            </button>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-sm font-medium text-bone hover:bg-elevate">
+              {importM.isPending ? <CircleNotch size={15} className="animate-spin" /> : <UploadSimple size={15} />}
+              산정 입력 엑셀 적재
+              <input type="file" accept=".xlsx" className="hidden" onChange={(e) => onUpload(e.target.files)} />
+            </label>
+          </div>
         )}
       </div>
 

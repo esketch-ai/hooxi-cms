@@ -66,6 +66,18 @@ export function useSaveStage() {
   })
 }
 
+// 차량 원장 링크 백필(정합 3) — 레지스트리·산정입력의 client_vehicle_id를 VIN 우선 매칭
+export function useLinkBackfill() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post('/vehicles/link-backfill')).data as {
+        registry: Record<string, number>; calc_input: Record<string, number>
+      },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reduction-run'] }),
+  })
+}
+
 // 워크벤치 MONITORING 스냅샷 → 사업 정본(ProjectVehicle.monitoring_reduction) 단방향 커밋
 export function useCommitMonitoring() {
   const qc = useQueryClient()

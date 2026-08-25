@@ -693,6 +693,9 @@ class VehicleCalcInput(Base):
 
     calc_input_id = Column(String(50), primary_key=True, default=gen_uuid)
     vehicle_no = Column(String(30), nullable=False, index=True)  # 차량번호(중복키)
+    # 보유차량 원장 정규 링크(정합 3) — vehicle_no 문자열 의존 축소. VIN(project_vin) 우선 백필.
+    client_vehicle_id = Column(
+        String(50), ForeignKey("tb_client_vehicle.vehicle_id", ondelete="SET NULL"))
     introduction_type = Column(String(20))  # 도입구분(신규도입/대체도입) — VIN 검증 분기
     baseline_vin = Column(String(50))  # 내연(대체 전) 차대번호 — 대체도입 판정
     project_vin = Column(String(50))   # 전기(대체 후) 차대번호
@@ -752,6 +755,9 @@ class ReductionRegistry(Base):
     registry_id = Column(String(50), primary_key=True, default=gen_uuid)
     role = Column(String(20), nullable=False, index=True)  # BASELINE/PROJECT/CANDIDATE
     vehicle_no = Column(String(30), index=True)  # 차량번호(자동차등록번호)
+    # 보유차량 원장 정규 링크(정합 3) — VIN(vin) 우선 백필. role별 EV/ICE 매칭.
+    client_vehicle_id = Column(
+        String(50), ForeignKey("tb_client_vehicle.vehicle_id", ondelete="SET NULL"))
     operator_name = Column(String(100))  # 업체명 원문
     client_id = Column(
         String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
@@ -1344,6 +1350,9 @@ def ensure_schema():
         ("tb_project_vehicle", "expire_at", "DATE"),
         # 3단계 '모니터링' 정본(라이프사이클 P2 정합) — 워크벤치서 단방향 커밋. additive.
         ("tb_project_vehicle", "monitoring_reduction", "NUMERIC(14,3)"),
+        # 보유차량 원장 정규 링크(정합 3) — vehicle_no 문자열 의존 축소. VIN 우선 백필.
+        ("tb_vehicle_calc_input", "client_vehicle_id", "VARCHAR(50)"),
+        ("tb_reduction_registry", "client_vehicle_id", "VARCHAR(50)"),
         ("tb_project_vehicle", "remaining_age", "NUMERIC(6,3)"),
         ("tb_project_vehicle", "effective_reduction", "NUMERIC(14,3)"),
         ("tb_project_vehicle", "client_vehicle_id", "VARCHAR(50)"),  # fleet 마스터 링크(부록 M)

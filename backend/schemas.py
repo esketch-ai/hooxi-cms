@@ -1526,6 +1526,11 @@ class StageCompareResponse(BaseModel):
     total_final: float
 
 
+class VehicleLinkResult(BaseModel):
+    registry: Dict[str, int]     # linked/vin/ambiguous/unmatched/skipped
+    calc_input: Dict[str, int]
+
+
 class VehicleDossierOut(BaseModel):
     """차량 통합 상세(개편 P5) — 한 vehicle_no의 전 생애. 섹션별 dict/list 조립 결과."""
     vehicle_no: str
