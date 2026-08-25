@@ -16,6 +16,7 @@ from auth import get_current_user, require_permission
 from models import Client, ReductionRegistry, User, get_db
 from routers import common
 from services import reduction_registry_import as rri
+from services import replacement_verify as rv
 from services.audit_logger import AuditLogger
 
 router = APIRouter(prefix="/reduction-registry", tags=["reduction-registry"])
@@ -128,4 +129,34 @@ def registry_summary(
         candidate=by_role.get("CANDIDATE", 0),
         client_matched=matched,
         by_region=[{"region": k, "count": v} for k, v in sorted(by_region.items())],
+    )
+
+
+@router.get("/verification", response_model=schemas.ReplacementVerificationResponse)
+def replacement_verification(
+    only_failed: bool = Query(False, description="실패 건만"),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """대체도입 자동 검증(D4) — 차량번호로 베이스라인↔전기버스 페어링해 룰 적용.
+
+    ①베이스라인 존재 ②VIN 상이 ③기존 경유/CNG ④신규 전기. 수작업 대사를 대체한다.
+    """
+    results = rv.verify_replacements(db)
+    summary = rv.verification_summary(results)
+    if only_failed:
+        results = [r for r in results if r["status"] == "FAIL"]
+    cnames = common.client_name_map(db, [r["client_id"] for r in results])
+    items = [
+        schemas.ReplacementVerificationItem(
+            vehicle_no=r["vehicle_no"], operator_name=r["operator_name"],
+            client_name=cnames.get(r["client_id"]), region=r["region"],
+            old_vin=r["old_vin"], new_vin=r["new_vin"], old_fuel=r["old_fuel"],
+            status=r["status"], reasons=r["reasons"],
+        )
+        for r in results
+    ]
+    return schemas.ReplacementVerificationResponse(
+        total=summary["total"], passed=summary["passed"], failed=summary["failed"],
+        items=items,
     )

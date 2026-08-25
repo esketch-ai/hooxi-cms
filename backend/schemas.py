@@ -1476,6 +1476,25 @@ class ReductionRegistryListResponse(BaseModel):
     total: int
 
 
+class ReplacementVerificationItem(BaseModel):
+    vehicle_no: Optional[str] = None
+    operator_name: Optional[str] = None
+    client_name: Optional[str] = None
+    region: Optional[str] = None
+    old_vin: Optional[str] = None
+    new_vin: Optional[str] = None
+    old_fuel: Optional[str] = None
+    status: str
+    reasons: List[str] = []
+
+
+class ReplacementVerificationResponse(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    items: List[ReplacementVerificationItem] = []
+
+
 class ReductionRegistrySummary(BaseModel):
     total: int
     baseline: int

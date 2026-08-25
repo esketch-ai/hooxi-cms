@@ -78,3 +78,42 @@ def test_import_list_summary_and_idempotent(client, staff_headers):
 
 def test_requires_auth(client):
     assert client.get(API).status_code == 401
+
+
+def test_replacement_verification(client, staff_headers):
+    db = models.SessionLocal()
+    try:
+        db.query(models.ReductionRegistry).delete(synchronize_session=False)
+        # PASS 케이스: 같은 차량번호, VIN 상이, 경유→전기
+        db.add(models.ReductionRegistry(role="BASELINE", vehicle_no="강원70자1", introduction_type="대체도입",
+                                        vin="OLD1", fuel="경유", operator_name="A운수"))
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="강원70자1", introduction_type="대체도입",
+                                        vin="NEW1", fuel="전기", operator_name="A운수"))
+        # FAIL 케이스: 베이스라인 없음
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="강원70자2", introduction_type="대체도입",
+                                        vin="NEW2", fuel="전기", operator_name="A운수"))
+        # FAIL 케이스: VIN 동일
+        db.add(models.ReductionRegistry(role="BASELINE", vehicle_no="강원70자3", introduction_type="대체도입",
+                                        vin="SAME", fuel="CNG", operator_name="A운수"))
+        db.add(models.ReductionRegistry(role="PROJECT", vehicle_no="강원70자3", introduction_type="대체도입",
+                                        vin="SAME", fuel="전기", operator_name="A운수"))
+        db.commit()
+    finally:
+        db.close()
+
+    v = client.get("/api/v1/reduction-registry/verification", headers=staff_headers).json()
+    assert v["total"] == 3 and v["passed"] == 1 and v["failed"] == 2
+    byno = {i["vehicle_no"]: i for i in v["items"]}
+    assert byno["강원70자1"]["status"] == "PASS"
+    assert "베이스라인 없음" in byno["강원70자2"]["reasons"]
+    assert "VIN 동일" in byno["강원70자3"]["reasons"]
+
+    failed = client.get("/api/v1/reduction-registry/verification", headers=staff_headers,
+                        params={"only_failed": True}).json()
+    assert len(failed["items"]) == 2
+
+    db = models.SessionLocal()
+    try:
+        db.query(models.ReductionRegistry).delete(synchronize_session=False); db.commit()
+    finally:
+        db.close()
