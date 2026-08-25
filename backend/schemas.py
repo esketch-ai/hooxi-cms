@@ -2155,6 +2155,15 @@ class CreditValuation(BaseModel):
     valuation: Optional[float] = None   # 평가액 = trunc(수량×단가)(원)
 
 
+class PaymentTracking(BaseModel):
+    """실지급 추적(C4) — 예상원가(Σexpected_payout) vs 실지급(Σ매입세금계산서=증빙)."""
+    expected_cost: Optional[float] = None    # 예상 원가(운수사 지급액)
+    paid_amount: float                       # 실지급 누적(매입세금계산서 합)
+    invoice_count: int                       # 매입 세금계산서 건수
+    payment_progress: Optional[float] = None # 지급 진행률 %(실지급/예상)
+    unpaid_balance: Optional[float] = None   # 미지급 잔액(예상−실지급)
+
+
 class ProjectDetailOut(ProjectOut):
     """사업 상세 (SCR-06) — 개요 + 진행 단계 + 거래계약/원장 파생."""
 
@@ -2190,6 +2199,8 @@ class ProjectDetailOut(ProjectOut):
     carbon_ownership: Optional[CarbonOwnership] = None
     # 탄소배출권 2상태 평가액(C3, 비영속) — 신청중=예상수량×6개월평균 / 승인=확정수량×잠금가
     credit_valuation: Optional[CreditValuation] = None
+    # 실지급 추적(C4, 비영속) — 예상원가 vs 실지급(매입세금계산서)
+    payment_tracking: Optional[PaymentTracking] = None
 
 
 # ---------------------------------------------------------------------------

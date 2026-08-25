@@ -501,6 +501,12 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
         approved_reduction=float(project.approved_reduction) if project.approved_reduction is not None else None,
         approved_unit_price=float(project.approved_unit_price) if project.approved_unit_price is not None else None,
     ))
+    # 실지급 추적(C4, 비영속) — 예상원가(payout_amount) vs 실지급(제품=Σ매입세금계산서) + 건수.
+    invoice_count = db.query(func.count(PurchaseInvoice.invoice_id)).filter(
+        PurchaseInvoice.project_id == project.project_id).scalar() or 0
+    payment_tracking = schemas.PaymentTracking(**carbon_credit.compute_payment_tracking(
+        expected_cost=payout_amount, paid_amount=acct.get("product"), invoice_count=int(invoice_count),
+    ))
     out = schemas.ProjectDetailOut.model_validate(project, from_attributes=True)
     return out.model_copy(
         update={
@@ -520,6 +526,7 @@ def _project_detail(db: Session, project: Project) -> schemas.ProjectDetailOut:
             "expected_revenue": expected_rev,
             "carbon_ownership": carbon_ownership,
             "credit_valuation": credit_valuation,
+            "payment_tracking": payment_tracking,
             **acct,
         }
     )

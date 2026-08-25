@@ -67,3 +67,27 @@ def compute_valuation(
         float(math.trunc(qty * unit)) if (qty is not None and unit is not None) else None
     )
     return {"basis": basis, "quantity": qty, "unit_price": unit, "valuation": valuation}
+
+
+def compute_payment_tracking(
+    expected_cost: Optional[float],
+    paid_amount: Optional[float],
+    invoice_count: int,
+) -> Dict[str, Optional[object]]:
+    """실지급 추적(C4) — 예상원가(Σ expected_payout) vs 실지급(Σ 매입세금계산서=증빙).
+
+    원가 정의=운수사 지급액(expected_payout). 실지급=매입 세금계산서 발행액(TAX_INVOICE 연결).
+    expected_cost None(지급 파라미터 미설정)이면 진행률·미지급 잔액 None 전파.
+    """
+    paid = float(paid_amount or 0)
+    if expected_cost is None:
+        return {"expected_cost": None, "paid_amount": paid, "invoice_count": invoice_count,
+                "payment_progress": None, "unpaid_balance": None}
+    exp = float(expected_cost)
+    return {
+        "expected_cost": exp,
+        "paid_amount": paid,
+        "invoice_count": invoice_count,
+        "payment_progress": round(paid / exp * 100, 1) if exp else None,
+        "unpaid_balance": round(exp - paid, 2),
+    }

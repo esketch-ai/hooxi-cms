@@ -507,6 +507,22 @@ function OverviewSection({
         <OverviewItem label="매각률 · 소유량 (탄소배출권)">
           <SaleRatioEditor projectId={project.project_id} saleRatio={project.sale_ratio} ownership={project.carbon_ownership} />
         </OverviewItem>
+        {project.payment_tracking && (project.payment_tracking.expected_cost != null || project.payment_tracking.invoice_count > 0) && (
+          <OverviewItem label="실지급 추적 (탄소배출권)">
+            <span className="flex flex-wrap items-center gap-1.5 text-sm">
+              <SensitiveData type="text" value={`실지급 ${Math.round(project.payment_tracking.paid_amount).toLocaleString('ko-KR')}원`} />
+              <span className="text-slatey">(세금계산서 {project.payment_tracking.invoice_count}건)</span>
+              {project.payment_tracking.payment_progress != null && (
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] ${project.payment_tracking.payment_progress >= 100 ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'border-amber-400/25 bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
+                  지급률 {project.payment_tracking.payment_progress}%
+                </span>
+              )}
+              {project.payment_tracking.unpaid_balance != null && project.payment_tracking.unpaid_balance > 0 && (
+                <span className="text-[11px] text-slatey">미지급 <SensitiveData type="text" value={`${Math.round(project.payment_tracking.unpaid_balance).toLocaleString('ko-KR')}원`} /></span>
+              )}
+            </span>
+          </OverviewItem>
+        )}
         {project.credit_valuation && (
           <OverviewItem label="배출권 평가액 (탄소배출권)">
             <span className="flex flex-wrap items-center gap-1.5 text-sm">

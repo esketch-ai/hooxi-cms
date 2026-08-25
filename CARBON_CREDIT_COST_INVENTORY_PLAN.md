@@ -97,8 +97,16 @@
   기존 compute_accounting(16/16 검증) **무접촉**, `carbon_credit.compute_valuation`로 별도 파생:
   신청중=EXPECTED(Σeff×6개월평균) / 승인=CONFIRMED(approved_reduction×approved_unit_price). TRUNC 평가액.
   ProjectDetailOut.credit_valuation + 사업상세 '배출권 평가액'(승인확정/예상 배지·SensitiveData 마스킹).
-- C4: (선택) 실지급 추적 + 세금계산서 연결(TAX_INVOICE 플랜).
+- C4: (선택) 실지급 추적 + 세금계산서 연결(TAX_INVOICE 플랜). ✅ **구현(dev)** —
+  `carbon_credit.compute_payment_tracking`: 예상원가(payout_amount=Σexpected_payout) vs 실지급
+  (제품=Σ 매입세금계산서 amount) + 건수 → 지급률·미지급 잔액. ProjectDetailOut.payment_tracking +
+  사업상세 '실지급 추적'(지급률 배지·마스킹). compute_accounting 무변경.
 - 각 단계 4원칙 루프(planner→implementer→verifier→reviewer), 회계 정합 테스트 필수(기존 16/16 회귀 0).
+
+## ✅ 구현 완료 — C1~C4 전부(dev, 2026-08-26)
+단가 2종·승인시점 잠금(C1)·매각률 소유량 분할·재고평가(C2)·2상태 배출권 평가액(C3)·실지급 추적(C4).
+전 단계 compute_accounting(엑셀 v19.3 16/16) 무접촉 — 별도 비영속 파생. 카본크레딧실 정본 엑셀의
+핵심 축을 CMS에서 일관 추적. 테스트 test_carbon_credit_c1.py 10건 + 회계 회귀 0.
 
 ## 5. 미결(착수 시 확정)
 - 매각률 grain: 사업 단위 vs 매각계약(ProjectSale) 단위 vs 투자사별.

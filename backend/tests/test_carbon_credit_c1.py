@@ -159,3 +159,36 @@ def test_c3_valuation_confirmed_when_approved(client, staff_headers):
     assert cv["basis"] == "CONFIRMED"
     assert cv["quantity"] == 80.0 and cv["unit_price"] == 20000.0
     assert cv["valuation"] == 1600000  # trunc(80 × 20000)
+
+
+def test_c4_payment_tracking(client, staff_headers):
+    """C4 — 예상원가(Σexpected_payout) vs 실지급(매입세금계산서). 진행률·미지급 잔액."""
+    pid = _mk_project(client, staff_headers, "C4실지급검증")
+    _add_vehicle(client, staff_headers, pid)
+    # 승인 파라미터 → expected_payout=666,666(부록 L 검증값)
+    client.put(f"{PROJECTS}/{pid}/payout-params", headers=staff_headers,
+               json={"max_payment": 2000000, "approved_at": "2016-02-01"})
+    d0 = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    pt0 = d0["payment_tracking"]
+    assert pt0["expected_cost"] == 666666 and pt0["paid_amount"] == 0.0
+    assert pt0["invoice_count"] == 0 and pt0["unpaid_balance"] == 666666
+
+    # 매입 세금계산서 1건(실지급 200,000) 등록
+    r = client.post(f"{PROJECTS}/{pid}/purchase-invoices", headers=staff_headers,
+                    json={"amount": 200000, "issue_date": "2016-03-01"})
+    assert r.status_code in (200, 201), r.text
+    d1 = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    pt1 = d1["payment_tracking"]
+    assert pt1["paid_amount"] == 200000.0 and pt1["invoice_count"] == 1
+    assert pt1["unpaid_balance"] == 466666  # 666,666 − 200,000
+    assert pt1["payment_progress"] == round(200000 / 666666 * 100, 1)
+
+
+def test_c4_no_expected_cost(client, staff_headers):
+    """지급 파라미터 미설정(예상원가 None) → 진행률·잔액 None, 건수는 여전히 표시."""
+    pid = _mk_project(client, staff_headers, "C4미설정검증")
+    _add_vehicle(client, staff_headers, pid)
+    d = client.get(f"{PROJECTS}/{pid}", headers=staff_headers).json()
+    pt = d["payment_tracking"]
+    assert pt["expected_cost"] is None and pt["payment_progress"] is None
+    assert pt["paid_amount"] == 0.0 and pt["invoice_count"] == 0
