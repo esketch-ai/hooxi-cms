@@ -74,8 +74,16 @@
    재귀 스캔, 저장소 루트 밖 차단, 세금계산서 스캔 관용구 재사용) + `parse_many` 공용화.
    API `GET /vehicle-logs/scan-preview`(미리보기 무변경)·`POST /vehicle-logs/scan-commit`(적재).
    config `etas_bms_dropbox_folder` 기본폴더(또는 inline 입력). 프론트 'Dropbox 폴더 자동 수집' 블록.
-5. **P5 3단계 감축량 stage** — 예상/모니터링/최종 저장·비교(라이프사이클 연결).
+5. **P5 3단계 감축량 stage** ✅ **구현(dev)** — `tb_reduction_stage`(차량·단계 upsert) +
+   `services/reduction_stage.py`(동일 엔진 재실행 스냅샷 + 달성률 비교). API
+   `POST /reduction-stages/{PLANNED|MONITORING|FINAL}`·`GET /reduction-stages/compare`.
+   CalcRunPanel '3단계 감축량' 섹션(저장 버튼 + 예상↔모니터링↔최종 나란히 + 달성률/확정률).
+   3단계=동일 방법론을 시점·데이터만 바꿔 3회 실행(예상=계획, 모니터링=실측 집계, 최종=확정).
 각 단계 pytest·빌드·dev 검증 후 커밋. dev 전용(내년 데이터 고려한 실험적 구축).
+
+## 9. 구현 완료 요약(D6 P1~P5, dev 전용·미배포)
+전 로드맵 로컬완료. **원본(업로드/Dropbox) → 월별 로그 → 연평균 집계 → 산정 엔진 → 3단계 스냅샷**
+파이프라인이 이어짐. 남은 운영 결정: (1) 충전량 원천 경로(담당자 확인), (2) prod 배포 시점.
 
 ## 7. 결정 필요
 | # | 질문 | 권고 |

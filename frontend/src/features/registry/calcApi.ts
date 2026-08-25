@@ -34,6 +34,38 @@ export function useReductionRun(onlyOk: boolean) {
       (await api.get<RunResp>('/reduction-run', { params: { only_ok: onlyOk } })).data,
   })
 }
+export interface StageItem {
+  vehicle_no: string
+  operator_name?: string | null
+  region?: string | null
+  planned?: number | null
+  monitoring?: number | null
+  final?: number | null
+  ach_monitoring?: number | null
+  ach_final?: number | null
+}
+export interface StageCompareResp {
+  items: StageItem[]
+  vehicle_count: number
+  total_planned: number
+  total_monitoring: number
+  total_final: number
+}
+export function useStageCompare() {
+  return useQuery({
+    queryKey: ['reduction-stage-compare'],
+    queryFn: async () => (await api.get<StageCompareResp>('/reduction-stages/compare')).data,
+  })
+}
+export function useSaveStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (stage: 'PLANNED' | 'MONITORING' | 'FINAL') =>
+      (await api.post(`/reduction-stages/${stage}`)).data as { stage: string; saved: number; skipped: number },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reduction-stage-compare'] }),
+  })
+}
+
 export function useImportCalcInputs() {
   const qc = useQueryClient()
   return useMutation({

@@ -1484,6 +1484,31 @@ class VehicleLogAggregateResponse(BaseModel):
     items: List[VehicleLogAggregateItem] = []
 
 
+class ReductionStageSaveResult(BaseModel):
+    stage: str
+    saved: int
+    skipped: int
+
+
+class StageCompareItem(BaseModel):
+    vehicle_no: str
+    operator_name: Optional[str] = None
+    region: Optional[str] = None
+    planned: Optional[float] = None
+    monitoring: Optional[float] = None
+    final: Optional[float] = None
+    ach_monitoring: Optional[float] = None  # 모니터링/예상 %
+    ach_final: Optional[float] = None        # 최종/예상 %
+
+
+class StageCompareResponse(BaseModel):
+    items: List[StageCompareItem] = []
+    vehicle_count: int
+    total_planned: float
+    total_monitoring: float
+    total_final: float
+
+
 class MethodologyConstantIn(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     value: float

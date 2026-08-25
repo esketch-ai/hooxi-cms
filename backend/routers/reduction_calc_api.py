@@ -16,6 +16,7 @@ from models import User, VehicleCalcInput, get_db
 from routers import common
 from services import calc_input_import as cii
 from services import reduction_run as rr
+from services import reduction_stage as rs
 from services.audit_logger import AuditLogger
 
 router = APIRouter(tags=["reduction-calc"])
@@ -97,4 +98,40 @@ def reduction_run(
         computed=out["computed"], skipped=out["skipped"], total=out["total"],
         total_reduction=out["total_reduction"], total_adjusted=out["total_adjusted"],
         items=items,
+    )
+
+
+@router.post("/reduction-stages/{stage}", response_model=schemas.ReductionStageSaveResult)
+def save_reduction_stage(
+    stage: str,
+    region: Optional[str] = Query(None),
+    note: Optional[str] = Query(None, max_length=255),
+    user: User = Depends(require_permission("master.write")),
+    db: Session = Depends(get_db),
+):
+    """현재 산정 입력으로 전 차량 계산 → 지정 단계(PLANNED/MONITORING/FINAL) 스냅샷 저장."""
+    try:
+        out = rs.save_stage(db, stage.upper(), region=region, note=note)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    AuditLogger.log_action(
+        db, user.user_id, "REDUCTION_STAGE_SAVE", target_type="STAGE", target_id=stage.upper(),
+        new_value="saved={0}, skipped={1}".format(out["saved"], out["skipped"]),
+    )
+    db.commit()
+    return schemas.ReductionStageSaveResult(**out)
+
+
+@router.get("/reduction-stages/compare", response_model=schemas.StageCompareResponse)
+def compare_reduction_stages(
+    region: Optional[str] = Query(None),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """차량별 예상↔모니터링↔최종 감축량 + 달성률 비교."""
+    out = rs.compare(db, region=region)
+    return schemas.StageCompareResponse(
+        items=[schemas.StageCompareItem(**i) for i in out["items"]],
+        vehicle_count=out["vehicle_count"], total_planned=out["total_planned"],
+        total_monitoring=out["total_monitoring"], total_final=out["total_final"],
     )

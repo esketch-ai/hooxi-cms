@@ -612,6 +612,39 @@ class EmissionFactor(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class ReductionStage(Base):
+    """3단계 감축량 스냅샷(D6 P5) — 예상(PLANNED)·모니터링(MONITORING)·최종(FINAL).
+
+    3단계는 서로 다른 공식이 아니라 동일 방법론을 시점·데이터 품질만 바꿔 3회 실행한 결과다
+    (예상=계획 주행/충전, 모니터링=실측 집계, 최종=검증·발급 확정). 차량×단계로 나란히
+    보관해 오차·달성률(모니터링/예상, 최종/예상)로 관리 신뢰도를 본다. (차량번호, 단계) upsert.
+    """
+
+    __tablename__ = "tb_reduction_stage"
+    __table_args__ = (
+        UniqueConstraint("vehicle_no", "stage", name="uq_reduction_stage"),
+    )
+
+    stage_id = Column(String(50), primary_key=True, default=gen_uuid)
+    vehicle_no = Column(String(30), nullable=False, index=True)
+    stage = Column(String(20), nullable=False)  # PLANNED/MONITORING/FINAL
+    operator_name = Column(String(100))
+    region = Column(String(30))
+    fuel = Column(String(20))
+    usage_year = Column(Integer)
+    project_emission = Column(Numeric(14, 3))
+    total_reduction = Column(Numeric(14, 3))   # 감축량(10년 합)
+    adjusted_total = Column(Numeric(14, 3))    # 민간반영
+    project_distance = Column(Numeric(14, 3))
+    project_kwh = Column(Numeric(14, 3))
+    baseline_distance = Column(Numeric(14, 3))
+    baseline_fuel = Column(Numeric(14, 3))
+    private_ratio = Column(Numeric(6, 4))
+    note = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class VehicleMonthlyLog(Base):
     """차량 월별 운행·충전 원천 로그(D6) — eTAS·BMS·충전 원본을 정규화한 원천.
 

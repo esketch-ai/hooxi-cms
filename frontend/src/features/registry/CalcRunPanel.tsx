@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { CircleNotch, UploadSimple } from '@phosphor-icons/react'
 import { useToast } from '../../components/Toast'
 import { useAuth } from '../../app/AuthProvider'
-import { useImportCalcInputs, useReductionRun } from './calcApi'
+import { useImportCalcInputs, useReductionRun, useStageCompare, useSaveStage } from './calcApi'
 
 const t = (v?: number | null) => (v == null ? '—' : `${v.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}`)
 const tco2 = (v: number) => `${v.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} tCO₂`
@@ -15,6 +15,19 @@ export function CalcRunPanel() {
   const [onlyOk, setOnlyOk] = useState(true)
   const { data, isLoading } = useReductionRun(onlyOk)
   const importM = useImportCalcInputs()
+  const { data: stages } = useStageCompare()
+  const saveStageM = useSaveStage()
+
+  const onSaveStage = async (stage: 'PLANNED' | 'MONITORING' | 'FINAL') => {
+    try {
+      const r = await saveStageM.mutateAsync(stage)
+      const label = { PLANNED: '예상', MONITORING: '모니터링', FINAL: '최종' }[stage]
+      showToast(`${label} 단계 스냅샷 저장 — ${r.saved}대(스킵 ${r.skipped})`, 'success')
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast(detail ?? '스냅샷 저장에 실패했습니다.', 'danger')
+    }
+  }
 
   const onUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -102,8 +115,78 @@ export function CalcRunPanel() {
           </table>
         </div>
       </section>
+
+      {/* 3단계 감축량(D6 P5) — 예상↔모니터링↔최종 스냅샷·달성률 */}
+      <section className="rounded-2xl border border-hairline bg-graphite p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-bone">3단계 감축량</h3>
+          <span className="text-[11px] text-slatey">예상↔모니터링↔최종을 나란히 비교 · 달성률로 관리 신뢰도 확인</span>
+          {canWrite && (
+            <div className="ml-auto flex flex-wrap gap-1.5">
+              {(['PLANNED', 'MONITORING', 'FINAL'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onSaveStage(s)}
+                  disabled={saveStageM.isPending}
+                  className="rounded-full border border-hairline px-3 py-1.5 text-xs font-medium text-bone hover:bg-elevate disabled:opacity-50"
+                >
+                  {saveStageM.isPending ? <CircleNotch size={13} className="inline animate-spin" /> : `${{ PLANNED: '예상', MONITORING: '모니터링', FINAL: '최종' }[s]} 저장`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="mt-1.5 text-[11px] text-slatey">
+          현재 산정 입력으로 계산해 단계별로 동결합니다. 로그 집계로 사업(project)을 갱신한 뒤 '모니터링 저장'하면 예상과 나란히 비교됩니다.
+        </p>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <Tile label="예상 합계" value={tco2(stages?.total_planned ?? 0)} />
+          <Tile label="모니터링 합계" value={tco2(stages?.total_monitoring ?? 0)} tone />
+          <Tile label="최종 합계" value={tco2(stages?.total_final ?? 0)} tone />
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-hairline text-[11px] uppercase tracking-wider text-slatey">
+              <tr>
+                <th className="px-2 py-2">차량번호</th>
+                <th className="px-2 py-2">운수사</th>
+                <th className="px-2 py-2 text-right">예상</th>
+                <th className="px-2 py-2 text-right">모니터링</th>
+                <th className="px-2 py-2 text-right">달성률</th>
+                <th className="px-2 py-2 text-right">최종</th>
+                <th className="px-2 py-2 text-right">확정률</th>
+                <th className="px-2 py-2">권역</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(stages?.items ?? []).length === 0 ? (
+                <tr><td colSpan={8} className="px-2 py-8 text-center text-slatey">저장된 단계 스냅샷이 없습니다. {canWrite ? '위 버튼으로 예상/모니터링/최종을 저장하세요.' : ''}</td></tr>
+              ) : (
+                (stages?.items ?? []).map((s) => (
+                  <tr key={s.vehicle_no} className="border-b border-hairline/60">
+                    <td className="px-2 py-2 font-medium text-bone">{s.vehicle_no}</td>
+                    <td className="px-2 py-2 text-ash">{s.operator_name ?? '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-ash">{t(s.planned)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums text-ash">{t(s.monitoring)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums"><Rate v={s.ach_monitoring} /></td>
+                    <td className="px-2 py-2 text-right tabular-nums text-bone">{t(s.final)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums"><Rate v={s.ach_final} /></td>
+                    <td className="px-2 py-2 text-ash">{s.region ?? '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   )
+}
+function Rate({ v }: { v?: number | null }) {
+  if (v == null) return <span className="text-slatey">—</span>
+  const tone = v >= 100 ? 'text-emerald-600 dark:text-emerald-400' : v >= 80 ? 'text-ash' : 'text-amber-600 dark:text-amber-400'
+  return <span className={tone}>{v.toFixed(1)}%</span>
 }
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: boolean }) {
   return (
