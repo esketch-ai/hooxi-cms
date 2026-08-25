@@ -21,6 +21,7 @@ import {
   SquaresFour,
   TreeStructure,
   Truck,
+  UploadSimple,
   Wallet,
 } from '@phosphor-icons/react'
 import type { UserRole } from '../../types'
@@ -61,6 +62,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'MASTER DATA',
     items: [
+      { label: '데이터 업로드 센터', path: '/data-import', icon: UploadSimple, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '고객사 마스터', path: '/clients', icon: Buildings },
       { label: '매수자 마스터', path: '/buyers', icon: Bank, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
       { label: '자산·연동 마스터', path: '/assets', icon: Truck },
