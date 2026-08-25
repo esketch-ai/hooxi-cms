@@ -9,6 +9,7 @@ import { useImportRegistry, useRegistry, useRegistrySummary } from './api'
 import { EvFinancePanel } from './EvFinancePanel'
 import { ChargingInfraPanel } from './ChargingInfraPanel'
 import { VerificationPanel } from './VerificationPanel'
+import { CalcRunPanel } from './CalcRunPanel'
 
 const ROLE_META: Record<string, { label: string; cls: string }> = {
   BASELINE: { label: '베이스라인(화석연료)', cls: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/25' },
@@ -25,7 +26,7 @@ export function RegistryPage() {
   const { showToast } = useToast()
   const { user } = useAuth()
   const canWrite = !!user && ['ADMIN', 'MANAGER', 'STAFF'].includes(user.role)
-  const [tab, setTab] = useState<'vehicles' | 'finance' | 'charging' | 'verify'>('vehicles')
+  const [tab, setTab] = useState<'vehicles' | 'finance' | 'charging' | 'verify' | 'calc'>('vehicles')
   const { data: summary } = useRegistrySummary()
   const [role, setRole] = useState('')
   const [search, setSearch] = useState('')
@@ -71,6 +72,7 @@ export function RegistryPage() {
             { key: 'finance', label: '민간투자비율' },
             { key: 'charging', label: '충전인프라' },
             { key: 'verify', label: '대체도입 검증' },
+            { key: 'calc', label: '감축량 산정' },
           ] as const
         ).map((t) => (
           <button
@@ -89,6 +91,7 @@ export function RegistryPage() {
       {tab === 'finance' && <EvFinancePanel />}
       {tab === 'charging' && <ChargingInfraPanel />}
       {tab === 'verify' && <VerificationPanel />}
+      {tab === 'calc' && <CalcRunPanel />}
       {tab === 'vehicles' && (
         <>
       {/* 요약 타일 — 클릭 시 role 필터 */}

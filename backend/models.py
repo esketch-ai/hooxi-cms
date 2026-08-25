@@ -612,6 +612,37 @@ class EmissionFactor(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class VehicleCalcInput(Base):
+    """차량별 감축량 산정 입력(D5) — eTAS·BMS 크롤링 raw를 정규화한 연평균 입력.
+
+    실무: 운수사별 eTAS(운행)·BMS(충전) 로그를 수집·정규화한 값. 업로드 시 차량번호로
+    중복 체크 후 upsert(CRUD). 계산 엔진(services.reduction_calc)이 직접 소비한다.
+    베이스라인=대체 전 화석연료(주행·연료), 사업=전기버스(주행·충전량).
+    """
+
+    __tablename__ = "tb_vehicle_calc_input"
+    __table_args__ = (UniqueConstraint("vehicle_no", name="uq_calc_input_vehicle"),)
+
+    calc_input_id = Column(String(50), primary_key=True, default=gen_uuid)
+    vehicle_no = Column(String(30), nullable=False, index=True)  # 차량번호(중복키)
+    operator_name = Column(String(100))
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )
+    region = Column(String(30))
+    fuel = Column(String(20))  # 베이스라인 연료(경유/CNG)
+    baseline_distance = Column(Numeric(14, 3))  # 연평균 주행거리(베이스라인)
+    baseline_fuel = Column(Numeric(14, 3))      # 연평균 연료사용량(베이스라인)
+    project_distance = Column(Numeric(14, 3))   # 연평균 주행거리(사업/전기)
+    project_kwh = Column(Numeric(14, 3))        # 연평균 충전량(사업)
+    ev_reg_year = Column(Integer)               # 전기차 등록연도(→이용연수)
+    private_ratio = Column(Numeric(8, 6))       # 민간투자비율(없으면 재무마스터에서 조인)
+    source = Column(String(20), default="CRAWL_IMPORT")
+    memo = Column(String(255))
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class MethodologyConstant(Base):
     """감축량 산정 방법론 상수(effective-dated) — 순발열량·배출계수·기술향상계수·전력계수·GWP·기준연도(D5).
 

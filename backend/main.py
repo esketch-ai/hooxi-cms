@@ -62,6 +62,7 @@ from routers import reduction_registry as reduction_registry_router
 from routers import ev_finance as ev_finance_router
 from routers import charging_infra as charging_infra_router
 from routers import methodology as methodology_router
+from routers import reduction_calc_api as reduction_calc_router
 from routers import observe as observe_router
 from routers import portal as portal_router
 from routers import projects as projects_router
@@ -478,6 +479,7 @@ app.include_router(reduction_registry_router.router, prefix=API_V1_PREFIX)
 app.include_router(ev_finance_router.router, prefix=API_V1_PREFIX)
 app.include_router(charging_infra_router.router, prefix=API_V1_PREFIX)
 app.include_router(methodology_router.router, prefix=API_V1_PREFIX)
+app.include_router(reduction_calc_router.router, prefix=API_V1_PREFIX)
 app.include_router(observe_router.router, prefix=API_V1_PREFIX)
 app.include_router(portal_router.router, prefix=API_V1_PREFIX)
 app.include_router(external_accounts_router.router, prefix=API_V1_PREFIX)

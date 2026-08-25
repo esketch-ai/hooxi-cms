@@ -1356,6 +1356,60 @@ class MarketRateOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class CalcInputImportResult(BaseModel):
+    created: int
+    updated: int
+    client_matched: int
+    total: int
+
+
+class CalcInputOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    calc_input_id: str
+    vehicle_no: str
+    operator_name: Optional[str] = None
+    client_name: Optional[str] = None
+    region: Optional[str] = None
+    fuel: Optional[str] = None
+    baseline_distance: Optional[float] = None
+    baseline_fuel: Optional[float] = None
+    project_distance: Optional[float] = None
+    project_kwh: Optional[float] = None
+    ev_reg_year: Optional[int] = None
+    private_ratio: Optional[float] = None
+
+
+class CalcInputListResponse(BaseModel):
+    items: List[CalcInputOut]
+    total: int
+
+
+class ReductionRunItem(BaseModel):
+    vehicle_no: str
+    operator_name: Optional[str] = None
+    client_name: Optional[str] = None
+    region: Optional[str] = None
+    status: str
+    reason: Optional[str] = None
+    fuel: Optional[str] = None
+    usage_year: Optional[int] = None
+    project_emission: Optional[float] = None
+    total_reduction: Optional[float] = None
+    private_ratio: Optional[float] = None
+    adjusted_total: Optional[float] = None
+    annual: List[float] = []
+
+
+class ReductionRunResponse(BaseModel):
+    computed: int
+    skipped: int
+    total: int
+    total_reduction: float
+    total_adjusted: float
+    items: List[ReductionRunItem] = []
+
+
 class MethodologyConstantIn(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     value: float
