@@ -1419,6 +1419,49 @@ class ReductionRunResponse(BaseModel):
     items: List[ReductionRunItem] = []
 
 
+class VehicleLogImportResult(BaseModel):
+    created: int
+    updated: int
+    client_matched: int
+    vehicles: int
+    months: int
+    total: int
+
+
+class VehicleLogConsolidateRow(BaseModel):
+    vehicle_no: str
+    operator_name: Optional[str] = None
+    has_run: bool
+    has_charge: bool
+    months: Dict[str, Dict[str, Optional[float]]] = {}
+
+
+class VehicleLogConsolidateResponse(BaseModel):
+    months: List[str] = []
+    vehicles: List[VehicleLogConsolidateRow] = []
+    vehicle_count: int
+    missing_run: int
+    missing_charge: int
+
+
+class VehicleLogAggregateItem(BaseModel):
+    vehicle_no: str
+    status: str
+    reason: Optional[str] = None
+    project_distance: Optional[float] = None
+    project_kwh: Optional[float] = None
+    months_used: Optional[int] = None
+
+
+class VehicleLogAggregateResponse(BaseModel):
+    vehicle_count: int
+    aggregated: int
+    insufficient: int
+    updated: int
+    created: int
+    items: List[VehicleLogAggregateItem] = []
+
+
 class MethodologyConstantIn(BaseModel):
     key: str = Field(min_length=1, max_length=40)
     value: float

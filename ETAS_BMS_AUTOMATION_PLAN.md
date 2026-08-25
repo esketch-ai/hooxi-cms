@@ -59,8 +59,12 @@
 - 프로그램 차량 중 **미수집 차량 목록**(레지스트리 − 로그) → 담당자 수집 대상 안내.
 
 ## 6. 단계 로드맵
-1. **P1 원천 로그 + 취합본(WIDE) 업로드** — `tb_vehicle_monthly_log` + WIDE 파서(담당자 정본 즉시 수용) + 자동 정리 뷰. (가장 빠른 가치 — 지금 취합본을 그대로 올림)
-2. **P2 자동 집계 → 산정 입력** — 기간 집계 → project 연평균 → VehicleCalcInput 자동 채움 → 계산.
+1. **P1 원천 로그 + 취합본(WIDE) 업로드** ✅ **구현(dev)** — `tb_vehicle_monthly_log`(중복키 차량·월·출처)
+   + WIDE 파서(`services/vehicle_log_import.py`) + 자동 정리 뷰(`vehicle_log_aggregate.consolidate`).
+   API `POST /vehicle-logs/import`·`GET /vehicle-logs/consolidate`. 레지스트리 탭 '운행·충전 로그'.
+2. **P2 자동 집계 → 산정 입력** ✅ **구현(dev)** — 기간 Σ → 연평균 `(Σ지표/Σ운행일수)×365` →
+   `VehicleCalcInput.project_*` 갱신. API `POST /vehicle-logs/aggregate?commit_project=`.
+   프로그램 차량(레지스트리)만. 미리보기/반영 2모드. 집계불가(운행일수·거리 결여) 플래그.
 3. **P3 운수사별 원본(.xls) 직접 업로드** — eTAS/BMS raw 파서(취합 자동화, 담당자 수작업 제거).
 4. **P4 Dropbox 자동 수집** — 폴더 저장 → 스캔·파싱(무업로드 자동화).
 5. **P5 3단계 감축량 stage** — 예상/모니터링/최종 저장·비교(라이프사이클 연결).
@@ -73,7 +77,7 @@
 | E2 | baseline(내연) 입력 방식 | 차량별 연평균 **1회 업로드/입력**(등록 시 확정, 재계산 시 고정) |
 | E3 | 연평균 산식 | **(Σ지표/Σ운행일수)×365** (산정 시트 관례) 확정 |
 | E4 | 집계 대상 | 레지스트리 프로그램 차량(≈500)만. 전체 1만 대는 로그 보관·필터 |
-| E5 | 충전량(kWh) 원천 | eTAS_Charge_Integrated의 충전 원천 확인 필요(BMS vs 충전기 API) |
+| E5 | 충전량(kWh) 원천 | **증빙자료 조사 결과**: 운행=eTAS, 베이스라인 내연 연료=국토부 버스유가보조금 통합관리시스템(경유/CNG). **충전량 전용 데이터 문서는 증빙자료에 없음** — eTAS_Charge_Integrated 충전 컬럼이 유일 실데이터, BMS취합 존재로 **BMS 유력**(문서 미명시). MRV 검증=AC전력량계. → 담당자 확인 1건 |
 | E6 | Dropbox 폴더 규칙 | 운수사/연월 경로 규칙 확정(기존 문서 아카이브 폴더 관용구 재사용) |
 
 ## 8. 원칙

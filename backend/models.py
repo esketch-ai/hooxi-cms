@@ -612,6 +612,37 @@ class EmissionFactor(Base):
     created_at = Column(DateTime, default=utcnow)
 
 
+class VehicleMonthlyLog(Base):
+    """차량 월별 운행·충전 원천 로그(D6) — eTAS·BMS·충전 원본을 정규화한 원천.
+
+    담당자가 매월 수작업 취합하던 것을 CMS가 원천으로 보관·자동 정리한다.
+    중복키 (차량번호, 월, 출처)로 재업로드·기간중복 안전(upsert). 프로그램 차량은 레지스트리
+    조인으로 필터. 연평균 집계(project_distance/kwh)의 원천이며 baseline(내연)과는 별개.
+    """
+
+    __tablename__ = "tb_vehicle_monthly_log"
+    __table_args__ = (
+        UniqueConstraint("vehicle_no", "year_month", "source", name="uq_veh_log"),
+    )
+
+    log_id = Column(String(50), primary_key=True, default=gen_uuid)
+    vehicle_no = Column(String(30), nullable=False, index=True)  # 차량번호
+    year_month = Column(String(7), nullable=False, index=True)   # YYYY-MM
+    source = Column(String(20), nullable=False)  # ETAS/BMS/CHARGE/INTEGRATED
+    operator_name = Column(String(100))
+    client_id = Column(
+        String(50), ForeignKey("tb_client.client_id", ondelete="SET NULL")
+    )
+    region = Column(String(30))
+    operating_days = Column(Numeric(8, 2))   # 운행일수
+    distance_km = Column(Numeric(14, 3))     # 운행거리
+    charge_kwh = Column(Numeric(14, 3))      # 충전량
+    trip_count = Column(Numeric(10, 2))      # 운행횟수(BMS)
+    batch = Column(String(60))               # 업로드 배치 표기
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class VehicleCalcInput(Base):
     """차량별 감축량 산정 입력(D5) — eTAS·BMS 크롤링 raw를 정규화한 연평균 입력.
 
